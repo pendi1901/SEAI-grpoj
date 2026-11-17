@@ -72,6 +72,32 @@ programs rescored. No LLM call was repeated and no Q value changed.
   labelled "ok" with Q = 0. It is now labelled an error. The report's
   "scored without error" counts fell from 105 to 81.
 
+## "Ran clean" (66) versus "scored without error" (81)
+
+These measure different things. "Ran clean" means `python stepNN.py`
+exited normally on the program's own demo. "Scored" means the skill
+function worked when the scorer called it on the test suite. Only the
+second feeds Q. They disagree both ways:
+
+| | function worked | function failed |
+|---|--:|--:|
+| script ran | 53 | 13 |
+| script failed | 28 | 86 |
+
+18 of the 28 "script failed, function worked" cases are one instrument
+fault of ours. The customer asks quote the full data size ("10,000
+setups", "1,470 staff records"), but since the 80/20 split each
+treatment's file holds 80% of the rows (8,000 and 1,176). The model
+copied the number from the ask into its demo (`rows = [next(reader)
+for _ in range(10000)]`) and ran off the end of the file. Q is not
+affected, because the scorer calls the function, not the demo. To fix
+before a fresh run: drop exact row counts from the asks, or state the
+training file's row count in the prompt. Changing the prompt mid-way
+would make old and new runs incomparable.
+
+Function success by treatment: T1 17/30, T2 16/30, T3 13/30, T4 8/30,
+T5 14/30, T6 13/30.
+
 ## Errors in the LLM's code worth citing in the AI disclosure
 
 - Converting hidden `?` goal cells to numbers (11 programs), though
