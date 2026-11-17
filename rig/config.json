@@ -1,0 +1,42 @@
+{
+  "backend": "mock",
+  "trials": 3,
+  "asks": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+  "runs": "runs",
+  "log": "results/calls.csv",
+  "run_timeout": 120,
+
+  "backends": {
+    "mock":   {"cmd": ["{python}", "{rig}/mock_llm.py"], "model": "mock",
+               "timeout": 30},
+    "claude": {"cmd": ["claude", "-p"], "model": "FILL IN",
+               "timeout": 600},
+    "ollama": {"cmd": ["ollama", "run", "qwen2.5-coder:7b"],
+               "model": "qwen2.5-coder:7b", "timeout": 900}
+  },
+
+  "treatments": {
+    "1": {"library": "plain",   "reuse": false},
+    "2": {"library": "plain",   "reuse": true},
+    "3": {"library": "sklearn", "reuse": false},
+    "4": {"library": "sklearn", "reuse": true},
+    "5": {"library": "ezr",     "reuse": false},
+    "6": {"library": "ezr",     "reuse": true}
+  },
+
+  "domains": {
+    "process": {"data": "data/pom3a.csv",
+                "requirements": "docs/requirements/process.md"},
+    "health":  {"data": "data/Health-ClosedIssues0000.csv",
+                "requirements": "docs/requirements/health.md"},
+    "hr":      {"data": "data/WA_Fn-UseC_-HR-Employee-Attrition.csv",
+                "requirements": "docs/requirements/hr.md"}
+  },
+
+  "fetch": {
+    "data/pom3a.csv": "https://raw.githubusercontent.com/timm/moot/master/optimize/process/pom3a.csv",
+    "data/Health-ClosedIssues0000.csv": "https://raw.githubusercontent.com/timm/moot/master/optimize/hpo/Health-ClosedIssues0000.csv",
+    "data/WA_Fn-UseC_-HR-Employee-Attrition.csv": "https://raw.githubusercontent.com/timm/moot/master/optimize/behavior_data/WA_Fn-UseC_-HR-Employee-Attrition.csv",
+    "rig/lib/ezr.py": "https://raw.githubusercontent.com/timm/ezr/main/ezr.py"
+  }
+}
