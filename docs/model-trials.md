@@ -169,3 +169,11 @@ race invalid. Justify's -1.00 is a working program that answers badly.
 At this rate a full N = 1 run (180 calls) costs about $0.40 and takes
 about 25 minutes; N = 10 about $4 and 4 hours. One climb is a pilot,
 not a measured failure rate.
+
+## Ollama prompt-v2 run stopped (Nov 17 2026)
+
+The ornith:9b run under prompt version 2 (`runs-v2/`, `results-v2/`)
+was stopped by the team at 144 of 180 calls, after the Gemini run made
+it redundant. It is kept as a record and was not scored. One step
+(HR, T3, step 5) was cut off mid-check and has files but no log row.
+Do not report it as a result.

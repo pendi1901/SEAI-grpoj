@@ -1,0 +1,660 @@
+You are writing one Python file, step09.py.
+
+The data is the csv file Health-ClosedIssues0000.train.csv in the current directory. Column names starting in upper case are numeric, lower case are symbolic. A name ending in - is a goal to minimise, in + a goal to maximise; all other columns are inputs. It has 8000 data rows after the header. Any count the customer quotes describes their full records, not this file: never hard-code a row count, read the file to the end. Its first lines:
+
+MRE-,ACC+,PRED40+,N_estimators,criterion,Min_sample_leaves,Min_impurity_decrease,Max_depth
+0.7771723122238585,0.4546619673181672,0,10,squared_error,17,7.75,11
+0.42238586156111924,0.6920858699134893,0.5714285714285714,150,absolute_error,3,4.25,10
+0.8817378497790869,0.40820249919897467,0,110,absolute_error,18,4,14
+
+Use only the Python standard library.
+
+These files, written earlier, are in the same directory:
+
+--- step01.py ---
+def _to_float(cell):
+    try:
+        return float(cell)
+    except (ValueError, TypeError):
+        return 0.0
+
+
+def remember(header, rows):
+    minimise = [c for c in header if c.endswith('-')]
+    maximise = [c for c in header if c.endswith('+')]
+
+    n_rows = len(rows)
+    max_return = max(1, int(n_rows * 0.05))
+
+    scored = []
+    for i, row in enumerate(rows):
+        score = 0.0
+        for col in minimise:
+            v = _to_float(row[header.index(col)])
+            score += v
+        for col in maximise:
+            v = _to_float(row[header.index(col)])
+            score -= v
+        scored.append((score, i))
+
+    scored.sort()
+    return [pos for _, pos in scored[:max_return]]
+
+
+if __name__ == "__main__":
+    import csv
+
+    with open("Health-ClosedIssues0000.train.csv", "r") as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = []
+        for row in reader:
+            rows.append(row)
+
+    best = remember(header, rows)
+    print(f"Top {len(best)} trustworthy setups out of {len(rows)}:")
+    for pos in best:
+        print(f"  Row {pos}")
+
+
+--- step02.py ---
+import csv
+
+
+def _to_float(cell):
+    try:
+        return float(cell)
+    except (ValueError, TypeError):
+        return 0.0
+
+
+def remember(header, rows):
+    minimise = [c for c in header if c.endswith('-')]
+    maximise = [c for c in header if c.endswith('+')]
+
+    n_rows = len(rows)
+    max_return = max(1, int(n_rows * 0.05))
+
+    scored = []
+    for i, row in enumerate(rows):
+        score = 0.0
+        for col in minimise:
+            v = _to_float(row[header.index(col)])
+            score += v
+        for col in maximise:
+            v = _to_float(row[header.index(col)])
+            score -= v
+        scored.append((score, i))
+
+    scored.sort()
+    return [pos for _, pos in scored[:max_return]]
+
+
+def guess(header, train, test):
+    minimise = [c for c in header if c.endswith('-')]
+    maximise = [c for c in header if c.endswith('+')]
+
+    # Build a simple k-NN style predictor using the top-k rows from training.
+    # For each test row, find the 5 closest training rows (by all non-goal features)
+    # and average their goal values.
+    import math
+
+    n_train = len(train)
+    n_test = len(test)
+
+    # Identify feature columns (non-goal, numeric) for distance computation
+    goal_cols = set(minimise + maximise)
+    feat_indices = [i for i in range(len(header)) if header[i] not in goal_cols and _to_float("") != 0.0]
+    # Fallback: use all non-goal columns as features
+    if not feat_indices:
+        feat_indices = [i for i in range(len(header)) if header[i] not in goal_cols]
+
+    def row_to_vec(row):
+        return [_to_float(row[header.index(c)]) for c in header if c not in goal_cols and header.index(c) < len(header)]
+
+    # Precompute training vectors (only features, no goals)
+    train_feats = []
+    for r in train:
+        v = [0.0] * len(feat_indices)
+        for j, col in enumerate(header):
+            if col not in goal_cols and _to_float("") != 0.0:
+                idx = header.index(col)
+                v[j] = _to_float(r[idx])
+        train_feats.append(v)
+
+    def euclidean(a, b):
+        return math.sqrt(sum((x - y) ** 2 for x, y in zip(a, b)))
+
+    results = []
+    k = min(5, n_train)
+
+    for t_row in test:
+        best_dist = float('inf')
+        best_goals = None
+        for i in range(n_train):
+            d = euclidean(train_feats[i], row_to_vec(t_row))
+            if d < best_dist:
+                best_dist = d
+                # We need to store goals alongside feats - let me redo this properly
+
+    # Let me restart the test loop with proper storage
+    train_goals = []  # (feature_vector, goal_values)
+    for r in train:
+        feat_vec = [0.0] * len(feat_indices)
+        goal_vals = {}
+        for j, col in enumerate(header):
+            if col not in goal_cols:
+                idx = header.index(col)
+                feat_vec[j] = _to_float(r[idx])
+            else:
+                goal_vals[col] = _to_float(r[idx])
+        train_goals.append((feat_vec, goal_vals))
+
+    results = []
+    k = min(5, n_train)
+
+    for t_row in test:
+        feat_vec_t = [0.0] * len(feat_indices)
+        for j, col in enumerate(header):
+            if col not in goal_cols:
+                idx = header.index(col)
+                feat_vec_t[j] = _to_float(t_row[idx])
+
+        # Find k nearest neighbors
+        dists = []
+        for i in range(n_train):
+            d = euclidean(train_goals[i][0], feat_vec_t)
+            dists.append((d, train_goals[i][1]))
+
+        dists.sort()
+        k_nearest = dists[:k]
+
+        # Average goal values from nearest neighbors
+        avg_goal = {}
+        for _, goals in k_nearest:
+            for col, val in goals.items():
+                if col not in avg_goal:
+                    avg_goal[col] = 0.0
+                avg_goal[col] += val
+
+        n_cols = len(avg_goal)
+        for col in avg_goal:
+            avg_goal[col] /= n_cols
+
+        # Return the first goal column value
+        results.append(list(avg_goal.values())[0])
+
+    return results
+
+
+if __name__ == "__main__":
+    import csv
+
+    with open("Health-ClosedIssues0000.train.csv", "r") as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = []
+        for row in reader:
+            rows.append(row)
+
+    best = remember(header, rows)
+    print(f"Top {len(best)} trustworthy setups out of {len(rows)}:")
+    for pos in best:
+        print(f"  Row {pos}")
+
+
+--- step03.py ---
+from step01 import _to_float, remember
+
+
+def certify(xs, ys):
+    """Return True if xs and ys are the same apart from noise."""
+    n_x = len(xs) or 1
+    n_y = len(ys) or 1
+    mean_x = sum(xs) / n_x
+    mean_y = sum(ys) / n_y
+
+    def std(vals):
+        m = sum(vals) / len(vals)
+        return (sum((v - m) ** 2 for v in vals) / len(vals)) ** 0.5
+
+    sx = std(xs) if xs else 1.0
+    sy = std(ys) if ys else 1.0
+
+    threshold = (sx + sy) * 2.0
+    return abs(mean_x - mean_y) <= threshold
+
+
+if __name__ == "__main__":
+    import csv
+
+    with open("Health-ClosedIssues0000.train.csv", "r") as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = []
+        for row in reader:
+            rows.append(row)
+
+    minimise = [c for c in header if c.endswith('-')]
+    maximise = [c for c in header if c.endswith('+')]
+    goal_cols = minimise + maximise
+
+    big_rows = []
+    small_rows = []
+
+    for row in rows:
+        n_est = _to_float(row[header.index("N_estimators")])
+        if n_est >= 50:
+            big_rows.append(row)
+        else:
+            small_rows.append(row)
+
+    def avg_goals(rows):
+        if not rows:
+            return [0.0] * len(goal_cols)
+        n = len(rows)
+        avg = []
+        for col in goal_cols:
+            vals = [_to_float(r[header.index(col)]) for r in rows]
+            avg.append(sum(vals) / n)
+        return avg
+
+    big_avg = avg_goals(big_rows)
+    small_avg = avg_goals(small_rows)
+
+    result = certify(big_avg, small_avg)
+    print(f"Big vs Small: {'Real difference' if not result else 'Noise'}")
+
+
+--- step04.py ---
+from step01 import _to_float, remember
+
+
+def flow(header, row, seen):
+    """Return True when the current row is good enough to ship."""
+    minimise = [c for c in header if c.endswith('-')]
+    maximise = [c for c in header if c.endswith('+')]
+
+    # First row: nothing to compare against yet.
+    if not seen:
+        return False
+
+    # Best goals so far (minimise → low, maximise → high).
+    best = {}
+    for col in minimise + maximise:
+        vals = [_to_float(r[header.index(col)]) for r in seen]
+        best[col] = min(vals) if col in minimise else max(vals)
+
+    cur = {col: _to_float(row[header.index(col)]) for col in minimise + maximise}
+
+    # Within tolerance of the best seen so far.
+    tol = 0.15
+    return all(
+        (cur[col] - best[col]) <= tol if col in minimise else (best[col] - cur[col]) <= tol
+        for col in minimise + maximise
+    )
+
+
+if __name__ == "__main__":
+    import csv
+
+    with open("Health-ClosedIssues0000.train.csv", "r") as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = []
+        for row in reader:
+            rows.append(row)
+
+    # Use the top trustworthy setups from step01 to set expectations.
+    best_rows = remember(header, rows)
+    print(f"Top {len(best_rows)} reference setups identified.")
+
+    for i, row in enumerate(rows):
+        if flow(header, row, rows[:i]):
+            print(f"Row {i} is good enough to ship!")
+            break
+    else:
+        print("No suitable row found among the data.")
+
+
+--- step05.py ---
+from step01 import _to_float, remember
+
+
+def blame(header, rows):
+    """Return names of input columns (not goals) that explain why worst rows are bad."""
+    minimise = [c for c in header if c.endswith('-')]
+    maximise = [c for c in header if c.endswith('+')]
+    goal_cols = minimise + maximise
+
+    # Score each row: low is good for minimise, high is good for maximise.
+    scored = []
+    for i, row in enumerate(rows):
+        score = 0.0
+        for col in minimise:
+            v = _to_float(row[header.index(col)])
+            score += v
+        for col in maximise:
+            v = _to_float(row[header.index(col)])
+            score -= v
+        scored.append((score, i))
+
+    scored.sort()
+    worst_n = max(1, int(len(scored) * 0.15))
+    worst_indices = [pos for _, pos in scored[:worst_n]]
+
+    # Input columns: numeric non-goal columns
+    input_cols = []
+    for col in header:
+        if col not in goal_cols and _to_float("") != 0.0:
+            idx = header.index(col)
+            sample_val = _to_float(rows[0][idx])
+            if isinstance(sample_val, float):
+                input_cols.append((col, idx))
+
+    # For each input column, compare average in worst vs all rows.
+    blame_results = []
+    for col_name, col_idx in input_cols:
+        vals_all = [_to_float(row[col_idx]) for row in rows]
+        vals_worst = [_to_float(rows[pos][col_idx]) for pos in worst_indices]
+
+        avg_all = sum(vals_all) / len(vals_all) if vals_all else 0.0
+        avg_worst = sum(vals_worst) / len(vals_worst) if vals_worst else 0.0
+
+        # The column "blames" bad rows if its value differs significantly in worst rows.
+        diff = abs(avg_worst - avg_all)
+        blame_results.append((diff, col_name))
+
+    blame_results.sort(reverse=True)
+    return [col for _, col in blame_results[:5]]
+
+
+if __name__ == "__main__":
+    import csv
+
+    with open("Health-ClosedIssues0000.train.csv", "r") as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = []
+        for row in reader:
+            rows.append(row)
+
+    bad_cols = blame(header, rows)
+    print(f"The worst rows are blamed on these input columns: {bad_cols}")
+
+
+--- step06.py ---
+from step01 import _to_float, remember
+
+
+def justify(header, rows, row):
+    minimise = [c for c in header if c.endswith('-')]
+    maximise = [c for c in header if c.endswith('+')]
+    goal_cols = minimise + maximise
+
+    # Replace "?" with a neutral value so we can compute goals.
+    def fill(row):
+        out = list(row)
+        for i, cell in enumerate(out):
+            if cell == "?":
+                out[i] = 0.0
+        return out
+
+    row_filled = fill(row)
+
+    # Best goal values across all real rows (excluding the test row).
+    best_vals = {}
+    for col in minimise:
+        vals = [_to_float(r[header.index(col)]) for r in rows if _to_float(r[header.index(col)]) != 0.0]
+        best_vals[col] = min(vals) if vals else 0.0
+    for col in maximise:
+        vals = [_to_float(r[header.index(col)]) for r in rows if _to_float(r[header.index(col)]) != 0.0]
+        best_vals[col] = max(vals) if vals else 0.0
+
+    # How good is the test row?
+    cur_goals = {}
+    for col in minimise:
+        v = _to_float(row_filled[header.index(col)])
+        cur_goals[col] = v
+    for col in maximise:
+        v = _to_float(row_filled[header.index(col)])
+        cur_goals[col] = v
+
+    # Distance of test row from best.
+    def goal_distance(goals, best):
+        return sum(
+            (best[c] - goals[c]) if c in minimise else (goals[c] - best[c])
+            for c in goal_cols
+        ) / len(goal_cols)
+
+    dist_test = goal_distance(cur_goals, best_vals)
+
+    # Compare against every other row: what fraction is at least as good?
+    n_rows = len(rows)
+    better_count = 0
+    for r in rows:
+        r_filled = fill(r)
+        r_goals = {}
+        for col in minimise:
+            v = _to_float(r_filled[header.index(col)])
+            r_goals[col] = v
+        for col in maximise:
+            v = _to_float(r_filled[header.index(col)])
+            r_goals[col] = v
+
+        rd = goal_distance(r_goals, best_vals)
+        if rd <= dist_test + 1e-9:
+            better_count += 1
+
+    p = better_count / n_rows if n_rows else 0.0
+    reason = (
+        f"This setup beats {better_count} of {n_rows} others "
+        f"(fraction {p:.2%}) and is within tolerance of the best."
+    )
+    return p, reason
+
+
+if __name__ == "__main__":
+    import csv
+
+    with open("Health-ClosedIssues0000.train.csv", "r") as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = []
+        for row in reader:
+            rows.append(row)
+
+    # Use the top trustworthy setups to pick a reference row.
+    best_rows = remember(header, rows)
+    ref_row = rows[best_rows[0]]
+
+    p, reason = justify(header, rows, ref_row)
+    print(f"Confidence: {p:.2%} — {reason}")
+
+
+--- step07.py ---
+from step01 import _to_float, remember
+
+
+def choose(header, rows, label):
+    minimise = [c for c in header if c.endswith('-')]
+    maximise = [c for c in header if c.endswith('+')]
+
+    # Try the top trustworthy setups first (they tend to be good), then fall back.
+    candidates = remember(header, rows)
+    tried = set()
+    best_pos = 0
+    best_score = float('inf')
+
+    def try_row(i):
+        nonlocal best_pos, best_score
+        goals = label(i)
+        score = sum(goals[c] for c in minimise) - sum(goals[c] for c in maximise)
+        if score < best_score:
+            best_score = score
+            best_pos = i
+
+    # Try up to 50 rows total.
+    n_to_try = min(50, len(rows))
+    for i in range(n_to_try):
+        try_row(i)
+
+    return best_pos
+
+
+if __name__ == "__main__":
+    import csv
+
+    with open("Health-ClosedIssues0000.train.csv", "r") as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = []
+        for row in reader:
+            rows.append(row)
+
+    best = choose(header, rows, lambda i: [_to_float(c) for c in rows[i]])
+    print(f"Best setup is row {best}")
+
+
+--- step08.py ---
+from step01 import _to_float
+
+
+def fix(header, row, levers):
+    """Return {column: new_value} for the single best lever change."""
+    minimise = [c for c in header if c.endswith('-')]
+    maximise = [c for c in header if c.endswith('+')]
+
+    # Current goal values (handle ?)
+    cur_goals = {}
+    for col in minimise + maximise:
+        v = _to_float(row[header.index(col)])
+        cur_goals[col] = v
+
+    def score(goals):
+        s = sum(goals[c] for c in minimise) - sum(goals[c] for c in maximise)
+        return s
+
+    # Best possible score from any real row (excluding this one).
+    best_score = float('inf')
+    n_rows = len(row)  # placeholder; we'll read the file properly below
+    # We don't have access to all rows here, so use a tolerance-based approach:
+    # try each lever change and pick the one that improves score most.
+
+    def fill_row(cells):
+        out = list(cells)
+        for i, cell in enumerate(out):
+            if cell == '?':
+                out[i] = 0.0
+        return out
+
+    row_filled = fill_row(row)
+
+    # For each lever column, try each allowed value and pick the best single change.
+    best_change = None
+    best_improvement = -float('inf')
+
+    for col, values in levers.items():
+        idx = header.index(col)
+        cur_val = _to_float(row[idx])
+        if isinstance(values[0], tuple):
+            # numeric: (low, high) — try both endpoints and midpoint
+            lo, hi = values
+            candidates = [lo, hi]
+            mid = (lo + hi) / 2.0
+            candidates.append(mid)
+        else:
+            candidates = list(values)
+
+        for val in candidates:
+            new_row = fill_row(list(row_filled))
+            new_row[idx] = str(val) if isinstance(val, float) else val
+            new_goals = {}
+            for c in minimise + maximise:
+                v = _to_float(new_row[header.index(c)])
+                new_goals[c] = v
+
+            s = score(new_goals)
+            improvement = s - score(cur_goals)
+            if improvement > best_improvement:
+                best_improvement = improvement
+                best_change = {col: val}
+
+    # If no lever was given, we still need to change at least one — pick the column
+    # with largest numeric range and set it to its midpoint.
+    if best_change is None:
+        for col in header:
+            idx = header.index(col)
+            sample = _to_float(row[idx])
+            if isinstance(sample, float):
+                lo = 0.0
+                hi = sample * 2.0 if sample != 0.0 else 1.0
+                best_change = {col: (lo + hi) / 2.0}
+                break
+
+    return best_change
+
+
+if __name__ == "__main__":
+    import csv
+
+    with open("Health-ClosedIssues0000.train.csv", "r") as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = []
+        for row in reader:
+            rows.append(row)
+
+    # Find the worst row (highest MRE-, lowest ACC+, PRED40+)
+    minimise = [c for c in header if c.endswith('-')]
+    maximise = [c for c in header if c.endswith('+')]
+
+    def score_row(r):
+        s = 0.0
+        for col in minimise:
+            s += _to_float(r[header.index(col)])
+        for col in maximise:
+            s -= _to_float(r[header.index(col)])
+        return s
+
+    worst_idx = min(range(len(rows)), key=lambda i: score_row(rows[i]))
+    worst = rows[worst_idx]
+
+    # Determine levers from the row (numeric columns that aren't goals)
+    goal_cols = set(minimise + maximise)
+    lever_candidates = []
+    for col in header:
+        if col in goal_cols or col.endswith('-') or col.endswith('+'):
+            continue
+        idx = header.index(col)
+        v = _to_float(worst[idx])
+        if isinstance(v, float):
+            lo = 0.0
+            hi = v * 2.0 if v != 0.0 else 1.0
+            lever_candidates.append((col, (lo, hi)))
+
+    levers = {c: vals for c, vals in lever_candidates}
+    result = fix(header, worst, levers)
+
+    print(f"Worst row score: {score_row(worst):.4f}")
+    print(f"Recommended fix: {result}")
+
+
+Reuse the earlier files wherever you can: import from them rather than rewriting. Write as little new code as possible. Do not edit the earlier files.
+
+The customer asks:
+
+  Some result rows look like a run that failed and got written down anyway. Find them.
+
+Write step09.py to answer that ask on this data.
+
+A test harness will import your file and call this function, so you must define it exactly:
+
+def spot(header, rows)
+  Returns a list of ints.   A few rows contain an input value that was entered wrongly. Return the positions of the rows you suspect, most suspicious first.
+
+Conventions: `header` is the list of column names. `rows` is a list of rows; each row is a list of cells in header order, floats for numeric columns and strings for symbolic ones. A cell shown as "?" is hidden from you. A row is better when its goals are closer to their best (low for names ending in -, high for names ending in +).
+
+Keep everything that prints or reads the csv file under `if __name__ == "__main__":` so that importing the file prints nothing. Plain built-in types are all you need: do not import anything from `typing`.
+
+Running `python step09.py` must load the csv, call your function, print a short answer a customer could read, and exit with status 0. Reply with the complete file in one ```python fenced block and nothing else.

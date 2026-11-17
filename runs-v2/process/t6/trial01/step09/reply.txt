@@ -1,0 +1,72 @@
+```python
+import ezr
+
+def spot(header, rows):
+    """Return row indices whose inputs look mistyped or made up."""
+    # Per-input column stats (skip goal columns)
+    n = len(rows)
+    suspicious = []
+    
+    for at in range(len(header)):
+        col_name = header[at]
+        if not col_name[0].isupper():  # skip symbolic goals
+            continue
+        
+        vals = [float(r[at]) for r in rows if isinstance(r[at], (int, float))]
+        if len(vals) < 3:
+            continue
+        
+        mu = sum(vals) / len(vals)
+        m2 = sum((v - mu)**2 for v in vals)
+        sd = (m2 / (len(vals) - 1)) ** 0.5 if len(vals) > 1 else 0
+        
+        # Flag rows where this input is far from the norm (>3 SD)
+        for i, r in enumerate(rows):
+            if isinstance(r[at], (int, float)):
+                z = abs(float(r[at]) - mu) / max(sd, 1e-9)
+                if z > 3.5:
+                    suspicious.append(i)
+    
+    # Sort by how many columns are anomalous (most suspicious first)
+    score = {}
+    for i in suspicious:
+        cnt = sum(1 for at in range(len(header)) 
+                  if not header[at][0].isupper() or True)  # placeholder
+        # Actually count properly below
+    
+    # Re-score: how many anomalous inputs per row
+    counts = [0] * n
+    for at in range(len(header)):
+        col_name = header[at]
+        if not col_name[0].isupper():
+            continue
+        vals = [float(r[at]) for r in rows if isinstance(r[at], (int, float))]
+        if len(vals) < 3:
+            continue
+        mu = sum(vals) / len(vals)
+        m2 = sum((v - mu)**2 for v in vals)
+        sd = (m2 / (len(vals) - 1)) ** 0.5 if len(vals) > 1 else 0
+        for i, r in enumerate(rows):
+            if isinstance(r[at], (int, float)):
+                z = abs(float(r[at]) - mu) / max(sd, 1e-9)
+                if z > 3.5:
+                    counts[i] += 1
+    
+    suspicious = [i for i in range(n) if counts[i] > 0]
+    suspicious.sort(key=lambda i: (-counts[i], i))
+    
+    return suspicious
+
+if __name__ == "__main__":
+    import os
+    path = 'pom3a.train.csv'
+    with open(path) as f:
+        lines = [l.strip() for l in f if l.strip()]
+    header = lines[0].split(',')
+    rows = ezr.csv(path)
+    
+    suspicious = spot(header, rows)
+    print(f"Suspect {len(suspicious)} of {len(rows)} setups:")
+    for i in suspicious:
+        print(f"  Row {i}")
+```

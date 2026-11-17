@@ -1,0 +1,31 @@
+```python
+import csv
+
+
+def remember(header, rows):
+    """Return positions (0-based) of the rows that are unusually good on all goal columns."""
+    goals = [c for c in header if c.endswith('-') and c[0].isupper()]
+
+    n = len(rows)
+    if n == 0:
+        return []
+
+    # For each row, sum its three goal values (lower is better).
+    scored = [(sum(row[header.index(g)] for g in goals), i) for i, row in enumerate(rows)]
+    scored.sort()
+
+    k = max(1, int(n * 0.05))
+    return [pos for _, pos in scored[:k]]
+
+
+if __name__ == "__main__":
+    with open('pom3a.train.csv', 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = list(reader)
+
+    best = remember(header, rows)
+    print(f"Top {len(best)} of {len(rows)} setups:")
+    for pos in best:
+        print(f"  Row {pos}")
+```

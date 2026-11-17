@@ -1,0 +1,55 @@
+```python
+import sys
+sys.path.insert(0, '.')
+from step01 import remember
+from step02 import guess
+from step03 import certify
+
+
+def flow(header, row, seen):
+    """Decide whether to approve the current proposal."""
+    goal_cols = [c for c in header if c.endswith('-')]
+
+    # Build a quick score from goals: lower is better.
+    def goal_score(cells):
+        s = 0.0
+        for col in goal_cols:
+            v = float(cells[header.index(col)])
+            s += -v  # minimise each '-' column
+        return s
+
+    row_s = goal_score(row)
+    seen_scores = [goal_score(r) for r in seen] if seen else []
+
+    # If we have a history, use the best historical score as a benchmark.
+    if seen_scores:
+        best_seen = min(seen_scores)
+        # Approve only when this row is at least as good as any seen so far.
+        return row_s <= best_seen + 1e-9
+
+    # No history yet — approve the first one (or use a simple heuristic).
+    return True
+
+
+if __name__ == "__main__":
+    import pandas as pd
+    df = pd.read_csv("pom3a.train.csv")
+    header = list(df.columns)
+    rows = [list(r) for _, r in df.iterrows()]
+
+    # Pre-compute a reference ranking from the training data.
+    best_positions = remember(header, rows)
+    print(f"Training reference: {len(best_positions)} top setups identified.")
+
+    # Simulate sequential arrival using the first 100 rows as a demo run.
+    n_demo = min(100, len(rows))
+    approved = []
+    for i in range(n_demo):
+        row = rows[i]
+        seen = rows[:i] if i > 0 else []
+        decision = flow(header, row, seen)
+        if decision:
+            approved.append(i)
+
+    print(f"Approved {len(approved)} out of {n_demo} proposals.")
+```

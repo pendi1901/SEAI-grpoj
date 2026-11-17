@@ -1,0 +1,86 @@
+from step01 import _to_float, remember
+
+
+def justify(header, rows, row):
+    minimise = [c for c in header if c.endswith('-')]
+    maximise = [c for c in header if c.endswith('+')]
+    goal_cols = minimise + maximise
+
+    # Replace "?" with a neutral value so we can compute goals.
+    def fill(row):
+        out = list(row)
+        for i, cell in enumerate(out):
+            if cell == "?":
+                out[i] = 0.0
+        return out
+
+    row_filled = fill(row)
+
+    # Best goal values across all real rows (excluding the test row).
+    best_vals = {}
+    for col in minimise:
+        vals = [_to_float(r[header.index(col)]) for r in rows if _to_float(r[header.index(col)]) != 0.0]
+        best_vals[col] = min(vals) if vals else 0.0
+    for col in maximise:
+        vals = [_to_float(r[header.index(col)]) for r in rows if _to_float(r[header.index(col)]) != 0.0]
+        best_vals[col] = max(vals) if vals else 0.0
+
+    # How good is the test row?
+    cur_goals = {}
+    for col in minimise:
+        v = _to_float(row_filled[header.index(col)])
+        cur_goals[col] = v
+    for col in maximise:
+        v = _to_float(row_filled[header.index(col)])
+        cur_goals[col] = v
+
+    # Distance of test row from best.
+    def goal_distance(goals, best):
+        return sum(
+            (best[c] - goals[c]) if c in minimise else (goals[c] - best[c])
+            for c in goal_cols
+        ) / len(goal_cols)
+
+    dist_test = goal_distance(cur_goals, best_vals)
+
+    # Compare against every other row: what fraction is at least as good?
+    n_rows = len(rows)
+    better_count = 0
+    for r in rows:
+        r_filled = fill(r)
+        r_goals = {}
+        for col in minimise:
+            v = _to_float(r_filled[header.index(col)])
+            r_goals[col] = v
+        for col in maximise:
+            v = _to_float(r_filled[header.index(col)])
+            r_goals[col] = v
+
+        rd = goal_distance(r_goals, best_vals)
+        if rd <= dist_test + 1e-9:
+            better_count += 1
+
+    p = better_count / n_rows if n_rows else 0.0
+    reason = (
+        f"This setup beats {better_count} of {n_rows} others "
+        f"(fraction {p:.2%}) and is within tolerance of the best."
+    )
+    return p, reason
+
+
+if __name__ == "__main__":
+    import csv
+
+    with open("Health-ClosedIssues0000.train.csv", "r") as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = []
+        for row in reader:
+            rows.append(row)
+
+    # Use the top trustworthy setups to pick a reference row.
+    best_rows = remember(header, rows)
+    ref_row = rows[best_rows[0]]
+
+    p, reason = justify(header, rows, ref_row)
+    print(f"Confidence: {p:.2%} — {reason}")

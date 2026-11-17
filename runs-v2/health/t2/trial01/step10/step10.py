@@ -1,0 +1,149 @@
+from step01 import _to_float
+
+
+def race(header, rows, label):
+    minimise = [c for c in header if c.endswith('-')]
+    maximise = [c for c in header if c.endswith('+')]
+    goal_cols = set(minimise + maximise)
+
+    def goals_of(row):
+        g = {}
+        for col in minimise:
+            v = _to_float(row[header.index(col)])
+            g[col] = v
+        for col in maximise:
+            v = _to_float(row[header.index(col)])
+            g[col] = v
+        return g
+
+    def goal_score(g):
+        s = sum(g[c] for c in minimise) - sum(g[c] for c in maximise)
+        return s
+
+    # Reference best score from the labelled rows (the "true" goals).
+    true_goals = [goals_of(rows[i]) for i in range(len(label))]
+    ref_score = min(goal_score(g) for g in true_goals) if true_goals else 0.0
+
+    def how_good(row):
+        return goal_score(goals_of(row)) - ref_score
+
+    # --- Strategy A: random (pick rows at random, up to 50 total across all strategies) ---
+    strategy_names = ["random", "greedy", "feature"]
+
+    tried_random = set()
+    tried_greedy = set()
+    tried_feature = set()
+
+    def pick_random():
+        while len(tried_random) < 50:
+            i = label.index(None) if None in label else -1
+            # We don't know which indices are labelled; try all and filter.
+            for j in range(len(rows)):
+                if j not in tried_random:
+                    tried_random.add(j)
+                    return j
+        return -1
+
+    def pick_greedy():
+        while len(tried_greedy) < 50:
+            best_i = None
+            best_s = float('inf')
+            for j in range(len(rows)):
+                if j not in tried_greedy and j not in tried_random:
+                    s = how_good(rows[j])
+                    if s < best_s:
+                        best_s = s
+                        best_i = j
+            if best_i is None:
+                break
+            tried_greedy.add(best_i)
+            return best_i
+
+    def pick_feature():
+        # Use non-goal numeric columns as features; score by feature similarity to the best labelled row.
+        feat_cols = [c for c in header if c not in goal_cols and _to_float("") != 0.0]
+        if not feat_cols:
+            return -1
+
+        ref_row = rows[true_goals.index(true_goals[0])] if true_goals else None
+        if ref_row is None:
+            return -1
+
+        def row_feat_vec(row):
+            v = [0.0] * len(feat_cols)
+            for j, col in enumerate(header):
+                if col not in goal_cols and _to_float("") != 0.0:
+                    idx = header.index(col)
+                    v[j] = _to_float(row[idx])
+            return v
+
+        ref_vec = row_feat_vec(ref_row)
+
+        while len(tried_feature) < 50:
+            best_i = None
+            best_s = float('inf')
+            for j in range(len(rows)):
+                if j not in tried_feature and j not in tried_random:
+                    fv = row_feat_vec(rows[j])
+                    s = sum((a - b) ** 2 for a, b in zip(fv, ref_vec))
+                    if s < best_s:
+                        best_s = s
+                        best_i = j
+            if best_i is None:
+                break
+            tried_feature.add(best_i)
+            return best_i
+
+    r1 = pick_random()
+    g1 = pick_greedy()
+    f1 = pick_feature()
+
+    # If greedy or feature didn't find anything, fall back to random for them.
+    if g1 < 0:
+        tried_greedy.update(tried_random)
+        while len(tried_greedy) < 50 and r1 >= 0:
+            best_i = -1
+            for j in range(len(rows)):
+                if j not in tried_greedy:
+                    best_i = j
+                    break
+            if best_i >= 0:
+                g1 = best_i
+                tried_greedy.add(best_i)
+
+    if f1 < 0:
+        tried_feature.update(tried_random)
+        while len(tried_feature) < 50 and r1 >= 0:
+            best_i = -1
+            for j in range(len(rows)):
+                if j not in tried_feature:
+                    best_i = j
+                    break
+            if best_i >= 0:
+                f1 = best_i
+                tried_feature.add(best_i)
+
+    # Pick the row with the best goal score among what each strategy found.
+    candidates = [(r1, "random"), (g1, "greedy"), (f1, "feature")]
+    valid = [(i, n) for i, n in candidates if i >= 0]
+    if not valid:
+        return {"winner": "random", "row": -1, "tried": ["random", "greedy", "feature"]}
+
+    best_i = min(valid, key=lambda x: how_good(rows[x[0]]))[0]
+    winner_name = [n for i, n in valid if i == best_i][0]
+
+    return {"winner": winner_name, "row": best_i, "tried": ["random", "greedy", "feature"]}
+
+
+if __name__ == "__main__":
+    import csv
+
+    with open("Health-ClosedIssues0000.train.csv", "r") as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = []
+        for row in reader:
+            rows.append(row)
+
+    result = race(header, rows, [])
+    print(result)

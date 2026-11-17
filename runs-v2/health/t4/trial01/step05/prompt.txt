@@ -1,0 +1,300 @@
+You are writing one Python file, step05.py.
+
+The data is the csv file Health-ClosedIssues0000.train.csv in the current directory. Column names starting in upper case are numeric, lower case are symbolic. A name ending in - is a goal to minimise, in + a goal to maximise; all other columns are inputs. It has 8000 data rows after the header. Any count the customer quotes describes their full records, not this file: never hard-code a row count, read the file to the end. Its first lines:
+
+MRE-,ACC+,PRED40+,N_estimators,criterion,Min_sample_leaves,Min_impurity_decrease,Max_depth
+0.7771723122238585,0.4546619673181672,0,10,squared_error,17,7.75,11
+0.42238586156111924,0.6920858699134893,0.5714285714285714,150,absolute_error,3,4.25,10
+0.8817378497790869,0.40820249919897467,0,110,absolute_error,18,4,14
+
+You may use scikit-learn, numpy and pandas.
+
+These files, written earlier, are in the same directory:
+
+--- step01.py ---
+import pandas as pd
+import numpy as np
+
+
+def remember(header, rows):
+    # Identify goal columns (end with '-' or '+')
+    goal_cols = [c for c in header if c.endswith('-') or c.endswith('+')]
+    
+    # Find best values per goal column across all valid rows
+    min_vals = {}
+    max_vals = {}
+    for col in goal_cols:
+        vals = []
+        for row in rows:
+            cell = row[header.index(col)]
+            if cell == "?" or (isinstance(cell, float) and np.isnan(cell)):
+                continue
+            v = float(cell)
+            vals.append(v)
+        
+        if '-' in col:
+            min_vals[col] = min(vals) if vals else 0.0
+        else:
+            max_vals[col] = max(vals) if vals else 0.0
+    
+    # Score each row: sum of absolute deviations from best on goals
+    scores = []
+    for i, row in enumerate(rows):
+        s = 0.0
+        valid = True
+        for col in goal_cols:
+            cell = row[header.index(col)]
+            if cell == "?" or (isinstance(cell, float) and np.isnan(cell)):
+                continue
+            v = float(cell)
+            if '-' in col:
+                s += abs(v - min_vals[col])
+            else:
+                s += abs(v - max_vals[col])
+        scores.append(s)
+    
+    # Return positions of top rows (at least 1, at most 5%)
+    n = len(rows)
+    k = max(1, int(n * 0.05))
+    sorted_indices = np.argsort(scores)[:k]
+    return sorted_indices.tolist()
+
+
+if __name__ == "__main__":
+    df = pd.read_csv("Health-ClosedIssues0000.train.csv")
+    header = list(df.columns)
+    rows = [list(map(float, row)) for _, row in df.iterrows()]
+    
+    best_positions = remember(header, rows)
+    print(f"Best {len(best_positions)} out of {len(rows)} setups:")
+    for pos in best_positions:
+        print(f"  Row {pos}: MRE={df.iloc[pos]['MRE-']:.4f}, ACC={df.iloc[pos]['ACC+']:.4f}, PRED40={df.iloc[pos]['PRED40+']:.4f}")
+
+
+--- step02.py ---
+import pandas as pd
+import numpy as np
+from sklearn.ensemble import RandomForestRegressor
+
+
+def remember(header, rows):
+    # Identify goal columns (end with '-' or '+')
+    goal_cols = [c for c in header if c.endswith('-') or c.endswith('+')]
+    
+    # Find best values per goal column across all valid rows
+    min_vals = {}
+    max_vals = {}
+    for col in goal_cols:
+        vals = []
+        for row in rows:
+            cell = row[header.index(col)]
+            if cell == "?" or (isinstance(cell, float) and np.isnan(cell)):
+                continue
+            v = float(cell)
+            vals.append(v)
+        
+        if '-' in col:
+            min_vals[col] = min(vals) if vals else 0.0
+        else:
+            max_vals[col] = max(vals) if vals else 0.0
+    
+    # Score each row: sum of absolute deviations from best on goals
+    scores = []
+    for i, row in enumerate(rows):
+        s = 0.0
+        valid = True
+        for col in goal_cols:
+            cell = row[header.index(col)]
+            if cell == "?" or (isinstance(cell, float) and np.isnan(cell)):
+                continue
+            v = float(cell)
+            if '-' in col:
+                s += abs(v - min_vals[col])
+            else:
+                s += abs(v - max_vals[col])
+        scores.append(s)
+    
+    # Return positions of top rows (at least 1, at most 5%)
+    n = len(rows)
+    k = max(1, int(n * 0.05))
+    sorted_indices = np.argsort(scores)[:k]
+    return sorted_indices.tolist()
+
+
+def guess(header, train, test):
+    goal_cols = [c for c in header if c.endswith('-') or c.endswith('+')]
+    target_col = goal_cols[0]  # first goal column to predict
+    
+    feature_cols = [c for c in header if c not in goal_cols]
+    
+    def build_X(rows):
+        X = np.zeros((len(rows), len(feature_cols)))
+        for i, row in enumerate(rows):
+            for j, col in enumerate(feature_cols):
+                cell = row[header.index(col)]
+                v = float(cell) if isinstance(cell, (int, float)) else 0.0
+                X[i][j] = v
+        return X
+    
+    train_X = build_X(train)
+    test_X = build_X(test)
+    
+    y_train = np.array([float(row[header.index(target_col)]) for row in train])
+    
+    model = RandomForestRegressor(n_estimators=100, random_state=42)
+    model.fit(train_X, y_train)
+    
+    return model.predict(test_X).tolist()
+
+
+if __name__ == "__main__":
+    df = pd.read_csv("Health-ClosedIssues0000.train.csv")
+    header = list(df.columns)
+    rows = [list(map(float, row)) for _, row in df.iterrows()]
+    
+    best_positions = remember(header, rows)
+    print(f"Best {len(best_positions)} out of {len(rows)} setups:")
+    for pos in best_positions:
+        print(f"  Row {pos}: MRE={df.iloc[pos]['MRE-']:.4f}, ACC={df.iloc[pos]['ACC+']:.4f}, PRED40={df.iloc[pos]['PRED40+']:.4f}")
+
+    preds = guess(header, rows, [])
+    print(f"\nPredicted MRE for {len(preds)} test configurations:")
+    for i, p in enumerate(preds):
+        print(f"  Config {i}: estimated MRE={p:.4f}")
+
+
+--- step03.py ---
+import pandas as pd
+from step01 import remember
+
+
+def certify(xs, ys):
+    """Return True if xs and ys are the same apart from noise."""
+    diff = [abs(x - y) for x, y in zip(xs, ys)]
+    avg_diff = sum(diff) / len(diff) if diff else 0.0
+    return avg_diff < 0.1
+
+
+def main():
+    df = pd.read_csv("Health-ClosedIssues0000.train.csv")
+    header = list(df.columns)
+    rows = [list(map(float, row)) for _, row in df.iterrows()]
+
+    best_positions = remember(header, rows)
+
+    big_rows = []
+    small_rows = []
+    for pos in best_positions:
+        if rows[pos][header.index('n_estimators')] > 50:
+            big_rows.append(pos)
+        else:
+            small_rows.append(pos)
+
+    big_mre = [rows[p][header.index('MRE-')] for p in big_rows]
+    small_mre = [rows[p][header.index('MRE-')] for p in small_rows]
+
+    result = certify(big_mre, small_mre)
+    print(f"Big vs Small n_estimators: {'Yes' if result else 'No'}, they differ by noise")
+
+
+if __name__ == "__main__":
+    main()
+
+
+--- step04.py ---
+import pandas as pd
+from step01 import remember
+
+
+def flow(header, row, seen):
+    """Return True when we have a good enough setup to ship."""
+    goal_cols = [c for c in header if c.endswith('-') or c.endswith('+')]
+
+    # Track best values and worst scores across all rows seen so far (including current)
+    min_vals = {}
+    max_vals = {}
+    for col in goal_cols:
+        vals = []
+        for r in seen + [row]:
+            cell = r[header.index(col)]
+            if cell == "?" or (isinstance(cell, float) and pd.isna(cell)):
+                continue
+            v = float(cell)
+            vals.append(v)
+
+        if '-' in col:
+            min_vals[col] = min(vals) if vals else 0.0
+        else:
+            max_vals[col] = max(vals) if vals else 0.0
+
+    # Score each row seen so far against the best values found across all rows
+    scores = []
+    for r in seen + [row]:
+        s = 0.0
+        valid = True
+        for col in goal_cols:
+            cell = r[header.index(col)]
+            if cell == "?" or (isinstance(cell, float) and pd.isna(cell)):
+                continue
+            v = float(cell)
+            if '-' in col:
+                s += abs(v - min_vals[col])
+            else:
+                s += abs(v - max_vals[col])
+        scores.append(s)
+
+    # Check if the current row is among the best (top 5%) of all rows seen so far
+    n = len(seen + [row])
+    k = max(1, int(n * 0.05))
+    sorted_indices = np.argsort(scores)[:k]
+    
+    # Return True if current row is in top-k
+    return (len(seen + [row]) - 1) in sorted_indices.tolist()
+
+
+if __name__ == "__main__":
+    df = pd.read_csv("Health-ClosedIssues0000.train.csv")
+    header = list(df.columns)
+    rows = []
+    for _, row in df.iterrows():
+        cells = []
+        for col in header:
+            val = row[col]
+            if isinstance(val, float):
+                cells.append(float(val))
+            else:
+                cells.append(str(val))
+        rows.append(cells)
+
+    print(f"Loaded {len(rows)} setups from CSV.")
+    
+    # Simulate streaming: feed rows one at a time to flow() and stop when True
+    import numpy as np
+    
+    for i, row in enumerate(rows):
+        if flow(header, row, rows[:i]):
+            print(f"Shipped setup {i} (MRE={row[header.index('MRE-')]:.4f}, ACC={row[header.index('ACC+')]:.4f})")
+            break
+    else:
+        # If we never returned True, ship the last row as fallback
+        print(f"No early stop triggered; shipping last setup {len(rows)-1}")
+
+
+Reuse the earlier files wherever you can: import from them rather than rewriting. Write as little new code as possible. Do not edit the earlier files.
+
+The customer asks:
+
+  Why do the bad setups miss so badly? Which settings are doing the damage?
+
+Write step05.py to answer that ask on this data.
+
+A test harness will import your file and call this function, so you must define it exactly:
+
+def blame(header, rows)
+  Returns a list of strings.   Return the names of the input columns (not goals) that best explain why the worst rows are bad.
+
+Conventions: `header` is the list of column names. `rows` is a list of rows; each row is a list of cells in header order, floats for numeric columns and strings for symbolic ones. A cell shown as "?" is hidden from you. A row is better when its goals are closer to their best (low for names ending in -, high for names ending in +).
+
+Keep everything that prints or reads the csv file under `if __name__ == "__main__":` so that importing the file prints nothing. Plain built-in types are all you need: do not import anything from `typing`.
+
+Running `python step05.py` must load the csv, call your function, print a short answer a customer could read, and exit with status 0. Reply with the complete file in one ```python fenced block and nothing else.

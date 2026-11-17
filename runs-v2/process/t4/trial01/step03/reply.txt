@@ -1,0 +1,41 @@
+```python
+import pandas as pd
+import numpy as np
+
+
+def certify(xs, ys):
+    xs = np.array(xs)
+    ys = np.array(ys)
+    n_x, n_y = len(xs), len(ys)
+    mean_x = xs.mean() if n_x > 0 else 0.0
+    mean_y = ys.mean() if n_y > 0 else 0.0
+    var_x = xs.var(ddof=1) if n_x > 1 else 0.0
+    var_y = ys.var(ddof=1) if n_y > 1 else 0.0
+    se = np.sqrt(var_x / n_x + var_y / n_y) if (var_x / n_x + var_y / n_y) > 0 else 0.0
+    t_stat = abs(mean_x - mean_y) / se if se > 0 else float('inf')
+    return t_stat < 2.0
+
+
+if __name__ == "__main__":
+    df = pd.read_csv("pom3a.train.csv")
+    header = list(df.columns)
+    rows = [list(row) for _, row in df.iterrows()]
+
+    team_size_col = 'Team Size'
+    cost_col = 'Cost-'
+
+    team_sizes = np.array([float(r[team_size_col]) for r in rows])
+    median_ts = np.median(team_sizes)
+
+    small_costs = [float(r[cost_col]) for r, ts in zip(rows, team_sizes) if ts <= median_ts]
+    big_costs = [float(r[cost_col]) for r, ts in zip(rows, team_sizes) if ts > median_ts]
+
+    is_noise = certify(small_costs, big_costs)
+
+    print(f"Small-team average Cost-: {np.mean(small_costs):.4f}")
+    print(f"Big-team average Cost-:   {np.mean(big_costs):.4f}")
+    if is_noise:
+        print("The difference looks like noise (luck).")
+    else:
+        print("The difference is real, not just luck.")
+```

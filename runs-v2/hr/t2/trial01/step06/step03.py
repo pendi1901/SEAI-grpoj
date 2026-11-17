@@ -1,0 +1,58 @@
+import csv
+from step01 import remember
+from step02 import guess
+
+
+def certify(xs, ys):
+    """Return True if xs and ys are the same apart from noise."""
+    n_x = len(xs)
+    n_y = len(ys)
+    if n_x == 0 or n_y == 0:
+        return False
+
+    mean_x = sum(xs) / n_x
+    mean_y = sum(ys) / n_y
+
+    var_x = sum((v - mean_x) ** 2 for v in xs) / max(n_x, 1)
+    var_y = sum((v - mean_y) ** 2 for v in ys) / max(n_y, 1)
+
+    std_x = max(var_x ** 0.5, 1e-6)
+    std_y = max(var_y ** 0.5, 1e-6)
+
+    diff = abs(mean_x - mean_y)
+    se = (std_x ** 2 / n_x + std_y ** 2 / n_y) ** 0.5
+
+    return diff < 3 * max(se, 1e-6)
+
+
+def main():
+    path = 'WA_Fn-UseC_-HR-Employee-Attrition.train.csv'
+    with open(path, newline='') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = list(reader)
+
+    overtime_years = []
+    non_overtime_years = []
+
+    for row in rows:
+        years_at_company = float(row[header.index('YearsAtCompany+')]) if row[header.index('YearsAtCompany+')] != '?' else 0.0
+        over_time = row[header.index('overTime')]
+
+        if over_time == 'Y':
+            overtime_years.append(years_at_company)
+        else:
+            non_overtime_years.append(years_at_company)
+
+    print(f"Overtime workers: {len(overtime_years)} employees, avg stay: {sum(overtime_years)/len(overtime_years):.1f} years")
+    print(f"Non-overtime workers: {len(non_overtime_years)} employees, avg stay: {sum(non_overtime_years)/len(non_overtime_years):.1f} years")
+
+    result = certify(overtime_years, non_overtime_years)
+    if result:
+        print("Conclusion: Overtime and non-overtime workers have similar tenure (apart from noise).")
+    else:
+        print("Conclusion: Overtime workers differ significantly in tenure.")
+
+
+if __name__ == "__main__":
+    main()

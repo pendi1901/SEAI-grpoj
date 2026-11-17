@@ -1,0 +1,115 @@
+```python
+import csv
+
+
+def flow(header, row, seen):
+    """Streaming retention classifier: return True if the employee needs a conversation."""
+    years_idx = header.index('YearsAtCompany+')
+    goal_cols = ['YearsAtCompany+', 'YearsInCurrentRole+',
+                 'YearsSinceLastPromotion', 'YearsWithCurrManager+']
+
+    numeric_cols = []
+    for col in header:
+        if col not in goal_cols and '+' not in col \
+                and col != 'EmployeeNumber' and col != 'EmployeeCount':
+            numeric_cols.append(col)
+
+    n_seen = len(seen)
+    if n_seen == 0:
+        return True
+
+    def safe_float(val):
+        if val == '?':
+            return 0.0
+        try:
+            return float(val)
+        except (ValueError, TypeError):
+            return 0.0
+
+    col_idx = {col: header.index(col) for col in numeric_cols}
+
+    means = {}
+    stds = {}
+    y_vals = []
+    for r in seen:
+        for col in numeric_cols:
+            v = safe_float(r[col_idx[col]])
+            means[col] = means.get(col, 0.0) + (v - means.get(col, 0.0))
+        y_vals.append(safe_float(r[years_idx]))
+
+    n = len(seen)
+    for col in numeric_cols:
+        m = sum(v for v in [safe_float(r[col_idx[col]]) for r in seen]) / n
+        variance = sum((v - m) ** 2 for v in means.values()) / n
+        # Recompute properly per column
+        pass
+
+    # Clean approach: compute stats fresh from seen
+    col_means = {}
+    col_sums_sq = {}
+    y_mean_sum = 0.0
+    y_var_sum = 0.0
+    for r in seen:
+        for col in numeric_cols:
+            v = safe_float(r[col_idx[col]])
+            col_means[col] = col_means.get(col, 0.0) + (v - col_means.get(col, 0.0))
+        y_mean_sum += safe_float(r[years_idx])
+
+    n = len(seen)
+    for col in numeric_cols:
+        m = col_means.get(col, 0.0) / n
+        # Need sum of squares too — let me redo this cleanly
+        pass
+
+    # OK, simplest correct approach:
+    def _stats(rows):
+        means = {}
+        sums_sq = {}
+        for r in rows:
+            for col in numeric_cols:
+                v = safe_float(r[col_idx[col]])
+                means[col] = means.get(col, 0.0) + (v - means.get(col, 0.0))
+        n = len(rows)
+        for col in numeric_cols:
+            m = means.get(col, 0.0) / n
+            sums_sq[col] = sum((safe_float(r[col_idx[col])) - m) ** 2 for r in rows)
+        return {col: (means.get(col, 0.0)/n, sums_sq.get(col, 0.0)**0.5) for col in numeric_cols}
+
+    stats_seen = _stats(seen)
+    y_mean = sum(safe_float(r[years_idx]) for r in seen) / n
+    y_std = (sum((safe_float(r[years_idx]) - y_mean) ** 2 for r in seen) / n) ** 0.5 or 1e-6)
+
+    correlations = {}
+    for col in numeric_cols:
+        x_vals = [safe_float(r[col_idx[col]]) for r in seen]
+        x_m, x_s = stats_seen[col]
+        numerator = sum((x - x_m) * (y - y_mean) for x, y in zip(x_vals, [safe_float(r[years_idx]) for r in seen]))
+        denom_x = ((sum((v - x_m)**2 for v in x_vals))**0.5 or 1e-6)
+        if denom_x * y_std > 0:
+            correlations[col] = numerator / (denom_x * y_std)
+        else:
+            correlations[col] = 0.0
+
+    pred = y_mean
+    for col in numeric_cols:
+        val = safe_float(row[col_idx[col]])
+        z_score = (val - stats_seen[col][0]) / stats_seen[col][1]
+        pred += correlations.get(col, 0.0) * z_score
+
+    return pred < y_mean
+
+
+if __name__ == "__main__":
+    path = 'WA_Fn-UseC_-HR-Employee-Attrition.train.csv'
+    with open(path, newline='') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = list(reader)
+
+    flagged = []
+    for row in rows:
+        if flow(header, row, flagged):
+            flagged.append(row)
+
+    print(f"Flagged {len(flagged)} of {len(rows)} employees for retention conversation.")
+```

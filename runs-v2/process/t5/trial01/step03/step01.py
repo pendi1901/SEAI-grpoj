@@ -1,0 +1,27 @@
+#!/usr/bin/env python3 -B
+"""step01.py: find setups unusually well on all three bills."""
+import ezr
+
+
+def remember(header, rows):
+    """Return positions (0-based) of the best rows."""
+    tbl = ezr.Tbl(zip(header, rows))
+    # ydist already measures how far each row is from its goals' best.
+    # Pick at most 5% of rows, but at least one.
+    cap = max(1, len(rows) // 20)
+    scored = [(ezr.ydist(tbl, r), i) for i, r in enumerate(rows)]
+    scored.sort()
+    return [i for _, i in scored[:cap]]
+
+
+if __name__ == "__main__":
+    import os
+    path = os.path.join(os.path.dirname(__file__) or ".", "pom3a.train.csv")
+    with open(path, encoding="utf-8-sig") as f:
+        lines = [l.strip() for l in f if l.strip()]
+    header = [s for s in lines[0].split(",")]
+    rows = [[ezr.atom(s) for s in line.split(",")] for line in lines[1:]]
+    best = remember(header, rows)
+    print(f"Best {len(best)} of {len(rows)} setups:")
+    for i in best[:5]:
+        print(f"  row {i}")

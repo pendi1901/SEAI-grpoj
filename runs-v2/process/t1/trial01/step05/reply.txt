@@ -1,0 +1,38 @@
+```python
+def blame(header, rows):
+    goal_cols = ['Cost-', 'Score-', 'Idle-']
+
+    col_to_idx = {col: i for i, col in enumerate(header)}
+
+    def parse_row(row):
+        rec = {}
+        for col in header:
+            idx = col_to_idx[col]
+            val = row[idx]
+            if val == '?':
+                return None
+            try:
+                rec[col] = float(val)
+            except ValueError:
+                return None
+        return rec
+
+    parsed = []
+    for row in rows:
+        p = parse_row(row)
+        if p is not None:
+            parsed.append(p)
+
+    if not parsed:
+        return []
+
+    n = len(parsed)
+
+    # Identify worst rows (highest Idle-)
+    idle_vals = [p['Idle-'] for p in parsed]
+    sorted_by_idle = sorted(range(n), key=lambda i: idle_vals[i], reverse=True)
+
+    worst_count = max(1, int(n * 0.2))
+    worst_indices = set(sorted_by_idle[:worst_count])
+
+    input_cols = [c for c

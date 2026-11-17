@@ -1,0 +1,59 @@
+```python
+#!/usr/bin/env python3 -B
+"""step06.py: justify any setup against all others."""
+import ezr
+
+
+def justify(header, rows, row):
+    """Return (p, reason) where p is fraction of rows that `row` beats.
+
+    In `row`, goal cells are "?".  We fill them with the training mean and
+    score the row through a decision tree grown on `rows`.
+    """
+    tbl = ezr.Tbl(zip(header, rows))
+    ranker_fn = ezr.ranker(tbl)
+
+    # Fill "?" goals in query row with column means
+    completed = list(row)
+    for i, col_name in enumerate(header):
+        if col_name.endswith("-") and completed[i] == "?":
+            col_obj = tbl.cols[i]
+            if hasattr(col_obj, "mu"):
+                completed[i] = col_obj.mu
+
+    predicted = ranker_fn(completed)
+
+    # Score all training rows with ydist (lower is better)
+    scored = [(ezr.ydist(tbl, r), i) for i, r in enumerate(rows)]
+    scored.sort()
+
+    n_worse = sum(1 for _, y in scored if y > predicted)
+    p = n_worse / len(rows)
+
+    if p >= 0.9:
+        reason = f"Top tier: {p:.0%} of setups are worse than this one."
+    elif p >= 0.7:
+        reason = f"Strong performer: {p:.0%} of setups are worse than this one."
+    else:
+        reason = f"Above average: {p:.0%} of setups are worse than this one."
+
+    return (p, reason)
+
+
+if __name__ == "__main__":
+    import os
+    path = os.path.join(os.path.dirname(__file__) or ".", "pom3a.train.csv")
+    with open(path, encoding="utf-8-sig") as f:
+        lines = [l.strip() for l in f if l.strip()]
+    header = [s for s in lines[0].split(",")]
+    rows = [[ezr.atom(s) for s in line.split(",")] for line in lines[1:]]
+
+    # Demo: take first row, mask goals with "?", then justify it
+    demo = list(rows[0])
+    for i, col_name in enumerate(header):
+        if col_name.endswith("-"):
+            demo[i] = "?"
+
+    p, reason = justify(header, rows, demo)
+    print(f"{reason}")
+```

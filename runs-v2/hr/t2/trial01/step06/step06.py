@@ -1,0 +1,52 @@
+import csv
+
+
+def justify(header, rows, row):
+    """Return (fraction_better, reason) for a single employee."""
+    years_idx = header.index('YearsAtCompany+')
+    goal_cols = ['YearsAtCompany+', 'YearsInCurrentRole+',
+                 'YearsSinceLastPromotion', 'YearsWithCurrManager+']
+
+    def safe_float(val):
+        if val == '?':
+            return 0.0
+        try:
+            return float(val)
+        except (ValueError, TypeError):
+            return 0.0
+
+    # Compute best possible score for each goal column across rows
+    best_scores = {}
+    for col in goal_cols:
+        vals = [safe_float(r[header.index(col)]) for r in rows]
+        best_scores[col] = max(vals) if vals else 0.0
+
+    # Score the reference row and all rows
+    def score(row):
+        s = 0.0
+        for col in goal_cols:
+            v = safe_float(row[header.index(col)])
+            s += (v / best_scores[col]) * 100.0 if best_scores[col] > 0 else 0.0
+        return s
+
+    ref_score = score(row)
+    better_count = sum(1 for r in rows if score(r) < ref_score)
+    n = len(rows)
+    fraction = better_count / max(n, 1)
+
+    reason = (f"Your tenure is better than {fraction*100:.0f}% of employees "
+              f"(you rank top-{int((1-fraction)*n)+1} out of {n}).")
+    return (fraction, reason)
+
+
+if __name__ == "__main__":
+    path = 'WA_Fn-UseC_-HR-Employee-Attrition.train.csv'
+    with open(path, newline='') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = list(reader)
+
+    # Use the last row (which has '?' goals) as the reference
+    ref_row = rows[-1]
+    fraction, reason = justify(header, rows, ref_row)
+    print(reason)

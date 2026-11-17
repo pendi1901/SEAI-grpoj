@@ -1,0 +1,230 @@
+You are writing one Python file, step04.py.
+
+The data is the csv file pom3a.train.csv in the current directory. Column names starting in upper case are numeric, lower case are symbolic. A name ending in - is a goal to minimise, in + a goal to maximise; all other columns are inputs. It has 16000 data rows after the header. Any count the customer quotes describes their full records, not this file: never hard-code a row count, read the file to the end. Its first lines:
+
+Culture,Criticality,Criticality Modifier,Initial Known,Inter-Dependency,Dynamism,Size,Plan,Team Size,Cost-,Score-,Idle-
+0.0398226348789376,0.4187697102690966,0.3161703902572166,0.959348346991444,0.2103972800854883,0.0012522910308919,0.6979456136102667,0.1708306261451138,0.3500716982826897,0.200104493,0.01402719,0.321856287
+0.8178056583175877,0.3082578231712947,0.6206926231796946,0.1199646773715625,0.2164255013970158,0.4846586144618353,0.294210224703445,0.9507425179765736,0.6096404500113382,0.163698034,0.592347249,0.522540984
+0.56468123803359,0.7539537892599035,0.9559574534085812,0.7971286605248636,0.1481054831420605,0.1838254939038858,0.3179577323742758,0.8793894950349531,0.5030407165929099,0.384975817,0.365612315,0.610119048
+
+Use only the Python standard library.
+
+These files, written earlier, are in the same directory:
+
+--- step01.py ---
+import csv
+
+
+def remember(header, rows):
+    """Return positions (0-based) of the rows that are unusually good on all goal columns."""
+    goals = [c for c in header if c.endswith('-') and c[0].isupper()]
+
+    n = len(rows)
+    if n == 0:
+        return []
+
+    # For each row, sum its three goal values (lower is better).
+    scored = [(sum(row[header.index(g)] for g in goals), i) for i, row in enumerate(rows)]
+    scored.sort()
+
+    k = max(1, int(n * 0.05))
+    return [pos for _, pos in scored[:k]]
+
+
+if __name__ == "__main__":
+    with open('pom3a.train.csv', 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = list(reader)
+
+    best = remember(header, rows)
+    print(f"Top {len(best)} of {len(rows)} setups:")
+    for pos in best:
+        print(f"  Row {pos}")
+
+
+--- step02.py ---
+import csv
+
+
+def remember(header, rows):
+    """Return positions (0-based) of the rows that are unusually good on all goal columns."""
+    goals = [c for c in header if c.endswith('-') and c[0].isupper()]
+
+    n = len(rows)
+    if n == 0:
+        return []
+
+    scored = [(sum(row[header.index(g)] for g in goals), i) for i, row in enumerate(rows)]
+    scored.sort()
+
+    k = max(1, int(n * 0.05))
+    return [pos for _, pos in scored[:k]]
+
+
+def guess(header, train, test):
+    """Predict Cost- (first goal column) for each test row."""
+    goals = [c for c in header if c.endswith('-') and c[0].isupper()]
+    first_goal = goals[0]  # "Cost-"
+
+    n_train = len(train)
+    if n_train == 0:
+        return ["?"] * len(test)
+
+    goal_idx = header.index(first_goal)
+    input_cols = [c for c in header if c not in goals and c != first_goal]
+
+    # Compute means of inputs and target from training data.
+    m_target = sum(row[goal_idx] for row in train) / n_train
+    m_inputs = {col: sum(row[header.index(col)] for row in train) / n_train for col in input_cols}
+
+    # Build OLS coefficients using normal equations (manual implementation).
+    p = len(input_cols)
+    A = [[0.0] * (p + 1) for _ in range(p + 1)]
+    b = [0.0] * (p + 1)
+
+    for row in train:
+        x = [row[header.index(col)] - m_inputs[col] for col in input_cols]
+        y = row[goal_idx] - m_target
+        for i in range(p):
+            b[i] += x[i] * y
+        for i in range(p):
+            for j in range(p):
+                A[i][j] += x[i] * x[j]
+        A[i][p] = 0.0
+
+    # Solve via Gaussian elimination on the augmented matrix [A | b].
+    aug = [row[:] + [b[i]] for i, row in enumerate(A)]
+    n = p + 1
+    for col in range(n):
+        max_row = col
+        for r in range(col + 1, n):
+            if abs(aug[r][col]) > abs(aug[max_row][col]):
+                max_row = r
+        aug[col], aug[max_row] = aug[max_row], aug[col]
+        pivot = aug[col][col]
+        if abs(pivot) < 1e-12:
+            continue
+        for r in range(col + 1, n):
+            factor = aug[r][col] / pivot
+            for c in range(col, n + 1):
+                aug[r][c] -= factor * aug[col][c]
+
+    coeffs = [aug[i][n] / aug[i][i] if abs(aug[i][i]) > 1e-12 else 0.0 for i in range(n)]
+
+    predictions = []
+    for row in test:
+        pred = m_target + sum(coeffs[i] * (row[header.index(input_cols[i])] - m_inputs[input_cols[i]]) for i in range(p))
+        predictions.append(round(pred, 6))
+
+    return predictions
+
+
+if __name__ == "__main__":
+    with open('pom3a.train.csv', 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = list(reader)
+
+    best = remember(header, rows)
+    print(f"Top {len(best)} of {len(rows)} setups:")
+    for pos in best:
+        print(f"  Row {pos}")
+
+    preds = guess(header, rows, [])
+    print(f"\nPredicted Cost- range: {min(preds):.4f} to {max(preds):.4f}")
+
+
+--- step03.py ---
+import csv
+from step01 import remember
+from step02 import guess
+
+
+def certify(xs, ys):
+    """Returns True if xs and ys are the same apart from noise."""
+    n = min(len(xs), len(ys))
+    if n == 0:
+        return False
+
+    mean_x = sum(xs[:n]) / n
+    mean_y = sum(ys[:n]) / n
+
+    num = sum((xs[i] - mean_x) * (ys[i] - mean_y) for i in range(n))
+    den_x = sum((x - mean_x) ** 2 for x in xs[:n]) ** 0.5
+    den_y = sum((y - mean_y) ** 2 for y in ys[:n]) ** 0.5
+
+    if den_x == 0 or den_y == 0:
+        return False
+
+    r = num / (den_x * den_y)
+    return abs(r) > 0.9
+
+
+def certify_team_size_vs_cost(header, rows):
+    """Test whether Team Size genuinely predicts Cost-."""
+    team_idx = header.index('Team Size')
+    cost_idx = header.index('Cost-')
+
+    n = len(rows)
+    if n == 0:
+        return False
+
+    x_vals = [row[team_idx] for row in rows]
+    y_vals = [row[cost_idx] for row in rows]
+
+    mean_x = sum(x_vals) / n
+    mean_y = sum(y_vals) / n
+
+    num = sum((x_vals[i] - mean_x) * (y_vals[i] - mean_y) for i in range(n))
+    den_x = sum((x_vals[i] - mean_x) ** 2 for i in range(n)) ** 0.5
+    den_y = sum((y_vals[i] - mean_y) ** 2 for i in range(n)) ** 0.5
+
+    if den_x == 0 or den_y == 0:
+        return False
+
+    r = num / (den_x * den_y)
+
+    # |r| > 0.9 means a real relationship; otherwise noise/luck
+    return abs(r) > 0.9
+
+
+if __name__ == "__main__":
+    with open('pom3a.train.csv', 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = list(reader)
+
+    best = remember(header, rows)
+    print(f"Top {len(best)} of {len(rows)} setups:")
+    for pos in best:
+        print(f"  Row {pos}")
+
+    preds = guess(header, rows, [])
+    print(f"\nPredicted Cost- range: {min(preds):.4f} to {max(preds):.4f}")
+
+    result = certify_team_size_vs_cost(header, rows)
+    if result is True:
+        print("Small-team setups are genuinely cheaper than big-team ones.")
+    else:
+        print("The apparent cost difference between team sizes was just noise/luck.")
+
+
+Reuse the earlier files wherever you can: import from them rather than rewriting. Write as little new code as possible. Do not edit the earlier files.
+
+The customer asks:
+
+  Proposals for new programmes reach my desk one at a time. Tell me on the spot whether to approve each one; I cannot go back.
+
+Write step04.py to answer that ask on this data.
+
+A test harness will import your file and call this function, so you must define it exactly:
+
+def flow(header, row, seen)
+  Returns True or False.   Rows arrive one at a time. `row` is the one that just arrived; `seen` is the list of rows that arrived before it. Return True to choose `row` and stop, False to let it go. You cannot go back.
+
+Conventions: `header` is the list of column names. `rows` is a list of rows; each row is a list of cells in header order, floats for numeric columns and strings for symbolic ones. A cell shown as "?" is hidden from you. A row is better when its goals are closer to their best (low for names ending in -, high for names ending in +).
+
+Keep everything that prints or reads the csv file under `if __name__ == "__main__":` so that importing the file prints nothing. Plain built-in types are all you need: do not import anything from `typing`.
+
+Running `python step04.py` must load the csv, call your function, print a short answer a customer could read, and exit with status 0. Reply with the complete file in one ```python fenced block and nothing else.

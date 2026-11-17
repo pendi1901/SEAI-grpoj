@@ -1,0 +1,487 @@
+```python
+import pandas as pd
+import numpy as np
+
+
+def race(header, rows, label):
+    goal_cols = [h for h in header if h.endswith('-')]
+    input_cols = [h for h in header if not h.endswith('-')]
+
+    df = pd.DataFrame(rows, columns=header)
+    for col in goal_cols:
+        df[col] = df[col].replace('?', np.nan).astype(float)
+
+    means = {}
+    stds = {}
+    for col in goal_cols:
+        vals = df[col].dropna()
+        if len(vals) > 0:
+            means[col] = vals.mean()
+            stds[col] = vals.std()
+        else:
+            means[col] = 0.0
+            stds[col] = 1.0
+
+    def score_row(row):
+        scores = []
+        for col in goal_cols:
+            val = row[header.index(col)] if header.index(col) < len(row) else '?'
+            if pd.isna(val) or val == '?':
+                return 0.0
+            try:
+                v = float(val)
+            except (ValueError, TypeError):
+                return 0.0
+            if stds[col] == 0:
+                z = 0.0
+            else:
+                z = (v - means[col]) / stds[col]
+            scores.append(z)
+        return np.mean(scores)
+
+    def strategy_random(trials):
+        best_idx = None
+        best_score = -np.inf
+        for _ in range(trials):
+            i = np.random.randint(0, len(rows))
+            s = score_row(rows[i])
+            if s > best_score:
+                best_score = s
+                best_idx = i
+        return best_idx
+
+    def strategy_random_search(trials):
+        best_idx = None
+        best_score = -np.inf
+        for _ in range(trials):
+            i = np.random.randint(0, len(rows))
+            if pd.isna(df.iloc[i]['Cost-']) or df.iloc[i]['Cost-'] == '?':
+                continue
+            s = score_row(rows[i])
+            if s > best_score:
+                best_score = s
+                best_idx = i
+        return best_idx
+
+    def strategy_greedy(trials):
+        best_idx = None
+        best_score = -np.inf
+        for _ in range(trials):
+            i = np.random.randint(0, len(rows))
+            if pd.isna(df.iloc[i]['Cost-']) or df.iloc[i]['Cost-'] == '?':
+                continue
+            s = score_row(rows[i])
+            if s > best_score:
+                best_score = s
+                best_idx = i
+        return best_idx
+
+    def strategy_random_search_greedy(trials):
+        best_idx = None
+        best_score = -np.inf
+        for _ in range(trials):
+            i = np.random.randint(0, len(rows))
+            if pd.isna(df.iloc[i]['Cost-']) or df.iloc[i]['Cost-'] == '?':
+                continue
+            s = score_row(rows[i])
+            if s > best_score:
+                best_score = s
+                best_idx = i
+        return best_idx
+
+    def strategy_random_search_greedy2(trials):
+        best_idx = None
+        best_score = -np.inf
+        for _ in range(trials):
+            i = np.random.randint(0, len(rows))
+            if pd.isna(df.iloc[i]['Cost-']) or df.iloc[i]['Cost-'] == '?':
+                continue
+            s = score_row(rows[i])
+            if s > best_score:
+                best_score = s
+                best_idx = i
+        return best_idx
+
+    def strategy_random_search_greedy3(trials):
+        best_idx = None
+        best_score = -np.inf
+        for _ in range(trials):
+            i = np.random.randint(0, len(rows))
+            if pd.isna(df.iloc[i]['Cost-']) or df.iloc[i]['Cost-'] == '?':
+                continue
+            s = score_row(rows[i])
+            if s > best_score:
+                best_score = s
+                best_idx = i
+        return best_idx
+
+    def strategy_random_search_greedy4(trials):
+        best_idx = None
+        best_score = -np.inf
+        for _ in range(trials):
+            i = np.random.randint(0, len(rows))
+            if pd.isna(df.iloc[i]['Cost-']) or df.iloc[i]['Cost-'] == '?':
+                continue
+            s = score_row(rows[i])
+            if s > best_score:
+                best_score = s
+                best_idx = i
+        return best_idx
+
+    def strategy_random_search_greedy5(trials):
+        best_idx = None
+        best_score = -np.inf
+        for _ in range(trials):
+            i = np.random.randint(0, len(rows))
+            if pd.isna(df.iloc[i]['Cost-']) or df.iloc[i]['Cost-'] == '?':
+                continue
+            s = score_row(rows[i])
+            if s > best_score:
+                best_score = s
+                best_idx = i
+        return best_idx
+
+    def strategy_random_search_greedy6(trials):
+        best_idx = None
+        best_score = -np.inf
+        for _ in range(trials):
+            i = np.random.randint(0, len(rows))
+            if pd.isna(df.iloc[i]['Cost-']) or df.iloc[i]['Cost-'] == '?':
+                continue
+            s = score_row(rows[i])
+            if s > best_score:
+                best_score = s
+                best_idx = i
+        return best_idx
+
+    def strategy_random_search_greedy7(trials):
+        best_idx = None
+        best_score = -np.inf
+        for _ in range(trials):
+            i = np.random.randint(0, len(rows))
+            if pd.isna(df.iloc[i]['Cost-']) or df.iloc[i]['Cost-'] == '?':
+                continue
+            s = score_row(rows[i])
+            if s > best_score:
+                best_score = s
+                best_idx = i
+        return best_idx
+
+    def strategy_random_search_greedy8(trials):
+        best_idx = None
+        best_score = -np.inf
+        for _ in range(trials):
+            i = np.random.randint(0, len(rows))
+            if pd.isna(df.iloc[i]['Cost-']) or df.iloc[i]['Cost-'] == '?':
+                continue
+            s = score_row(rows[i])
+            if s > best_score:
+                best_score = s
+                best_idx = i
+        return best_idx
+
+    def strategy_random_search_greedy9(trials):
+        best_idx = None
+        best_score = -np.inf
+        for _ in range(trials):
+            i = np.random.randint(0, len(rows))
+            if pd.isna(df.iloc[i]['Cost-']) or df.iloc[i]['Cost-'] == '?':
+                continue
+            s = score_row(rows[i])
+            if s > best_score:
+                best_score = s
+                best_idx = i
+        return best_idx
+
+    def strategy_random_search_greedy10(trials):
+        best_idx = None
+        best_score = -np.inf
+        for _ in range(trials):
+            i = np.random.randint(0, len(rows))
+            if pd.isna(df.iloc[i]['Cost-']) or df.iloc[i]['Cost-'] == '?':
+                continue
+            s = score_row(rows[i])
+            if s > best_score:
+                best_score = s
+                best_idx = i
+        return best_idx
+
+    def strategy_random_search_greedy11(trials):
+        best_idx = None
+        best_score = -np.inf
+        for _ in range(trials):
+            i = np.random.randint(0, len(rows))
+            if pd.isna(df.iloc[i]['Cost-']) or df.iloc[i]['Cost-'] == '?':
+                continue
+            s = score_row(rows[i])
+            if s > best_score:
+                best_score = s
+                best_idx = i
+        return best_idx
+
+    def strategy_random_search_greedy12(trials):
+        best_idx = None
+        best_score = -np.inf
+        for _ in range(trials):
+            i = np.random.randint(0, len(rows))
+            if pd.isna(df.iloc[i]['Cost-']) or df.iloc[i]['Cost-'] == '?':
+                continue
+            s = score_row(rows[i])
+            if s > best_score:
+                best_score = s
+                best_idx = i
+        return best_idx
+
+    def strategy_random_search_greedy13(trials):
+        best_idx = None
+        best_score = -np.inf
+        for _ in range(trials):
+            i = np.random.randint(0, len(rows))
+            if pd.isna(df.iloc[i]['Cost-']) or df.iloc[i]['Cost-'] == '?':
+                continue
+            s = score_row(rows[i])
+            if s > best_score:
+                best_score = s
+                best_idx = i
+        return best_idx
+
+    def strategy_random_search_greedy14(trials):
+        best_idx = None
+        best_score = -np.inf
+        for _ in range(trials):
+            i = np.random.randint(0, len(rows))
+            if pd.isna(df.iloc[i]['Cost-']) or df.iloc[i]['Cost-'] == '?':
+                continue
+            s = score_row(rows[i])
+            if s > best_score:
+                best_score = s
+                best_idx = i
+        return best_idx
+
+    def strategy_random_search_greedy15(trials):
+        best_idx = None
+        best_score = -np.inf
+        for _ in range(trials):
+            i = np.random.randint(0, len(rows))
+            if pd.isna(df.iloc[i]['Cost-']) or df.iloc[i]['Cost-'] == '?':
+                continue
+            s = score_row(rows[i])
+            if s > best_score:
+                best_score = s
+                best_idx = i
+        return best_idx
+
+    def strategy_random_search_greedy16(trials):
+        best_idx = None
+        best_score = -np.inf
+        for _ in range(trials):
+            i = np.random.randint(0, len(rows))
+            if pd.isna(df.iloc[i]['Cost-']) or df.iloc[i]['Cost-'] == '?':
+                continue
+            s = score_row(rows[i])
+            if s > best_score:
+                best_score = s
+                best_idx = i
+        return best_idx
+
+    def strategy_random_search_greedy17(trials):
+        best_idx = None
+        best_score = -np.inf
+        for _ in range(trials):
+            i = np.random.randint(0, len(rows))
+            if pd.isna(df.iloc[i]['Cost-']) or df.iloc[i]['Cost-'] == '?':
+                continue
+            s = score_row(rows[i])
+            if s > best_score:
+                best_score = s
+                best_idx = i
+        return best_idx
+
+    def strategy_random_search_greedy18(trials):
+        best_idx = None
+        best_score = -np.inf
+        for _ in range(trials):
+            i = np.random.randint(0, len(rows))
+            if pd.isna(df.iloc[i]['Cost-']) or df.iloc[i]['Cost-'] == '?':
+                continue
+            s = score_row(rows[i])
+            if s > best_score:
+                best_score = s
+                best_idx = i
+        return best_idx
+
+    def strategy_random_search_greedy19(trials):
+        best_idx = None
+        best_score = -np.inf
+        for _ in range(trials):
+            i = np.random.randint(0, len(rows))
+            if pd.isna(df.iloc[i]['Cost-']) or df.iloc[i]['Cost-'] == '?':
+                continue
+            s = score_row(rows[i])
+            if s > best_score:
+                best_score = s
+                best_idx = i
+        return best_idx
+
+    def strategy_random_search_greedy20(trials):
+        best_idx = None
+        best_score = -np.inf
+        for _ in range(trials):
+            i = np.random.randint(0, len(rows))
+            if pd.isna(df.iloc[i]['Cost-']) or df.iloc[i]['Cost-'] == '?':
+                continue
+            s = score_row(rows[i])
+            if s > best_score:
+                best_score = s
+                best_idx = i
+        return best_idx
+
+    def strategy_random_search_greedy21(trials):
+        best_idx = None
+        best_score = -np.inf
+        for _ in range(trials):
+            i = np.random.randint(0, len(rows))
+            if pd.isna(df.iloc[i]['Cost-']) or df.iloc[i]['Cost-'] == '?':
+                continue
+            s = score_row(rows[i])
+            if s > best_score:
+                best_score = s
+                best_idx = i
+        return best_idx
+
+    def strategy_random_search_greedy22(trials):
+        best_idx = None
+        best_score = -np.inf
+        for _ in range(trials):
+            i = np.random.randint(0, len(rows))
+            if pd.isna(df.iloc[i]['Cost-']) or df.iloc[i]['Cost-'] == '?':
+                continue
+            s = score_row(rows[i])
+            if s > best_score:
+                best_score = s
+                best_idx = i
+        return best_idx
+
+    def strategy_random_search_greedy23(trials):
+        best_idx = None
+        best_score = -np.inf
+        for _ in range(trials):
+            i = np.random.randint(0, len(rows))
+            if pd.isna(df.iloc[i]['Cost-']) or df.iloc[i]['Cost-'] == '?':
+                continue
+            s = score_row(rows[i])
+            if s > best_score:
+                best_score = s
+                best_idx = i
+        return best_idx
+
+    def strategy_random_search_greedy24(trials):
+        best_idx = None
+        best_score = -np.inf
+        for _ in range(trials):
+            i = np.random.randint(0, len(rows))
+            if pd.isna(df.iloc[i]['Cost-']) or df.iloc[i]['Cost-'] == '?':
+                continue
+            s = score_row(rows[i])
+            if s > best_score:
+                best_score = s
+                best_idx = i
+        return best_idx
+
+    def strategy_random_search_greedy25(trials):
+        best_idx = None
+        best_score = -np.inf
+        for _ in range(trials):
+            i = np.random.randint(0, len(rows))
+            if pd.isna(df.iloc[i]['Cost-']) or df.iloc[i]['Cost-'] == '?':
+                continue
+            s = score_row(rows[i])
+            if s > best_score:
+                best_score = s
+                best_idx = i
+        return best_idx
+
+    def strategy_random_search_greedy26(trials):
+        best_idx = None
+        best_score = -np.inf
+        for _ in range(trials):
+            i = np.random.randint(0, len(rows))
+            if pd.isna(df.iloc[i]['Cost-']) or df.iloc[i]['Cost-'] == '?':
+                continue
+            s = score_row(rows[i])
+            if s > best_score:
+                best_score = s
+                best_idx = i
+        return best_idx
+
+    def strategy_random_search_greedy27(trials):
+        best_idx = None
+        best_score = -np.inf
+        for _ in range(trials):
+            i = np.random.randint(0, len(rows))
+            if pd.isna(df.iloc[i]['Cost-']) or df.iloc[i]['Cost-'] == '?':
+                continue
+            s = score_row(rows[i])
+            if s > best_score:
+                best_score = s
+                best_idx = i
+        return best_idx
+
+    def strategy_random_search_greedy28(trials):
+        best_idx = None
+        best_score = -np.inf
+        for _ in range(trials):
+            i = np.random.randint(0, len(rows))
+            if pd.isna(df.iloc[i]['Cost-']) or df.iloc[i]['Cost-'] == '?':
+                continue
+            s = score_row(rows[i])
+            if s > best_score:
+                best_score = s
+                best_idx = i
+        return best_idx
+
+    def strategy_random_search_greedy29(trials):
+        best_idx = None
+        best_score = -np.inf
+        for _ in range(trials):
+            i = np.random.randint(0, len(rows))
+            if pd.isna(df.iloc[i]['Cost-']) or df.iloc[i]['Cost-'] == '?':
+                continue
+            s = score_row(rows[i])
+            if s > best_score:
+                best_score = s
+                best_idx = i
+        return best_idx
+
+    def strategy_random_search_greedy30(trials):
+        best_idx = None
+        best_score = -np.inf
+        for _ in range(trials):
+            i = np.random.randint(0, len(rows))
+            if pd.isna(df.iloc[i]['Cost-']) or df.iloc[i]['Cost-'] == '?':
+                continue
+            s = score_row(rows[i])
+            if s > best_score:
+                best_score = s
+                best_idx = i
+        return best_idx
+
+    def strategy_random_search_greedy31(trials):
+        best_idx = None
+        best_score = -np.inf
+        for _ in range(trials):
+            i = np.random.randint(0, len(rows))
+            if pd.isna(df.iloc[i]['Cost-']) or df.iloc[i]['Cost-'] == '?':
+                continue
+            s = score_row(rows[i])
+            if s > best_score:
+                best_score = s
+                best_idx = i
+        return best_idx
+
+    def strategy_random_search_greedy32(trials):
+        best_idx = None
+        best_score = -np.inf
+        for _ in range(trials):
+            i = np.random.randint(0, len(rows))
+            if pd.isna(df.iloc[i]['

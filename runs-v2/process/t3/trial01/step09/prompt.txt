@@ -1,0 +1,570 @@
+You are writing one Python file, step09.py.
+
+The data is the csv file pom3a.train.csv in the current directory. Column names starting in upper case are numeric, lower case are symbolic. A name ending in - is a goal to minimise, in + a goal to maximise; all other columns are inputs. It has 16000 data rows after the header. Any count the customer quotes describes their full records, not this file: never hard-code a row count, read the file to the end. Its first lines:
+
+Culture,Criticality,Criticality Modifier,Initial Known,Inter-Dependency,Dynamism,Size,Plan,Team Size,Cost-,Score-,Idle-
+0.0398226348789376,0.4187697102690966,0.3161703902572166,0.959348346991444,0.2103972800854883,0.0012522910308919,0.6979456136102667,0.1708306261451138,0.3500716982826897,0.200104493,0.01402719,0.321856287
+0.8178056583175877,0.3082578231712947,0.6206926231796946,0.1199646773715625,0.2164255013970158,0.4846586144618353,0.294210224703445,0.9507425179765736,0.6096404500113382,0.163698034,0.592347249,0.522540984
+0.56468123803359,0.7539537892599035,0.9559574534085812,0.7971286605248636,0.1481054831420605,0.1838254939038858,0.3179577323742758,0.8793894950349531,0.5030407165929099,0.384975817,0.365612315,0.610119048
+
+You may use scikit-learn, numpy and pandas.
+
+These files, written earlier, are in the same directory:
+
+--- step01.py ---
+import pandas as pd
+import numpy as np
+
+
+def remember(header, rows):
+    goal_cols = [h for h in header if h.endswith('-')]
+
+    df = pd.DataFrame(rows, columns=header)
+    for col in goal_cols:
+        df[col] = df[col].replace('?', np.nan).astype(float)
+
+    scores = {}
+    for col in goal_cols:
+        vals = df[col].dropna()
+        if len(vals) == 0:
+            continue
+        mean = vals.mean()
+        std = vals.std()
+        if std == 0:
+            z_scores = np.zeros(len(df))
+        else:
+            z_scores = (df[col] - mean) / std
+        scores[col] = z_scores
+
+    if len(scores) > 0:
+        avg_score = np.mean([scores[c] for c in scores], axis=1)
+    else:
+        return []
+
+    n_rows = len(rows)
+    max_return = max(1, int(n_rows * 0.05))
+    top_indices = np.argsort(avg_score)[:max_return]
+
+    return sorted(top_indices.tolist())
+
+
+if __name__ == "__main__":
+    df = pd.read_csv('pom3a.train.csv')
+    header = list(df.columns)
+    rows = [list(row) for row in df.values]
+    result = remember(header, rows)
+    print(f"Top {len(result)} out of {len(rows)} setups:")
+    for idx in result:
+        print(
+            f"  Row {idx}: Cost-={df.iloc[idx]['Cost-']:.4f}, "
+            f"Score-={df.iloc[idx]['Score-']:.4f}, Idle-={df.iloc[idx]['Idle-']:.4f}"
+        )
+
+
+--- step02.py ---
+import pandas as pd
+import numpy as np
+from sklearn.linear_model import LinearRegression
+
+
+def guess(header, train, test):
+    df = pd.DataFrame(train, columns=header)
+
+    goal_cols = [h for h in header if h.endswith('-')]
+    input_cols = [h for h in header if not h.endswith('-')]
+
+    for col in goal_cols:
+        df[col] = df[col].replace('?', np.nan).astype(float)
+
+    models = {}
+    for col in goal_cols:
+        X = df[input_cols].values
+        y = df[col].dropna().values
+        mask = ~df[col].isna()
+        if len(y) > 0:
+            model = LinearRegression()
+            model.fit(X[mask], y)
+            models[col] = model
+
+    results = []
+    for row in test:
+        X_pred = np.array([row[c] for c in input_cols])
+        pred = models['Cost-'].predict(X_pred)[0]
+        results.append(float(pred))
+
+    return results
+
+
+if __name__ == "__main__":
+    df = pd.read_csv('pom3a.train.csv')
+    header = list(df.columns)
+    rows = [list(row) for row in df.values]
+
+    result = guess(header, rows, [])
+    print(f"Predicted Cost- values (first 5): {result[:5]}")
+
+
+--- step03.py ---
+import pandas as pd
+from scipy import stats
+
+
+def certify(xs, ys):
+    """Return True if xs and ys are statistically indistinguishable (same apart from noise)."""
+    try:
+        _, p = stats.ttest_ind(xs, ys)
+        return p > 0.05
+    except Exception:
+        return False
+
+
+if __name__ == "__main__":
+    df = pd.read_csv('pom3a.train.csv')
+
+    team_size_col = 'Team Size'
+    cost_col = 'Cost-'
+
+    group_means = {}
+    for val, grp in df.groupby(team_size_col):
+        group_means[val] = grp[cost_col].mean()
+
+    print(f"Mean Cost- by Team Size:")
+    for t, m in sorted(group_means.items()):
+        print(f"  {t}: {m:.4f}")
+
+    teams = list(group_means.keys())
+    if len(teams) >= 2:
+        xs = df.loc[df[team_size_col] == teams[0], cost_col].values
+        ys = df.loc[df[team_size_col] == teams[-1], cost_col].values
+        same = certify(xs, ys)
+        print(f"\nAre small-team and big-team Cost- values the same apart from noise? {same}")
+    else:
+        print("\nNot enough team size groups to compare.")
+
+
+--- step04.py ---
+import pandas as pd
+from sklearn.linear_model import LinearRegression
+import numpy as np
+
+
+_df = pd.read_csv('pom3a.train.csv')
+_header = list(_df.columns)
+_rows = [list(row) for row in _df.values]
+
+_goal_cols = [h for h in _header if h.endswith('-')]
+_input_cols = [h for h in _header if not h.endswith('-')]
+
+for col in _goal_cols:
+    _df[col] = _df[col].replace('?', np.nan).astype(float)
+
+_models = {}
+_means = {}
+_stds = {}
+for col in _goal_cols:
+    vals = _df[col].dropna()
+    if len(vals) > 0:
+        mean = vals.mean()
+        std = vals.std()
+        _means[col] = mean
+        _stds[col] = std
+        model = LinearRegression()
+        X = _df[_input_cols].values
+        y = vals.values
+        mask = ~_df[col].isna()
+        model.fit(X[mask], y)
+        _models[col] = model
+
+
+def flow(header, row, seen):
+    df_row = pd.DataFrame([row], columns=header)
+    for col in _goal_cols:
+        df_row[col] = df_row[col].replace('?', np.nan).astype(float)
+
+    preds = {}
+    for col in _goal_cols:
+        if col in _models:
+            X_pred = np.array([row[c] for c in _input_cols])
+            pred = _models[col].predict(X_pred)[0]
+            preds[col] = float(pred)
+
+    approve = True
+    for col, mean in _means.items():
+        if col not in preds:
+            continue
+        if preds[col] > mean:
+            approve = False
+
+    return approve
+
+
+if __name__ == "__main__":
+    result = []
+    seen = []
+    for row in _rows:
+        approved = flow(_header, row, seen)
+        if approved:
+            result.append(row)
+            print(f"Approved row {len(result)}")
+        else:
+            print(f"Rejected row {len(seen)+1}")
+
+    print(f"\nFinal: Approved {len(result)} out of {len(_rows)} rows")
+
+
+--- step05.py ---
+import pandas as pd
+import numpy as np
+
+
+def blame(header, rows):
+    goal_cols = [h for h in header if h.endswith('-')]
+    input_cols = [h for h in header if not h.endswith('-')]
+
+    df = pd.DataFrame(rows, columns=header)
+    for col in goal_cols:
+        df[col] = df[col].replace('?', np.nan).astype(float)
+
+    # Normalize each goal to z-scores (low is good for '-', high is good for '+')
+    scores = {}
+    for col in goal_cols:
+        vals = df[col].dropna()
+        if len(vals) == 0:
+            continue
+        mean = vals.mean()
+        std = vals.std()
+        if std == 0:
+            z_scores = np.zeros(len(df))
+        else:
+            z_scores = (df[col] - mean) / std
+        scores[col] = z_scores
+
+    # Composite score: average across all goals
+    avg_score = np.mean([scores[c] for c in scores], axis=1)
+
+    # Identify worst rows (lowest composite score)
+    n_worst = max(1, int(len(rows) * 0.1))
+    worst_idx = np.argsort(avg_score)[:n_worst]
+    worst_mask = np.zeros(len(df), dtype=bool)
+    worst_mask[worst_idx] = True
+
+    # For each input column, measure how well it predicts being in the worst set
+    correlations = {}
+    for col in input_cols:
+        vals = df[col].values
+        if vals.dtype.kind == 'O':  # symbolic / categorical
+            encoded = np.zeros(len(df))
+            for i in range(len(df)):
+                v = vals[i]
+                if pd.isna(v):
+                    continue
+                if isinstance(v, str) and '?' not in v:
+                    encoded[i] = 1.0
+            correlations[col] = np.corrcoef(encoded, avg_score)[0, 1]
+        else:
+            correlations[col] = np.corrcoef(vals, avg_score)[0, 1]
+
+    # Sort by absolute correlation descending and return top input columns
+    sorted_cols = sorted(correlations.keys(), key=lambda c: abs(correlations[c]), reverse=True)
+    return sorted_cols[:5]
+
+
+if __name__ == "__main__":
+    df = pd.read_csv('pom3a.train.csv')
+    header = list(df.columns)
+    rows = [list(row) for row in df.values]
+    result = blame(header, rows)
+    print(f"Top {len(result)} input columns explaining worst setups: {result}")
+
+
+--- step06.py ---
+import pandas as pd
+import numpy as np
+
+
+def justify(header, rows, row):
+    goal_cols = [h for h in header if h.endswith('-')]
+    input_cols = [h for h in header if not h.endswith('-')]
+
+    df = pd.DataFrame(rows, columns=header)
+    for col in goal_cols:
+        df[col] = df[col].replace('?', np.nan).astype(float)
+
+    scores = {}
+    for col in goal_cols:
+        vals = df[col].dropna()
+        if len(vals) == 0:
+            continue
+        mean = vals.mean()
+        std = vals.std()
+        if std == 0:
+            z_scores = np.zeros(len(df))
+        else:
+            z_scores = (df[col] - mean) / std
+        scores[col] = z_scores
+
+    avg_score = np.mean([scores[c] for c in scores], axis=1)
+
+    target_row_idx = None
+    for i, r in enumerate(rows):
+        if all(r[j] == '?' or pd.isna(df.iloc[i][j]) for j in range(len(goal_cols))):
+            # Check if this row's goal cells are "?"
+            pass
+    
+    # Find the index of the query row (where goals are "?")
+    target_idx = None
+    for i, r in enumerate(rows):
+        is_target = True
+        for col in goal_cols:
+            cell_val = df.iloc[i][col]
+            if pd.notna(cell_val) and str(cell_val).strip() != '?':
+                is_target = False
+                break
+        if is_target:
+            target_idx = i
+            break
+
+    if target_idx is None:
+        # If no row has "?" goals, treat the last row or compute normally
+        return (0.5, "Could not identify a query setup with hidden goal values.")
+
+    target_score = avg_score[target_idx]
+    better_mask = avg_score > target_score
+    p = float(np.mean(better_mask))
+
+    rank = int(np.sum(avg_score >= target_score)) / len(rows) if len(rows) > 0 else 0.5
+    
+    reason = (
+        f"This setup is better than {p:.1%} of all setups, "
+        f"ranking in the top {int((1 - p) * 100)} percentile."
+    )
+
+    return (p, reason)
+
+
+if __name__ == "__main__":
+    df = pd.read_csv('pom3a.train.csv')
+    header = list(df.columns)
+    rows = [list(row) for row in df.values]
+
+    # Find a representative query row (one with "?" goals) or use the first row
+    query_row = None
+    for r in rows:
+        has_question = any(str(cell).strip() == '?' for cell in r)
+        if has_question:
+            query_row = r
+            break
+
+    if query_row is None:
+        # Use a synthetic query with "?" goals to demonstrate the function
+        sample_row = [0.5] * len(header)
+        for col in header:
+            if col.endswith('-'):
+                sample_row[header.index(col)] = '?'
+        query_row = sample_row
+
+    p, reason = justify(header, rows, query_row)
+    print(f"Result: {p:.1%} of setups are better. {reason}")
+
+
+--- step07.py ---
+import pandas as pd
+import numpy as np
+
+
+def choose(header, rows, label):
+    goal_cols = [h for h in header if h.endswith('-')]
+
+    n_try = min(50, len(rows))
+
+    best_idx = None
+    best_score = -np.inf
+
+    for i in range(n_try):
+        goals = label(i)
+
+        scores = {}
+        for col in goal_cols:
+            val = goals[col] if col in goals else '?'
+            if isinstance(val, (int, float)):
+                scores[col] = float(val)
+            else:
+                scores[col] = 0.0
+
+        avg_score = np.mean(list(scores.values())) if len(scores) > 0 else -np.inf
+
+        if avg_score > best_score:
+            best_score = avg_score
+            best_idx = i
+
+    return best_idx
+
+
+if __name__ == "__main__":
+    df = pd.read_csv('pom3a.train.csv')
+    header = list(df.columns)
+    rows = [list(row) for row in df.values]
+
+    goal_cols = [h for h in header if h.endswith('-')]
+    for col in goal_cols:
+        for i, row in enumerate(rows):
+            if pd.notna(df.iloc[i][col]):
+                rows[i][header.index(col)] = '?'
+
+    result = choose(header, rows, lambda i: [df.iloc[i][c] for c in goal_cols])
+    print(f"Best setup is at position {result}")
+
+
+--- step08.py ---
+import pandas as pd
+import numpy as np
+
+
+def fix(header, row, levers):
+    goal_cols = [h for h in header if h.endswith('-')]
+    input_cols = [h for h in header if not h.endswith('-')]
+
+    # Build a baseline DataFrame from the training data to compute stats
+    df = pd.read_csv('pom3a.train.csv')
+    for col in goal_cols:
+        df[col] = df[col].replace('?', np.nan).astype(float)
+
+    means = {}
+    stds = {}
+    for col in goal_cols:
+        vals = df[col].dropna()
+        if len(vals) > 0:
+            means[col] = vals.mean()
+            stds[col] = vals.std()
+        else:
+            means[col] = 0.0
+            stds[col] = 1.0
+
+    # Normalize goals to z-scores (low is good for '-', high is good for '+')
+    def normalize(val, mean, std):
+        if pd.isna(val) or val == '?':
+            return 0.0
+        try:
+            v = float(val)
+        except (ValueError, TypeError):
+            return 0.0
+        if std == 0:
+            return 0.0
+        return (v - mean) / std
+
+    # Compute baseline score for the given row
+    def compute_score(row_dict):
+        scores = []
+        for col in goal_cols:
+            val = row_dict.get(col, '?')
+            z = normalize(val, means[col], stds[col])
+            scores.append(z)
+        return np.mean(scores) if scores else 0.0
+
+    # Try each lever combination to find the best one
+    best_row = dict(row)
+    best_score = compute_score(best_row)
+
+    for col in levers:
+        allowed = levers[col]
+        if isinstance(allowed, (list, tuple)) and len(allowed) >= 2 and not isinstance(allowed[0], str):
+            # Numeric lever: try low and high
+            candidates = [allowed[0], allowed[-1]]
+        else:
+            # Symbolic lever: try all values
+            candidates = list(allowed)
+
+        for val in candidates:
+            test_row = dict(best_row)
+            if col.endswith('-'):
+                test_row[col] = val
+            else:
+                test_row[col] = val
+            score = compute_score(test_row)
+            if score > best_score:
+                best_score = score
+                best_row = test_row
+
+    return best_row
+
+
+if __name__ == "__main__":
+    df = pd.read_csv('pom3a.train.csv')
+    header = list(df.columns)
+    rows = [list(row) for row in df.values]
+
+    goal_cols = [h for h in header if h.endswith('-')]
+    input_cols = [h for h in header if not h.endswith('-')]
+
+    # Find a bad row (high cost, high idle, low score)
+    bad_row_idx = None
+    for i, r in enumerate(rows):
+        goals = {}
+        for col in goal_cols:
+            goals[col] = r[header.index(col)] if header.index(col) < len(r) else '?'
+        score = 0.0
+        for col in goal_cols:
+            val = goals.get(col, '?')
+            try:
+                v = float(val)
+            except (ValueError, TypeError):
+                continue
+            if col.endswith('-'):
+                score -= v
+            else:
+                score += v
+        if score < 0 and bad_row_idx is None:
+            bad_row_idx = i
+            break
+
+    if bad_row_idx is None:
+        bad_row_idx = 0
+
+    bad_row = rows[bad_row_idx]
+
+    # Determine levers (input columns) with their allowed values from the data
+    lever_candidates = {}
+    for col in input_cols:
+        vals = df[col].dropna()
+        if len(vals) > 0:
+            unique_vals = sorted(vals.unique())[:5]
+            if isinstance(unique_vals[0], float):
+                low, high = unique_vals[0], unique_vals[-1]
+                lever_candidates[col] = (low, high)
+            else:
+                lever_candidates[col] = list(unique_vals)
+
+    levers = {col: lever_candidates.get(col, []) for col in input_cols if len(lever_candidates.get(col, [])) > 0}
+
+    result = fix(header, bad_row, levers)
+
+    print(f"Original row score components:")
+    for col in goal_cols:
+        val = bad_row[header.index(col)] if header.index(col) < len(bad_row) else '?'
+        print(f"  {col}: {val}")
+
+    print(f"\nRecommended changes:")
+    for col, new_val in result.items():
+        if col != 'Criticality':  # Skip non-lever columns
+            old_val = bad_row[header.index(col)] if header.index(col) < len(bad_row) else '?'
+            print(f"  {col}: {old_val} -> {new_val}")
+
+    print(f"\nThis plan change would improve the setup.")
+
+
+The customer asks:
+
+  Some of these records look mistyped or made up. Point out the ones that do not fit.
+
+Write step09.py to answer that ask on this data.
+
+A test harness will import your file and call this function, so you must define it exactly:
+
+def spot(header, rows)
+  Returns a list of ints.   A few rows contain an input value that was entered wrongly. Return the positions of the rows you suspect, most suspicious first.
+
+Conventions: `header` is the list of column names. `rows` is a list of rows; each row is a list of cells in header order, floats for numeric columns and strings for symbolic ones. A cell shown as "?" is hidden from you. A row is better when its goals are closer to their best (low for names ending in -, high for names ending in +).
+
+Keep everything that prints or reads the csv file under `if __name__ == "__main__":` so that importing the file prints nothing. Plain built-in types are all you need: do not import anything from `typing`.
+
+Running `python step09.py` must load the csv, call your function, print a short answer a customer could read, and exit with status 0. Reply with the complete file in one ```python fenced block and nothing else.

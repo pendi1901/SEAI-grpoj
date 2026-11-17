@@ -1,0 +1,31 @@
+import pandas as pd
+import numpy as np
+from step02 import guess
+
+
+def justify(header, rows, row):
+    goal_cols = [c for c in header if c.endswith('-') or c.endswith('+')]
+    
+    # Predict MRE- for the candidate setup using training features
+    pred_mre = guess(header, rows, [row])[0]
+    
+    # Collect actual MRE- values from known setups (skip "?" / NaN)
+    actual_mres = []
+    for r in rows:
+        cell = r[header.index('MRE-')]
+        if isinstance(cell, (int, float)) and not np.isnan(cell):
+            actual_mres.append(float(cell))
+    
+    n = len(actual_mres)
+    p = sum(1 for a in actual_mres if pred_mre < a) / n
+    
+    return (p, f"Better than {n*round(p)} of {n} known setups.")
+
+
+if __name__ == "__main__":
+    df = pd.read_csv("Health-ClosedIssues0000.train.csv")
+    header = list(df.columns)
+    rows = [list(map(float, row)) for _, row in df.iterrows()]
+
+    p, reason = justify(header, rows, rows[0])
+    print(f"{p:.2%} of setups are worse than this one. {reason}")

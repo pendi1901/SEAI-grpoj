@@ -1,0 +1,58 @@
+```python
+import csv
+
+
+def blame(header, rows):
+    """Return names of input columns (not goals) that best explain short stays."""
+    years_idx = header.index('YearsAtCompany+')
+    goal_cols = ['YearsAtCompany+', 'YearsInCurrentRole+',
+                 'YearsSinceLastPromotion', 'YearsWithCurrManager+']
+
+    numeric_cols = []
+    for col in header:
+        if col not in goal_cols and '+' not in col \
+                and col != 'EmployeeNumber' and col != 'EmployeeCount':
+            numeric_cols.append(col)
+
+    def safe_float(val):
+        if val == '?':
+            return 0.0
+        try:
+            return float(val)
+        except (ValueError, TypeError):
+            return 0.0
+
+    y_vals = [safe_float(r[years_idx]) for r in rows]
+    y_mean = sum(y_vals) / len(y_vals) if y_vals else 0.0
+    y_std = ((sum((v - y_mean) ** 2 for v in y_vals) / max(len(y_vals), 1)) ** 0.5 or 1e-6)
+
+    col_corrs = {}
+    for col in numeric_cols:
+        vals = [safe_float(r[header.index(col)]) for r in rows]
+        x_mean = sum(vals) / len(vals) if vals else 0.0
+        x_std = ((sum((v - x_mean) ** 2 for v in vals) / max(len(vals), 1)) ** 0.5 or 1e-6)
+
+        numerator = sum((x - x_mean) * (y - y_mean) for x, y in zip(vals, y_vals))
+        denom = x_std * y_std
+        if denom > 0:
+            col_corrs[col] = numerator / denom
+        else:
+            col_corrs[col] = 0.0
+
+    sorted_cols = sorted(col_corrs.items(), key=lambda kv: abs(kv[1]), reverse=True)
+    top_n = min(5, len(sorted_cols))
+    return [col for col, _ in sorted_cols[:top_n]]
+
+
+if __name__ == "__main__":
+    path = 'WA_Fn-UseC_-HR-Employee-Attrition.train.csv'
+    with open(path, newline='') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = list(reader)
+
+    reasons = blame(header, rows)
+    print("Factors explaining short stays:")
+    for r in reasons:
+        print(f"  - {r}")
+```

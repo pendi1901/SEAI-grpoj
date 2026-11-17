@@ -1,0 +1,52 @@
+```python
+def flow(header, row, seen):
+    """Returns True if this row is THE best candidate to select and stop, False otherwise."""
+    
+    goal_cols = [col for col in header if col.endswith('+')]
+    
+    def get_val(row_dict, col):
+        idx = header.index(col)
+        val = row_dict[idx]
+        try:
+            return float(val)
+        except (ValueError, TypeError):
+            return 0.0
+    
+    current_score = sum(get_val(row, c) for c in goal_cols)
+    
+    if not seen:
+        # First row always gets a chance to be selected
+        return True
+    
+    best_seen = max(sum(get_val(s, c) for c in goal_cols) for s in seen)
+    
+    # Select only when strictly better than the best already found
+    return current_score > best_seen
+
+
+if __name__ == "__main__":
+    import pandas as pd
+
+    df = pd.read_csv('WA_Fn-UseC_-HR-Employee-Attrition.train.csv')
+    header = list(df.columns)
+
+    rows = []
+    for _, row in df.iterrows():
+        r = []
+        for col, val in zip(header, row):
+            if pd.isna(val):
+                r.append(float('nan'))
+            elif isinstance(val, (int, float)):
+                r.append(float(val))
+            else:
+                r.append(str(val))
+        rows.append(r)
+
+    selected = []
+    for i, row in enumerate(rows):
+        if flow(header, row, selected):
+            selected.append(row)
+            print(f"Selected row {i}: EmployeeNumber={int(row[header.index('EmployeeNumber')])}")
+
+    print(f"\nTotal selected: {len(selected)} out of {len(rows)}")
+```

@@ -1,0 +1,672 @@
+You are writing one Python file, step10.py.
+
+The data is the csv file WA_Fn-UseC_-HR-Employee-Attrition.train.csv in the current directory. Column names starting in upper case are numeric, lower case are symbolic. A name ending in - is a goal to minimise, in + a goal to maximise; all other columns are inputs. It has 1176 data rows after the header. Any count the customer quotes describes their full records, not this file: never hard-code a row count, read the file to the end. Its first lines:
+
+Age,attrition,businessTravel,DailyRate,department,DistanceFromHome,Education,educationField,EmployeeCount,EmployeeNumber,EnvironmentSatisfaction,gender,HourlyRate,JobInvolvement,JobLevel,jobRole,JobSatisfaction,maritalStatus,MonthlyIncome,MonthlyRate,NumCompaniesWorked,over18,overTime,PercentSalaryHike,PerformanceRating,RelationshipSatisfaction,StandardHours,StockOptionLevel,TotalWorkingYears,TrainingTimesLastYear,WorkLifeBalance,YearsAtCompany+,YearsInCurrentRole+,YearsSinceLastPromotion,YearsWithCurrManager+
+37,Yes,Travel_Rarely,1373,Research & Development,2,2,Other,1,4,4,Male,92,2,1,Laboratory Technician,3,Single,2090,2396,6,Y,Yes,15,3,2,80,0,7,3,3,0,0,0,0
+30,No,Non-Travel,1400,Research & Development,3,3,Life Sciences,1,562,3,Male,53,3,1,Laboratory Technician,4,Married,2097,16734,4,Y,No,15,3,3,80,1,9,3,1,5,3,1,4
+39,No,Travel_Rarely,1462,Sales,6,3,Medical,1,1588,4,Male,38,4,3,Sales Executive,3,Married,8237,4658,2,Y,No,11,3,1,80,1,11,3,3,7,6,7,6
+
+Use only the Python standard library.
+
+These files, written earlier, are in the same directory:
+
+--- step01.py ---
+import csv
+
+
+def remember(header, rows):
+    years_at_company_idx = header.index('YearsAtCompany+')
+    years_in_current_role_idx = header.index('YearsInCurrentRole+')
+    years_with_curr_manager_idx = header.index('YearsWithCurrManager+')
+
+    def safe(val):
+        if val == '?':
+            return 0.0
+        try:
+            return float(val)
+        except (ValueError, TypeError):
+            return 0.0
+
+    max_ac = max(safe(r[years_at_company_idx]) for r in rows) or 1
+    max_icr = max(safe(r[years_in_current_role_idx]) for r in rows) or 1
+    max_wcm = max(safe(r[years_with_curr_manager_idx]) for r in rows) or 1
+
+    scored = []
+    for i, row in enumerate(rows):
+        score = (safe(row[years_at_company_idx]) / max_ac +
+                 safe(row[years_in_current_role_idx]) / max_icr +
+                 safe(row[years_with_curr_manager_idx]) / max_wcm) * 100.0
+        scored.append((score, i))
+
+    scored.sort(reverse=True)
+    n = len(rows)
+    limit = max(1, int(n * 0.05))
+    return [pos for _, pos in scored[:limit]]
+
+
+if __name__ == "__main__":
+    path = 'WA_Fn-UseC_-HR-Employee-Attrition.train.csv'
+    with open(path, newline='') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = list(reader)
+
+    positions = remember(header, rows)
+    emp_idx = header.index('EmployeeNumber')
+    print(f"Top {len(positions)} employees who stay unusually long:")
+    for pos in positions[:5]:
+        row = rows[pos]
+        print(f"  Employee #{row[emp_idx]}, "
+              f"At company: {row[years_at_company_idx]} years, "
+              f"In current role: {row[years_in_current_role_idx]} years")
+
+
+--- step02.py ---
+import csv
+import math
+
+
+def guess(header, train, test):
+    years_idx = header.index('YearsAtCompany+')
+    goal_cols = ['YearsAtCompany+', 'YearsInCurrentRole+',
+                 'YearsSinceLastPromotion', 'YearsWithCurrManager+']
+
+    numeric_cols = []
+    for col in header:
+        if col not in goal_cols and '+' not in col \
+                and col != 'EmployeeNumber' and col != 'EmployeeCount':
+            numeric_cols.append(col)
+
+    n_train = len(train)
+    if n_train == 0:
+        return [0.0] * len(test)
+
+    def safe_float(val):
+        if val == '?':
+            return 0.0
+        try:
+            return float(val)
+        except (ValueError, TypeError):
+            return 0.0
+
+    col_idx = {col: header.index(col) for col in numeric_cols}
+
+    means = {}
+    stds = {}
+    for col in numeric_cols:
+        vals = [safe_float(r[col_idx[col]]) for r in train]
+        mean_val = sum(vals) / len(vals)
+        variance = sum((v - mean_val) ** 2 for v in vals) / len(vals)
+        means[col] = mean_val
+        stds[col] = max(math.sqrt(variance), 1e-6)
+
+    y_vals = [safe_float(r[years_idx]) for r in train]
+    y_mean = sum(y_vals) / len(y_vals)
+
+    correlations = {}
+    for col in numeric_cols:
+        x_vals = [safe_float(r[col_idx[col]]) for r in train]
+        x_mean = means[col]
+        numerator = sum((x - x_mean) * (y - y_mean)
+                        for x, y in zip(x_vals, y_vals))
+        denom_x = math.sqrt(sum((x - x_mean) ** 2 for x in x_vals))
+        denom_y = math.sqrt(sum((y - y_mean) ** 2 for y in y_vals))
+        if denom_x * denom_y > 0:
+            correlations[col] = numerator / (denom_x * denom_y)
+        else:
+            correlations[col] = 0.0
+
+    predictions = []
+    for t_row in test:
+        pred = y_mean
+        for col in numeric_cols:
+            val = safe_float(t_row[col_idx[col]])
+            z_score = (val - means[col]) / stds[col]
+            pred += correlations[col] * z_score
+        predictions.append(pred)
+
+    return predictions
+
+
+if __name__ == "__main__":
+    path = 'WA_Fn-UseC_-HR-Employee-Attrition.train.csv'
+    with open(path, newline='') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = list(reader)
+
+    predictions = guess(header, rows, [])
+    print(f"Predicted YearsAtCompany+ for {len(predictions)} new hires:")
+    for i, p in enumerate(predictions[:5]):
+        print(f"  Hire #{i+1}: ~{p:.1f} years")
+
+
+--- step03.py ---
+import csv
+from step01 import remember
+from step02 import guess
+
+
+def certify(xs, ys):
+    """Return True if xs and ys are the same apart from noise."""
+    n_x = len(xs)
+    n_y = len(ys)
+    if n_x == 0 or n_y == 0:
+        return False
+
+    mean_x = sum(xs) / n_x
+    mean_y = sum(ys) / n_y
+
+    var_x = sum((v - mean_x) ** 2 for v in xs) / max(n_x, 1)
+    var_y = sum((v - mean_y) ** 2 for v in ys) / max(n_y, 1)
+
+    std_x = max(var_x ** 0.5, 1e-6)
+    std_y = max(var_y ** 0.5, 1e-6)
+
+    diff = abs(mean_x - mean_y)
+    se = (std_x ** 2 / n_x + std_y ** 2 / n_y) ** 0.5
+
+    return diff < 3 * max(se, 1e-6)
+
+
+def main():
+    path = 'WA_Fn-UseC_-HR-Employee-Attrition.train.csv'
+    with open(path, newline='') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = list(reader)
+
+    overtime_years = []
+    non_overtime_years = []
+
+    for row in rows:
+        years_at_company = float(row[header.index('YearsAtCompany+')]) if row[header.index('YearsAtCompany+')] != '?' else 0.0
+        over_time = row[header.index('overTime')]
+
+        if over_time == 'Y':
+            overtime_years.append(years_at_company)
+        else:
+            non_overtime_years.append(years_at_company)
+
+    print(f"Overtime workers: {len(overtime_years)} employees, avg stay: {sum(overtime_years)/len(overtime_years):.1f} years")
+    print(f"Non-overtime workers: {len(non_overtime_years)} employees, avg stay: {sum(non_overtime_years)/len(non_overtime_years):.1f} years")
+
+    result = certify(overtime_years, non_overtime_years)
+    if result:
+        print("Conclusion: Overtime and non-overtime workers have similar tenure (apart from noise).")
+    else:
+        print("Conclusion: Overtime workers differ significantly in tenure.")
+
+
+if __name__ == "__main__":
+    main()
+
+
+--- step04.py ---
+import csv
+
+
+def flow(header, row, seen):
+    """Streaming retention classifier: return True if the employee needs a conversation."""
+    years_idx = header.index('YearsAtCompany+')
+    goal_cols = ['YearsAtCompany+', 'YearsInCurrentRole+',
+                 'YearsSinceLastPromotion', 'YearsWithCurrManager+']
+
+    numeric_cols = []
+    for col in header:
+        if col not in goal_cols and '+' not in col \
+                and col != 'EmployeeNumber' and col != 'EmployeeCount':
+            numeric_cols.append(col)
+
+    n_seen = len(seen)
+    if n_seen == 0:
+        return True
+
+    def safe_float(val):
+        if val == '?':
+            return 0.0
+        try:
+            return float(val)
+        except (ValueError, TypeError):
+            return 0.0
+
+    col_idx = {col: header.index(col) for col in numeric_cols}
+
+    means = {}
+    stds = {}
+    y_vals = []
+    for r in seen:
+        for col in numeric_cols:
+            v = safe_float(r[col_idx[col]])
+            means[col] = means.get(col, 0.0) + (v - means.get(col, 0.0))
+        y_vals.append(safe_float(r[years_idx]))
+
+    n = len(seen)
+    for col in numeric_cols:
+        m = sum(v for v in [safe_float(r[col_idx[col]]) for r in seen]) / n
+        variance = sum((v - m) ** 2 for v in means.values()) / n
+        # Recompute properly per column
+        pass
+
+    # Clean approach: compute stats fresh from seen
+    col_means = {}
+    col_sums_sq = {}
+    y_mean_sum = 0.0
+    y_var_sum = 0.0
+    for r in seen:
+        for col in numeric_cols:
+            v = safe_float(r[col_idx[col]])
+            col_means[col] = col_means.get(col, 0.0) + (v - col_means.get(col, 0.0))
+        y_mean_sum += safe_float(r[years_idx])
+
+    n = len(seen)
+    for col in numeric_cols:
+        m = col_means.get(col, 0.0) / n
+        # Need sum of squares too — let me redo this cleanly
+        pass
+
+    # OK, simplest correct approach:
+    def _stats(rows):
+        means = {}
+        sums_sq = {}
+        for r in rows:
+            for col in numeric_cols:
+                v = safe_float(r[col_idx[col]])
+                means[col] = means.get(col, 0.0) + (v - means.get(col, 0.0))
+        n = len(rows)
+        for col in numeric_cols:
+            m = means.get(col, 0.0) / n
+            sums_sq[col] = sum((safe_float(r[col_idx[col])) - m) ** 2 for r in rows)
+        return {col: (means.get(col, 0.0)/n, sums_sq.get(col, 0.0)**0.5) for col in numeric_cols}
+
+    stats_seen = _stats(seen)
+    y_mean = sum(safe_float(r[years_idx]) for r in seen) / n
+    y_std = (sum((safe_float(r[years_idx]) - y_mean) ** 2 for r in seen) / n) ** 0.5 or 1e-6)
+
+    correlations = {}
+    for col in numeric_cols:
+        x_vals = [safe_float(r[col_idx[col]]) for r in seen]
+        x_m, x_s = stats_seen[col]
+        numerator = sum((x - x_m) * (y - y_mean) for x, y in zip(x_vals, [safe_float(r[years_idx]) for r in seen]))
+        denom_x = ((sum((v - x_m)**2 for v in x_vals))**0.5 or 1e-6)
+        if denom_x * y_std > 0:
+            correlations[col] = numerator / (denom_x * y_std)
+        else:
+            correlations[col] = 0.0
+
+    pred = y_mean
+    for col in numeric_cols:
+        val = safe_float(row[col_idx[col]])
+        z_score = (val - stats_seen[col][0]) / stats_seen[col][1]
+        pred += correlations.get(col, 0.0) * z_score
+
+    return pred < y_mean
+
+
+if __name__ == "__main__":
+    path = 'WA_Fn-UseC_-HR-Employee-Attrition.train.csv'
+    with open(path, newline='') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = list(reader)
+
+    flagged = []
+    for row in rows:
+        if flow(header, row, flagged):
+            flagged.append(row)
+
+    print(f"Flagged {len(flagged)} of {len(rows)} employees for retention conversation.")
+
+
+--- step05.py ---
+import csv
+
+
+def blame(header, rows):
+    """Return names of input columns (not goals) that best explain short stays."""
+    years_idx = header.index('YearsAtCompany+')
+    goal_cols = ['YearsAtCompany+', 'YearsInCurrentRole+',
+                 'YearsSinceLastPromotion', 'YearsWithCurrManager+']
+
+    numeric_cols = []
+    for col in header:
+        if col not in goal_cols and '+' not in col \
+                and col != 'EmployeeNumber' and col != 'EmployeeCount':
+            numeric_cols.append(col)
+
+    def safe_float(val):
+        if val == '?':
+            return 0.0
+        try:
+            return float(val)
+        except (ValueError, TypeError):
+            return 0.0
+
+    y_vals = [safe_float(r[years_idx]) for r in rows]
+    y_mean = sum(y_vals) / len(y_vals) if y_vals else 0.0
+    y_std = ((sum((v - y_mean) ** 2 for v in y_vals) / max(len(y_vals), 1)) ** 0.5 or 1e-6)
+
+    col_corrs = {}
+    for col in numeric_cols:
+        vals = [safe_float(r[header.index(col)]) for r in rows]
+        x_mean = sum(vals) / len(vals) if vals else 0.0
+        x_std = ((sum((v - x_mean) ** 2 for v in vals) / max(len(vals), 1)) ** 0.5 or 1e-6)
+
+        numerator = sum((x - x_mean) * (y - y_mean) for x, y in zip(vals, y_vals))
+        denom = x_std * y_std
+        if denom > 0:
+            col_corrs[col] = numerator / denom
+        else:
+            col_corrs[col] = 0.0
+
+    sorted_cols = sorted(col_corrs.items(), key=lambda kv: abs(kv[1]), reverse=True)
+    top_n = min(5, len(sorted_cols))
+    return [col for col, _ in sorted_cols[:top_n]]
+
+
+if __name__ == "__main__":
+    path = 'WA_Fn-UseC_-HR-Employee-Attrition.train.csv'
+    with open(path, newline='') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = list(reader)
+
+    reasons = blame(header, rows)
+    print("Factors explaining short stays:")
+    for r in reasons:
+        print(f"  - {r}")
+
+
+--- step06.py ---
+import csv
+
+
+def justify(header, rows, row):
+    """Return (fraction_better, reason) for a single employee."""
+    years_idx = header.index('YearsAtCompany+')
+    goal_cols = ['YearsAtCompany+', 'YearsInCurrentRole+',
+                 'YearsSinceLastPromotion', 'YearsWithCurrManager+']
+
+    def safe_float(val):
+        if val == '?':
+            return 0.0
+        try:
+            return float(val)
+        except (ValueError, TypeError):
+            return 0.0
+
+    # Compute best possible score for each goal column across rows
+    best_scores = {}
+    for col in goal_cols:
+        vals = [safe_float(r[header.index(col)]) for r in rows]
+        best_scores[col] = max(vals) if vals else 0.0
+
+    # Score the reference row and all rows
+    def score(row):
+        s = 0.0
+        for col in goal_cols:
+            v = safe_float(row[header.index(col)])
+            s += (v / best_scores[col]) * 100.0 if best_scores[col] > 0 else 0.0
+        return s
+
+    ref_score = score(row)
+    better_count = sum(1 for r in rows if score(r) < ref_score)
+    n = len(rows)
+    fraction = better_count / max(n, 1)
+
+    reason = (f"Your tenure is better than {fraction*100:.0f}% of employees "
+              f"(you rank top-{int((1-fraction)*n)+1} out of {n}).")
+    return (fraction, reason)
+
+
+if __name__ == "__main__":
+    path = 'WA_Fn-UseC_-HR-Employee-Attrition.train.csv'
+    with open(path, newline='') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = list(reader)
+
+    # Use the last row (which has '?' goals) as the reference
+    ref_row = rows[-1]
+    fraction, reason = justify(header, rows, ref_row)
+    print(reason)
+
+
+--- step07.py ---
+import csv
+
+
+def choose(header, rows, label):
+    """Find the working arrangement that keeps people longest."""
+
+    years_idx = header.index('YearsAtCompany+')
+    goal_cols = ['YearsAtCompany+', 'YearsInCurrentRole+',
+                 'YearsSinceLastPromotion', 'YearsWithCurrManager+']
+
+    def safe_float(val):
+        if val == '?':
+            return 0.0
+        try:
+            return float(val)
+        except (ValueError, TypeError):
+            return 0.0
+
+    # Identify input numeric columns
+    numeric_cols = []
+    for col in header:
+        if col not in goal_cols and '+' not in col \
+                and col != 'EmployeeNumber' and col != 'EmployeeCount':
+            numeric_cols.append(col)
+
+    n_rows = len(rows)
+
+    # Compute correlations of each input feature with YearsAtCompany+
+    y_vals = [safe_float(r[years_idx]) for r in rows]
+    y_mean = sum(y_vals) / n_rows if n_rows else 0.0
+    y_var = sum((v - y_mean)**2 for v in y_vals) / max(n_rows, 1)
+    y_std = (y_var**0.5 or 1e-6)
+
+    col_means = {}
+    col_vars = {}
+    for col in numeric_cols:
+        vals = [safe_float(r[header.index(col)]) for r in rows]
+        m = sum(vals) / len(vals) if vals else 0.0
+        v = sum((x - m)**2 for x in vals) / max(len(vals), 1)
+        col_means[col] = m
+        col_vars[col] = (v**0.5 or 1e-6)
+
+    # Rank rows by predicted YearsAtCompany+ score using correlations
+    scored = []
+    for i, row in enumerate(rows):
+        pred = y_mean
+        for col in numeric_cols:
+            val = safe_float(row[header.index(col)])
+            z = (val - col_means[col]) / col_vars[col] if col_vars[col] > 0 else 0.0
+            x_vals = [safe_float(r[header.index(col)]) for r in rows]
+            x_mean = col_means[col]
+            numerator = sum((x - x_mean) * (y - y_mean) for x, y in zip(x_vals, y_vals))
+            denom_x = ((sum((v - x_mean)**2 for v in x_vals))**0.5 or 1e-6)
+            corr = numerator / (denom_x * y_std) if denom_x * y_std > 0 else 0.0
+            pred += corr * z
+        scored.append((pred, i))
+
+    # Pick top candidates for interview (up to 50)
+    scored.sort(reverse=True)
+    top_n = min(50, n_rows)
+    candidates = [pos for _, pos in scored[:top_n]]
+
+    # Interview them and get true goals
+    best_pos = None
+    best_score = -float('inf')
+
+    for i in candidates:
+        goals = label(i)
+        score = 0.0
+        for col in goal_cols:
+            v = safe_float(goals[header.index(col)])
+            if col == 'YearsAtCompany+':
+                score += v
+            elif col == 'YearsInCurrentRole+':
+                score += v
+            elif col == 'YearsSinceLastPromotion':
+                score += v
+            elif col == 'YearsWithCurrManager+':
+                score += v
+
+        if score > best_score:
+            best_score = score
+            best_pos = i
+
+    return best_pos
+
+
+if __name__ == "__main__":
+    path = 'WA_Fn-UseC_-HR-Employee-Attrition.train.csv'
+    with open(path, newline='') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = list(reader)
+
+    best = choose(header, rows, label)
+    print(f"Best employee to interview: row {best}")
+
+
+--- step08.py ---
+import csv
+
+
+def fix(header, row, levers):
+    """Recommend changes to keep an employee longer."""
+    years_idx = header.index('YearsAtCompany+')
+    goal_cols = ['YearsAtCompany+', 'YearsInCurrentRole+',
+                 'YearsSinceLastPromotion', 'YearsWithCurrManager+']
+
+    def safe_float(val):
+        if val == '?':
+            return 0.0
+        try:
+            return float(val)
+        except (ValueError, TypeError):
+            return 0.0
+
+    # Compute best possible score for each goal column across rows
+    best_scores = {}
+    for col in goal_cols:
+        vals = [safe_float(r[header.index(col)]) for r in row]
+        best_scores[col] = max(vals) if vals else 0.0
+
+    def score(row):
+        s = 0.0
+        for col in goal_cols:
+            v = safe_float(row[header.index(col)])
+            s += (v / best_scores[col]) * 100.0 if best_scores[col] > 0 else 0.0
+        return s
+
+    ref_score = score(row)
+    better_count = sum(1 for r in row if score(r) < ref_score)
+    n = len(row)
+    fraction = better_count / max(n, 1)
+
+    reason = (f"Your tenure is better than {fraction*100:.0f}% of employees "
+              f"(you rank top-{int((1-fraction)*n)+1} out of {n}).")
+    return (fraction, reason)
+
+
+if __name__ == "__main__":
+    path = 'WA_Fn-UseC_-HR-Employee-Attrition.train.csv'
+    with open(path, newline='') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = list(reader)
+
+    print("Analysis complete.")
+
+
+--- step09.py ---
+import csv
+
+
+def spot(header, rows):
+    """Return positions (row indices) whose input cells look wrong, most suspicious first."""
+
+    def safe_float(val):
+        if val == '?':
+            return 0.0
+        try:
+            return float(val)
+        except (ValueError, TypeError):
+            return 0.0
+
+    goal_cols = ['YearsAtCompany+', 'YearsInCurrentRole+',
+                 'YearsSinceLastPromotion', 'YearsWithCurrManager+']
+
+    numeric_cols = []
+    for col in header:
+        if col not in goal_cols and '+' not in col \
+                and col != 'EmployeeNumber' and col != 'EmployeeCount':
+            numeric_cols.append(col)
+
+    n_rows = len(rows)
+    col_idx = {col: header.index(col) for col in numeric_cols}
+
+    # Compute per-column mean and std
+    col_means = {}
+    col_vars = {}
+    for col in numeric_cols:
+        vals = [safe_float(r[col_idx[col]]) for r in rows]
+        m = sum(vals) / n_rows if n_rows else 0.0
+        v = sum((x - m) ** 2 for x in vals) / max(n_rows, 1)
+        col_means[col] = m
+        col_vars[col] = (v ** 0.5 or 1e-6)
+
+    # Score each row by how many cells are far from expected
+    scored = []
+    for i, row in enumerate(rows):
+        suspicious = 0.0
+        worst_dev = 0.0
+        for col in numeric_cols:
+            val = safe_float(row[col_idx[col]])
+            dev = abs(val - col_means[col]) / col_vars[col]
+            if dev > worst_dev:
+                worst_dev = dev
+            if dev > 3.0:
+                suspicious += 1
+        scored.append((worst_dev, i))
+
+    # Sort by worst deviation descending (most anomalous first)
+    scored.sort(reverse=True)
+    return [pos for _, pos in scored]
+
+
+if __name__ == "__main__":
+    path = 'WA_Fn-UseC_-HR-Employee-Attrition.train.csv'
+    with open(path, newline='') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = list(reader)
+
+    positions = spot(header, rows)
+    print(f"Found {len(positions)} suspicious row(s):")
+    for pos in positions[:10]:
+        print(f"  Row #{pos}")
+
+
+Reuse the earlier files wherever you can: import from them rather than rewriting. Write as little new code as possible. Do not edit the earlier files.
+
+The customer asks:
+
+  Three advisers have three theories about what keeps people. Give each the same 50 interviews. Who is right?
+
+Write step10.py to answer that ask on this data.
+
+A test harness will import your file and call this function, so you must define it exactly:
+
+def race(header, rows, label)
+  Returns a dict.   Every goal cell in `rows` is "?". label(i) returns the true goal values of rows[i]; at most 50 different rows may be labelled in total, across all strategies. Compare at least three ways of searching for the best row; one of them must pick rows at random and be named "random". Return {"winner": name of the best strategy, "row": position of the best row that strategy found, "tried": list of all strategy names}.
+
+Conventions: `header` is the list of column names. `rows` is a list of rows; each row is a list of cells in header order, floats for numeric columns and strings for symbolic ones. A cell shown as "?" is hidden from you. A row is better when its goals are closer to their best (low for names ending in -, high for names ending in +).
+
+Keep everything that prints or reads the csv file under `if __name__ == "__main__":` so that importing the file prints nothing. Plain built-in types are all you need: do not import anything from `typing`.
+
+Running `python step10.py` must load the csv, call your function, print a short answer a customer could read, and exit with status 0. Reply with the complete file in one ```python fenced block and nothing else.

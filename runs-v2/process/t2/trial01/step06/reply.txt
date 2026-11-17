@@ -1,0 +1,44 @@
+```python
+from step01 import remember
+from step02 import guess
+
+
+def justify(header, rows, row):
+    """Returns (p, reason) where p is fraction of rows this one beats."""
+    goals = [c for c in header if c.endswith('-') and c[0].isupper()]
+
+    # Predict Cost- for the query row using OLS from step02.
+    # The model only uses input columns, so "?" goal cells are ignored.
+    preds = guess(header, rows, [row])
+    predicted_cost = preds[0] if preds else float('inf')
+
+    cost_idx = header.index('Cost-')
+    n = len(rows)
+
+    if n == 0:
+        return (0.0, "No data to compare against.")
+
+    # Count how many training rows have Cost- worse than our prediction.
+    better_count = sum(1 for r in rows if r[cost_idx] > predicted_cost)
+    p = better_count / n
+
+    reason = f"This setup beats {p:.0%} of all setups on cost."
+
+    return (round(p, 4), reason)
+
+
+if __name__ == "__main__":
+    import csv
+
+    with open('pom3a.train.csv', 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = list(reader)
+
+    # Use the first row as a sample query (pretend its goals are unknown).
+    sample_row = rows[0]
+    p, reason = justify(header, rows, sample_row)
+    print(f"Justification for first setup:")
+    print(f"  Better than {p:.4f} of all setups")
+    print(f"  Reason: {reason}")
+```

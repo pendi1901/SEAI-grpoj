@@ -1,0 +1,33 @@
+from step01 import remember
+
+
+def flow(header, row, seen):
+    """Approve or reject each proposal as it arrives."""
+    goals = [c for c in header if c.endswith('-') and c[0].isupper()]
+
+    all_rows = seen + [row]
+    n = len(all_rows)
+
+    scored = [(sum(row[header.index(g)] for g in goals), i)
+               for i, row in enumerate(all_rows)]
+    scored.sort()
+
+    k = max(1, int(n * 0.05))
+    top_indices = [pos for _, pos in scored[:k]]
+
+    return (n - 1) in top_indices
+
+
+if __name__ == "__main__":
+    import csv
+
+    with open('pom3a.train.csv', 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = list(reader)
+
+    print("Proposals:")
+    for i, row in enumerate(rows):
+        approve = flow(header, row, [rows[:i]])
+        status = "APPROVED" if approve else "rejected"
+        print(f"  Proposal {i}: {status}")

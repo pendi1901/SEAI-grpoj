@@ -1,0 +1,89 @@
+import csv
+
+
+def remember(header, rows):
+    """Return positions (0-based) of the rows that are unusually good on all goal columns."""
+    goals = [c for c in header if c.endswith('-') and c[0].isupper()]
+
+    n = len(rows)
+    if n == 0:
+        return []
+
+    scored = [(sum(row[header.index(g)] for g in goals), i) for i, row in enumerate(rows)]
+    scored.sort()
+
+    k = max(1, int(n * 0.05))
+    return [pos for _, pos in scored[:k]]
+
+
+def guess(header, train, test):
+    """Predict Cost- (first goal column) for each test row."""
+    goals = [c for c in header if c.endswith('-') and c[0].isupper()]
+    first_goal = goals[0]  # "Cost-"
+
+    n_train = len(train)
+    if n_train == 0:
+        return ["?"] * len(test)
+
+    goal_idx = header.index(first_goal)
+    input_cols = [c for c in header if c not in goals and c != first_goal]
+
+    # Compute means of inputs and target from training data.
+    m_target = sum(row[goal_idx] for row in train) / n_train
+    m_inputs = {col: sum(row[header.index(col)] for row in train) / n_train for col in input_cols}
+
+    # Build OLS coefficients using normal equations (manual implementation).
+    p = len(input_cols)
+    A = [[0.0] * (p + 1) for _ in range(p + 1)]
+    b = [0.0] * (p + 1)
+
+    for row in train:
+        x = [row[header.index(col)] - m_inputs[col] for col in input_cols]
+        y = row[goal_idx] - m_target
+        for i in range(p):
+            b[i] += x[i] * y
+        for i in range(p):
+            for j in range(p):
+                A[i][j] += x[i] * x[j]
+        A[i][p] = 0.0
+
+    # Solve via Gaussian elimination on the augmented matrix [A | b].
+    aug = [row[:] + [b[i]] for i, row in enumerate(A)]
+    n = p + 1
+    for col in range(n):
+        max_row = col
+        for r in range(col + 1, n):
+            if abs(aug[r][col]) > abs(aug[max_row][col]):
+                max_row = r
+        aug[col], aug[max_row] = aug[max_row], aug[col]
+        pivot = aug[col][col]
+        if abs(pivot) < 1e-12:
+            continue
+        for r in range(col + 1, n):
+            factor = aug[r][col] / pivot
+            for c in range(col, n + 1):
+                aug[r][c] -= factor * aug[col][c]
+
+    coeffs = [aug[i][n] / aug[i][i] if abs(aug[i][i]) > 1e-12 else 0.0 for i in range(n)]
+
+    predictions = []
+    for row in test:
+        pred = m_target + sum(coeffs[i] * (row[header.index(input_cols[i])] - m_inputs[input_cols[i]]) for i in range(p))
+        predictions.append(round(pred, 6))
+
+    return predictions
+
+
+if __name__ == "__main__":
+    with open('pom3a.train.csv', 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = list(reader)
+
+    best = remember(header, rows)
+    print(f"Top {len(best)} of {len(rows)} setups:")
+    for pos in best:
+        print(f"  Row {pos}")
+
+    preds = guess(header, rows, [])
+    print(f"\nPredicted Cost- range: {min(preds):.4f} to {max(preds):.4f}")

@@ -1,0 +1,65 @@
+import numpy as np
+
+
+def guess(header, train, test):
+    goal_cols = [c for c in header if c.endswith('-') or c.endswith('+')]
+    first_goal = goal_cols[0]  # MRE-
+
+    input_cols = [c for c in header if not c.endswith('-') and not c.endswith('+')]
+
+    numeric_input_cols = []
+    symbolic_input_cols = []
+
+    for c in input_cols:
+        is_numeric = True
+        for row in train:
+            val = row[input_cols.index(c)]
+            try:
+                float(val)
+            except (ValueError, TypeError):
+                is_numeric = False
+                break
+        if is_numeric:
+            numeric_input_cols.append(c)
+        else:
+            symbolic_input_cols.append(c)
+
+    X_train = []
+    for row in train:
+        x = [float(row[input_cols.index(c)]) for c in numeric_input_cols]
+        X_train.append(x)
+    X_train = np.array(X_train)
+
+    y_train = np.array([float(row[header.index(first_goal)]) for row in train])
+
+    from sklearn.linear_model import LinearRegression
+    model = LinearRegression()
+    model.fit(X_train, y_train)
+
+    predictions = []
+    for row in test:
+        x = [float(row[input_cols.index(c)]) for c in numeric_input_cols]
+        pred = float(model.predict([x])[0])
+        predictions.append(pred)
+
+    return predictions
+
+
+if __name__ == "__main__":
+    import pandas as pd
+
+    df = pd.read_csv("Health-ClosedIssues0000.train.csv")
+    header = list(df.columns)
+    rows = [list(r) for r in df.values]
+
+    goal_cols = [c for c in header if c.endswith('-') or c.endswith('+')]
+    test_rows = []
+    for row in rows:
+        new_row = list(row)
+        for i, col in enumerate(header):
+            if col in goal_cols:
+                new_row[i] = "?"
+        test_rows.append(new_row)
+
+    predictions = guess(header, rows, test_rows)
+    print(f"Predicted MRE- (first 5 of {len(predictions)}): {[f'{p:.4f}' for p in predictions[:5]]}")

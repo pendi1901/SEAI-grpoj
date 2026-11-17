@@ -1,0 +1,37 @@
+import ezr
+
+def certify(xs, ys):
+    """Returns True if xs and ys are the same apart from noise."""
+    xs = [float(x) for x in xs]
+    ys = [float(y) for y in ys]
+    return ezr.same(xs, ys)
+
+if __name__ == "__main__":
+    import os
+    path = 'pom3a.train.csv'
+    with open(path) as f:
+        lines = [l.strip() for l in f if l.strip()]
+    header = lines[0].split(',')
+    rows = ezr.csv(path)
+
+    tbl = ezr.Tbl([header] + rows)
+
+    # Cost- is the first goal column (minimise)
+    cost_col = [c for c in tbl.y if c.goal == 1 and type(c) is ezr.Num][0]
+
+    # Split by Team Size at its mean
+    team_size_col = tbl.cols[8]
+
+    small_cost = []
+    big_cost = []
+
+    for row in rows:
+        ts = float(row[8])
+        cost = float(row[cost_col.at])
+        if ts < team_size_col.mu:
+            small_cost.append(cost)
+        else:
+            big_cost.append(cost)
+
+    result = certify(small_cost, big_cost)
+    print(f"Small-team Cost- vs Big-team Cost-: {'Same apart from noise' if result else 'Really different'}")

@@ -1,0 +1,196 @@
+You are writing one Python file, step03.py.
+
+The data is the csv file Health-ClosedIssues0000.train.csv in the current directory. Column names starting in upper case are numeric, lower case are symbolic. A name ending in - is a goal to minimise, in + a goal to maximise; all other columns are inputs. It has 8000 data rows after the header. Any count the customer quotes describes their full records, not this file: never hard-code a row count, read the file to the end. Its first lines:
+
+MRE-,ACC+,PRED40+,N_estimators,criterion,Min_sample_leaves,Min_impurity_decrease,Max_depth
+0.7771723122238585,0.4546619673181672,0,10,squared_error,17,7.75,11
+0.42238586156111924,0.6920858699134893,0.5714285714285714,150,absolute_error,3,4.25,10
+0.8817378497790869,0.40820249919897467,0,110,absolute_error,18,4,14
+
+Use only the Python standard library.
+
+These files, written earlier, are in the same directory:
+
+--- step01.py ---
+def remember(header, rows):
+    minimise_cols = [c for c in header if c.endswith('-')]
+    maximise_cols = [c for c in header if c.endswith('+')]
+
+    best_positions = []
+    scores = []
+
+    for i, row in enumerate(rows):
+        score = 0.0
+        for col in minimise_cols:
+            val = row[header.index(col)]
+            try:
+                fval = float(val) if str(val) != '?' else None
+            except (ValueError, TypeError):
+                continue
+            if fval is not None:
+                score -= fval  # lower MRE → better
+        for col in maximise_cols:
+            val = row[header.index(col)]
+            try:
+                fval = float(val) if str(val) != '?' else None
+            except (ValueError, TypeError):
+                continue
+            if fval is not None:
+                score += fval  # higher ACC/PRED40 → better
+
+        scores.append(score)
+
+    n = len(rows)
+    max_positions = max(1, int(n * 0.05))
+
+    indexed_scores = [(i, s) for i, s in enumerate(scores)]
+    indexed_scores.sort(key=lambda x: -x[1])
+
+    best_positions = [idx for idx, _ in indexed_scores[:max_positions]]
+    return best_positions
+
+
+if __name__ == "__main__":
+    import csv
+
+    with open('Health-ClosedIssues0000.train.csv', 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = []
+        for row in reader:
+            converted = []
+            for cell in row:
+                if cell.strip() == '?':
+                    converted.append('?')
+                else:
+                    try:
+                        converted.append(float(cell))
+                    except ValueError:
+                        converted.append(cell)
+            rows.append(converted)
+
+    result = remember(header, rows)
+    print(f"Best {len(result)} of {len(rows)} setups:")
+    for pos in result:
+        print(f"  Row {pos}")
+
+
+--- step02.py ---
+import csv
+
+
+def guess(header, train, test):
+    """Estimate the first goal column for each test row using training data."""
+    minimise_cols = [c for c in header if c.endswith('-')]
+    maximise_cols = [c for c in header if c.endswith('+')]
+
+    # Find indices of all columns
+    col_idx = {name: i for i, name in enumerate(header)}
+
+    first_goal_col = col_idx[minimise_cols[0]]  # MRE- is the first goal column
+
+    # Build a simple linear model from training data
+    n_train = len(train)
+    if n_train == 0:
+        return [None] * len(test)
+
+    # Collect features (all non-goal columns) and target (first goal column)
+    feature_cols = []
+    for i, name in enumerate(header):
+        if name not in minimise_cols + maximise_cols:
+            feature_cols.append(i)
+
+    n_features = len(feature_cols)
+
+    # Simple OLS-like approach: compute means and covariances
+    target_vals = []
+    for row in train:
+        val = row[first_goal_col]
+        try:
+            fval = float(val) if str(val) != '?' else None
+        except (ValueError, TypeError):
+            continue
+        if fval is not None:
+            target_vals.append(fval)
+
+    n_target = len(target_vals)
+    if n_target == 0:
+        return [None] * len(test)
+
+    mean_y = sum(target_vals) / n_target
+
+    # Compute feature means and covariances using only rows with valid targets
+    for row in train:
+        has_valid_target = False
+        for i, name in enumerate(header):
+            if name not in minimise_cols + maximise_cols:
+                val = row[i]
+                try:
+                    fval = float(val) if str(val) != '?' else None
+                except (ValueError, TypeError):
+                    continue
+                if fval is not None:
+                    has_valid_target = True
+
+        if has_valid_target and len(target_vals) > 0:
+            # We'll use a simpler approach: just predict based on feature means
+            pass
+
+    # Simple approach: for each test row, compute weighted average of training targets
+    # based on similarity to the test row's features
+    results = []
+
+    for test_row in test:
+        # Find valid target value (should be "?")
+        val = test_row[first_goal_col]
+        try:
+            fval = float(val) if str(val) != '?' else None
+        except (ValueError, TypeError):
+            pass  # It's "?"
+
+        # Use the mean of training targets as our prediction
+        results.append(mean_y)
+
+    return results
+
+
+if __name__ == "__main__":
+    with open('Health-ClosedIssues0000.train.csv', 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        train = []
+        for row in reader:
+            converted = []
+            for cell in row:
+                if cell.strip() == '?':
+                    converted.append('?')
+                else:
+                    try:
+                        converted.append(float(cell))
+                    except ValueError:
+                        converted.append(cell)
+            train.append(converted)
+
+    # Create a dummy test row with "?" for goal columns
+    test_row = ['?'] * len(header)
+    results = guess(header, train, [test_row])
+
+    print(f"Predicted {minimise_cols[0]}: {results[0]:.4f}")
+
+
+The customer asks:
+
+  In my last batch the big setups looked more accurate than the small ones. Is that real, or noise?
+
+Write step03.py to answer that ask on this data.
+
+A test harness will import your file and call this function, so you must define it exactly:
+
+def certify(xs, ys)
+  Returns True or False.   `xs` and `ys` are lists of numbers. Return True if they are the same apart from noise, False if they really differ.
+
+Conventions: `header` is the list of column names. `rows` is a list of rows; each row is a list of cells in header order, floats for numeric columns and strings for symbolic ones. A cell shown as "?" is hidden from you. A row is better when its goals are closer to their best (low for names ending in -, high for names ending in +).
+
+Keep everything that prints or reads the csv file under `if __name__ == "__main__":` so that importing the file prints nothing. Plain built-in types are all you need: do not import anything from `typing`.
+
+Running `python step03.py` must load the csv, call your function, print a short answer a customer could read, and exit with status 0. Reply with the complete file in one ```python fenced block and nothing else.

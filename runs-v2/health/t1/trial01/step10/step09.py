@@ -1,0 +1,82 @@
+def spot(header, rows):
+    minimise_cols = [c for c in header if c.endswith('-')]
+    maximise_cols = [c for c in header if c.endswith('+')]
+
+    col_idx = {name: i for i, name in enumerate(header)}
+    input_cols = [c for c in header if not (c.endswith('-') or c.endswith('+'))]
+
+    n = len(rows)
+    if n == 0:
+        return []
+
+    # Compute per-column mean and std on numeric inputs
+    col_stats = {}
+    for col in input_cols:
+        idx = col_idx[col]
+        vals = []
+        for row in rows:
+            val = row[idx]
+            try:
+                fval = float(val) if str(val) != '?' else None
+            except (ValueError, TypeError):
+                continue
+            if fval is not None:
+                vals.append(fval)
+
+        if len(vals) < 2:
+            col_stats[col] = {'mean': 0.0, 'std': 1e9}
+            continue
+
+        mean_val = sum(vals) / len(vals)
+        var_val = sum((v - mean_val) ** 2 for v in vals)
+        std_val = var_val ** 0.5 if var_val > 1e-10 else 1e-9
+
+        col_stats[col] = {'mean': mean_val, 'std': std_val}
+
+    # Score each row: how far its input values stray from typical (z-score)
+    suspicious_scores = []
+    for i in range(n):
+        score = 0.0
+        for col in input_cols:
+            idx = col_idx[col]
+            val = rows[i][idx]
+            try:
+                fval = float(val) if str(val) != '?' else None
+            except (ValueError, TypeError):
+                continue
+
+            if fval is not None and col_stats[col]['std'] > 1e-9:
+                z = abs(fval - col_stats[col]['mean']) / col_stats[col]['std']
+                score += max(0.0, z - 3.0)
+
+        suspicious_scores.append((i, score))
+
+    # Sort most suspicious first; return rows flagged as anomalous (score > 0)
+    suspicious_scores.sort(key=lambda x: -x[1])
+    result = [pos for pos, s in suspicious_scores if s > 0]
+    return result[:5]
+
+
+if __name__ == "__main__":
+    import csv
+
+    with open('Health-ClosedIssues0000.train.csv', 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = []
+        for row in reader:
+            converted = []
+            for cell in row:
+                if cell.strip() == '?':
+                    converted.append('?')
+                else:
+                    try:
+                        converted.append(float(cell))
+                    except ValueError:
+                        converted.append(cell)
+            rows.append(converted)
+
+    result = spot(header, rows)
+    print(f"Found {len(result)} potentially wrongly-entered row(s):")
+    for pos in result:
+        print(f"  Row {pos}")

@@ -1,0 +1,56 @@
+from step01 import remember
+
+
+def blame(header, rows):
+    """Return names of input columns (not goals) that best explain why worst rows are bad."""
+    goals = [c for c in header if c.endswith('-') and c[0].isupper()]
+    
+    n = len(rows)
+    if n == 0:
+        return []
+
+    # Score each row; lower is better (goals end in -).
+    scored = [(sum(row[header.index(g)] for g in goals), i) for i, row in enumerate(rows)]
+    scored.sort(reverse=True)  # worst first
+
+    k = max(1, int(n * 0.05))
+    bad_indices = set(pos for _, pos in scored[:k])
+
+    input_cols = [c for c in header if c not in goals]
+
+    results = []
+    for col in input_cols:
+        x_vals = [row[header.index(col)] for row in rows]
+        y_vals = [1.0 if i in bad_indices else 0.0 for i in range(n)]
+
+        mean_x = sum(x_vals) / n
+        mean_y = sum(y_vals) / n
+
+        num = sum((x_vals[i] - mean_x) * (y_vals[i] - mean_y) for i in range(n))
+        den_x = sum((x_vals[i] - mean_x) ** 2 for i in range(n)) ** 0.5
+        den_y = sum((y_vals[i] - mean_y) ** 2 for i in range(n)) ** 0.5
+
+        if den_x == 0 or den_y == 0:
+            r = 0.0
+        else:
+            r = num / (den_x * den_y)
+
+        results.append((abs(r), col, r))
+
+    # Sort by absolute correlation descending; return column names in that order.
+    results.sort(reverse=True)
+    return [col for _, col, _ in results]
+
+
+if __name__ == "__main__":
+    import csv
+
+    with open('pom3a.train.csv', 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = list(reader)
+
+    bad_cols = blame(header, rows)
+    print("The worst setups are bad because of:")
+    for col in bad_cols:
+        print(f"  {col}")

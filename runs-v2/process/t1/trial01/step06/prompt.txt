@@ -1,0 +1,473 @@
+You are writing one Python file, step06.py.
+
+The data is the csv file pom3a.train.csv in the current directory. Column names starting in upper case are numeric, lower case are symbolic. A name ending in - is a goal to minimise, in + a goal to maximise; all other columns are inputs. It has 16000 data rows after the header. Any count the customer quotes describes their full records, not this file: never hard-code a row count, read the file to the end. Its first lines:
+
+Culture,Criticality,Criticality Modifier,Initial Known,Inter-Dependency,Dynamism,Size,Plan,Team Size,Cost-,Score-,Idle-
+0.0398226348789376,0.4187697102690966,0.3161703902572166,0.959348346991444,0.2103972800854883,0.0012522910308919,0.6979456136102667,0.1708306261451138,0.3500716982826897,0.200104493,0.01402719,0.321856287
+0.8178056583175877,0.3082578231712947,0.6206926231796946,0.1199646773715625,0.2164255013970158,0.4846586144618353,0.294210224703445,0.9507425179765736,0.6096404500113382,0.163698034,0.592347249,0.522540984
+0.56468123803359,0.7539537892599035,0.9559574534085812,0.7971286605248636,0.1481054831420605,0.1838254939038858,0.3179577323742758,0.8793894950349531,0.5030407165929099,0.384975817,0.365612315,0.610119048
+
+Use only the Python standard library.
+
+These files, written earlier, are in the same directory:
+
+--- step01.py ---
+import csv
+
+
+def remember(header, rows):
+    goal_cols = ['Cost-', 'Score-', 'Idle-']
+
+    # Parse valid rows (all three goals must be numeric)
+    valid_rows = []  # list of (original_index, parsed_goals_dict)
+    for i, row in enumerate(rows):
+        ok = True
+        goals = {}
+        for col in goal_cols:
+            idx = header.index(col)
+            val = row[idx]
+            if val == '?':
+                ok = False
+                break
+            try:
+                goals[col] = float(val)
+            except ValueError:
+                ok = False
+                break
+        if ok:
+            valid_rows.append((i, goals))
+
+    if not valid_rows:
+        return []
+
+    n = len(valid_rows)
+
+    # Compute ranks for each goal among valid rows (lower value = better rank)
+    goal_ranks = {col: {} for col in goal_cols}
+    for col in goal_cols:
+        vals = [(valid_rows[j][1][col], j) for j in range(n)]
+        vals.sort(key=lambda x: x[0])
+        for new_rank, (_, idx_in_valid) in enumerate(vals, 1):
+            goal_ranks[col][idx_in_valid] = new_rank
+
+    # Find rows that are top performers on ALL three goals simultaneously
+    max_count = int(n * 0.05)
+    threshold = n - max_count
+
+    result = []
+    for j, (orig_idx, goals) in enumerate(valid_rows):
+        ranks = [goal_ranks[col][j] for col in goal_cols]
+        if all(r <= threshold for r in ranks):
+            result.append(orig_idx)
+
+    return result
+
+
+if __name__ == "__main__":
+    with open('pom3a.train.csv', 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = [row for row in reader]
+
+    result = remember(header, rows)
+    print(f"Found {len(result)} elite setups out of {len(rows)}:")
+    for pos in sorted(result):
+        c = float(rows[pos][header.index('Cost-')])
+        s = float(rows[pos][header.index('Score-')])
+        i = float(rows[pos][header.index('Idle-')])
+        print(f"  Row {pos}: Cost-={c:.4f}, Score-={s:.4f}, Idle-={i:.4f}")
+
+
+--- step02.py ---
+import csv
+
+
+def guess(header, train, test):
+    goal_cols = ['Cost-', 'Score-', 'Idle-']
+    input_cols = [c for c in header if c not in goal_cols]
+
+    def parse_row(row):
+        result = {}
+        ok = True
+        for col in input_cols + ['Cost-']:
+            idx = header.index(col)
+            val = row[idx]
+            if val == '?':
+                return None
+            try:
+                result[col] = float(val)
+            except ValueError:
+                return None
+        return result
+
+    # Parse training rows (all complete, no "?" cells)
+    train_parsed = []
+    for row in train:
+        parsed = parse_row(row)
+        if parsed is not None:
+            train_parsed.append(parsed)
+
+    results = []
+    for test_row in test:
+        test_parsed = parse_row(test_row)
+        if test_parsed is None:
+            # Fallback: average Cost- across training data
+            avg_cost = sum(t['Cost-'] for t in train_parsed) / len(train_parsed)
+            results.append(avg_cost)
+            continue
+
+        # Nearest-neighbour on input features (excluding Cost-)
+        best_idx = 0
+        min_dist = float('inf')
+        for i, tp in enumerate(train_parsed):
+            dist = sum((test_parsed[c] - tp[c]) ** 2 for c in input_cols)
+            if dist < min_dist:
+                min_dist = dist
+                best_idx = i
+
+        results.append(train_parsed[best_idx]['Cost-'])
+
+    return results
+
+
+if __name__ == "__main__":
+    with open('pom3a.train.csv', 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = [row for row in reader]
+
+    predictions = guess(header, rows, [])
+    print("guess() function defined and ready.")
+
+
+--- step03.py ---
+import csv
+
+
+def certify(xs, ys):
+    """Return True if xs and ys are the same apart from noise, False if they really differ."""
+    def mean(data):
+        return sum(data) / len(data)
+
+    def var(data, m):
+        return sum((x - m) ** 2 for x in data) / (len(data) - 1)
+
+    mx = mean(xs)
+    my = mean(ys)
+    sx = var(xs, mx)
+    sy = var(ys, my)
+    n = len(xs) + len(ys)
+    se = ((sx / n) + (sy / n)) ** 0.5
+    t = abs(mx - my) / se if se > 0 else 0
+    return t < 2.0
+
+
+def remember(header, rows):
+    goal_cols = ['Cost-', 'Score-', 'Idle-']
+
+    valid_rows = []
+    for i, row in enumerate(rows):
+        ok = True
+        goals = {}
+        for col in goal_cols:
+            idx = header.index(col)
+            val = row[idx]
+            if val == '?':
+                ok = False
+                break
+            try:
+                goals[col] = float(val)
+            except ValueError:
+                ok = False
+                break
+        if ok:
+            valid_rows.append((i, goals))
+
+    if not valid_rows:
+        return []
+
+    n = len(valid_rows)
+
+    goal_ranks = {col: {} for col in goal_cols}
+    for col in goal_cols:
+        vals = [(valid_rows[j][1][col], j) for j in range(n)]
+        vals.sort(key=lambda x: x[0])
+        for new_rank, (_, idx_in_valid) in enumerate(vals, 1):
+            goal_ranks[col][idx_in_valid] = new_rank
+
+    max_count = int(n * 0.05)
+    threshold = n - max_count
+
+    result = []
+    for j, (orig_idx, goals) in enumerate(valid_rows):
+        ranks = [goal_ranks[col][j] for col in goal_cols]
+        if all(r <= threshold for r in ranks):
+            result.append(orig_idx)
+
+    return result
+
+
+def guess(header, train, test):
+    goal_cols = ['Cost-', 'Score-', 'Idle-']
+    input_cols = [c for c in header if c not in goal_cols]
+
+    def parse_row(row):
+        result = {}
+        ok = True
+        for col in input_cols + ['Cost-']:
+            idx = header.index(col)
+            val = row[idx]
+            if val == '?':
+                return None
+            try:
+                result[col] = float(val)
+            except ValueError:
+                return None
+        return result
+
+    train_parsed = []
+    for row in train:
+        parsed = parse_row(row)
+        if parsed is not None:
+            train_parsed.append(parsed)
+
+    results = []
+    for test_row in test:
+        test_parsed = parse_row(test_row)
+        if test_parsed is None:
+            avg_cost = sum(t['Cost-'] for t in train_parsed) / len(train_parsed)
+            results.append(avg_cost)
+            continue
+
+        best_idx = 0
+        min_dist = float('inf')
+        for i, tp in enumerate(train_parsed):
+            dist = sum((test_parsed[c] - tp[c]) ** 2 for c in input_cols)
+            if dist < min_dist:
+                min_dist = dist
+                best_idx = i
+
+        results.append(train_parsed[best_idx]['Cost-'])
+
+    return results
+
+
+def analyse(header, rows):
+    goal_cols = ['Cost-', 'Score-', 'Idle-']
+    input_cols = [c for c in header if c not in goal_cols]
+
+    def parse_row(row):
+        result = {}
+        ok = True
+        for col in input_cols + goal_cols:
+            idx = header.index(col)
+            val = row[idx]
+            if val == '?':
+                return None
+            try:
+                result[col] = float(val)
+            except ValueError:
+                return None
+        return result
+
+    parsed = []
+    for row in rows:
+        p = parse_row(row)
+        if p is not None:
+            parsed.append(p)
+
+    small_cost, big_cost = [], []
+    for rec in parsed:
+        ts = rec['Team Size']
+        c = rec['Cost-']
+        if ts <= 0.5 * max(ts for _ in parsed):
+            small_cost.append(c)
+        else:
+            big_cost.append(c)
+
+    return certify(small_cost, big_cost), (small_cost, big_cost)
+
+
+if __name__ == "__main__":
+    with open('pom3a.train.csv', 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = [row for row in reader]
+
+    ok, (sc, bc) = analyse(header, rows)
+    print("Small-team Cost- vs big-team Cost-:", "same apart from noise" if ok else "genuinely different")
+
+
+--- step04.py ---
+import csv
+
+
+def flow(header, row, seen):
+    """Approve or reject each arriving proposal; cannot go back."""
+    goal_cols = ['Cost-', 'Score-', 'Idle-']
+
+    def parse_goals(row):
+        goals = {}
+        for col in goal_cols:
+            idx = header.index(col)
+            val = row[idx]
+            if val == '?':
+                return None
+            try:
+                goals[col] = float(val)
+            except ValueError:
+                return None
+        return goals
+
+    # Parse the current row's goals (skip if any goal is hidden)
+    cur_goals = parse_goals(row)
+    if cur_goals is None:
+        return False  # can't evaluate, reject
+
+    n_seen = len(seen) + 1
+    seen.append(row)
+
+    # If we have very few rows so far, be generous and approve anything decent.
+    if n_seen <= 3:
+        return True
+
+    # Compute the best possible score for each goal from all rows seen so far.
+    best = {}
+    worst = {}
+    for col in goal_cols:
+        vals = [parse_goals(r)[col] for r in seen if parse_goals(r) is not None]
+        best[col] = min(vals)   # lower is better (all goals end in -)
+        worst[col] = max(vals)
+
+    # Score the current row relative to what we've seen.
+    score = 0.0
+    for col in goal_cols:
+        g = cur_goals[col]
+        if g <= best[col]:
+            score += 1.0   # at least as good as the best seen so far
+        elif g >= worst[col]:
+            score += 0.5   # between best and worst
+
+    # If we've already approved something, only approve new rows that are clearly better.
+    if len(seen) > 1:
+        return False  # conservative: don't switch once we start rejecting
+    else:
+        # First row or early rows: approve anything that's not terrible.
+        return True
+
+
+if __name__ == "__main__":
+    with open('pom3a.train.csv', 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = [row for row in reader]
+
+    seen = []
+    approved = 0
+    rejected = 0
+    for row in rows:
+        if flow(header, row, seen):
+            approved += 1
+        else:
+            rejected += 1
+        seen.append(row)
+
+    print(f"Approved {approved}, rejected {rejected} out of {len(rows)} proposals.")
+
+
+--- step05.py ---
+import csv
+
+
+def blame(header, rows):
+    goal_cols = ['Cost-', 'Score-', 'Idle-']
+    input_cols = [c for c in header if c not in goal_cols]
+
+    def parse_row(row):
+        result = {}
+        ok = True
+        for col in input_cols + goal_cols:
+            idx = header.index(col)
+            val = row[idx]
+            if val == '?':
+                return None
+            try:
+                result[col] = float(val)
+            except ValueError:
+                return None
+        return result
+
+    parsed = []
+    for row in rows:
+        p = parse_row(row)
+        if p is not None:
+            parsed.append(p)
+
+    # Score each row: lower is better (all goals end in -)
+    def score(rec):
+        s = 0.0
+        for col in goal_cols:
+            s += rec[col]
+        return s
+
+    scored = [(score(r), r) for r in parsed]
+    scored.sort(key=lambda x: x[0])
+
+    # Worst rows are those with highest total cost (sum of goals, since all end in -)
+    worst_rows = [r for _, r in scored[len(scored)//2:]]
+
+    if not worst_rows:
+        return []
+
+    # For each input column, compute correlation between its value and the row's score
+    # Higher score = worse. We want columns that are high when rows are bad.
+    n_worst = len(worst_rows)
+    n_total = len(parsed)
+
+    col_names = header[:]
+    correlations = []
+    for col in input_cols:
+        vals = [r[col] for r in parsed if isinstance(r[col], (int, float))]
+        worst_vals = [r[col] for r in worst_rows if isinstance(r[col], (int, float))]
+
+        mean_all = sum(vals) / len(vals)
+        mean_worst = sum(worst_vals) / len(worst_vals)
+
+        num = sum((v - mean_all) * (w - mean_worst) for v, w in zip(vals, worst_vals))
+        den = ((sum((v - mean_all)**2 for v in vals)) *
+               (sum((w - mean_worst)**2 for w in worst_vals))) ** 0.5)
+
+        corr = num / den if den > 0 else 0.0
+        correlations.append((col, corr))
+
+    # Sort by absolute correlation descending; pick top contributors
+    correlations.sort(key=lambda x: abs(x[1]), reverse=True)
+    return [c for c, _ in correlations[:3]]
+
+
+if __name__ == "__main__":
+    with open('pom3a.train.csv', 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = [row for row in reader]
+
+    answer = blame(header, rows)
+    print("The worst setups are driven by:", ", ".join(answer))
+
+
+The customer asks:
+
+  When you call a setup "top tier", show me where it ranks against all the others and why I should believe you.
+
+Write step06.py to answer that ask on this data.
+
+A test harness will import your file and call this function, so you must define it exactly:
+
+def justify(header, rows, row)
+  Returns a pair (number, string).   `rows` are complete. In `row` the goal cells are "?". Return (p, reason): p is the fraction, 0 to 1, of `rows` that `row` is better than; reason is one sentence a customer could read.
+
+Conventions: `header` is the list of column names. `rows` is a list of rows; each row is a list of cells in header order, floats for numeric columns and strings for symbolic ones. A cell shown as "?" is hidden from you. A row is better when its goals are closer to their best (low for names ending in -, high for names ending in +).
+
+Keep everything that prints or reads the csv file under `if __name__ == "__main__":` so that importing the file prints nothing. Plain built-in types are all you need: do not import anything from `typing`.
+
+Running `python step06.py` must load the csv, call your function, print a short answer a customer could read, and exit with status 0. Reply with the complete file in one ```python fenced block and nothing else.

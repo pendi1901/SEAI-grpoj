@@ -1,0 +1,72 @@
+```python
+import csv
+
+
+def justify(header, rows, row):
+    """Return (p, reason) where p is fraction of rows that `row` beats."""
+
+    goal_cols = [c for c in header if c.endswith('+')]
+
+    # Compute mean tenure for each goal column from the training data.
+    goal_means = {}
+    for col in goal_cols:
+        vals = []
+        for r in rows:
+            try:
+                vals.append(float(r[header.index(col)]))
+            except (ValueError, TypeError):
+                pass
+        if vals:
+            goal_means[col] = sum(vals) / len(vals)
+        else:
+            goal_means[col] = 0.0
+
+    # Predict the hidden goals for `row` using these averages.
+    predicted_goals = {col: goal_means.get(col, 0.0) for col in goal_cols}
+
+    n_total = len(rows)
+    count_better = 0
+
+    for r in rows:
+        is_better = True
+        for col in goal_cols:
+            try:
+                actual_val = float(r[header.index(col)])
+            except (ValueError, TypeError):
+                continue
+            if actual_val > predicted_goals[col]:
+                is_better = False
+                break
+        if is_better:
+            count_better += 1
+
+    p = count_better / n_total if n_total else 0.0
+
+    question_marks = sum(1 for col in goal_cols if row[header.index(col)] == '?')
+    if question_marks == len(goal_cols):
+        reason = (
+            f"Based on average tenure patterns, this employee ranks better "
+            f"than {p:.0%} of staff."
+        )
+    else:
+        reason = (
+            f"With estimated tenure metrics, this employee ranks better "
+            f"than {p:.0%} of staff."
+        )
+
+    return (p, reason)
+
+
+if __name__ == '__main__':
+    with open('WA_Fn-UseC_-HR-Employee-Attrition.train.csv', 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = list(reader)
+
+    p, reason = justify(header, rows, rows[0])
+
+    print(
+        f"An employee with estimated tenure metrics ranks better than "
+        f"{p:.1%} of staff records.\n{reason}"
+    )
+```

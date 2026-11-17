@@ -1,0 +1,37 @@
+```python
+import csv
+
+
+def remember(header, rows):
+    attrition_idx = header.index('attrition')
+    years_cols = ['YearsAtCompany+', 'YearsInCurrentRole+',
+                  'YearsSinceLastPromotion', 'YearsWithCurrManager+']
+    year_indices = [header.index(c) for c in years_cols]
+
+    candidates = []
+    for i, row in enumerate(rows):
+        if row[attrition_idx] != 'No':
+            continue
+        skip = any(row[idx] == '?' for idx in year_indices)
+        if skip:
+            continue
+        score = sum(float(row[idx]) for idx in year_indices)
+        candidates.append((score, i))
+
+    candidates.sort(reverse=True)
+    max_count = max(1, int(len(rows) * 0.05))
+    return [pos for _, pos in candidates[:max_count]]
+
+
+if __name__ == '__main__':
+    with open('WA_Fn-UseC_-HR-Employee-Attrition.train.csv', 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = list(reader)
+
+    positions = remember(header, rows)
+    print(
+        f"Out of {len(rows)} staff records, "
+        f"{len(positions)} stayed unusually long."
+    )
+```

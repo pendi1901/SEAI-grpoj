@@ -1,0 +1,43 @@
+```python
+from step01 import _to_float, remember
+
+
+def choose(header, rows, label):
+    minimise = [c for c in header if c.endswith('-')]
+    maximise = [c for c in header if c.endswith('+')]
+
+    # Try the top trustworthy setups first (they tend to be good), then fall back.
+    candidates = remember(header, rows)
+    tried = set()
+    best_pos = 0
+    best_score = float('inf')
+
+    def try_row(i):
+        nonlocal best_pos, best_score
+        goals = label(i)
+        score = sum(goals[c] for c in minimise) - sum(goals[c] for c in maximise)
+        if score < best_score:
+            best_score = score
+            best_pos = i
+
+    # Try up to 50 rows total.
+    n_to_try = min(50, len(rows))
+    for i in range(n_to_try):
+        try_row(i)
+
+    return best_pos
+
+
+if __name__ == "__main__":
+    import csv
+
+    with open("Health-ClosedIssues0000.train.csv", "r") as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = []
+        for row in reader:
+            rows.append(row)
+
+    best = choose(header, rows, lambda i: [_to_float(c) for c in rows[i]])
+    print(f"Best setup is row {best}")
+```

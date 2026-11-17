@@ -1,0 +1,57 @@
+import pandas as pd
+import numpy as np
+
+
+def remember(header, rows):
+    # Identify goal columns (end with '-' or '+')
+    goal_cols = [c for c in header if c.endswith('-') or c.endswith('+')]
+    
+    # Find best values per goal column across all valid rows
+    min_vals = {}
+    max_vals = {}
+    for col in goal_cols:
+        vals = []
+        for row in rows:
+            cell = row[header.index(col)]
+            if cell == "?" or (isinstance(cell, float) and np.isnan(cell)):
+                continue
+            v = float(cell)
+            vals.append(v)
+        
+        if '-' in col:
+            min_vals[col] = min(vals) if vals else 0.0
+        else:
+            max_vals[col] = max(vals) if vals else 0.0
+    
+    # Score each row: sum of absolute deviations from best on goals
+    scores = []
+    for i, row in enumerate(rows):
+        s = 0.0
+        valid = True
+        for col in goal_cols:
+            cell = row[header.index(col)]
+            if cell == "?" or (isinstance(cell, float) and np.isnan(cell)):
+                continue
+            v = float(cell)
+            if '-' in col:
+                s += abs(v - min_vals[col])
+            else:
+                s += abs(v - max_vals[col])
+        scores.append(s)
+    
+    # Return positions of top rows (at least 1, at most 5%)
+    n = len(rows)
+    k = max(1, int(n * 0.05))
+    sorted_indices = np.argsort(scores)[:k]
+    return sorted_indices.tolist()
+
+
+if __name__ == "__main__":
+    df = pd.read_csv("Health-ClosedIssues0000.train.csv")
+    header = list(df.columns)
+    rows = [list(map(float, row)) for _, row in df.iterrows()]
+    
+    best_positions = remember(header, rows)
+    print(f"Best {len(best_positions)} out of {len(rows)} setups:")
+    for pos in best_positions:
+        print(f"  Row {pos}: MRE={df.iloc[pos]['MRE-']:.4f}, ACC={df.iloc[pos]['ACC+']:.4f}, PRED40={df.iloc[pos]['PRED40+']:.4f}")
