@@ -199,7 +199,8 @@ def one_call(cfg, domain, tid, trial, step, ask, prior):
   leaks = claude_md_above(d)
   if leaks: sys.exit(f"CLAUDE.md would leak into trials: {leaks}")
   data = ROOT / dom["data"]
-  shutil.copy(data, d / data.name)
+  try: os.link(data, d / data.name)       # same file, no extra disk
+  except OSError: shutil.copy(data, d / data.name)
   if treat["library"] == "ezr": shutil.copy(RIG / "lib" / "ezr.py", d)
   for pname, ptext in prior: (d / pname).write_text(ptext, "utf8")
 
