@@ -67,7 +67,7 @@ class Data:
         v = [r[k] for r in i.rows if r[k] != "?"]
         i.lo[k], i.hi[k] = min(v), max(v)
         i.mu[k], i.sd[k] = st.mean(v), st.pstdev(v)
-    i.levers = {}
+    i.levers, i.extra = {}, {}
     for name in levers:
       k = i.header.index(name)
       i.levers[name] = ((i.lo[k], i.hi[k]) if i.num[k] else
@@ -255,7 +255,12 @@ def q_choose(f, D, rnd):
 
 
 def q_fix(f, D, rnd):
-  out = []
+  """The course's number: is the change allowed? (It says itself that
+  this "does not measure improvement".) So a second list is kept in
+  D.extra: allowed AND estimated to lower the row's score, judged from
+  its 5 nearest training rows."""
+  out, helps = [], []
+  guess = D.oracle(rnd.sample(D.rows, min(600, len(D.rows))))
   for row in D.worst(20, rnd):
     try:
       got = f(D.header[:], row[:], dict(D.levers))
@@ -269,7 +274,12 @@ def q_fix(f, D, rnd):
         else: good &= v in allowed
       good = good and any(row[D.header.index(n)] != v for n, v in got.items())
       out.append(int(bool(good)))
-    except Exception: out.append(0)              # that row gets no credit
+      new = row[:]
+      for n, v in (got.items() if good else []): new[D.header.index(n)] = v
+      helps.append(int(bool(good) and guess(new) < guess(row)))
+    except Exception:                            # that row gets no credit
+      out.append(0); helps.append(0)
+  D.extra = dict(fix_helps=helps)
   return out
 
 
@@ -331,7 +341,8 @@ def child(file, skill, train, test, levers):
     detail = f"{type(e).__name__}: {e}"[:200]
     cases = [BASELINE[skill]] * ncases(skill, D)
   print("@@Q " + json.dumps(dict(status=status, detail=detail,
-                                 cases=[round(v, 4) for v in cases])))
+                                 cases=[round(v, 4) for v in cases],
+                                 extra=D.extra)))
 
 
 # -- parent: grade them all ---------------------------------------------
@@ -380,7 +391,9 @@ def grade(cfg, call, timeout):
       if new: w.writeheader()
       w.writerow(out)
     with open(cfg["cases"], "a", encoding="utf8") as fh:
-      fh.write(json.dumps(dict(key, cases=cases)) + "\n")
+      extra = res.get("extra") or (
+        {"fix_helps": [0] * len(cases)} if skill == "fix" else {})
+      fh.write(json.dumps(dict(key, cases=cases, extra=extra)) + "\n")
   return out
 
 

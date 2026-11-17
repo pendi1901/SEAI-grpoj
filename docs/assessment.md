@@ -43,17 +43,40 @@ training set.
 | 4 | flow | a decision on each row as it arrives, no going back | the arriving row, and the rows seen before it | one arrival order of 100 test rows (100 orders) | 1 - the score of the row it stopped on / the average score in the stream | 0 | [ ] |
 | 5 | blame | which inputs make the bad rows bad | the training rows | one of 30 test rows from the worst quarter | drop in that row's estimated score when the blamed columns are reset to typical good values, minus the drop from resetting as many random columns | 0 | [ ] |
 | 6 | justify | "how good is this one, and why?" | training rows; one test row with goals hidden | one of 20 test rows from the best quarter | how much closer its percentile is than always answering "50th"; a reason in words is required | 0 | [ ] |
-| 7 | choose | the best row, measuring very few | 150 test rows with goals hidden; a `label` function it may call on 50 rows | one run on a fresh draw of rows (30 runs) | 1 win, 0.5 tie, 0 loss against the best of 50 rows picked at random | 0.5 | [ ] |
-| 8 | fix | a change that could rescue a bad row | one bad test row; the columns it may change and their allowed values | one of 20 test rows from the worst quarter | 1 if the change uses only allowed columns and values and changes something, else 0 | 0 | [ ] |
+| 7 | choose | the best row, measuring very few | 150 test rows with goals hidden; a `label` function it may call on 50 rows | one run on a fresh draw of rows (30 runs) | 1 win, 0.5 tie, 0 loss against the best of 50 rows picked at random | 0 (see decision A) | [ ] |
+| 8 | fix | a change that could rescue a bad row | one bad test row; the columns it may change and their allowed values | one of 20 test rows from the worst quarter | 1 if the change uses only allowed columns and values and changes something, else 0. A second number, "fix: helps", also requires the change to lower the row's estimated score (decision B) | 0 | [ ] |
 | 9 | spot | the entries that look wrong | test rows, 10 of which had one input replaced by a value 6 standard deviations out | one corrupted copy (10 copies) | hits among its first 20 suspects, divided by 20 | 0 | [ ] |
 | 10 | race | which search strategy wins on the same budget | as for choose | one run (30 runs) | as for choose, for the row its winning strategy found; 0 if fewer than three strategies, no "random" strategy, or more than 50 labels | 0 | [ ] |
 
-## Doubts I want you to rule on
+## What Q does and does not measure
 
-1. **Fix does not check that the change helps.** gloss10 says so
-   itself: "It does not measure improvement." A treatment that always
-   flips one lever scores 1. Keep it as the course defines it, or add
-   a second number (estimated improvement after the change)?
+Q judges the **skill**, not the wording of the customer's ask. The
+scorer calls a generic function for each skill on test cases it
+builds itself. It does not check whether a program answered the
+specific question in the requirements doc. Example: the step-3 ask
+for the process domain is "were small teams really cheaper?"; what is
+scored is whether `certify` can tell two lists of numbers apart. The
+twenty asks drive what gets built and demoed. They are not graded
+one by one. Say this in Methods.
+
+## Decisions taken (Nov 17 2026, team member's instruction)
+
+- **A. A failed choose earns 0, not 0.5.** gloss10 gives choose a
+  chance level of 0.5. That describes a skill as good as random
+  search. A crash is not that: a working program that picks one poor
+  row scores about 0, so under the 0.5 rule a broken program outranked
+  a weak honest one. Certify keeps 0.5, because a coin flip really
+  scores 0.5 there. This departs from gloss10; state it.
+- **B. Fix gets a second number.** The course's number (is the change
+  allowed?) stays as the headline, because it is the course's
+  definition. But nearly every program that runs scores 1, so it
+  cannot separate treatments. "fix: helps" counts a change only if it
+  is allowed and lowers the row's score as estimated from its 5
+  nearest training rows. Same caveat as blame: an estimate, not truth.
+
+## Doubts still open for you to rule on
+
+1. (Settled: decision B.)
 2. **Blame has no ground truth.** On real data nobody knows the true
    effect of changing a column. I estimate a rewritten row's score
    from its 5 nearest training rows. That is a model judging a model.
@@ -70,10 +93,7 @@ training set.
    makes skill 1 nearly free to pass, which also makes it a weak test.
 6. **Justify's "reason" is not graded**, only required. Grading text
    needs a human or another LLM. Leave ungraded?
-7. **Choose and race report 0.5 for a failure** but a skill that
-   picks one row at random scores about 0, because it loses to the
-   best of 50. So failing beats trying badly. That is gloss10's rule
-   ("chance = 0.5"). Keep, or set failure to 0?
+7. (Settled: decision A.)
 8. **The HR goals.** All three goals are tenure, and tenure tracks
    age and total working years, which are inputs. Guess will look
    strong here for a boring reason.

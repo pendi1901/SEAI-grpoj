@@ -124,68 +124,80 @@ Things to decide and check:
 
 ## The scorer
 
-`rig/score.py` gives every generated program one number, Q, following
-the ten-skill table in the course's gloss10 page. Higher is better.
+`rig/score.py` grades every generated program on a fixed test suite.
+**How each skill is judged is defined in `docs/assessment.md`**, which
+a human on the team must agree before any large run. This section is
+only the mechanics.
 
     python rig/test_score.py          # want "failures: 0"
     python rig/score.py --workers 8   # scores every call not yet scored
 
-It reads `results/calls.csv` and writes `results/scores.csv` (domain,
-treatment, trial, step, skill, q, status, detail). It runs on the CPU,
-needs no LLM, and can be rerun at any time: scored programs are
-skipped.
+It runs on the CPU, needs no LLM, and can be rerun at any time: scored
+programs are skipped. To rescore after a rule change, delete
+`results/scores.csv` and `results/cases.jsonl` and run it again; the
+generated programs are kept, so no model calls are needed.
+
+Files it writes, beside `results/calls.csv`:
+
+| file | holds |
+|---|---|
+| `scores.csv` | one row per program: Q (mean over its test cases), number of cases, status, detail |
+| `cases.jsonl` | one line per program: the per-test-case numbers, plus `fix_helps` for the fix skill |
+
+### The 80/20 split
+
+Each data set is split once, with the seed in `config.json`, into
+`data/<name>.train.csv` (80%) and `data/<name>.test.csv` (20%).
+Treatments are given the training file only. The scorer builds its
+test cases from the test file, seeded by domain and skill, so every
+treatment and every trial faces the same test suite.
 
 ### The contract
 
-A program that only prints cannot be graded. So the prompt now also
-requires each step file to define one function, named after its skill,
-with a fixed signature (`rig/contract.py`). The scorer imports the
-file and calls that function on test cases it builds from the data.
-Every program for one skill in one domain faces the same test cases.
+A program that only prints cannot be graded. So the prompt requires
+each step file to define one function, named after its skill, with a
+fixed signature (`rig/contract.py`). The scorer imports the file and
+calls that function.
 
-| skill | the function must | Q | failure earns |
-|---|---|---|--:|
-| remember | return up to 5% of rows it judges best | 1 - median score of its rows / median score of random sets | 0 |
-| guess | predict the first goal for held-out rows, 30 splits | 1 - its error / error of guessing the training mean | 0 |
-| certify | say same or different for 200 pairs of samples | share it gets right | 0.5 |
-| flow | say yes or no as each row arrives, 100 orders | 1 - chosen row's score / average score | 0 |
-| blame | name the input columns behind bad rows | improvement when those columns are reset to good values, minus the same for random columns | 0 |
-| justify | give a row's percentile and a reason, 20 rows | improvement over always answering 0.5 | 0 |
-| choose | find the best row using at most 50 labels, 30 runs | win 1, tie 0.5, loss 0 against the best of 50 random rows | 0.5 |
-| fix | recommend a change using allowed levers only, 20 rows | share of changes that are valid | 0 |
-| spot | list suspect rows; 10 errors planted in 1,000 rows | hits in its first 20, divided by 20 (so 0.5 is perfect) | 0 |
-| race | compare 3+ search strategies within 50 labels, 30 runs | win rate of its winner against random; invalid race = 0 | 0 |
-
-"Score" is distance to the best possible goals, 0 best, 1 worst.
 A missing function, a crash, a timeout (300 s) or an answer outside
-the rules earns the failure value. The `status` column says which.
+the rules earns the skill's baseline on every test case. The `status`
+column says which: `ok`, `invalid`, `error`, `timeout` or `no_code`.
 
-### Where this differs from gloss10, and why
+### Where this differs from gloss10
 
-These are my readings of a one-line-per-skill table. No scorer was
-supplied with the course. State them in Methods, and check them with
-the lecturer (open question 1).
+No scorer was supplied with the course; these are readings of a
+one-line-per-skill table. State them in Methods.
 
-- **blame** drops "rules" and takes column names only. Real data has
-  no simulator to re-score a rewritten row, so the scorer estimates
-  the new score from the 5 nearest real rows.
-- **justify** hides the row's goals, or the percentile could simply
-  be read off.
-- **spot** plants errors 6 standard deviations from a column's mean
-  in a numeric input, and uses 10 copies, not 30, to save time.
-- **choose** and **race** search pools of 300 rows per run.
-- **guess** uses 500 training and 100 test rows per split.
-- Tables over 2,000 rows are sampled down to 2,000 (pom3a).
+- **One fixed 80/20 split** replaces gloss10's repeated splits, as
+  the lecturer's Nov 16 notes describe.
+- **choose** fails to 0, not 0.5 (decision A in the assessment sheet).
+- **fix** keeps the course's number and adds "fix: helps" (decision B).
+- **blame** takes column names only, no rules; a rewritten row's new
+  score is estimated from its 5 nearest training rows.
+- **justify** hides the row's goals, or the percentile could be read
+  off.
+- **spot** plants errors 6 standard deviations out in a numeric
+  input, in 10 copies rather than 30.
+- **choose** and **race** search 150 test rows per run.
+- Training rows are capped at 2,000 and test rows at 400 (pom3a).
+- Each test case's number is clipped to the range -1 to 1.
 - **Levers** for fix come from `config.json` and are proposals.
-- Q is clipped to the range -1 to 1.
 
 ### What the checks show
 
 `test_score.py` grades three stand-in programs on a made-up table: a
 sensible answer beats the baseline on all ten skills, a random or
-constant answer does not, and a crash earns exactly the baseline.
+constant answer does not, and a crash earns exactly the baseline on
+every test case.
 
-## What it does not do yet
+## The report
 
-- **No Z rescaling, `same` tables or histograms.** Those read
-  `calls.csv` and `scores.csv` and are the next piece.
+    python rig/test_report.py         # want "failures: 0"
+    python rig/report.py              # writes results/report.md, results/fig/
+
+Per domain: the % new code histogram; treatments ranked per skill on
+the test suite; new lines and Q per step; and Q rescaled to Z within
+each domain and skill for comparison across skills. Ranks use the
+lecturer's Python `same` with all three tests. It works on a partial
+run. If `results/t7.csv` exists (columns `domain,step,new_lines`),
+treatment 7 is drawn as a reference line.

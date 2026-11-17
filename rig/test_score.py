@@ -92,7 +92,7 @@ def race(header, rows, label): return dict(winner="x", tried=["x"], row=0)
 
 CRASH = "\n".join(f"def {s}(*a): raise ValueError('boom')" for s in BASELINE)
 
-fails = 0
+fails, EXTRA = 0, {}
 def check(name, ok):
   global fails
   fails += not ok
@@ -108,6 +108,7 @@ def grade(file, skill, data):
   q = [s for s in r.stdout.splitlines() if s.startswith("@@Q ")]
   if not q: return None, r.stderr[-300:], 0
   res = json.loads(q[-1][4:])
+  EXTRA[file.stem, skill] = res.get("extra", {})
   return sum(res["cases"]) / len(res["cases"]), res["status"], len(res["cases"])
 
 
@@ -146,6 +147,10 @@ try:
           dumb is None or dumb < base + .1)
     check(f"{skill}: a crash earns the baseline on every test case",
           crash == base and n3 > 0)
+  h = EXTRA["good", "fix"]["fix_helps"]
+  check("fix also records whether each allowed change helps",
+        len(h) == 20 and set(h) <= {0, 1})
+  check("a crashing choose earns 0, not 0.5", BASELINE["choose"] == 0)
 finally:
   shutil.rmtree(tmp, ignore_errors=True)
 

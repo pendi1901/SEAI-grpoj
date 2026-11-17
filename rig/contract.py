@@ -87,8 +87,11 @@ CONTRACT = {
 }
 
 # What a failed call earns: "crashing is not a way to sit out a round".
+# gloss10 gives choose a chance level of 0.5, but that describes a skill
+# as good as random search, not a crash; a program that picks one poor
+# row scores about 0, so a failure must not earn more than that.
 BASELINE = dict(remember=0, guess=0, certify=.5, flow=0, blame=0,
-                justify=0, choose=.5, fix=0, spot=0, race=0)
+                justify=0, choose=0, fix=0, spot=0, race=0)
 
 
 def prompt_text(skill):

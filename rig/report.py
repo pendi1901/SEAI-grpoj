@@ -67,15 +67,17 @@ def load(cfg):
     s = score.get(c["dir"])
     c["q"] = float(s["q"]) if s else None
     c["status"] = s["status"] if s else "unscored"
-    c["cases"] = None
+    c["cases"], c["extra"] = None, {}
   cp = cfg["log"].with_name("cases.jsonl")
   if cp.exists():
     import json
     by = {}
     for line in open(cp, encoding="utf8"):
       if line.strip():
-        j = json.loads(line); by[j["dir"]] = j["cases"]
-    for c in calls: c["cases"] = by.get(c["dir"])
+        j = json.loads(line); by[j["dir"]] = j
+    for c in calls:
+      j = by.get(c["dir"]) or {}
+      c["cases"], c["extra"] = j.get("cases"), j.get("extra") or {}
   return calls
 
 
@@ -133,6 +135,15 @@ def case_table(calls):
     n = max(len(v) for v in d.values())
     rows.append([skill, n] + [f"{st.mean(d[t]):.2f} ({r[t]})" if t in d else ""
                               for t in treats])
+    for name in sorted({k for c in calls if c["skill"] == skill
+                        for k in c["extra"]}):       # e.g. fix_helps
+      d = defaultdict(list)
+      for c in calls:
+        if c["skill"] == skill: d[c["treatment"]] += c["extra"].get(name, [])
+      r = ranks(d, big=True) if len(d) > 1 else {k: 0 for k in d}
+      rows.append([name.replace("_", ": "), max(len(v) for v in d.values())]
+                  + [f"{st.mean(d[t]):.2f} ({r[t]})" if d.get(t) else ""
+                     for t in treats])
   return table(["skill", "cases"] + [NAMES.get(t, t) for t in treats], rows)
 
 
