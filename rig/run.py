@@ -43,7 +43,7 @@ LIB_TEXT = {
 FIELDS = ("when domain data treatment library reuse trial step skill ask "
           "backend model dir new_lines total_lines pct_new got_code ran_ok "
           "llm_secs run_secs prompt_chars reply_chars prompt_tokens "
-          "reply_tokens seed error").split()
+          "reply_tokens seed attempts error").split()
 LOCK = threading.Lock()
 
 
@@ -53,6 +53,25 @@ def load_config(path=None):
   cfg["runs"] = ROOT / cfg.get("runs", "runs")
   cfg["log"] = ROOT / cfg.get("log", "results/calls.csv")
   return cfg
+
+
+def split(cfg, domain):
+  """The fixed 80/20 split of a domain's data: (train path, test path).
+  Made once, with a fixed seed, and reused by every treatment and trial.
+  Treatments are given the train file only; the scorer tests on the
+  test file. So every treatment faces the same test suite."""
+  import random
+  src = ROOT / cfg["domains"][domain]["data"]
+  train = src.with_name(src.stem + ".train.csv")
+  test = src.with_name(src.stem + ".test.csv")
+  if not (train.exists() and test.exists()):
+    head, *rows = [s for s in src.read_text("utf8").splitlines() if s.strip()]
+    random.Random(cfg.get("split_seed", 1)).shuffle(rows)
+    n = round(len(rows) * cfg.get("test_fraction", 0.2))
+    nl = chr(10)
+    test.write_text(nl.join([head] + rows[:n]) + nl, "utf8")
+    train.write_text(nl.join([head] + rows[n:]) + nl, "utf8")
+  return train, test
 
 
 def asks(cfg, domain):
@@ -137,9 +156,9 @@ def call_ollama(b, prompt, seed):
     ctx=opts.get("num_ctx", 0))
 
 
-def call_llm(cfg, prompt, cwd, seed=0):
+def call_llm(cfg, prompt, cwd, seed=0, b=None):
   "Send PROMPT to the backend. Returns (reply, seconds, meta)."
-  b = cfg["backends"][cfg["backend"]]
+  b = b or cfg["backends"][cfg["backend"]]
   if "url" in b:
     t = time.time()
     reply, meta = call_ollama(b, prompt, seed)
@@ -198,7 +217,7 @@ def one_call(cfg, domain, tid, trial, step, ask, prior):
   d.mkdir(parents=True)
   leaks = claude_md_above(d)
   if leaks: sys.exit(f"CLAUDE.md would leak into trials: {leaks}")
-  data = ROOT / dom["data"]
+  data, _ = split(cfg, domain)            # treatments see the 80% only
   try: os.link(data, d / data.name)       # same file, no extra disk
   except OSError: shutil.copy(data, d / data.name)
   if treat["library"] == "ezr": shutil.copy(RIG / "lib" / "ezr.py", d)
@@ -219,7 +238,7 @@ def one_call(cfg, domain, tid, trial, step, ask, prior):
              prompt_chars=len(prompt), new_lines=0, total_lines=prior_total,
              pct_new=0, got_code=0, ran_ok=0, llm_secs=0, run_secs=0,
              reply_chars=0, prompt_tokens=0, reply_tokens=0, seed=seed,
-             error="")
+             attempts=1, error="")
   code = ""
   try:
     reply, secs, meta = call_llm(cfg, prompt, d, seed)
@@ -229,8 +248,21 @@ def one_call(cfg, domain, tid, trial, step, ask, prior):
     if meta.get("ctx") and meta.get("prompt_tokens", 0) >= .95 * meta["ctx"]:
       row["error"] = "prompt filled the context window: likely truncated"
     (d / "reply.txt").write_text(reply, "utf8")
-    row["reply_chars"] = len(reply)
     code = extract_code(reply) or ""
+    if not code and b.get("fallback"):
+      # The reply held no file (a reasoning model can spend its whole
+      # budget thinking). Ask once more, fresh, with the fallback
+      # settings. Same prompt, same rule for every treatment; logged.
+      b2 = {k: v for k, v in b.items() if k != "fallback"}
+      for k, v in b["fallback"].items():
+        b2[k] = dict(b2.get(k, {}), **v) if isinstance(v, dict) else v
+      reply, secs2, meta2 = call_llm(cfg, prompt, d, seed, b2)
+      (d / "reply2.txt").write_text(reply, "utf8")
+      row.update(attempts=2, llm_secs=round(secs + secs2, 1),
+                 reply_tokens=row["reply_tokens"]
+                 + meta2.get("reply_tokens", 0))
+      code = extract_code(reply) or ""
+    row["reply_chars"] = len(reply)
     if code:
       (d / name).write_text(code, "utf8")
       new = code_lines(code)

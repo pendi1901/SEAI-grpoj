@@ -5,6 +5,8 @@
   "runs": "runs",
   "log": "results/calls.csv",
   "run_timeout": 120,
+  "split_seed": 1,
+  "test_fraction": 0.2,
 
   "backends": {
     "mock":   {"cmd": ["{python}", "{rig}/mock_llm.py"], "model": "mock",
@@ -13,8 +15,10 @@
                "timeout": 600},
     "ollama": {"url": "http://localhost:11434",
                "model": "ornith:9b", "timeout": 900, "think": true,
-               "options": {"num_ctx": 16384, "num_predict": 8192,
-                           "temperature": 0.2}}
+               "options": {"num_ctx": 16384, "num_predict": 6000,
+                           "temperature": 0.2},
+               "fallback": {"think": false,
+                            "options": {"num_predict": 4096}}}
   },
 
   "treatments": {

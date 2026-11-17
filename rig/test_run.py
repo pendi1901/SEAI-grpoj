@@ -125,6 +125,26 @@ try:
 finally:
   shutil.rmtree(tmp, ignore_errors=True)
 
+# -- the fallback: a reply with no file gets one more try --------------
+tmp = Path(tempfile.mkdtemp(prefix="rigtest_"))
+try:
+  conf = sandbox(tmp, "| 1 | Fine. | remember |\n| 2 | NOCODE today. | guess |\n"
+                      "| 3 | Fine again. | certify |\n")
+  c = json.loads(conf.read_text())
+  c["backends"]["mock"]["fallback"] = {"cmd": c["backends"]["mock"]["cmd"]
+                                       + ["--force"]}
+  conf.write_text(json.dumps(c))
+  go(conf, "--treatments", "1", "--trials", "1")
+  R = rows(tmp)
+  check("fallback rescues a reply that had no file",
+        [x["got_code"] for x in R] == ["1", "1", "1"])
+  check("only the rescued call is logged as two attempts",
+        [x["attempts"] for x in R] == ["1", "2", "1"])
+  check("both replies are kept",
+        (tmp / "runs/toy/t1/trial01/step02/reply2.txt").exists())
+finally:
+  shutil.rmtree(tmp, ignore_errors=True)
+
 # -- the Ollama backend, against a fake server ------------------------
 import http.server, threading
 seen = []

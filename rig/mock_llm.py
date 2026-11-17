@@ -15,7 +15,7 @@ step = int(re.search(r"step(\d+)\.py", prompt)[1])
 csvs = re.findall(r"csv file (\S+) in the current", prompt)
 reuse = "Reuse the earlier files" in prompt
 
-if "NOCODE" in prompt:
+if "NOCODE" in prompt and "--force" not in sys.argv:
   print("I could not do that.")
   sys.exit(0)
 
