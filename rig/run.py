@@ -17,7 +17,7 @@ and is never repeated. Written with LLM help (see rig/README.md); this is
 experiment tooling and is not part of the hand-written treatment 7.
 """
 import argparse, csv, json, re, shutil, subprocess, sys, threading, time
-import zlib
+import os, zlib
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -120,8 +120,9 @@ def call_ollama(b, prompt, seed):
   """One stateless call to a local Ollama server. No `context` is sent, so
   the model sees this prompt and nothing else. Returns (reply, meta)."""
   opts = dict(b.get("options", {}), seed=seed)
-  body = json.dumps(dict(model=b["model"], prompt=prompt, stream=False,
-                         options=opts)).encode()
+  body = dict(model=b["model"], prompt=prompt, stream=False, options=opts)
+  if "think" in b: body["think"] = b["think"]     # reasoning models only
+  body = json.dumps(body).encode()
   req = urllib.request.Request(b["url"].rstrip("/") + "/api/generate", body,
                                {"Content-Type": "application/json"})
   with urllib.request.urlopen(req, timeout=b.get("timeout", 900)) as r:
@@ -155,7 +156,11 @@ def smoke(cfg, d, name):
   "Does the new file run at all? Not a quality score; see the scorer."
   t = time.time()
   try:
+    # PYTHONUTF8: else printing a non-ASCII character such as a
+    # greater-or-equal sign crashes on a Windows console code page,
+    # and the rig would blame the generated program for it.
     r = subprocess.run([sys.executable, name], cwd=d, capture_output=True,
+                       env=dict(os.environ, PYTHONUTF8="1"),
                        text=True, encoding="utf8", errors="replace",
                        timeout=cfg.get("run_timeout", 120))
     (d / "run.out").write_text(r.stdout[-5000:] + "\n--- stderr ---\n"
