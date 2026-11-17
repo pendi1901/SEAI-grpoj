@@ -141,3 +141,31 @@ or Opus 5.5, from run 1's token counts). The team chose to stay on the
 local model, `ornith:9b`, at zero cost. Consequence for the report: with
 about half of skill functions failing, quality comparisons between
 treatments are weak; code-size comparisons are unaffected.
+
+## Gemini pilot (Nov 17 2026): the decision above is reversed
+
+Later the same day a Gemini API key was provided and a Gemini backend
+added (`rig/config.gemini.json`; the key lives in the git-ignored
+`rig/.secrets/`). Model: `gemini-3.1-flash-lite`, the cheapest offered
+($0.25 per 1M input tokens, $1.50 per 1M output, thinking included,
+per Google's pricing page on Nov 17). `gemini-2.5-flash-lite` is no
+longer available to new keys.
+
+One ten-step climb, HR, treatment 1, prompt version 2, scored on the
+test suite. Against ornith:9b on the same climb (prompt version 1, so
+not a like-for-like prompt):
+
+| | gemini-3.1-flash-lite | ornith:9b |
+|---|--:|--:|
+| demo scripts that ran | 10 of 10 | 4 of 10 |
+| skill functions scored without error | 9 of 10 | 5 of 10 |
+| seconds per call | 8 | about 96 |
+| cost of the ten calls | $0.02 at paid rates | $0 |
+
+Q per step (Gemini): remember 0.45, guess 0.14, certify 0.87, flow
+0.18, blame 0.03, justify -1.00, choose 0.33, fix 1.00, spot 0.50,
+race invalid. Justify's -1.00 is a working program that answers badly.
+
+At this rate a full N = 1 run (180 calls) costs about $0.40 and takes
+about 25 minutes; N = 10 about $4 and 4 hours. One climb is a pilot,
+not a measured failure rate.

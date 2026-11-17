@@ -161,9 +161,56 @@ def call_ollama(b, prompt, seed):
     ctx=opts.get("num_ctx", 0))
 
 
+def gemini_key(b):
+  "The API key: from $GEMINI_API_KEY, else from the git-ignored key file."
+  key = os.environ.get("GEMINI_API_KEY", "").strip()
+  if not key and b.get("key_file"):
+    p = ROOT / b["key_file"]
+    if p.exists(): key = p.read_text("utf8").strip()
+  if not key: raise RuntimeError("no Gemini key: set GEMINI_API_KEY or "
+                                 f"write it to {b.get('key_file')}")
+  return key
+
+
+def call_gemini(b, prompt, seed):
+  """One stateless call to the Gemini API: a single user turn, no history,
+  so no call can see another. The key travels in a header, never in the
+  URL. Rate limits (429) and overloads (5xx) are retried with back-off;
+  every retry is the same request. Returns (reply, meta)."""
+  import urllib.error
+  url = (b["url"].rstrip("/") + f"/v1beta/models/{b['model']}"
+         ":generateContent")
+  body = json.dumps({"contents": [{"role": "user", "parts": [{"text": prompt}]}],
+                     "generationConfig": dict(b.get("options", {}), seed=seed)}
+                    ).encode()
+  hdr = {"Content-Type": "application/json", "x-goog-api-key": gemini_key(b)}
+  for attempt in range(b.get("retries", 6) + 1):
+    try:
+      req = urllib.request.Request(url, body, hdr)
+      with urllib.request.urlopen(req, timeout=b.get("timeout", 300)) as r:
+        out = json.loads(r.read())
+      break
+    except urllib.error.HTTPError as e:
+      if e.code not in (429, 500, 502, 503, 504) or attempt == b.get("retries", 6):
+        raise RuntimeError(f"Gemini HTTP {e.code}: {e.read().decode()[:200]}")
+      time.sleep(min(120, b.get("backoff", 5) * 2 ** attempt))
+  cand = (out.get("candidates") or [{}])[0]
+  text = "".join(p.get("text", "") for p in
+                 cand.get("content", {}).get("parts", []) if not p.get("thought"))
+  u = out.get("usageMetadata", {})
+  return text, dict(prompt_tokens=u.get("promptTokenCount", 0),
+                    reply_tokens=u.get("candidatesTokenCount", 0)
+                    + u.get("thoughtsTokenCount", 0),
+                    finish=cand.get("finishReason", ""))
+
+
 def call_llm(cfg, prompt, cwd, seed=0, b=None):
   "Send PROMPT to the backend. Returns (reply, seconds, meta)."
   b = b or cfg["backends"][cfg["backend"]]
+  if b.get("api") == "gemini":
+    t = time.time()
+    reply, meta = call_gemini(b, prompt, seed)
+    return reply, time.time() - t, meta
   if "url" in b:
     t = time.time()
     reply, meta = call_ollama(b, prompt, seed)

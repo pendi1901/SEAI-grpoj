@@ -189,6 +189,49 @@ try:
 finally:
   srv.shutdown(); shutil.rmtree(tmp, ignore_errors=True)
 
+# -- the Gemini backend, against a fake server ------------------------
+gseen, gcount = [], [0]
+class FakeGemini(http.server.BaseHTTPRequestHandler):
+  def do_POST(self):
+    gcount[0] += 1
+    q = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+    gseen.append(dict(path=self.path, key=self.headers.get("x-goog-api-key"), body=q))
+    if gcount[0] == 1:                         # first request: rate limited
+      self.send_response(429); self.end_headers(); self.wfile.write(b"{}"); return
+    out = json.dumps({"candidates": [{"finishReason": "STOP", "content": {"parts": [
+      {"text": "secret plan", "thought": True},
+      {"text": "```python\nprint('hi')\n```"}]}}],
+      "usageMetadata": {"promptTokenCount": 50, "candidatesTokenCount": 7,
+                        "thoughtsTokenCount": 3}}).encode()
+    self.send_response(200); self.end_headers(); self.wfile.write(out)
+  def log_message(self, *a): pass
+gsrv = http.server.HTTPServer(("127.0.0.1", 0), FakeGemini)
+threading.Thread(target=gsrv.serve_forever, daemon=True).start()
+tmp = Path(tempfile.mkdtemp(prefix="rigtest_"))
+try:
+  conf = sandbox(tmp, GOOD)
+  (tmp / "k").write_text("TESTKEY-123")
+  c = json.loads(conf.read_text())
+  c["backend"] = "gem"
+  c["backends"]["gem"] = dict(api="gemini", model="m-lite", backoff=0,
+                              url=f"http://127.0.0.1:{gsrv.server_port}",
+                              key_file=str(tmp / "k"), options={"temperature": .2})
+  conf.write_text(json.dumps(c))
+  go(conf, "--treatments", "1", "--trials", "1")
+  R = rows(tmp)
+  check("gemini backend: 3 calls, all got code and ran",
+        len(R) == 3 and all(x["got_code"] == "1" and x["ran_ok"] == "1" for x in R))
+  check("a 429 is retried, not logged as a failure", gcount[0] == 4)
+  check("key goes in a header, never in the URL",
+        all(g["key"] == "TESTKEY-123" and "TESTKEY" not in g["path"] for g in gseen))
+  check("request is one user turn with a seed",
+        all(len(g["body"]["contents"]) == 1 and "seed" in g["body"]["generationConfig"]
+            for g in gseen))
+  check("thought parts are not taken as the reply; thinking tokens are counted",
+        R[0]["reply_tokens"] == "10" and R[0]["prompt_tokens"] == "50")
+finally:
+  gsrv.shutdown(); shutil.rmtree(tmp, ignore_errors=True)
+
 # -- the real requirements docs parse ---------------------------------
 cfg = run.load_config()
 for dom in cfg["domains"]:
