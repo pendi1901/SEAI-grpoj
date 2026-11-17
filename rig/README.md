@@ -122,9 +122,70 @@ Things to decide and check:
 - **Each call is text in, text out.** The model writes a file; it does
   not get to run tools or look around.
 
-## What it does not do
+## The scorer
 
-- **No quality score.** `ran_ok` only says the program ran. The Q
-  scores in `docs/stats.md` need a separate scorer, not yet written.
-- **No `same` tables or histograms.** Those read `calls.csv` and are
-  the next piece.
+`rig/score.py` gives every generated program one number, Q, following
+the ten-skill table in the course's gloss10 page. Higher is better.
+
+    python rig/test_score.py          # want "failures: 0"
+    python rig/score.py --workers 8   # scores every call not yet scored
+
+It reads `results/calls.csv` and writes `results/scores.csv` (domain,
+treatment, trial, step, skill, q, status, detail). It runs on the CPU,
+needs no LLM, and can be rerun at any time: scored programs are
+skipped.
+
+### The contract
+
+A program that only prints cannot be graded. So the prompt now also
+requires each step file to define one function, named after its skill,
+with a fixed signature (`rig/contract.py`). The scorer imports the
+file and calls that function on test cases it builds from the data.
+Every program for one skill in one domain faces the same test cases.
+
+| skill | the function must | Q | failure earns |
+|---|---|---|--:|
+| remember | return up to 5% of rows it judges best | 1 - median score of its rows / median score of random sets | 0 |
+| guess | predict the first goal for held-out rows, 30 splits | 1 - its error / error of guessing the training mean | 0 |
+| certify | say same or different for 200 pairs of samples | share it gets right | 0.5 |
+| flow | say yes or no as each row arrives, 100 orders | 1 - chosen row's score / average score | 0 |
+| blame | name the input columns behind bad rows | improvement when those columns are reset to good values, minus the same for random columns | 0 |
+| justify | give a row's percentile and a reason, 20 rows | improvement over always answering 0.5 | 0 |
+| choose | find the best row using at most 50 labels, 30 runs | win 1, tie 0.5, loss 0 against the best of 50 random rows | 0.5 |
+| fix | recommend a change using allowed levers only, 20 rows | share of changes that are valid | 0 |
+| spot | list suspect rows; 10 errors planted in 1,000 rows | hits in its first 20, divided by 20 (so 0.5 is perfect) | 0 |
+| race | compare 3+ search strategies within 50 labels, 30 runs | win rate of its winner against random; invalid race = 0 | 0 |
+
+"Score" is distance to the best possible goals, 0 best, 1 worst.
+A missing function, a crash, a timeout (300 s) or an answer outside
+the rules earns the failure value. The `status` column says which.
+
+### Where this differs from gloss10, and why
+
+These are my readings of a one-line-per-skill table. No scorer was
+supplied with the course. State them in Methods, and check them with
+the lecturer (open question 1).
+
+- **blame** drops "rules" and takes column names only. Real data has
+  no simulator to re-score a rewritten row, so the scorer estimates
+  the new score from the 5 nearest real rows.
+- **justify** hides the row's goals, or the percentile could simply
+  be read off.
+- **spot** plants errors 6 standard deviations from a column's mean
+  in a numeric input, and uses 10 copies, not 30, to save time.
+- **choose** and **race** search pools of 300 rows per run.
+- **guess** uses 500 training and 100 test rows per split.
+- Tables over 2,000 rows are sampled down to 2,000 (pom3a).
+- **Levers** for fix come from `config.json` and are proposals.
+- Q is clipped to the range -1 to 1.
+
+### What the checks show
+
+`test_score.py` grades three stand-in programs on a made-up table: a
+sensible answer beats the baseline on all ten skills, a random or
+constant answer does not, and a crash earns exactly the baseline.
+
+## What it does not do yet
+
+- **No Z rescaling, `same` tables or histograms.** Those read
+  `calls.csv` and `scores.csv` and are the next piece.

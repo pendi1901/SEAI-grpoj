@@ -6,7 +6,8 @@ software process (pom3a), open-source project health, and HR employee
 attrition.
 
 This repo holds the reading of the course spec, draft requirements,
-and the runner for treatments 1 to 6. No experiment has been run yet.
+and the runner and scorer for treatments 1 to 6. Only scouting calls
+have been made; no experiment has been run yet.
 It is local, with no remote.
 
 | file | what it answers |
@@ -17,7 +18,8 @@ It is local, with no remote.
 | [docs/runs.md](docs/runs.md) | how many LLM calls, how long, the reset protocol |
 | [docs/domains.md](docs/domains.md) | the three data sets, measured, with their traps |
 | [docs/requirements.md](docs/requirements.md) | DRAFT: three clients, twenty skill-tagged asks each |
-| [rig/README.md](rig/README.md) | the runner: one command per stage, what it logs, what it does not do |
+| [rig/README.md](rig/README.md) | the runner and the scorer: one command per stage, what they log, how Q is computed |
+| [docs/model-trials.md](docs/model-trials.md) | why the local model is ornith:9b with thinking on |
 | [docs/open-questions.md](docs/open-questions.md) | what the spec leaves unsettled, and what to ask the lecturer |
 
 Source: `github.com/txt/seai26f` at commit `5fb51c8` (Nov 16 2026) and

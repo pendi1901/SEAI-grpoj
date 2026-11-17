@@ -75,3 +75,29 @@ Not tried: a higher temperature, granite4.2:8b, any hosted model.
 At about 50 s per call: about 7.5 hours for N = 3 (540 calls) and
 about 25 hours for N = 10 (1,800 calls), one call at a time. Later
 steps carry longer prompts, so expect somewhat more.
+
+## With the scoring contract in the prompt
+
+Later the same night the prompt gained a requirement: define a
+function with a fixed signature so the scorer can call it
+(`rig/contract.py`). Same six calls, ornith:9b, thinking on:
+
+| treatment | step | skill | new lines | script ran | Q | baseline | note |
+|---|--:|---|--:|:--:|--:|--:|---|
+| 1 plain | 1 | remember | 49 | yes | 0.51 | 0 | |
+| 1 plain | 2 | guess | 70 | no | 0 | 0 | tried to turn a hidden "?" cell into a number |
+| 1 plain | 3 | certify | 40 | no | 0.66 | 0.5 | function works; its script part does not |
+| 6 ezr | 1 | remember | 27 | no | 0 | 0 | gave ezr rows without the header row |
+| 6 ezr | 2 | guess | 27 | no | 0 | 0 | same mistake, inherited |
+| 6 ezr | 3 | certify | 18 | no | 0.55 | 0.5 | |
+
+Three of six earned a real score, at about 49 s per call. The
+contract asks more of the model, so fewer scripts run end to end than
+without it (1 of 6 against 5 of 6). The two measures now disagree in
+both directions, which is the point of having a scorer: a script can
+run and be wrong, and a function can be right inside a script that
+crashes. Use Q for quality; keep `ran_ok` only as a diagnostic.
+
+The ezr programs are short and do call ezr (`Tbl`, `acquire`,
+`ranker`, `ydist`), but misuse it. All of the failures are the
+model's own; none traced to the rig.

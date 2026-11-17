@@ -49,6 +49,9 @@ Asked, no answer seen yet:
    and "the analysis re-expresses Q as Z". No scorer code is in the
    repo. Do we write our own scorer to that table, or is one being
    handed out?
+   **Status Nov 16:** we wrote our own (`rig/score.py`), reading the
+   table as closely as we could; its departures are listed in
+   `rig/README.md`. Still ask: if an official scorer exists, use it.
 
 2. **Z: pooled over what?** "Z within each domain and skill" gives no
    formula. Pool all treatments and trials for that (domain, skill)?
