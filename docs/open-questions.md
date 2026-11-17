@@ -36,6 +36,13 @@ member; not in the course repo).
   section. A Python `same` exists; see [stats.md](stats.md). This
   removes the "Lua only" tooling gap and bears on question 8.
 
+- **Project notes, Nov 16** (full text and consequences in
+  [lecturer-notes.md](lecturer-notes.md)): agree how each skill is
+  assessed before any big run; use an 80/20 train/test split and pass
+  the same test suite to every treatment; do treatment 7 first; Python
+  ezr is fine; set a budget and stop at it; in a cost crisis, one
+  domain and one repeat is an accepted fallback.
+
 Asked, no answer seen yet:
 
 - **Q22.** "Will we still get full credit for 3-5 repeats?" Until

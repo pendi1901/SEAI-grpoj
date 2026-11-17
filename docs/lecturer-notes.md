@@ -1,0 +1,52 @@
+# Lecturer's project notes, Nov 16 2026
+
+Posted by the lecturer after class and relayed by a team member. Marked
+by him as "very important". Not in the course repo. Quoted where the
+wording matters; the right-hand column is what each note changes here.
+
+Appointment slots are open this week (link in the Discord post). "Now is
+the time to ask questions."
+
+## Before doing big runs with LLMs
+
+| the note | what it means for us | status |
+|---|---|---|
+| "work thu each task and ask the LLM how would we assess this one? see if you agree with its methods. dont go on until you do." | A human on the team must read how each of the ten skills is scored and agree, before any large run. | [assessment.md](assessment.md) is the sheet to read and sign off. **Not yet agreed. No big run until it is.** |
+| "get to the point of being able to collect numbers on (e.g.) an 80% train and 20% test suite. then for the 6 treatments you'll have 6 sets of numbers you can compare with my stats." | Split each data set 80/20. Treatments work from the 80%. Numbers come from the 20%. Six treatments give six sets of numbers; compare them with `same`. | Being built into the runner and scorer. |
+| "do treatment T7. i.e. you won't be able to understand all the decisions within the automatic till you do the manual." | Do the hand-written skills early, not last. They are how we learn what the scorer should reward. | The team's job. Not started. |
+
+## When making training and test sets
+
+| the note | what it means for us | status |
+|---|---|---|
+| "pass the SAME test suite to each treatment" | One fixed test set per domain, and the same test cases for every treatment and trial. | The scorer already seeds its test cases by domain and skill, so every program faces the same cases. The 80/20 split makes the test rows fixed as well. |
+
+## Regarding the Lua
+
+| the note | what it means for us | status |
+|---|---|---|
+| If Lua "is not your friend, then jump to python, which you can auto-gen via LLMs (checking the test cases, of course)". Stats in Python: `timm/ezr` `ezr.py`, lines 321-359. | Python ezr is allowed for the ezr treatments, and for the statistics. | Already the case: treatments 5 and 6 are given `ezr.py`, and `rig/report.py` calls its `same`. |
+
+## Cost
+
+| the note | what it means for us | status |
+|---|---|---|
+| "set a max budget per person equal to the cost of a textbook. say $100. ... DO NOT EXCEED THAT BUDGET. If you blow $$$ then just stop and report on the surprising result that this simple task blew away LLMs" | Declare a budget. Stop at it. Running out is a reportable result. | Team decision (Nov 16): run on local Ollama models. Money cost is zero; the budget is GPU hours. Report cost as hours and tokens. |
+| "consider not using the latest and greatest model" | Cheaper models are acceptable, even encouraged. | A local 9B model (`ornith:9b`) is as cheap as it gets. State it. |
+| "if all hell breaks loose with cost, cut back to one domain and 1 repeat. with e.g. auto93 that will still generate say 80 test cases for 6 treatments." | There is an approved fallback: one domain, one repeat, where the 20% test set supplies the numbers. | Note the arithmetic: auto93 has 398 rows, and 20% is 80. So "test cases" means **test rows**, and the six sets of numbers are per-test-row results. This is how one repeat can still feed `same`. |
+
+## What this changes in our design
+
+1. **The numbers that go into `same` can come from test rows, not only
+   from repeated trials.** With one climb per treatment, each skill
+   still yields a list of per-row results on the test set (errors,
+   scores, hits), one list per treatment. That is a far cheaper route
+   to statistics than N = 10 climbs. Ask the lecturer whether this
+   replaces the N >= 10 rule in the rubric or sits beside it (this is
+   question Q22, still unanswered).
+2. **Assessment comes first.** The order is: agree how each skill is
+   judged; hand-write treatment 7; only then run the LLM treatments.
+   We had it the other way round.
+3. **The run of Nov 16 was paused** after 11 calls for separate
+   reasons ([model-trials.md](model-trials.md)). It stays paused until
+   the assessment sheet is agreed and the split is in.
