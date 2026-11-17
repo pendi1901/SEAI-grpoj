@@ -95,6 +95,12 @@ before a fresh run: drop exact row counts from the asks, or state the
 training file's row count in the prompt. Changing the prompt mid-way
 would make old and new runs incomparable.
 
+**Fixed Nov 17 for later runs** (prompt version 2): the prompt now
+states the file's true row count and says not to hard-code one. The
+customer asks are unchanged. Runs with the new prompt go to `runs-v2/`
+and `results-v2/`; this N = 1 run stays in `runs/` and `results/` and
+must not be pooled with them.
+
 Function success by treatment: T1 17/30, T2 16/30, T3 13/30, T4 8/30,
 T5 14/30, T6 13/30.
 

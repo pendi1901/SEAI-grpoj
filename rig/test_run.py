@@ -84,6 +84,8 @@ try:
         "Reuse the earlier files" in p and "--- step01.py ---" in p)
   p1 = (tmp / "runs/toy/t1/trial01/step03/prompt.txt").read_text()
   check("no-reuse prompt never says reuse", "Reuse" not in p1)
+  check("prompt states the file's true row count",
+        "It has 2 data rows after the header" in p1 and "never hard-code" in p1)
   check("trials are separate directories",
         (tmp / "runs/toy/t1/trial01").exists() and
         (tmp / "runs/toy/t1/trial02").exists())

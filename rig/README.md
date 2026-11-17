@@ -122,6 +122,17 @@ Things to decide and check:
 - **Each call is text in, text out.** The model writes a file; it does
   not get to run tools or look around.
 
+## Prompt versions
+
+| version | used by | change |
+|---|---|---|
+| 1 | the N = 1 run of Nov 17, in `runs/` and `results/` | |
+| 2 | everything after, in `runs-v2/` and `results-v2/` | states the data file's row count and says not to hard-code one |
+
+Never pool results from two prompt versions. To report on version 1,
+run `score.py` and `report.py` with a config whose `runs` and `log`
+point at the old folders.
+
 ## The scorer
 
 `rig/score.py` grades every generated program on a fixed test suite.

@@ -104,13 +104,18 @@ def extract_code(reply):
 def build_prompt(cfg, domain, treat, step, ask, skill, prior, data_path):
   "Background library + earlier skills + the one-line ask."
   lib, reuse = treat["library"], treat["reuse"]
-  head = data_path.read_text("utf8").splitlines()[:4]
+  lines = [s for s in data_path.read_text("utf8").splitlines() if s.strip()]
+  head = lines[:4]
   p = [f"You are writing one Python file, step{step:02d}.py.",
        "",
        f"The data is the csv file {data_path.name} in the current "
        "directory. Column names starting in upper case are numeric, lower "
        "case are symbolic. A name ending in - is a goal to minimise, in + "
-       "a goal to maximise; all other columns are inputs. Its first lines:",
+       "a goal to maximise; all other columns are inputs. "
+       f"It has {len(lines) - 1} data rows after the header. Any count "
+       "the customer quotes describes their full records, not this file: "
+       "never hard-code a row count, read the file to the end. "
+       "Its first lines:",
        "", *head, "",
        LIB_TEXT[lib]]
   if lib == "ezr":
