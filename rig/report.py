@@ -44,10 +44,17 @@ def same(xs, ys):
 def ranks(d, big=False):
   """Port of ezr.lua's ranks. D maps a name to a list of numbers. Sort by
   median, best first; a treatment gets a new rank only when it is not
-  `same` as the leader of the current rank. So ties share a rank."""
+  `same` as the leader of the current rank. So ties share a rank.
+
+  One departure: equal medians are broken by the mean, not by name. Many
+  skills give 0/1 test cases (certify, choose, race, fix), where most
+  treatments share a median; sorting those by name made a worse
+  treatment the rank-0 leader. The median rule is unchanged otherwise."""
   med = lambda v: sorted(v)[len(v) // 2]
+  sign = -1 if big else 1
   out, rank, best = {}, -1, None
-  for k in sorted(d, key=lambda k: (-med(d[k]) if big else med(d[k]), k)):
+  for k in sorted(d, key=lambda k: (sign * med(d[k]),
+                                    sign * st.mean(d[k]), k)):
     if best is None or not same(d[best], d[k]):
       rank, best = rank + 1, k
     out[k] = rank

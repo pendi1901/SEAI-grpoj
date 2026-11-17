@@ -259,7 +259,7 @@ def q_fix(f, D, rnd):
   this "does not measure improvement".) So a second list is kept in
   D.extra: allowed AND estimated to lower the row's score, judged from
   its 5 nearest training rows."""
-  out, helps = [], []
+  out, helps, fails = [], [], []
   guess = D.oracle(rnd.sample(D.rows, min(600, len(D.rows))))
   for row in D.worst(20, rnd):
     try:
@@ -277,8 +277,9 @@ def q_fix(f, D, rnd):
       new = row[:]
       for n, v in (got.items() if good else []): new[D.header.index(n)] = v
       helps.append(int(bool(good) and guess(new) < guess(row)))
-    except Exception:                            # that row gets no credit
-      out.append(0); helps.append(0)
+    except Exception as e:                       # that row gets no credit
+      out.append(0); helps.append(0); fails.append(e)
+  if len(fails) == len(out): raise fails[0]      # never worked: an error
   D.extra = dict(fix_helps=helps)
   return out
 
@@ -298,7 +299,7 @@ def q_spot(f, D, rnd):
 
 
 def q_race(f, D, rnd):
-  out = []
+  out, fails = [], []
   for _ in range(RUNS):
     pool = rnd.sample(D.test, min(POOL, len(D.test)))
     try:
@@ -308,7 +309,9 @@ def q_race(f, D, rnd):
         raise Invalid("needs three strategies, one named random")
       row = indices([got["row"]], len(pool))[0]
       out.append(versus_random(D, pool, row, rnd))
-    except Exception: out.append(0)              # an invalid race has failed
+    except Exception as e:                       # an invalid race has failed
+      out.append(0); fails.append(e)
+  if len(fails) == len(out): raise fails[0]      # never worked: an error
   return out
 
 

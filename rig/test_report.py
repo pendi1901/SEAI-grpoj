@@ -28,6 +28,10 @@ r = report.ranks(d)
 check("ties share rank 0", r["a"] == 0 and r["b"] == 0)
 check("a real gap gets a new rank", r["c"] == 1 and r["d"] == 2)
 check("big=True reverses the order", report.ranks(d, big=True)["d"] == 0)
+b = dict(lo=[1] * 67 + [0] * 33, hi=[1] * 88 + [0] * 12, mid=[1] * 83 + [0] * 17)
+r = report.ranks(b, big=True)
+check("0/1 data: equal medians are ordered by mean, best first",
+      r["hi"] == 0 and r["mid"] == 0 and r["lo"] == 1)
 check("same: a sample equals itself", report.same(a, a))
 check("same: constant lists that differ are different",
       not report.same([5, 5, 5], [9, 9, 9]))
