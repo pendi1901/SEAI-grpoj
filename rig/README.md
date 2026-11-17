@@ -57,14 +57,10 @@ Chosen Nov 16 2026: a local model on the laptop's 8 GB RTX 5060. The
 runner talks to Ollama over HTTP at `localhost:11434`. Tested against
 a fake server only; Ollama is not installed on this machine yet.
 
-Set-up, once:
-
-    winget install Ollama.Ollama
-    ollama pull qwen2.5-coder:7b
-    pip install scikit-learn
-    python rig/run.py fetch
-
-Then:
+Ollama runs in the Docker container `ollama`, with GPU
+access, on port 11434. The model in the config is `ornith:9b`, with
+thinking off; why is in `docs/model-trials.md`. The data and `ezr.py`
+are already fetched. Still to install: `pip install scikit-learn`.
 
     python rig/run.py go --limit 10       # timing test
     python rig/run.py status
@@ -86,10 +82,8 @@ What the runner does for you on this backend:
 
 Things to decide and check:
 
-- **The model.** `qwen2.5-coder:7b` is a placeholder that fits in
-  8 GB; newer small coding models may exist. Whatever you use, a
-  4-bit model of about 7B parameters is the practical ceiling here.
-  Put its exact name in `config.json` and in Methods.
+- **The model is provisional.** Fix it, and its settings, before the
+  first real run and never change them partway.
 - **Use one worker.** One GPU serves one call at a time.
 - **Watch the first ten calls.** If `status` shows few programs
   running clean, or the log shows truncation flags, fix that before
