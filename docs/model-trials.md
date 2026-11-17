@@ -132,3 +132,12 @@ code.
 
 Cost: about 100 s of model time per call on average, so roughly 5 h
 for one repeat of everything (180 calls) and 15 h for three (540).
+
+## Decision: stay on Ollama (Nov 17 2026)
+
+After the N = 1 run, a hosted-model pilot was considered and costed
+(about $0.50 to $19 per 180-call run on Claude Haiku 5.5, Sonnet 5.5
+or Opus 5.5, from run 1's token counts). The team chose to stay on the
+local model, `ornith:9b`, at zero cost. Consequence for the report: with
+about half of skill functions failing, quality comparisons between
+treatments are weak; code-size comparisons are unaffected.
