@@ -1,0 +1,57 @@
+import csv
+import pandas as pd
+import numpy as np
+from sklearn.neighbors import KNeighborsRegressor
+from step01 import remember
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column for test rows using K-Nearest Neighbors
+    based on input columns (non-goal columns).
+    """
+    # Identify goal columns and input columns
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    input_indices = [i for i, name in enumerate(header) if not name.endswith(('-', '+'))]
+    
+    # Prepare training data
+    X_train = [[float(row[i]) for i in input_indices] for row in train]
+    y_train = [float(row[goal_indices[0]]) for row in train]
+    
+    # Prepare test data
+    X_test = [[float(row[i]) for i in input_indices] for row in test]
+    
+    # Use KNN to predict the first goal
+    model = KNeighborsRegressor(n_neighbors=5)
+    model.fit(X_train, y_train)
+    
+    return model.predict(X_test).tolist()
+
+if __name__ == "__main__":
+    filename = 'pom3a.train.csv'
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = [row for row in reader]
+
+    # Split data: use 80% for training, 20% for testing
+    split_idx = int(len(rows) * 0.8)
+    train_data = rows[:split_idx]
+    test_data = rows[split_idx:]
+    
+    # Mask the goals in test data
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    masked_test = []
+    for row in test_data:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_test.append(new_row)
+    
+    predictions = guess(header, train_data, masked_test)
+    
+    # Report findings
+    print("Customer Inquiry: Estimated Cost (First Goal) for sample setups:")
+    for i in range(min(5, len(predictions))):
+        print(f"Setup {i+1}: Estimated Cost = {predictions[i]:.4f}")
+    
+    print(f"\nAnalysis complete. Predicted costs for {len(predictions)} test scenarios.")

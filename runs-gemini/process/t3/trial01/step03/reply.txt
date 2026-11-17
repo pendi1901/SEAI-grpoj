@@ -1,0 +1,47 @@
+```python
+import pandas as pd
+import numpy as np
+from scipy import stats
+
+def certify(xs, ys):
+    """
+    Returns True if the two distributions are statistically similar (null hypothesis 
+    not rejected), False if they differ significantly. Uses Welch's t-test.
+    """
+    # Use a significance level of 0.05
+    t_stat, p_val = stats.ttest_ind(xs, ys, equal_var=False)
+    return p_val > 0.05
+
+def analyze_team_size_impact(df):
+    """
+    Splits data into small and big teams based on the median of 'Team Size'
+    and compares the 'Cost-' goal.
+    """
+    median_team_size = df['Team Size'].median()
+    
+    small_teams = df[df['Team Size'] <= median_team_size]['Cost-']
+    big_teams = df[df['Team Size'] > median_team_size]['Cost-']
+    
+    is_same = certify(small_teams.tolist(), big_teams.tolist())
+    
+    return small_teams.mean(), big_teams.mean(), is_same
+
+if __name__ == "__main__":
+    import csv
+    
+    filename = 'pom3a.train.csv'
+    data = pd.read_csv(filename)
+    
+    small_avg, big_avg, is_same = analyze_team_size_impact(data)
+    
+    print("--- Team Size vs Cost Analysis ---")
+    print(f"Average Cost for Small Teams: {small_avg:.4f}")
+    print(f"Average Cost for Big Teams:   {big_avg:.4f}")
+    
+    if is_same:
+        print("\nConclusion: The difference in costs is not statistically significant.")
+        print("The observation from last quarter was likely due to random noise/luck.")
+    else:
+        print("\nConclusion: There is a statistically significant difference in costs.")
+        print("The observation from last quarter appears to be a real trend.")
+```

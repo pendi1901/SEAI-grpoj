@@ -1,0 +1,62 @@
+```python
+import csv
+import pandas as pd
+import numpy as np
+
+def remember(header, rows):
+    """
+    Identifies the best rows based on multi-objective optimization.
+    Goals ending in '-' are minimized, '+' are maximized.
+    We normalize numeric columns to [0, 1] and calculate a score.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    
+    # Identify goal columns
+    min_cols = [c for c in header if c.endswith('-')]
+    max_cols = [c for c in header if c.endswith('+')]
+    
+    # Convert numeric columns to float, handle potential errors
+    for col in min_cols + max_cols:
+        df[col] = pd.to_numeric(df[col], errors='coerce')
+    
+    # Normalize goals: (val - min) / (max - min)
+    # For '-', we want low values, so we invert: (max - val) / (max - min)
+    scores = pd.DataFrame(index=df.index)
+    for col in min_cols:
+        c_min, c_max = df[col].min(), df[col].max()
+        scores[col] = (c_max - df[col]) / (c_max - c_min + 1e-9)
+    for col in max_cols:
+        c_min, c_max = df[col].min(), df[col].max()
+        scores[col] = (df[col] - c_min) / (c_max - c_min + 1e-9)
+        
+    # Aggregate score (average of normalized goals)
+    df['score'] = scores.mean(axis=1)
+    
+    # Return top 5% (or at least 1)
+    n_top = max(1, int(len(df) * 0.05))
+    top_indices = df['score'].nlargest(n_top).index.tolist()
+    
+    return sorted(top_indices)
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.train.csv'
+    data = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            # Convert numeric strings to floats where possible
+            processed_row = []
+            for val in row:
+                try:
+                    processed_row.append(float(val))
+                except ValueError:
+                    processed_row.append(val)
+            data.append(processed_row)
+            
+    best_indices = remember(header, data)
+    
+    print(f"Analysis complete. Found {len(best_indices)} top-performing setups.")
+    print("Indices of the most trustworthy setups (0-based):")
+    print(best_indices)
+```

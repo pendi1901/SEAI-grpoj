@@ -1,0 +1,66 @@
+```python
+import ezr
+import random
+
+def choose(header, rows, label):
+    """
+    Finds the best row by using the acquire strategy from ezr.
+    We are allowed 50 labels. We use the 'acquire' function which
+    intelligently samples the space to find the best configuration.
+    """
+    # Create a table object to manage the data
+    # We need to ensure the rows are in the format expected by ezr
+    tbl = ezr.Tbl([header] + rows)
+    
+    # The acquire function uses the budget (the.Stop) to label rows.
+    # We pass a wrapper to the label function to track which row index
+    # we are labeling, as the oracle expects a row and returns a row.
+    def oracle_wrapper(row):
+        # Find the index of this row in the original list to call label()
+        # Note: This assumes rows are unique or we just need any matching index
+        idx = rows.index(row)
+        labeled_row = label(idx)
+        # Update the row in place with the new values
+        for i, val in enumerate(labeled_row):
+            row[i] = val
+        return row
+
+    # Run the acquisition process
+    # This returns a list of rows that have been labeled
+    labeled_rows = ezr.acquire(tbl, cap=50, label=oracle_wrapper)
+    
+    # Find the best row among the labeled ones
+    # A row is better when its ydist is lower
+    best_row = min(labeled_rows, key=lambda r: ezr.ydist(tbl, r))
+    
+    # Return the index of the best row found
+    return rows.index(best_row)
+
+if __name__ == "__main__":
+    file_path = "pom3a.train.csv"
+    rows_iter = ezr.csv(file_path)
+    header = next(rows_iter)
+    all_rows = list(rows_iter)
+    
+    # Create a copy of rows with goals masked as "?"
+    masked_rows = []
+    for row in all_rows:
+        masked_rows.append([row[i] if header[i][-1] not in "+-" else "?" for i in range(len(row))])
+    
+    # Define the label function for the choose() call
+    def label_func(idx):
+        return all_rows[idx]
+    
+    # Run the selection
+    best_idx = choose(header, masked_rows, label_func)
+    
+    # Print results
+    print(f"Analysis complete.")
+    print(f"The best configuration found is at index {best_idx}.")
+    
+    best_row = all_rows[best_idx]
+    goals = {header[i]: best_row[i] for i, name in enumerate(header) if name[-1] in "+-"}
+    print(f"Goal values for this configuration: {goals}")
+    
+    exit(0)
+```

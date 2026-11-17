@@ -1,0 +1,44 @@
+import pandas as pd
+import numpy as np
+
+def remember(header, rows):
+    """
+    Identifies staff who stay 'unusually long'.
+    We define 'unusually long' as those in the top 5% of 'YearsAtCompany+'
+    among those who did not leave (attrition == 'No').
+    """
+    df = pd.DataFrame(rows, columns=header)
+    
+    # Filter for those who stay (attrition == 'No')
+    stayed = df[df['attrition'] == 'No'].copy()
+    
+    # Convert goal column to numeric
+    stayed['YearsAtCompany+'] = pd.to_numeric(stayed['YearsAtCompany+'])
+    
+    # Find the threshold for the top 5%
+    threshold = stayed['YearsAtCompany+'].quantile(0.95)
+    
+    # Identify rows that meet the criteria
+    best_rows = stayed[stayed['YearsAtCompany+'] >= threshold]
+    
+    # Return the original 0-based indices
+    return best_rows.index.tolist()
+
+if __name__ == "__main__":
+    # Load the data
+    df = pd.read_csv('WA_Fn-UseC_-HR-Employee-Attrition.train.csv')
+    header = df.columns.tolist()
+    rows = df.values.tolist()
+    
+    # Get indices of staff who stay unusually long
+    indices = remember(header, rows)
+    
+    print(f"Found {len(indices)} staff members who stay unusually long.")
+    print("Working arrangements (BusinessTravel, OverTime, WorkLifeBalance) for these staff:")
+    
+    # Display relevant working arrangement columns for the identified rows
+    cols_to_show = ['businessTravel', 'overTime', 'WorkLifeBalance']
+    for idx in indices:
+        row_data = dict(zip(header, rows[idx]))
+        arrangements = {k: row_data[k] for k in cols_to_show}
+        print(f"Row {idx}: {arrangements}")

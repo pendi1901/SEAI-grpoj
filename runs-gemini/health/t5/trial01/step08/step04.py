@@ -1,0 +1,53 @@
+import ezr
+import random
+
+def flow(header, row, seen):
+    """
+    Returns True if the current row is 'good enough' to ship.
+    We define 'good enough' as being in the top 5% of the expected
+    distribution of ydist (trustworthiness) based on the history seen so far.
+    """
+    if not seen:
+        return False
+    
+    # Create a temporary table to calculate ydist
+    # We use the header and the history to define the space
+    tbl = ezr.Tbl([header] + seen)
+    
+    # Calculate ydist for the current row
+    # Note: If row contains '?', we treat it as neutral in distance
+    current_ydist = ezr.ydist(tbl, row)
+    
+    # Calculate ydist for all seen rows
+    seen_ydists = [ezr.ydist(tbl, r) for r in seen]
+    
+    # If the current row is better (lower ydist) than 95% of what we've seen,
+    # we consider it a candidate to stop.
+    threshold = sorted(seen_ydists)[int(len(seen_ydists) * 0.05)]
+    
+    return current_ydist <= threshold
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.train.csv"
+    all_data = list(ezr.csv(filename))
+    header = all_data[0]
+    rows = all_data[1:]
+    
+    # Shuffle to simulate incoming stream
+    random.seed(1234567891)
+    random.shuffle(rows)
+    
+    seen = []
+    found = False
+    for i, row in enumerate(rows):
+        if flow(header, row, seen):
+            print(f"Found a setup good enough to ship at record {i+1}.")
+            print(f"Row details: {row}")
+            found = True
+            break
+        seen.append(row)
+    
+    if not found:
+        print("Processed all records; no setup met the 'good enough' criteria.")
+    
+    exit(0)

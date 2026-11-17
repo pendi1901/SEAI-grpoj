@@ -1,0 +1,66 @@
+```python
+import csv
+
+def flow(header, row, seen):
+    """
+    Implements a Secretary Problem variant:
+    1. Observe a sample (the first 10% of data) to establish a baseline.
+    2. After the sample, accept the first row that is better than the 
+       best seen in the sample.
+    """
+    # Identify goal indices
+    goal_indices = [i for i, name in enumerate(header) 
+                    if name.endswith('-') or name.endswith('+')]
+    
+    # Helper to calculate normalized score for a row
+    def get_score(r):
+        score = 0.0
+        for i in goal_indices:
+            val = float(r[i])
+            # Normalize: if -, lower is better; if +, higher is better
+            # Since we don't have global min/max, we use the range [0,1]
+            # as per the problem domain (all data is 0-1)
+            if header[i].endswith('-'):
+                score += val
+            else:
+                score += (1.0 - val)
+        return score
+
+    # Define sample size (10% of 16000 = 1600)
+    sample_size = 1600
+    
+    if len(seen) < sample_size:
+        return False
+    
+    # Calculate best score from seen rows
+    best_seen_score = min(get_score(s) for s in seen)
+    
+    # Current row score
+    current_score = get_score(row)
+    
+    # If current is better than anything seen, accept it
+    return current_score < best_seen_score
+
+if __name__ == "__main__":
+    filename = "pom3a.train.csv"
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = list(reader)
+
+    seen = []
+    accepted = None
+    
+    for row in rows:
+        if flow(header, row, seen):
+            accepted = row
+            break
+        seen.append(row)
+    
+    print("Secretary Problem Strategy (10% sample):")
+    if accepted:
+        print("Decision: Approved the current proposal.")
+        print(f"Row details: {accepted}")
+    else:
+        print("Decision: No suitable proposal found in the stream.")
+```

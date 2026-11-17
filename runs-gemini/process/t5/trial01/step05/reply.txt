@@ -1,0 +1,62 @@
+```python
+import ezr
+import random
+
+def blame(header, rows):
+    """
+    Identifies input columns that correlate with 'bad' performance.
+    We define 'bad' as the worst 25% of rows based on ydist.
+    We then compare the distribution of inputs in the worst rows
+    against the best rows to find the most significant differences.
+    """
+    # Create a table to use the library's distance functions
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Score all rows
+    scored = []
+    for row in rows:
+        scored.append((ezr.ydist(tbl, row), row))
+    
+    # Sort by ydist (ascending: smaller is better)
+    scored.sort(key=lambda x: x[0])
+    
+    # Split into best and worst quartiles
+    n = len(scored) // 4
+    best = [x[1] for x in scored[:n]]
+    worst = [x[1] for x in scored[-n:]]
+    
+    # For each input column, check if the distributions in 'best' vs 'worst'
+    # are significantly different using the statistical tests in ezr.
+    # If they are different, that column is a candidate for 'blame'.
+    blamed = []
+    for col in tbl.x:
+        xs = [r[col.at] for r in best if r[col.at] != "?"]
+        ys = [r[col.at] for r in worst if r[col.at] != "?"]
+        
+        if not xs or not ys:
+            continue
+            
+        # If the distributions are NOT the same, the column is a factor
+        if not ezr.same(xs, ys):
+            blamed.append(col.txt)
+            
+    return blamed
+
+if __name__ == "__main__":
+    # Load the data
+    filename = "pom3a.train.csv"
+    rows_iter = ezr.csv(filename)
+    header = next(rows_iter)
+    rows = list(rows_iter)
+    
+    # Identify the culprits
+    culprits = blame(header, rows)
+    
+    print("Analysis: Why do our worst setups leave people waiting around?")
+    print("The following input factors are significantly different in our worst-performing setups:")
+    for factor in culprits:
+        print(f"- {factor}")
+    
+    print("\nThese factors are the primary drivers of poor performance.")
+    exit(0)
+```

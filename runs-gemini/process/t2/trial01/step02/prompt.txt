@@ -1,0 +1,91 @@
+You are writing one Python file, step02.py.
+
+The data is the csv file pom3a.train.csv in the current directory. Column names starting in upper case are numeric, lower case are symbolic. A name ending in - is a goal to minimise, in + a goal to maximise; all other columns are inputs. It has 16000 data rows after the header. Any count the customer quotes describes their full records, not this file: never hard-code a row count, read the file to the end. Its first lines:
+
+Culture,Criticality,Criticality Modifier,Initial Known,Inter-Dependency,Dynamism,Size,Plan,Team Size,Cost-,Score-,Idle-
+0.0398226348789376,0.4187697102690966,0.3161703902572166,0.959348346991444,0.2103972800854883,0.0012522910308919,0.6979456136102667,0.1708306261451138,0.3500716982826897,0.200104493,0.01402719,0.321856287
+0.8178056583175877,0.3082578231712947,0.6206926231796946,0.1199646773715625,0.2164255013970158,0.4846586144618353,0.294210224703445,0.9507425179765736,0.6096404500113382,0.163698034,0.592347249,0.522540984
+0.56468123803359,0.7539537892599035,0.9559574534085812,0.7971286605248636,0.1481054831420605,0.1838254939038858,0.3179577323742758,0.8793894950349531,0.5030407165929099,0.384975817,0.365612315,0.610119048
+
+Use only the Python standard library.
+
+These files, written earlier, are in the same directory:
+
+--- step01.py ---
+import csv
+
+def remember(header, rows):
+    """
+    Identifies the best rows by calculating a normalized score for each goal.
+    Goals ending in '-' are minimized (1 - value), '+' are maximized (value).
+    We look for rows that perform well across all goals simultaneously.
+    """
+    goals = []
+    for i, name in enumerate(header):
+        if name.endswith('-') or name.endswith('+'):
+            goals.append((i, name.endswith('+')))
+
+    # Calculate normalized scores for each goal
+    # Since all inputs are 0-1, we can treat them as already normalized
+    scores = []
+    for idx, row in enumerate(rows):
+        row_score = 0
+        for col_idx, is_max in goals:
+            val = float(row[col_idx])
+            # If goal is to minimize (-), lower is better (1 - val)
+            # If goal is to maximize (+), higher is better (val)
+            row_score += val if is_max else (1.0 - val)
+        
+        # Average score across the 3 goals
+        scores.append((row_score / len(goals), idx))
+
+    # Sort by score descending (higher is better)
+    scores.sort(key=lambda x: x[0], reverse=True)
+    
+    # Return top 5% of rows
+    limit = max(1, len(rows) // 20)
+    return [item[1] for item in scores[:limit]]
+
+if __name__ == "__main__":
+    filename = "pom3a.train.csv"
+    rows = []
+    header = []
+    
+    with open(filename, mode='r', encoding='utf-8') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            rows.append(row)
+            
+    best_indices = remember(header, rows)
+    
+    print(f"Found {len(best_indices)} top-performing setups.")
+    print(f"{'Row Index':<10} | {'Cost-':<10} | {'Score-':<10} | {'Idle-':<10}")
+    print("-" * 45)
+    
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    
+    for idx in best_indices:
+        row = rows[idx]
+        vals = [row[i] for i in goal_indices]
+        print(f"{idx:<10} | {vals[0]:<10} | {vals[1]:<10} | {vals[2]:<10}")
+
+
+Reuse the earlier files wherever you can: import from them rather than rewriting. Write as little new code as possible. Do not edit the earlier files.
+
+The customer asks:
+
+  Before I commit to a setup, tell me roughly what it will cost and how much of the team will sit idle.
+
+Write step02.py to answer that ask on this data.
+
+A test harness will import your file and call this function, so you must define it exactly:
+
+def guess(header, train, test)
+  Returns a list of floats.   `train` rows are complete. In `test` rows every goal cell is "?". Return one number per test row: your estimate of the FIRST goal column for that row.
+
+Conventions: `header` is the list of column names. `rows` is a list of rows; each row is a list of cells in header order, floats for numeric columns and strings for symbolic ones. A cell shown as "?" is hidden from you. A row is better when its goals are closer to their best (low for names ending in -, high for names ending in +).
+
+Keep everything that prints or reads the csv file under `if __name__ == "__main__":` so that importing the file prints nothing. Plain built-in types are all you need: do not import anything from `typing`.
+
+Running `python step02.py` must load the csv, call your function, print a short answer a customer could read, and exit with status 0. Reply with the complete file in one ```python fenced block and nothing else.

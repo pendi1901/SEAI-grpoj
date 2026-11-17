@@ -1,0 +1,68 @@
+import pandas as pd
+import numpy as np
+from sklearn.ensemble import RandomForestRegressor
+
+def blame(header, rows):
+    """
+    Identifies input columns that correlate most strongly with the 'Idle-' goal.
+    We define 'worst setups' as those with high 'Idle-' values.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    
+    # Identify goal columns and input columns
+    goals = [c for c in header if c.endswith('-') or c.endswith('+')]
+    inputs = [c for c in header if c not in goals]
+    
+    # Target: Idle- (the goal related to people waiting around)
+    target = 'Idle-'
+    
+    # Preprocess: Convert symbolic inputs to numeric using one-hot encoding
+    df_encoded = pd.get_dummies(df[inputs])
+    
+    # Train a Random Forest to find feature importance for 'Idle-'
+    # We use a regressor to see which inputs drive the magnitude of Idle-
+    model = RandomForestRegressor(n_estimators=50, random_state=42)
+    model.fit(df_encoded, df[target])
+    
+    # Get feature importances
+    importances = model.feature_importances_
+    feature_names = df_encoded.columns
+    
+    # Map back to original input column names
+    # If a column was one-hot encoded, we take the max importance of its components
+    importance_map = {}
+    for name, imp in zip(feature_names, importances):
+        # Find the original column name (before _val suffix)
+        orig_name = next((col for col in inputs if name.startswith(col)), name)
+        importance_map[orig_name] = importance_map.get(orig_name, 0) + imp
+        
+    # Sort by importance
+    sorted_features = sorted(importance_map.items(), key=lambda x: x[1], reverse=True)
+    
+    # Return the top 3 most influential input factors
+    return [feat for feat, imp in sorted_features[:3]]
+
+if __name__ == "__main__":
+    import csv
+    
+    filename = 'pom3a.train.csv'
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = []
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    top_factors = blame(header, rows)
+    
+    print("--- Analysis of Idle Time ---")
+    print("The primary factors causing high idle time in your setups are:")
+    for i, factor in enumerate(top_factors, 1):
+        print(f"{i}. {factor}")
+    print("\nThese inputs have the strongest influence on why people are waiting.")

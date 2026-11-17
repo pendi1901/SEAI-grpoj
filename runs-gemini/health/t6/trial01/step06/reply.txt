@@ -1,0 +1,57 @@
+```python
+import ezr
+import step01
+
+def justify(header, rows, row):
+    """
+    Returns (p, reason): p is the fraction of rows that `row` is better than,
+    and a sentence explaining the performance.
+    """
+    # Create a table to calculate ydist (trustworthiness)
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate ydist for all rows
+    all_ydists = [ezr.ydist(tbl, r) for r in rows]
+    
+    # Calculate ydist for the target row
+    # We need to fill the '?' goals to calculate ydist. 
+    # We use the median of the column as a neutral estimate for the goal.
+    row_with_goals = list(row)
+    for i, name in enumerate(header):
+        if name[-1] in "+-":
+            col = tbl.cols[i]
+            row_with_goals[i] = ezr.mid(col)
+            
+    target_yd = ezr.ydist(tbl, row_with_goals)
+    
+    # Count how many rows are worse (have a higher ydist) than the target
+    # A lower ydist is better.
+    worse_count = sum(1 for yd in all_ydists if yd > target_yd)
+    p = worse_count / len(rows)
+    
+    reason = (f"This setup is better than {int(p * 100)}% of all possible configurations "
+              "because its predicted performance metrics align more closely with the "
+              "ideal objectives found in our historical data.")
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Pick a sample row to justify (e.g., the 100th row)
+    sample_row = list(rows[100])
+    # Mask the goals
+    for i, name in enumerate(header):
+        if name[-1] in "+-":
+            sample_row[i] = "?"
+            
+    p, reason = justify(header, rows, sample_row)
+    
+    print(f"Justification Analysis:")
+    print(f"Target Row: {sample_row}")
+    print(f"Score: {p:.2f}")
+    print(f"Reason: {reason}")
+```

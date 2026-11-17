@@ -1,0 +1,48 @@
+```python
+import ezr
+import step01
+
+def flow(header, row, seen):
+    """
+    Returns True if the current row is 'good enough' to ship.
+    We define 'good enough' as being in the top 5% of the expected 
+    distribution of ydist (trustworthiness) based on the history 
+    of rows seen so far.
+    """
+    if not seen:
+        return False
+    
+    # Build a temporary table to calculate ydist
+    # We use the current row and all previously seen rows
+    data = [header] + seen + [row]
+    tbl = ezr.Tbl(data)
+    
+    # Calculate ydist for all seen rows
+    ydists = [ezr.ydist(tbl, r) for r in seen]
+    current_yd = ezr.ydist(tbl, row)
+    
+    # If the current row's ydist is better (lower) than the 95th percentile
+    # of what we have seen so far, we stop.
+    threshold = sorted(ydists)[int(len(ydists) * 0.05)]
+    
+    return current_yd <= threshold
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    seen = []
+    found = False
+    for i, row in enumerate(rows):
+        if flow(header, row, seen):
+            print(f"Stopped at row {i} (0-indexed).")
+            print(f"Row data: {row}")
+            found = True
+            break
+        seen.append(row)
+    
+    if not found:
+        print("No row met the criteria before the end of the file.")
+```

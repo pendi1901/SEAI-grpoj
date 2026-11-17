@@ -1,0 +1,64 @@
+import csv
+import pandas as pd
+import numpy as np
+
+def remember(header, rows):
+    """
+    Identifies the best rows based on multi-objective optimization.
+    Goals ending in '-' are minimized, '+' are maximized.
+    We normalize numeric columns and use a simple weighted sum (or Pareto-like approach)
+    to find the most 'trustworthy' setups.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    
+    # Identify goal columns
+    min_cols = [c for c in header if c.endswith('-')]
+    max_cols = [c for c in header if c.endswith('+')]
+    
+    # Convert numeric columns to float, handle potential errors
+    for col in min_cols + max_cols:
+        df[col] = pd.to_numeric(df[col], errors='coerce')
+    
+    # Normalize goals to [0, 1] range
+    # For min_cols: lower is better (1 - normalized)
+    # For max_cols: higher is better (normalized)
+    scores = pd.DataFrame(index=df.index)
+    
+    for col in min_cols:
+        col_min, col_max = df[col].min(), df[col].max()
+        scores[col] = (col_max - df[col]) / (col_max - col_min + 1e-9)
+        
+    for col in max_cols:
+        col_min, col_max = df[col].min(), df[col].max()
+        scores[col] = (df[col] - col_min) / (col_max - col_min + 1e-9)
+        
+    # Aggregate scores
+    df['total_score'] = scores.sum(axis=1)
+    
+    # Select top 5% (or at least 1)
+    n_select = max(1, int(len(df) * 0.05))
+    top_indices = df['total_score'].nlargest(n_select).index.tolist()
+    
+    return top_indices
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.train.csv"
+    data = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            # Convert numeric strings to floats
+            processed_row = []
+            for i, val in enumerate(row):
+                try:
+                    processed_row.append(float(val))
+                except ValueError:
+                    processed_row.append(val)
+            data.append(processed_row)
+    
+    best_indices = remember(header, data)
+    
+    print(f"Analysis complete. Found {len(best_indices)} highly trustworthy setups.")
+    print("Top performing row indices:", best_indices[:10], "..." if len(best_indices) > 10 else "")
+    print("\nThese setups represent the best balance of minimizing error and maximizing performance metrics.")

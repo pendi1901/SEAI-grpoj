@@ -1,0 +1,56 @@
+import csv
+import pandas as pd
+import numpy as np
+from sklearn.ensemble import IsolationForest
+
+def spot(header, rows):
+    """
+    Identifies rows that are likely 'failed runs' by detecting outliers
+    in the input feature space. Rows that are statistically anomalous 
+    compared to the rest of the dataset are flagged as suspicious.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    
+    # Identify goal columns to exclude from anomaly detection
+    goal_cols = [c for c in header if c.endswith('-') or c.endswith('+')]
+    input_cols = [c for c in header if c not in goal_cols]
+    
+    # Prepare input data: encode symbolic columns
+    X = df[input_cols].copy()
+    for col in X.columns:
+        if X[col].dtype == 'object':
+            X[col] = pd.factorize(X[col])[0]
+            
+    # Use IsolationForest to detect anomalies
+    # Contamination is set to 0.05 as a heuristic for 'failed' runs
+    clf = IsolationForest(contamination=0.05, random_state=42)
+    scores = clf.fit_predict(X)
+    
+    # IsolationForest returns -1 for outliers, 1 for inliers.
+    # We want the indices of the outliers, sorted by anomaly score (decision_function)
+    anomaly_scores = clf.decision_function(X)
+    
+    # Get indices where score is -1, sorted by lowest (most anomalous) score
+    suspicious_indices = np.where(scores == -1)[0]
+    sorted_indices = sorted(suspicious_indices, key=lambda i: anomaly_scores[i])
+    
+    return sorted_indices.tolist()
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.train.csv"
+    data = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = [float(val) if val.replace('.', '', 1).isdigit() or 
+                             (val.startswith('-') and val[1:].replace('.', '', 1).isdigit()) 
+                             else val for val in row]
+            data.append(processed_row)
+            
+    suspicious = spot(header, data)
+    
+    print(f"Analysis complete. Identified {len(suspicious)} potentially failed runs.")
+    print("The most suspicious row indices are:")
+    print(suspicious[:10])
+    print("These rows contain input configurations that deviate significantly from the norm.")

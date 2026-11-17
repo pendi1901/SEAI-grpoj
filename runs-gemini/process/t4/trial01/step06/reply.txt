@@ -1,0 +1,81 @@
+```python
+import csv
+import pandas as pd
+import numpy as np
+from step01 import remember
+from step02 import guess
+
+def justify(header, rows, row):
+    """
+    Returns (p, reason): p is the fraction of rows that 'row' is better than.
+    'row' has goals as "?". We estimate the goals using KNN and compare
+    the aggregate score against the distribution of all other rows.
+    """
+    # 1. Estimate the missing goals for the target row
+    # We need to provide a list containing the single row to the guess function
+    predicted_goals = guess(header, rows, [row])
+    
+    # 2. Calculate scores for all rows
+    # Reuse logic from step01: normalize and aggregate
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    goal_types = ['min' if header[i].endswith('-') else 'max' for i in goal_indices]
+    
+    data = [[float(r[i]) for i in goal_indices] for r in rows]
+    df_goals = pd.DataFrame(data)
+    
+    # Normalize
+    normalized = (df_goals - df_goals.min()) / (df_goals.max() - df_goals.min())
+    
+    # Calculate aggregate scores for all rows
+    scores = []
+    for i, col in enumerate(normalized.columns):
+        if goal_types[i] == 'min':
+            scores.append(normalized[col])
+        else:
+            scores.append(1 - normalized[col])
+    all_scores = pd.concat(scores, axis=1).sum(axis=1)
+    
+    # 3. Calculate score for the target row
+    # We must normalize the predicted goal using the same min/max from the training set
+    pred_row_vals = []
+    # Note: guess() only predicts the first goal, so we assume others are 0 or 
+    # use the mean for estimation if not provided. For simplicity, we use the 
+    # predicted first goal and assume average performance for others.
+    pred_row_vals.append(predicted_goals[0])
+    for i in range(1, len(goal_indices)):
+        pred_row_vals.append(df_goals.iloc[:, i].mean())
+        
+    pred_norm = []
+    for i in range(len(goal_indices)):
+        val = (pred_row_vals[i] - df_goals.iloc[:, i].min()) / (df_goals.iloc[:, i].max() - df_goals.iloc[:, i].min())
+        pred_norm.append(val if goal_types[i] == 'min' else 1 - val)
+    
+    target_score = sum(pred_norm)
+    
+    # 4. Calculate fraction better
+    better_count = (all_scores > target_score).sum()
+    p = better_count / len(rows)
+    
+    reason = f"This setup is in the top {int((1-p)*100)}% of all possible configurations based on its estimated performance metrics."
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = 'pom3a.train.csv'
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = list(reader)
+    
+    # Pick a sample row and mask its goals
+    sample_row = list(rows[0])
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    for idx in goal_indices:
+        sample_row[idx] = "?"
+        
+    p, reason = justify(header, rows, sample_row)
+    
+    print(f"Customer Inquiry: How does this setup rank?")
+    print(f"Rank: Better than {p*100:.1f}% of all setups.")
+    print(f"Justification: {reason}")
+```

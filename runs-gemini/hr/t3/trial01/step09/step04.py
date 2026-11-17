@@ -1,0 +1,60 @@
+import pandas as pd
+import numpy as np
+
+def flow(header, row, seen):
+    """
+    Decides if the current row needs a 'what would keep you here' conversation.
+    We prioritize employees who have high potential for retention (high tenure goals)
+    but are currently showing signs of attrition risk (e.g., OverTime=Yes).
+    
+    Since we cannot revisit the pile, we use a threshold-based approach 
+    relative to the 'seen' data to identify high-value individuals.
+    """
+    # Identify indices for relevant columns
+    try:
+        idx_overtime = header.index('overTime')
+        idx_tenure = header.index('YearsAtCompany+')
+        idx_attrition = header.index('attrition')
+    except ValueError:
+        return False
+
+    # If this is the first row, we can't compare, so let it go
+    if not seen:
+        return False
+
+    # Extract current row values
+    current_overtime = row[idx_overtime]
+    current_tenure = float(row[idx_tenure])
+    current_attrition = row[idx_attrition]
+
+    # Logic: If they are at risk (attrition=Yes) and have significant tenure 
+    # (above the average of what we've seen so far), they are a priority.
+    seen_df = pd.DataFrame(seen, columns=header)
+    avg_tenure = seen_df['YearsAtCompany+'].mean()
+
+    if current_attrition == 'Yes' and current_tenure >= avg_tenure:
+        return True
+    
+    return False
+
+if __name__ == "__main__":
+    # Load the data
+    df = pd.read_csv('WA_Fn-UseC_-HR-Employee-Attrition.train.csv')
+    header = df.columns.tolist()
+    rows = df.values.tolist()
+    
+    seen = []
+    selected_count = 0
+    
+    print("Processing annual reviews one by one...")
+    print("-" * 50)
+    
+    for i, row in enumerate(rows):
+        if flow(header, row, seen):
+            print(f"Review {i+1}: Flagged for 'what would keep you here' conversation.")
+            selected_count += 1
+        seen.append(row)
+        
+    print("-" * 50)
+    print(f"Total employees flagged for retention conversation: {selected_count}")
+    print("Process complete.")

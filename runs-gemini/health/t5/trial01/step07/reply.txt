@@ -1,0 +1,65 @@
+```python
+import ezr
+import random
+
+def choose(header, rows, label):
+    """
+    Find the best row by labeling up to 50 rows.
+    We use the acquire logic from ezr to intelligently sample the space.
+    """
+    # Create a table structure to manage columns and distance calculations
+    # We need to handle the fact that goals are currently '?'
+    tbl = ezr.Tbl([header] + rows)
+    
+    # We need to label rows to understand the objective space.
+    # The acquire function in ezr is designed to find the best rows
+    # within a budget (the.Stop).
+    # We wrap the provided label function to work with the TBL structure.
+    def oracle_wrapper(row):
+        # Find the index of this row in the original rows list
+        idx = rows.index(row)
+        # Get the true goals
+        true_row = label(idx)
+        # Update the row with true goals
+        for i, val in enumerate(true_row):
+            if header[i].endswith(('-', '+')):
+                row[i] = val
+        return row
+
+    # Use ezr's acquire to spend the budget of 50 labels
+    # ezr.the.Stop is set to 50 by default
+    ezr.the.Stop = 50
+    labeled_rows = ezr.acquire(tbl, cap=50, label=oracle_wrapper)
+    
+    # After labeling, find the best row among all labeled ones
+    # A row is better when its ydist is lower
+    best_row = min(labeled_rows, key=lambda r: ezr.ydist(tbl, r))
+    
+    # Return the index of the best row
+    return rows.index(best_row)
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.train.csv"
+    all_data = list(ezr.csv(filename))
+    header = all_data[0]
+    rows = all_data[1:]
+    
+    # Keep a copy of the original rows to provide to the label function
+    # The label function needs to return the full row with goals
+    def label_func(idx):
+        return all_data[idx + 1]
+    
+    # Mask the goals for the choose function
+    masked_rows = []
+    for row in rows:
+        masked_rows.append([row[i] if not header[i].endswith(('-', '+')) else "?" 
+                           for i in range(len(row))])
+    
+    best_idx = choose(header, masked_rows, label_func)
+    
+    print(f"Analysis complete. Evaluated 50 setups.")
+    print(f"The best configuration found is at index {best_idx}.")
+    print(f"Row details: {rows[best_idx]}")
+    
+    exit(0)
+```

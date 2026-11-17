@@ -1,0 +1,56 @@
+```python
+import ezr
+import random
+
+def flow(header, row, seen):
+    """
+    Decide if the current row is a priority for a 'stay' conversation.
+    We use the 'seen' data to build a model of what 'good' looks like,
+    then check if the current row is significantly better than the 
+    average of what we have seen so far.
+    """
+    # We need at least a small sample to start making decisions
+    if len(seen) < 20:
+        return False
+    
+    # Create a table from seen data to calculate ydist
+    tbl = ezr.Tbl([header] + seen)
+    
+    # Calculate the ydist of the current row
+    # A lower ydist means the row is closer to the ideal goals
+    current_ydist = ezr.ydist(tbl, row)
+    
+    # Calculate the average ydist of all seen rows
+    seen_ydists = [ezr.ydist(tbl, r) for r in seen]
+    avg_ydist = sum(seen_ydists) / len(seen_ydists)
+    
+    # If the current row is significantly better (lower ydist) than the average,
+    # flag it for a conversation. We use a threshold of 0.5 standard deviations
+    # below the mean to define "significantly better".
+    std_dev = (sum((y - avg_ydist)**2 for y in seen_ydists) / len(seen_ydists))**0.5
+    
+    return current_ydist < (avg_ydist - 0.5 * std_dev)
+
+if __name__ == "__main__":
+    # Load data
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Simulate the arrival of rows one by one
+    seen = []
+    flagged_count = 0
+    
+    print(f"Processing {len(rows)} employee records one by one...")
+    
+    for row in rows:
+        if flow(header, row, seen):
+            flagged_count += 1
+        seen.append(row)
+        
+    print(f"Analysis complete.")
+    print(f"Total employees reviewed: {len(rows)}")
+    print(f"Employees flagged for 'what would keep you here' conversation: {flagged_count}")
+    print("Strategy: Flagged employees whose goal metrics are significantly better than the historical average.")
+```

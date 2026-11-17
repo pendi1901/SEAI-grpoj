@@ -1,0 +1,74 @@
+import csv
+import step01
+import step02
+import step03
+import step04
+import step05
+import step06
+
+def choose(header, rows, label):
+    """
+    Finds the best working arrangement by sampling 50 rows.
+    We pick 50 rows that are diverse or likely to be high-performing,
+    label them, and return the index of the one with the highest tenure.
+    """
+    # Identify goal indices
+    goal_indices = [i for i, h in enumerate(header) if h.endswith('+') or h.endswith('-')]
+    tenure_idx = header.index("YearsAtCompany+")
+    
+    # We have a budget of 50 labels.
+    # We'll sample 50 rows spread across the dataset to get a representative view.
+    n = len(rows)
+    step = max(1, n // 50)
+    indices_to_sample = [i for i in range(0, n, step)][:50]
+    
+    best_idx = -1
+    max_tenure = -1.0
+    
+    for i in indices_to_sample:
+        # label(i) returns the true goal values for rows[i]
+        goals = label(i)
+        # The first goal is YearsAtCompany+
+        tenure = goals[0]
+        
+        if tenure > max_tenure:
+            max_tenure = tenure
+            best_idx = i
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.train.csv"
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Keep a copy of true goals to simulate the label function
+    true_goals = []
+    goal_indices = [i for i, h in enumerate(header) if h.endswith('+') or h.endswith('-')]
+    for row in rows:
+        true_goals.append([row[idx] for idx in goal_indices])
+        # Mask the rows as per instructions
+        for idx in goal_indices:
+            row[idx] = "?"
+
+    def label(i):
+        return true_goals[i]
+
+    best_idx = choose(header, rows, label)
+    
+    print(f"Analysis complete. Best employee found at index {best_idx}.")
+    print(f"This employee has a tenure of {true_goals[best_idx][0]} years.")
+    print("This represents the longest-tenured arrangement found within the 50-interview budget.")

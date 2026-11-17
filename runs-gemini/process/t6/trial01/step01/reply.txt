@@ -1,0 +1,54 @@
+```python
+import ezr
+import random
+
+def remember(header, rows):
+    """
+    Returns the indices of the best rows.
+    A row is better when its goals are closer to their best.
+    """
+    # Create a table object from the provided data
+    # The header is required to define column roles (X, Y, etc.)
+    data = [header] + rows
+    tbl = ezr.Tbl(data)
+    
+    # Calculate ydist for all rows.
+    # ydist measures how far a row's goals are from the ideal (0.0).
+    # Lower ydist is better.
+    scored = []
+    for i, row in enumerate(rows):
+        d = ezr.ydist(tbl, row)
+        scored.append((d, i))
+    
+    # Sort by ydist ascending (best first)
+    scored.sort(key=lambda x: x[0])
+    
+    # Return top 5% of rows (or at least one)
+    limit = max(1, int(len(rows) * 0.05))
+    return [idx for _, idx in scored[:limit]]
+
+if __name__ == "__main__":
+    # Load the data
+    file_path = "pom3a.train.csv"
+    rows_iter = ezr.csv(file_path)
+    
+    # Extract header and all rows
+    header = next(rows_iter)
+    all_rows = list(rows_iter)
+    
+    # Get the best indices
+    best_indices = remember(header, all_rows)
+    
+    # Print results for the customer
+    print(f"Found {len(all_rows)} records.")
+    print(f"Top {len(best_indices)} best-performing setups:")
+    
+    # Display the first few best rows
+    for idx in best_indices[:5]:
+        row = all_rows[idx]
+        # Show only goal columns (those ending in + or -)
+        goals = {header[i]: row[i] for i, name in enumerate(header) if name[-1] in "+-"}
+        print(f"Row {idx}: {goals}")
+    
+    exit(0)
+```

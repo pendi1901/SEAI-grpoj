@@ -1,0 +1,64 @@
+```python
+import pandas as pd
+import numpy as np
+from sklearn.neighbors import KNeighborsRegressor
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column for test rows using K-Nearest Neighbors.
+    """
+    df_train = pd.DataFrame(train, columns=header)
+    df_test = pd.DataFrame(test, columns=header)
+    
+    # Identify goal columns and input columns
+    goals = [c for c in header if c.endswith('-') or c.endswith('+')]
+    inputs = [c for c in header if c not in goals]
+    
+    # Target is the first goal column
+    target_col = goals[0]
+    
+    # Preprocess: Convert symbolic inputs to numeric using one-hot encoding
+    # Combine train and test to ensure consistent encoding
+    combined = pd.concat([df_train[inputs], df_test[inputs]], axis=0)
+    combined_encoded = pd.get_dummies(combined)
+    
+    train_encoded = combined_encoded.iloc[:len(df_train)]
+    test_encoded = combined_encoded.iloc[len(df_train):]
+    
+    # Train KNN regressor
+    model = KNeighborsRegressor(n_neighbors=5)
+    model.fit(train_encoded, df_train[target_col])
+    
+    # Predict
+    predictions = model.predict(test_encoded)
+    return predictions.tolist()
+
+if __name__ == "__main__":
+    import csv
+    
+    filename = 'pom3a.train.csv'
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = []
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    # Split data for demonstration: use last 100 rows as 'test'
+    train_data = rows[:-100]
+    test_data = [row[:-3] + ["?", "?", "?"] for row in rows[-100:]]
+    
+    predictions = guess(header, train_data, test_data)
+    
+    avg_cost = sum(predictions) / len(predictions)
+    print("--- Estimation Report ---")
+    print(f"Based on the training data, the estimated average cost for the")
+    print(f"provided configurations is approximately {avg_cost:.4f}.")
+    print("Note: This estimate is based on the first goal column (Cost-).")
+```

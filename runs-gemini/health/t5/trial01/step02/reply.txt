@@ -1,0 +1,77 @@
+```python
+import ezr
+import random
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column for each row in test.
+    Uses a tree-based ranker trained on the provided train data.
+    """
+    # Create a table from the training data
+    train_tbl = ezr.Tbl([header] + train)
+    
+    # Build a tree to predict the ydist (distance to ideal)
+    # We use the tree logic to find the leaf node for each test row
+    node = ezr.tree(train_tbl, train_tbl.rows)
+    
+    # To estimate the first goal column, we find the leaf node for a test row
+    # and return the average value of that goal column in that leaf.
+    # First, identify the index of the first goal column
+    goal_idx = -1
+    for i, name in enumerate(header):
+        if name.endswith(('-', '+')):
+            goal_idx = i
+            break
+            
+    # Pre-calculate the mean of the first goal column for each leaf
+    leafs = ezr.leafs(node)
+    for l in leafs:
+        vals = [r[goal_idx] for r in l.rows if r[goal_idx] != "?"]
+        l.goal_mean = sum(vals) / len(vals) if vals else 0.0
+        
+    results = []
+    for row in test:
+        # Walk the tree to find the leaf
+        curr = node
+        while curr.kids:
+            # If the test row has a '?' at the split column, we take the first path
+            val = row[curr.at]
+            if val == "?":
+                curr = curr.kids[0]
+            else:
+                curr = curr.kids[0] if curr.go(row) else curr.kids[1]
+        results.append(curr.goal_mean)
+        
+    return results
+
+if __name__ == "__main__":
+    # Load the data
+    filename = "Health-ClosedIssues0000.train.csv"
+    all_data = list(ezr.csv(filename))
+    header = all_data[0]
+    rows = all_data[1:]
+    
+    # Split into train and test for demonstration
+    random.seed(1234567891)
+    random.shuffle(rows)
+    split = int(len(rows) * 0.8)
+    train = rows[:split]
+    test = rows[split:]
+    
+    # Mask the goals in the test set to simulate the customer's request
+    masked_test = []
+    for row in test:
+        new_row = [row[i] if not header[i].endswith(('-', '+')) else "?" 
+                   for i in range(len(row))]
+        masked_test.append(new_row)
+        
+    # Get estimates
+    estimates = guess(header, train, masked_test)
+    
+    print(f"Analysis complete on {len(train)} training records.")
+    print(f"Generated {len(estimates)} forecasts for test records.")
+    print("Sample estimates for the first goal column:")
+    print([round(x, 4) for x in estimates[:10]])
+    
+    exit(0)
+```

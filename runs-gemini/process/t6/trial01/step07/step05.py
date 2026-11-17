@@ -1,0 +1,60 @@
+import ezr
+import step01
+
+def blame(header, rows):
+    """
+    Identifies input columns that correlate with the worst-performing rows.
+    We define 'worst' as the bottom 25% of rows based on ydist.
+    We then compare the distribution of input values in the worst rows
+    vs the rest of the data to find the most significant differences.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate ydist for all rows
+    scored = []
+    for row in rows:
+        scored.append((ezr.ydist(tbl, row), row))
+    
+    # Sort by ydist descending (worst first)
+    scored.sort(key=lambda x: x[0], reverse=True)
+    
+    # Split into worst 25% and the rest
+    n_worst = len(rows) // 4
+    worst = [x[1] for x in scored[:n_worst]]
+    rest = [x[1] for x in scored[n_worst:]]
+    
+    # For each input column, check if the distribution of values
+    # in 'worst' is significantly different from 'rest'.
+    # We use the statistical tests from ezr.
+    explanations = []
+    for col in tbl.x:
+        # Extract values for this column
+        w_vals = [r[col.at] for r in worst if r[col.at] != "?"]
+        r_vals = [r[col.at] for r in rest if r[col.at] != "?"]
+        
+        if not w_vals or not r_vals:
+            continue
+            
+        # If they are NOT the same, this column helps explain the difference
+        if not ezr.same(w_vals, r_vals):
+            explanations.append(col.txt)
+            
+    return explanations
+
+if __name__ == "__main__":
+    file_path = "pom3a.train.csv"
+    rows_iter = ezr.csv(file_path)
+    header = next(rows_iter)
+    all_rows = list(rows_iter)
+    
+    reasons = blame(header, all_rows)
+    
+    print("Analysis of why worst setups have high idle times:")
+    print("The following input factors are statistically linked to poor performance:")
+    for reason in reasons:
+        print(f" - {reason}")
+    
+    print("\nThese factors show a significant difference in distribution between")
+    print("the worst-performing setups and the rest of the population.")
+    
+    exit(0)

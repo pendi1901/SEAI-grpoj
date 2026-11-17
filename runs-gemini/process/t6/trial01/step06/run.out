@@ -1,0 +1,24 @@
+
+--- stderr ---
+Traceback (most recent call last):
+  File "<repo>\runs-gemini\process\t6\trial01\step06\step06.py", line 48, in <module>
+    p, reason = justify(header, all_rows, target_row)
+                ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<repo>\runs-gemini\process\t6\trial01\step06\step06.py", line 17, in justify
+    target_ydist = ezr.ydist(tbl, row)
+  File "<repo>\runs-gemini\process\t6\trial01\step06\ezr.py", line 180, in ydist
+    return dist((abs(norm(c, row[c.at]) - c.goal)
+                      for c in tbl.y), len(tbl.y))
+  File "<repo>\runs-gemini\process\t6\trial01\step06\ezr.py", line 176, in dist
+    return sqrt(sum(v*v for v in vs) / n)
+                ~~~^^^^^^^^^^^^^^^^^
+  File "<repo>\runs-gemini\process\t6\trial01\step06\ezr.py", line 176, in <genexpr>
+    return sqrt(sum(v*v for v in vs) / n)
+                                 ^^
+  File "<repo>\runs-gemini\process\t6\trial01\step06\ezr.py", line 180, in <genexpr>
+    return dist((abs(norm(c, row[c.at]) - c.goal)
+                     ~~~~^^^^^^^^^^^^^^
+  File "<repo>\runs-gemini\process\t6\trial01\step06\ezr.py", line 138, in norm
+    z = max(-3, min(3, (v - col.mu) / (1e-32 + div(col))))
+                        ~~^~~~~~~~
+TypeError: unsupported operand type(s) for -: 'str' and 'float'

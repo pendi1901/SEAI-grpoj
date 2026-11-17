@@ -1,0 +1,76 @@
+```python
+import csv
+
+def blame(header, rows):
+    """
+    Identifies input columns that correlate most strongly with poor performance.
+    'Bad' rows are defined as those in the bottom 25% of the quality distribution.
+    We compare the distribution of input values in 'bad' rows vs 'good' rows.
+    """
+    goals = []
+    inputs = []
+    for i, name in enumerate(header):
+        if name.endswith('-') or name.endswith('+'):
+            goals.append((i, name.endswith('-')))
+        else:
+            inputs.append((i, name))
+
+    # Calculate quality score for each row
+    def get_score(row):
+        score = 0.0
+        for idx, is_min in goals:
+            val = float(row[idx])
+            # We use a simple relative score based on the whole dataset
+            # to rank rows from best to worst.
+            score += val if is_min else -val
+        return score
+
+    scored_rows = sorted([(get_score(r), r) for r in rows])
+    
+    # Define bad rows as the worst 25%
+    n = len(scored_rows)
+    bad_rows = [r for _, r in scored_rows[int(0.75 * n):]]
+    good_rows = [r for _, r in scored_rows[:int(0.25 * n)]]
+
+    # For each input, calculate the difference in mean between bad and good
+    # For numeric, we use normalized difference. For symbolic, we use frequency.
+    impacts = []
+    for idx, name in inputs:
+        try:
+            # Numeric
+            bad_vals = [float(r[idx]) for r in bad_rows]
+            good_vals = [float(r[idx]) for r in good_rows]
+            diff = abs((sum(bad_vals) / len(bad_vals)) - (sum(good_vals) / len(good_vals)))
+            impacts.append((diff, name))
+        except ValueError:
+            # Symbolic: compare mode frequency
+            bad_freq = {}
+            for r in bad_rows: bad_freq[r[idx]] = bad_freq.get(r[idx], 0) + 1
+            good_freq = {}
+            for r in good_rows: good_freq[r[idx]] = good_freq.get(r[idx], 0) + 1
+            
+            # Simple divergence: how much more common is the bad mode in bad rows
+            bad_mode = max(bad_freq, key=bad_freq.get)
+            diff = (bad_freq.get(bad_mode, 0) / len(bad_rows)) - (good_freq.get(bad_mode, 0) / len(good_rows))
+            impacts.append((diff, name))
+
+    # Return the top 3 columns that contribute most to the difference
+    impacts.sort(key=lambda x: x[0], reverse=True)
+    return [name for _, name in impacts[:3]]
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.train.csv"
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            rows.append(row)
+    
+    culprits = blame(header, rows)
+    print("Analysis complete.")
+    print("The settings most responsible for poor performance are:")
+    for i, name in enumerate(culprits, 1):
+        print(f"{i}. {name}")
+    print("\nThese columns show the largest divergence between the best and worst performing setups.")
+```

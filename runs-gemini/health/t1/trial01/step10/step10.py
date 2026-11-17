@@ -1,0 +1,94 @@
+import csv
+import random
+
+def race(header, rows, label):
+    """
+    Compares three strategies: random, greedy (best-so-far), and local-search.
+    Each strategy gets 50 calls to label().
+    """
+    goal_indices = [(i, name.endswith('-')) for i, name in enumerate(header) 
+                    if name.endswith('-') or name.endswith('+')]
+
+    def get_score(row_vals):
+        score = 0.0
+        for i, (idx, is_min) in enumerate(goal_indices):
+            val = row_vals[i]
+            # Normalize to [0, 1] based on global range is not possible here,
+            # so we use the raw values assuming they are already scaled/comparable.
+            score += val if is_min else -val
+        return score
+
+    def strategy_random(budget):
+        best_score = float('inf')
+        best_row = -1
+        for _ in range(budget):
+            idx = random.randint(0, len(rows) - 1)
+            score = get_score(label(idx))
+            if score < best_score:
+                best_score, best_row = score, idx
+        return best_row, best_score
+
+    def strategy_greedy(budget):
+        # Sample 5, then pick the best, then explore neighbors
+        best_score = float('inf')
+        best_row = -1
+        for i in range(budget):
+            idx = i # Simple sequential exploration
+            score = get_score(label(idx))
+            if score < best_score:
+                best_score, best_row = score, idx
+        return best_row, best_score
+
+    def strategy_local(budget):
+        # Start random, then look at neighbors
+        curr = random.randint(0, len(rows) - 1)
+        best_score = get_score(label(curr))
+        best_row = curr
+        for i in range(budget - 1):
+            neighbor = (curr + random.randint(-5, 5)) % len(rows)
+            score = get_score(label(neighbor))
+            if score < best_score:
+                best_score, best_row = score, neighbor
+                curr = neighbor
+        return best_row, best_score
+
+    results = {
+        "random": strategy_random(50),
+        "greedy": strategy_greedy(50),
+        "local": strategy_local(50)
+    }
+
+    winner = min(results, key=lambda k: results[k][1])
+    return {
+        "winner": winner,
+        "row": results[winner][0],
+        "tried": list(results.keys())
+    }
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.train.csv"
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            rows.append(row)
+
+    goal_indices = [i for i, h in enumerate(header) if h.endswith('-') or h.endswith('+')]
+    true_goals = [[float(row[i]) for i in goal_indices] for row in rows]
+    
+    hidden_rows = []
+    for row in rows:
+        new_row = list(row)
+        for i in goal_indices:
+            new_row[i] = "?"
+        hidden_rows.append(new_row)
+
+    def label(i):
+        return true_goals[i]
+
+    outcome = race(header, hidden_rows, label)
+    
+    print(f"Race complete. The winning strategy was: {outcome['winner']}")
+    print(f"Best row found at index: {outcome['row']}")
+    print(f"Strategies compared: {', '.join(outcome['tried'])}")

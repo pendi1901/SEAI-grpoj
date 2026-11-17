@@ -1,0 +1,82 @@
+import ezr
+import random
+
+def race(header, rows, label):
+    """
+    Compare three strategies: random, active learning (acquire), 
+    and a greedy search based on distance to the global centroid.
+    """
+    # Setup
+    tbl = ezr.Tbl([header] + rows)
+    goal_indices = [i for i, h in enumerate(header) if h.endswith(("+", "-"))]
+    
+    def get_goals(row_idx):
+        true_vals = label(row_idx)
+        for i, val in zip(goal_indices, true_vals):
+            rows[row_idx][i] = val
+        return rows[row_idx]
+
+    # Strategies
+    def strategy_random(budget):
+        indices = random.sample(range(len(rows)), budget)
+        for i in indices: get_goals(i)
+        return min(indices, key=lambda i: ezr.ydist(tbl, rows[i]))
+
+    def strategy_acquire(budget):
+        # Use ezr.acquire which returns rows, we need to map back to indices
+        # We pass a wrapper to label the rows as they are acquired
+        def oracle_wrapper(row):
+            idx = rows.index(row)
+            return get_goals(idx)
+        
+        best_rows = ezr.acquire(tbl, cap=budget, label=oracle_wrapper)
+        best_row = min(best_rows, key=lambda r: ezr.ydist(tbl, r))
+        return rows.index(best_row)
+
+    def strategy_greedy(budget):
+        # Pick rows closest to the global centroid (mids)
+        mids = ezr.mids(tbl)
+        scored = sorted(range(len(rows)), key=lambda i: ezr.xdist(tbl, rows[i], mids))
+        for i in scored[:budget]: get_goals(i)
+        return min(scored[:budget], key=lambda i: ezr.ydist(tbl, rows[i]))
+
+    # Run race
+    budget = 50
+    results = {
+        "random": strategy_random(budget),
+        "acquire": strategy_acquire(budget),
+        "greedy": strategy_greedy(budget)
+    }
+    
+    # Determine winner (lowest ydist)
+    winner = min(results, key=lambda name: ezr.ydist(tbl, rows[results[name]]))
+    
+    return {
+        "winner": winner,
+        "row": results[winner],
+        "tried": list(results.keys())
+    }
+
+if __name__ == "__main__":
+    data = list(ezr.csv("WA_Fn-UseC_-HR-Employee-Attrition.train.csv"))
+    header = data[0]
+    rows = data[1:]
+    
+    # Mask goals
+    goal_indices = [i for i, h in enumerate(header) if h.endswith(("+", "-"))]
+    for row in rows:
+        for idx in goal_indices:
+            row[idx] = "?"
+            
+    # Define label function
+    full_data = list(ezr.csv("WA_Fn-UseC_-HR-Employee-Attrition.train.csv"))
+    def label(i):
+        return [full_data[i+1][idx] for idx in goal_indices]
+    
+    result = race(header, rows, label)
+    
+    print(f"Race Results:")
+    print(f"Winner: {result['winner']}")
+    print(f"Best row found at index: {result['row']}")
+    print(f"Strategies compared: {', '.join(result['tried'])}")
+    exit(0)

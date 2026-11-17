@@ -1,0 +1,109 @@
+import csv
+import pandas as pd
+import numpy as np
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import LabelEncoder
+
+def fix(header, row, levers):
+    """
+    Finds the smallest change to settings that improves the score.
+    'Smallest change' is defined as changing one lever to a value that
+    maximizes the predicted score improvement.
+    """
+    # Identify goal columns and input columns
+    goal_cols = [c for c in header if c.endswith('-') or c.endswith('+')]
+    input_cols = [c for c in header if not (c.endswith('-') or c.endswith('+'))]
+    
+    # Load data to train a surrogate model
+    df = pd.read_csv('Health-ClosedIssues0000.train.csv')
+    
+    # Normalize goals to score
+    scores = pd.DataFrame(index=df.index)
+    for col in goal_cols:
+        c_min, c_max = df[col].min(), df[col].max()
+        if col.endswith('-'):
+            scores[col] = (c_max - df[col]) / (c_max - c_min + 1e-9)
+        else:
+            scores[col] = (df[col] - c_min) / (c_max - c_min + 1e-9)
+    df['score'] = scores.mean(axis=1)
+    
+    # Train model
+    X = df[input_cols].copy()
+    le_map = {}
+    for col in input_cols:
+        if X[col].dtype == 'object':
+            le = LabelEncoder()
+            X[col] = le.fit_transform(X[col].astype(str))
+            le_map[col] = le
+    
+    model = RandomForestRegressor(n_estimators=50, random_state=42)
+    model.fit(X, df['score'])
+    
+    # Evaluate current row
+    current_row_df = pd.DataFrame([row], columns=header)[input_cols]
+    for col in input_cols:
+        if col in le_map:
+            current_row_df[col] = le_map[col].transform(current_row_df[col].astype(str))
+    
+    best_change = {}
+    max_improvement = -1.0
+    
+    # Try changing each lever
+    for col, allowed in levers.items():
+        idx = input_cols.index(col)
+        original_val = row[idx]
+        
+        # Generate candidates
+        candidates = []
+        if isinstance(allowed, (list, tuple)) and not isinstance(allowed[0], (int, float)):
+            candidates = [v for v in allowed if v != original_val]
+        else:
+            # Numeric: try boundaries and midpoint
+            low, high = allowed
+            candidates = [low, (low + high) / 2, high]
+            
+        for val in candidates:
+            test_row = current_row_df.copy()
+            if col in le_map:
+                test_row[col] = le_map[col].transform([str(val)])[0]
+            else:
+                test_row[col] = val
+            
+            pred = model.predict(test_row)[0]
+            if pred > max_improvement:
+                max_improvement = pred
+                best_change = {col: val}
+                
+    return best_change
+
+if __name__ == "__main__":
+    # Load data
+    df = pd.read_csv('Health-ClosedIssues0000.train.csv')
+    header = df.columns.tolist()
+    data = df.values.tolist()
+    
+    # Pick a "bad" row (bottom 10%)
+    # For demonstration, we calculate scores and pick one
+    min_cols = [c for c in header if c.endswith('-')]
+    max_cols = [c for c in header if c.endswith('+')]
+    scores = pd.DataFrame(index=df.index)
+    for col in min_cols:
+        scores[col] = (df[col].max() - df[col]) / (df[col].max() - df[col].min() + 1e-9)
+    for col in max_cols:
+        scores[col] = (df[col] - df[col].min()) / (df[col].max() - df[col].min() + 1e-9)
+    df['score'] = scores.mean(axis=1)
+    
+    bad_row = df.sort_values('score').iloc[0].tolist()
+    
+    # Define levers
+    levers = {
+        'N_estimators': (10, 200),
+        'criterion': ['squared_error', 'absolute_error', 'poisson'],
+        'Max_depth': (5, 20)
+    }
+    
+    recommendation = fix(header, bad_row, levers)
+    
+    print("Recommendation for improving the setup:")
+    for col, val in recommendation.items():
+        print(f"Change '{col}' to {val}.")

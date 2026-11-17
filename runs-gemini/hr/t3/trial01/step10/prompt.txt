@@ -1,0 +1,607 @@
+You are writing one Python file, step10.py.
+
+The data is the csv file WA_Fn-UseC_-HR-Employee-Attrition.train.csv in the current directory. Column names starting in upper case are numeric, lower case are symbolic. A name ending in - is a goal to minimise, in + a goal to maximise; all other columns are inputs. It has 1176 data rows after the header. Any count the customer quotes describes their full records, not this file: never hard-code a row count, read the file to the end. Its first lines:
+
+Age,attrition,businessTravel,DailyRate,department,DistanceFromHome,Education,educationField,EmployeeCount,EmployeeNumber,EnvironmentSatisfaction,gender,HourlyRate,JobInvolvement,JobLevel,jobRole,JobSatisfaction,maritalStatus,MonthlyIncome,MonthlyRate,NumCompaniesWorked,over18,overTime,PercentSalaryHike,PerformanceRating,RelationshipSatisfaction,StandardHours,StockOptionLevel,TotalWorkingYears,TrainingTimesLastYear,WorkLifeBalance,YearsAtCompany+,YearsInCurrentRole+,YearsSinceLastPromotion,YearsWithCurrManager+
+37,Yes,Travel_Rarely,1373,Research & Development,2,2,Other,1,4,4,Male,92,2,1,Laboratory Technician,3,Single,2090,2396,6,Y,Yes,15,3,2,80,0,7,3,3,0,0,0,0
+30,No,Non-Travel,1400,Research & Development,3,3,Life Sciences,1,562,3,Male,53,3,1,Laboratory Technician,4,Married,2097,16734,4,Y,No,15,3,3,80,1,9,3,1,5,3,1,4
+39,No,Travel_Rarely,1462,Sales,6,3,Medical,1,1588,4,Male,38,4,3,Sales Executive,3,Married,8237,4658,2,Y,No,11,3,1,80,1,11,3,3,7,6,7,6
+
+You may use scikit-learn, numpy and pandas.
+
+These files, written earlier, are in the same directory:
+
+--- step01.py ---
+import pandas as pd
+import numpy as np
+
+def remember(header, rows):
+    """
+    Identifies staff who stay 'unusually long'.
+    Goals ending in '+' are maximized.
+    We look for rows with high values in 'YearsAtCompany+', 'YearsInCurrentRole+', 
+    and 'YearsWithCurrManager+'.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    
+    # Identify goal columns ending in '+'
+    goal_cols = [c for c in header if c.endswith('+')]
+    
+    # Normalize the goal columns to calculate a composite score
+    # We use Z-score normalization to handle different scales
+    scores = pd.DataFrame(index=df.index)
+    for col in goal_cols:
+        col_data = df[col].astype(float)
+        scores[col] = (col_data - col_data.mean()) / col_data.std()
+    
+    # Calculate total score (higher is better)
+    df['total_score'] = scores.sum(axis=1)
+    
+    # Get top 5% of rows (or at least 1)
+    n_rows = len(df)
+    n_select = max(1, int(n_rows * 0.05))
+    
+    top_indices = df.nlargest(n_select, 'total_score').index.tolist()
+    return top_indices
+
+if __name__ == "__main__":
+    # Load the data
+    df = pd.read_csv('WA_Fn-UseC_-HR-Employee-Attrition.train.csv')
+    
+    # Prepare header and rows
+    header = df.columns.tolist()
+    rows = df.values.tolist()
+    
+    # Get indices of people who stay unusually long
+    indices = remember(header, rows)
+    
+    print("Working arrangements of staff who stay unusually long:")
+    print("-" * 60)
+    
+    # Display relevant columns for the selected rows
+    relevant_cols = ['businessTravel', 'department', 'JobRole', 'OverTime', 'WorkLifeBalance']
+    # Map to actual header names if case differs
+    actual_cols = [c for c in header if c.lower() in [r.lower() for r in relevant_cols]]
+    
+    for idx in indices:
+        row_data = dict(zip(header, rows[idx]))
+        print(f"Row {idx}:")
+        for col in actual_cols:
+            print(f"  {col}: {row_data[col]}")
+        print("-" * 20)
+
+
+--- step02.py ---
+import pandas as pd
+import numpy as np
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import LabelEncoder
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column (YearsAtCompany+) for test rows
+    based on input columns (non-goal columns).
+    """
+    df_train = pd.DataFrame(train, columns=header)
+    df_test = pd.DataFrame(test, columns=header)
+    
+    # Identify goal columns
+    goal_cols = [c for c in header if c.endswith('+') or c.endswith('-')]
+    target_col = goal_cols[0]
+    
+    # Identify input columns (exclude goals)
+    input_cols = [c for c in header if c not in goal_cols]
+    
+    # Preprocess: Encode symbolic columns
+    combined = pd.concat([df_train[input_cols], df_test[input_cols]], axis=0)
+    encoded_df = combined.copy()
+    
+    for col in input_cols:
+        if encoded_df[col].dtype == 'object':
+            le = LabelEncoder()
+            encoded_df[col] = le.fit_transform(encoded_df[col].astype(str))
+            
+    X_train = encoded_df.iloc[:len(df_train)]
+    X_test = encoded_df.iloc[len(df_train):]
+    y_train = df_train[target_col].astype(float)
+    
+    # Train a simple regressor
+    model = RandomForestRegressor(n_estimators=100, random_state=42)
+    model.fit(X_train, y_train)
+    
+    predictions = model.predict(X_test)
+    return predictions.tolist()
+
+if __name__ == "__main__":
+    # Load the data
+    df = pd.read_csv('WA_Fn-UseC_-HR-Employee-Attrition.train.csv')
+    header = df.columns.tolist()
+    rows = df.values.tolist()
+    
+    # Split data for demonstration: use last 10 rows as 'test'
+    train_data = rows[:-10]
+    test_data = [row[:-3] + ["?", "?", "?"] for row in rows[-10:]]
+    
+    # Get estimates
+    estimates = guess(header, train_data, test_data)
+    
+    print("Estimates for 'YearsAtCompany+' for new hires:")
+    print("-" * 50)
+    for i, est in enumerate(estimates):
+        print(f"New Hire {i+1}: Predicted stay duration = {est:.2f} years")
+    
+    exit(0)
+
+
+--- step03.py ---
+import pandas as pd
+import numpy as np
+from scipy import stats
+
+def certify(xs, ys):
+    """
+    Returns True if the difference between two groups is statistically 
+    insignificant (noise), False if they really differ.
+    Uses Welch's t-test.
+    """
+    t_stat, p_value = stats.ttest_ind(xs, ys, equal_var=False)
+    # If p-value > 0.05, we fail to reject the null hypothesis (they are the same)
+    return p_value > 0.05
+
+if __name__ == "__main__":
+    # Load the data
+    df = pd.read_csv('WA_Fn-UseC_-HR-Employee-Attrition.train.csv')
+    
+    # Identify the goal column related to tenure (YearsInCurrentRole+ is a good proxy for 'leaving sooner')
+    # We want to see if 'OverTime' (Yes/No) affects 'YearsInCurrentRole+'
+    target = 'YearsInCurrentRole+'
+    
+    # Split data based on OverTime
+    overtime_yes = df[df['overTime'] == 'Yes'][target]
+    overtime_no = df[df['overTime'] == 'No'][target]
+    
+    # Perform the certification
+    is_noise = certify(overtime_yes.tolist(), overtime_no.tolist())
+    
+    print("Analysis: Does working overtime correlate with leaving a role sooner?")
+    print("-" * 60)
+    print(f"Average years in role (OverTime=Yes): {overtime_yes.mean():.2f}")
+    print(f"Average years in role (OverTime=No):  {overtime_no.mean():.2f}")
+    
+    if is_noise:
+        print("\nConclusion: The observed difference is likely just noise.")
+        print("There is no statistically significant evidence that overtime impacts tenure.")
+    else:
+        print("\nConclusion: The difference is real.")
+        print("Working overtime appears to have a statistically significant impact on tenure.")
+    
+    exit(0)
+
+
+--- step04.py ---
+import pandas as pd
+import numpy as np
+
+def flow(header, row, seen):
+    """
+    Decides if the current row needs a 'what would keep you here' conversation.
+    We prioritize employees who have high potential for retention (high tenure goals)
+    but are currently showing signs of attrition risk (e.g., OverTime=Yes).
+    
+    Since we cannot revisit the pile, we use a threshold-based approach 
+    relative to the 'seen' data to identify high-value individuals.
+    """
+    # Identify indices for relevant columns
+    try:
+        idx_overtime = header.index('overTime')
+        idx_tenure = header.index('YearsAtCompany+')
+        idx_attrition = header.index('attrition')
+    except ValueError:
+        return False
+
+    # If this is the first row, we can't compare, so let it go
+    if not seen:
+        return False
+
+    # Extract current row values
+    current_overtime = row[idx_overtime]
+    current_tenure = float(row[idx_tenure])
+    current_attrition = row[idx_attrition]
+
+    # Logic: If they are at risk (attrition=Yes) and have significant tenure 
+    # (above the average of what we've seen so far), they are a priority.
+    seen_df = pd.DataFrame(seen, columns=header)
+    avg_tenure = seen_df['YearsAtCompany+'].mean()
+
+    if current_attrition == 'Yes' and current_tenure >= avg_tenure:
+        return True
+    
+    return False
+
+if __name__ == "__main__":
+    # Load the data
+    df = pd.read_csv('WA_Fn-UseC_-HR-Employee-Attrition.train.csv')
+    header = df.columns.tolist()
+    rows = df.values.tolist()
+    
+    seen = []
+    selected_count = 0
+    
+    print("Processing annual reviews one by one...")
+    print("-" * 50)
+    
+    for i, row in enumerate(rows):
+        if flow(header, row, seen):
+            print(f"Review {i+1}: Flagged for 'what would keep you here' conversation.")
+            selected_count += 1
+        seen.append(row)
+        
+    print("-" * 50)
+    print(f"Total employees flagged for retention conversation: {selected_count}")
+    print("Process complete.")
+
+
+--- step05.py ---
+import pandas as pd
+import numpy as np
+from sklearn.ensemble import RandomForestRegressor
+
+def blame(header, rows):
+    """
+    Identifies input columns that best explain why employees have short stays.
+    We define 'bad' rows as those with the lowest values in the goal columns 
+    (YearsAtCompany+, YearsInCurrentRole+, YearsWithCurrManager+).
+    """
+    df = pd.DataFrame(rows, columns=header)
+    
+    # Identify goal columns and input columns
+    goal_cols = [c for c in header if c.endswith('+') or c.endswith('-')]
+    input_cols = [c for c in header if c not in goal_cols]
+    
+    # Create a composite 'badness' score: lower goal values = worse
+    # Normalize goals to 0-1 range
+    scores = pd.DataFrame(index=df.index)
+    for col in goal_cols:
+        col_data = df[col].astype(float)
+        scores[col] = (col_data - col_data.min()) / (col_data.max() - col_data.min() + 1e-9)
+    
+    # Average score: lower is worse
+    df['badness'] = scores.mean(axis=1)
+    
+    # Focus on the bottom 25% (the 'worst' rows)
+    threshold = df['badness'].quantile(0.25)
+    worst_rows = df[df['badness'] <= threshold].copy()
+    
+    # Use a Random Forest to find feature importance for predicting 'badness'
+    # Encode symbolic columns
+    X = df[input_cols].copy()
+    for col in input_cols:
+        if X[col].dtype == 'object':
+            X[col] = X[col].astype('category').cat.codes
+            
+    y = df['badness']
+    
+    model = RandomForestRegressor(n_estimators=50, random_state=42)
+    model.fit(X, y)
+    
+    # Get feature importances
+    importances = pd.Series(model.feature_importances_, index=input_cols)
+    top_features = importances.nlargest(3).index.tolist()
+    
+    return top_features
+
+if __name__ == "__main__":
+    df = pd.read_csv('WA_Fn-UseC_-HR-Employee-Attrition.train.csv')
+    header = df.columns.tolist()
+    rows = df.values.tolist()
+    
+    reasons = blame(header, rows)
+    
+    print("Analysis: What factors explain why some departments have short stays?")
+    print("-" * 65)
+    print("The primary factors contributing to shorter employee tenure are:")
+    for i, reason in enumerate(reasons, 1):
+        print(f"{i}. {reason}")
+    print("-" * 65)
+    print("These columns show the highest correlation with the lowest tenure metrics.")
+    
+    exit(0)
+
+
+--- step06.py ---
+import pandas as pd
+import numpy as np
+
+def justify(header, rows, row):
+    """
+    Calculates the percentile rank of a given row relative to the dataset
+    based on goal columns and provides a justification.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    
+    # Identify goal columns
+    goal_cols = [c for c in header if c.endswith('+') or c.endswith('-')]
+    
+    # Calculate a composite score for the dataset
+    # Normalize goals: for '+', higher is better; for '-', lower is better
+    scores = pd.DataFrame(index=df.index)
+    for col in goal_cols:
+        col_data = df[col].astype(float)
+        if col.endswith('+'):
+            scores[col] = (col_data - col_data.min()) / (col_data.max() - col_data.min() + 1e-9)
+        else:
+            scores[col] = (col_data.max() - col_data) / (col_data.max() - col_data.min() + 1e-9)
+    
+    # Global average score for comparison
+    df['composite'] = scores.mean(axis=1)
+    
+    # Calculate the score for the input row
+    # Since the row has '?', we must infer its performance based on its non-goal inputs.
+    # We use the average composite score of rows that share the same categorical inputs.
+    input_cols = [c for c in header if c not in goal_cols]
+    
+    # Find rows with matching categorical/numeric inputs
+    match_mask = pd.Series(True, index=df.index)
+    for col in input_cols:
+        val = row[header.index(col)]
+        if val != '?':
+            match_mask &= (df[col] == val)
+    
+    matches = df[match_mask]
+    if not matches.empty:
+        row_score = matches['composite'].mean()
+    else:
+        row_score = df['composite'].mean()
+        
+    # Calculate percentile (fraction of rows that this row is better than)
+    p = (df['composite'] < row_score).mean()
+    
+    reason = f"This team's arrangement ranks in the {p:.0%} percentile because its performance metrics across {len(goal_cols)} key indicators outperform the majority of other recorded team configurations."
+    
+    return (p, reason)
+
+if __name__ == "__main__":
+    df = pd.read_csv('WA_Fn-UseC_-HR-Employee-Attrition.train.csv')
+    header = df.columns.tolist()
+    rows = df.values.tolist()
+    
+    # Test with a sample row (the first one)
+    sample_row = rows[0].copy()
+    # Mask the goals
+    goal_indices = [i for i, col in enumerate(header) if col.endswith('+') or col.endswith('-')]
+    for idx in goal_indices:
+        sample_row[idx] = "?"
+        
+    p, reason = justify(header, rows, sample_row)
+    
+    print(f"Rank: {p:.2f}")
+    print(f"Justification: {reason}")
+    
+    exit(0)
+
+
+--- step07.py ---
+import pandas as pd
+import numpy as np
+
+def choose(header, rows, label):
+    """
+    Finds the best working arrangement by sampling 50 rows.
+    We use a simple strategy: sample 50 random rows, query their true goals,
+    and identify the one with the highest composite score.
+    """
+    goal_cols = [i for i, c in enumerate(header) if c.endswith('+') or c.endswith('-')]
+    
+    # Randomly select 50 indices to label
+    np.random.seed(42)
+    indices_to_sample = np.random.choice(len(rows), size=min(50, len(rows)), replace=False)
+    
+    best_idx = -1
+    best_score = -float('inf')
+    
+    # We need to normalize goals to compare them. 
+    # Since we only have 50 samples, we use the min/max of the sampled data.
+    sampled_data = []
+    for idx in indices_to_sample:
+        goals = label(idx)
+        sampled_data.append(goals)
+    
+    sampled_goals = np.array(sampled_data)
+    
+    # Normalize: for '+', higher is better; for '-', lower is better.
+    # We'll use (val - min) / (max - min) for '+' and (max - val) / (max - min) for '-'
+    normalized_scores = np.zeros(sampled_goals.shape)
+    for i, col_idx in enumerate(goal_cols):
+        col_name = header[col_idx]
+        col_vals = sampled_goals[:, i]
+        col_min, col_max = col_vals.min(), col_vals.max()
+        diff = col_max - col_min if col_max != col_min else 1.0
+        
+        if col_name.endswith('+'):
+            normalized_scores[:, i] = (col_vals - col_min) / diff
+        else:
+            normalized_scores[:, i] = (col_max - col_vals) / diff
+            
+    # Calculate composite score (sum of normalized goals)
+    total_scores = normalized_scores.sum(axis=1)
+    
+    # Find the index of the best row
+    best_pos = np.argmax(total_scores)
+    return indices_to_sample[best_pos]
+
+if __name__ == "__main__":
+    df = pd.read_csv('WA_Fn-UseC_-HR-Employee-Attrition.train.csv')
+    header = df.columns.tolist()
+    rows = df.values.tolist()
+    
+    # Define the label function for the test harness
+    goal_indices = [i for i, c in enumerate(header) if c.endswith('+') or c.endswith('-')]
+    
+    def label(i):
+        return [float(rows[i][idx]) for idx in goal_indices]
+    
+    # Mask the rows
+    masked_rows = []
+    for row in rows:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_rows.append(new_row)
+        
+    best_idx = choose(header, masked_rows, label)
+    
+    print("Analysis complete.")
+    print(f"The best working arrangement found among the 50 sampled staff is at row index {best_idx}.")
+    print("This row was identified by maximizing the composite score of tenure-related goals.")
+    exit(0)
+
+
+--- step08.py ---
+import pandas as pd
+import numpy as np
+
+def fix(header, row, levers):
+    """
+    Recommends changes to a 'bad' row to improve its goal metrics.
+    We simulate the impact of changing levers by picking the value that 
+    maximizes the average of the goal columns (normalized).
+    """
+    goal_cols = [c for c in header if c.endswith('+') or c.endswith('-')]
+    row_dict = dict(zip(header, row))
+    
+    # We need a reference to understand what 'good' looks like.
+    # Since we don't have the full dataset passed in, we use the global context
+    # provided by the main block or assume a simple heuristic:
+    # For '+', we want higher values. For '-', we want lower values.
+    
+    recommendations = {}
+    
+    for col, allowed in levers.items():
+        if isinstance(allowed, list):  # Symbolic
+            # Pick a value that is not the current one
+            current = row_dict[col]
+            options = [v for v in allowed if v != current]
+            if options:
+                recommendations[col] = options[0]
+        else:  # Numeric (low, high)
+            # Move towards the 'better' direction
+            low, high = allowed
+            if col.endswith('+'):
+                recommendations[col] = high
+            else:
+                recommendations[col] = low
+                
+    return recommendations
+
+if __name__ == "__main__":
+    df = pd.read_csv('WA_Fn-UseC_-HR-Employee-Attrition.train.csv')
+    header = df.columns.tolist()
+    rows = df.values.tolist()
+    
+    # Define levers based on customer request
+    levers = {
+        'businessTravel': ['Non-Travel', 'Travel_Rarely', 'Travel_Frequently'],
+        'overTime': ['Yes', 'No'],
+        'TrainingTimesLastYear': (0, 6),
+        'PercentSalaryHike': (11, 25),
+        'StockOptionLevel': (0, 3)
+    }
+    
+    # Identify a 'bad' row (e.g., low tenure)
+    # We'll pick the row with the minimum YearsAtCompany+
+    idx = df['YearsAtCompany+'].idxmin()
+    bad_row = rows[idx]
+    
+    recommendations = fix(header, bad_row, levers)
+    
+    print("Analysis: Recommended changes for staff retention")
+    print("-" * 50)
+    print(f"Original row index: {idx}")
+    print("Recommended adjustments:")
+    for col, val in recommendations.items():
+        print(f"  Change '{col}' to: {val}")
+    
+    print("-" * 50)
+    print("These changes are suggested to improve tenure and reduce attrition risk.")
+    exit(0)
+
+
+--- step09.py ---
+import pandas as pd
+import numpy as np
+
+def spot(header, rows):
+    """
+    Identifies rows that look 'wrong' by detecting outliers in numeric columns.
+    We use the Interquartile Range (IQR) method to find rows with values 
+    that are statistically improbable given the distribution of the data.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    
+    # Identify numeric columns (those with uppercase first letter)
+    # Exclude goal columns to focus on input data integrity
+    numeric_cols = [c for c in header if c[0].isupper() and not (c.endswith('+') or c.endswith('-'))]
+    
+    suspicion_scores = np.zeros(len(df))
+    
+    for col in numeric_cols:
+        series = pd.to_numeric(df[col], errors='coerce')
+        q1 = series.quantile(0.25)
+        q3 = series.quantile(0.75)
+        iqr = q3 - q1
+        
+        # Define bounds for outliers
+        lower_bound = q1 - 3 * iqr
+        upper_bound = q3 + 3 * iqr
+        
+        # Add to suspicion score if value is outside the 3*IQR range
+        outliers = (series < lower_bound) | (series > upper_bound)
+        suspicion_scores += outliers.astype(int)
+        
+    # Get indices of rows with at least one outlier, sorted by suspicion score
+    indices = np.where(suspicion_scores > 0)[0]
+    sorted_indices = sorted(indices, key=lambda i: suspicion_scores[i], reverse=True)
+    
+    return sorted_indices
+
+if __name__ == "__main__":
+    # Load the data
+    df = pd.read_csv('WA_Fn-UseC_-HR-Employee-Attrition.train.csv')
+    header = df.columns.tolist()
+    rows = df.values.tolist()
+    
+    # Identify suspicious rows
+    suspicious_indices = spot(header, rows)
+    
+    print("Data Integrity Analysis: Identifying potentially erroneous entries")
+    print("-" * 65)
+    
+    if not suspicious_indices:
+        print("No suspicious data entries found.")
+    else:
+        print(f"Found {len(suspicious_indices)} rows with potential input errors.")
+        print("Top 5 most suspicious rows (by index):")
+        for idx in suspicious_indices[:5]:
+            print(f"  Row {idx}: Contains extreme outliers in numeric input fields.")
+            
+    print("-" * 65)
+    print("Note: These rows were flagged due to values significantly outside the expected range.")
+    exit(0)
+
+
+The customer asks:
+
+  Three advisers have three theories about what keeps people. Give each the same 50 interviews. Who is right?
+
+Write step10.py to answer that ask on this data.
+
+A test harness will import your file and call this function, so you must define it exactly:
+
+def race(header, rows, label)
+  Returns a dict.   Every goal cell in `rows` is "?". label(i) returns the true goal values of rows[i]; at most 50 different rows may be labelled in total, across all strategies. Compare at least three ways of searching for the best row; one of them must pick rows at random and be named "random". Return {"winner": name of the best strategy, "row": position of the best row that strategy found, "tried": list of all strategy names}.
+
+Conventions: `header` is the list of column names. `rows` is a list of rows; each row is a list of cells in header order, floats for numeric columns and strings for symbolic ones. A cell shown as "?" is hidden from you. A row is better when its goals are closer to their best (low for names ending in -, high for names ending in +).
+
+Keep everything that prints or reads the csv file under `if __name__ == "__main__":` so that importing the file prints nothing. Plain built-in types are all you need: do not import anything from `typing`.
+
+Running `python step10.py` must load the csv, call your function, print a short answer a customer could read, and exit with status 0. Reply with the complete file in one ```python fenced block and nothing else.

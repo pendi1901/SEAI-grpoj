@@ -1,0 +1,53 @@
+import csv
+import pandas as pd
+import numpy as np
+from step01 import remember
+
+def flow(header, row, seen):
+    """
+    Implements a simple threshold-based decision strategy.
+    We accept a row if it is better than the median of the 'seen' rows
+    based on the aggregate goal score.
+    """
+    if not seen:
+        return True
+    
+    # Identify goal columns
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    goal_types = ['min' if header[i].endswith('-') else 'max' for i in goal_indices]
+    
+    def get_score(r):
+        # Normalize goal values relative to the current 'seen' set
+        # If seen is small, we use a simple heuristic
+        vals = [float(r[i]) for i in goal_indices]
+        scores = []
+        for i, val in enumerate(vals):
+            # Simple heuristic: if min, lower is better; if max, higher is better
+            # We treat the current row's value as a score component
+            scores.append(val if goal_types[i] == 'min' else -val)
+        return sum(scores)
+
+    current_score = get_score(row)
+    seen_scores = [get_score(s) for s in seen]
+    
+    # Accept if better than the median of what we have seen so far
+    return current_score <= np.median(seen_scores)
+
+if __name__ == "__main__":
+    filename = 'pom3a.train.csv'
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = list(reader)
+
+    seen = []
+    accepted_count = 0
+    # Process first 100 rows as a simulation
+    for i, row in enumerate(rows[:100]):
+        if flow(header, row, seen):
+            accepted_count += 1
+        seen.append(row)
+
+    print("Customer Inquiry: Decision process for incoming proposals.")
+    print(f"Processed 100 proposals. Accepted {accepted_count} setups based on real-time evaluation.")
+    print("Strategy: Accepted proposals that outperformed the median of previously seen setups.")

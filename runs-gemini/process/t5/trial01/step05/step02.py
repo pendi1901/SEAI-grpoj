@@ -1,0 +1,64 @@
+import ezr
+import random
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column for each row in test.
+    Uses the tree-based ranker from ezr to find the leaf node
+    and returns the mean of the first goal column in that leaf.
+    """
+    # Create table from training data
+    data = [header] + train
+    tbl = ezr.Tbl(data)
+    
+    # Build a tree on the training data
+    node = ezr.tree(tbl, tbl.rows)
+    
+    # Identify the index of the first goal column
+    # The first goal column is the first column in tbl.y
+    first_goal_at = tbl.y[0].at
+    
+    results = []
+    for row in test:
+        # Walk the tree to find the leaf for this test row
+        leaf_node = ezr.leaf(node, row)
+        
+        # Calculate the mean of the first goal column in this leaf
+        vals = [r[first_goal_at] for r in leaf_node.rows]
+        mean_val = sum(vals) / len(vals)
+        results.append(mean_val)
+        
+    return results
+
+if __name__ == "__main__":
+    # Load the data
+    filename = "pom3a.train.csv"
+    rows_iter = ezr.csv(filename)
+    header = next(rows_iter)
+    all_rows = list(rows_iter)
+    
+    # Split data: 80% train, 20% test
+    random.seed(1234567891)
+    random.shuffle(all_rows)
+    split = int(len(all_rows) * 0.8)
+    train = all_rows[:split]
+    test_full = all_rows[split:]
+    
+    # Prepare test rows by masking the goal columns (last 3)
+    test_masked = []
+    for row in test_full:
+        masked_row = row[:]
+        for i in range(-3, 0):
+            masked_row[i] = "?"
+        test_masked.append(masked_row)
+        
+    # Get estimates
+    estimates = guess(header, train, test_masked)
+    
+    # Print summary for the customer
+    print("Estimation complete.")
+    print(f"Estimated Cost- for the first 10 test cases:")
+    for i in range(min(10, len(estimates))):
+        print(f"Case {i+1}: {estimates[i]:.4f}")
+        
+    exit(0)

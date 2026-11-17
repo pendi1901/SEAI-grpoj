@@ -1,0 +1,55 @@
+import csv
+import step01
+
+def certify(xs, ys):
+    """
+    Returns True if the means of two lists are statistically similar 
+    (within 10% of the range), False otherwise.
+    """
+    if not xs or not ys:
+        return True
+    
+    mean_x = sum(xs) / len(xs)
+    mean_y = sum(ys) / len(ys)
+    
+    combined = xs + ys
+    rng = max(combined) - min(combined)
+    
+    # If the difference between means is less than 10% of the total range,
+    # we consider the difference to be noise.
+    return abs(mean_x - mean_y) < (0.1 * rng)
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.train.csv"
+    data = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for val in row:
+                try:
+                    processed_row.append(float(val))
+                except ValueError:
+                    processed_row.append(val)
+            data.append(processed_row)
+
+    # Identify N_estimators column (index 3)
+    n_est_idx = header.index("N_estimators")
+    
+    # Split data into "big" (above median) and "small" (below or equal to median)
+    n_vals = [row[n_est_idx] for row in data]
+    median_n = sorted(n_vals)[len(n_vals) // 2]
+    
+    # We use the first goal column (MRE-) for accuracy
+    goal_idx = 0
+    big_setups = [row[goal_idx] for row in data if row[n_est_idx] > median_n]
+    small_setups = [row[goal_idx] for row in data if row[n_est_idx] <= median_n]
+    
+    is_noise = certify(big_setups, small_setups)
+    
+    print("Analysis of setup size vs accuracy:")
+    if is_noise:
+        print("The difference in accuracy between big and small setups is likely just noise.")
+    else:
+        print("There is a statistically significant difference in accuracy between big and small setups.")

@@ -1,0 +1,57 @@
+import ezr
+
+def blame(header, rows):
+    """
+    Identify input columns that best explain why the worst rows are bad.
+    We define 'worst' as rows with the highest ydist (distance from ideal goals).
+    We then compare the distribution of input values in the worst rows
+    against the rest of the data to find significant differences.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate ydist for all rows
+    scored = []
+    for row in rows:
+        scored.append((ezr.ydist(tbl, row), row))
+    
+    # Sort by ydist descending (worst first)
+    scored.sort(key=lambda x: x[0], reverse=True)
+    
+    # Split into worst 25% and the rest
+    n_worst = len(scored) // 4
+    worst_rows = [x[1] for x in scored[:n_worst]]
+    rest_rows = [x[1] for x in scored[n_worst:]]
+    
+    # Find input columns where the distribution in 'worst' is significantly
+    # different from 'rest' using the statistical tests in ezr.
+    explanations = []
+    for col in tbl.x:
+        # Collect values for this column
+        worst_vals = [r[col.at] for r in worst_rows if r[col.at] != "?"]
+        rest_vals = [r[col.at] for r in rest_rows if r[col.at] != "?"]
+        
+        if not worst_vals or not rest_vals:
+            continue
+            
+        # If the distributions are not the same, this column is a candidate
+        if not ezr.same(sorted(worst_vals), sorted(rest_vals)):
+            explanations.append(col.txt)
+            
+    return explanations
+
+if __name__ == "__main__":
+    data = list(ezr.csv("WA_Fn-UseC_-HR-Employee-Attrition.train.csv"))
+    header = data[0]
+    rows = data[1:]
+    
+    factors = blame(header, rows)
+    
+    print("Analysis of factors contributing to short employee stays:")
+    if factors:
+        print("The following input factors significantly correlate with poor retention:")
+        for f in factors:
+            print(f" - {f}")
+    else:
+        print("No single input factor was found to be statistically significant.")
+    
+    exit(0)

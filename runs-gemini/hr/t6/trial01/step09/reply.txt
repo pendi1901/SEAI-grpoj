@@ -1,0 +1,48 @@
+```python
+import ezr
+import random
+
+def spot(header, rows):
+    """
+    Find rows that look wrong. We define 'wrong' as rows that are 
+    outliers in the input space (x-columns) relative to the rest of the data.
+    We use the distance to the nearest centroid (mids) as a measure of 
+    how 'unusual' a row is.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate the centroid of the entire dataset
+    # ezr.mids(tbl) computes the middle of every column
+    centroids = ezr.mids(tbl)
+    
+    # Calculate xdist for every row from the global centroid
+    # Rows with high xdist are the most "unusual" or "suspicious"
+    suspicious = []
+    for i, row in enumerate(rows):
+        dist = ezr.xdist(tbl, row, centroids)
+        suspicious.append((dist, i))
+    
+    # Sort by distance descending (most suspicious first)
+    suspicious.sort(key=lambda x: x[0], reverse=True)
+    
+    # Return the indices of the top 1% most suspicious rows
+    limit = max(1, int(len(rows) * 0.01))
+    return [item[1] for item in suspicious[:limit]]
+
+if __name__ == "__main__":
+    # Load the data
+    data = list(ezr.csv("WA_Fn-UseC_-HR-Employee-Attrition.train.csv"))
+    header = data[0]
+    rows = data[1:]
+    
+    # Identify suspicious rows
+    indices = spot(header, rows)
+    
+    print(f"Analyzed {len(rows)} employee records.")
+    print(f"Identified {len(indices)} records that appear suspicious (outliers in input space).")
+    print("\nTop 3 most suspicious row indices:")
+    for idx in indices[:3]:
+        print(f" - Row index {idx} (Data: {rows[idx][:5]}...)")
+    
+    exit(0)
+```

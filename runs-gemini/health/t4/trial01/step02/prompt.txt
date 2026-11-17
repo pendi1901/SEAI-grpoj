@@ -1,0 +1,98 @@
+You are writing one Python file, step02.py.
+
+The data is the csv file Health-ClosedIssues0000.train.csv in the current directory. Column names starting in upper case are numeric, lower case are symbolic. A name ending in - is a goal to minimise, in + a goal to maximise; all other columns are inputs. It has 8000 data rows after the header. Any count the customer quotes describes their full records, not this file: never hard-code a row count, read the file to the end. Its first lines:
+
+MRE-,ACC+,PRED40+,N_estimators,criterion,Min_sample_leaves,Min_impurity_decrease,Max_depth
+0.7771723122238585,0.4546619673181672,0,10,squared_error,17,7.75,11
+0.42238586156111924,0.6920858699134893,0.5714285714285714,150,absolute_error,3,4.25,10
+0.8817378497790869,0.40820249919897467,0,110,absolute_error,18,4,14
+
+You may use scikit-learn, numpy and pandas.
+
+These files, written earlier, are in the same directory:
+
+--- step01.py ---
+import csv
+import pandas as pd
+import numpy as np
+
+def remember(header, rows):
+    """
+    Identifies the best rows based on multi-objective optimization.
+    Goals ending in '-' are minimized, '+' are maximized.
+    We normalize numeric columns and use a simple weighted sum (or Pareto-like approach)
+    to find the most 'trustworthy' setups.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    
+    # Identify goal columns
+    min_cols = [c for c in header if c.endswith('-')]
+    max_cols = [c for c in header if c.endswith('+')]
+    
+    # Convert numeric columns to float, handle potential errors
+    for col in min_cols + max_cols:
+        df[col] = pd.to_numeric(df[col], errors='coerce')
+    
+    # Normalize goals to [0, 1] range
+    # For min_cols: lower is better (1 - normalized)
+    # For max_cols: higher is better (normalized)
+    scores = pd.DataFrame(index=df.index)
+    
+    for col in min_cols:
+        col_min, col_max = df[col].min(), df[col].max()
+        scores[col] = (col_max - df[col]) / (col_max - col_min + 1e-9)
+        
+    for col in max_cols:
+        col_min, col_max = df[col].min(), df[col].max()
+        scores[col] = (df[col] - col_min) / (col_max - col_min + 1e-9)
+        
+    # Aggregate scores
+    df['total_score'] = scores.sum(axis=1)
+    
+    # Select top 5% (or at least 1)
+    n_select = max(1, int(len(df) * 0.05))
+    top_indices = df['total_score'].nlargest(n_select).index.tolist()
+    
+    return top_indices
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.train.csv"
+    data = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            # Convert numeric strings to floats
+            processed_row = []
+            for i, val in enumerate(row):
+                try:
+                    processed_row.append(float(val))
+                except ValueError:
+                    processed_row.append(val)
+            data.append(processed_row)
+    
+    best_indices = remember(header, data)
+    
+    print(f"Analysis complete. Found {len(best_indices)} highly trustworthy setups.")
+    print("Top performing row indices:", best_indices[:10], "..." if len(best_indices) > 10 else "")
+    print("\nThese setups represent the best balance of minimizing error and maximizing performance metrics.")
+
+
+Reuse the earlier files wherever you can: import from them rather than rewriting. Write as little new code as possible. Do not edit the earlier files.
+
+The customer asks:
+
+  Before I spend an hour running a setup, tell me roughly how far off its forecasts will be.
+
+Write step02.py to answer that ask on this data.
+
+A test harness will import your file and call this function, so you must define it exactly:
+
+def guess(header, train, test)
+  Returns a list of floats.   `train` rows are complete. In `test` rows every goal cell is "?". Return one number per test row: your estimate of the FIRST goal column for that row.
+
+Conventions: `header` is the list of column names. `rows` is a list of rows; each row is a list of cells in header order, floats for numeric columns and strings for symbolic ones. A cell shown as "?" is hidden from you. A row is better when its goals are closer to their best (low for names ending in -, high for names ending in +).
+
+Keep everything that prints or reads the csv file under `if __name__ == "__main__":` so that importing the file prints nothing. Plain built-in types are all you need: do not import anything from `typing`.
+
+Running `python step02.py` must load the csv, call your function, print a short answer a customer could read, and exit with status 0. Reply with the complete file in one ```python fenced block and nothing else.

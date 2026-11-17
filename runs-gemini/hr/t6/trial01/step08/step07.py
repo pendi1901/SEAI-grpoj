@@ -1,0 +1,64 @@
+import ezr
+import random
+
+def choose(header, rows, label):
+    """
+    Find the best working arrangement using a budget of 50 labels.
+    We use the 'acquire' strategy from ezr to intelligently sample the space.
+    """
+    # Create a table structure
+    tbl = ezr.Tbl([header] + rows)
+    
+    # The acquire function in ezr.py performs active learning to find
+    # the best rows within a budget (the.Stop).
+    # We pass a wrapper to the label function to satisfy the interface.
+    def oracle_wrapper(row):
+        # Find the index of this row in the original rows list to call label(i)
+        # Since rows are passed by reference, we can find the index
+        idx = rows.index(row)
+        true_goals = label(idx)
+        # Update the row with the true values
+        for i, h in enumerate(header):
+            if h.endswith(("+", "-")):
+                row[i] = true_goals[i]
+        return row
+
+    # Set the budget
+    ezr.the.Stop = 50
+    
+    # Acquire the best rows
+    best_rows = ezr.acquire(tbl, cap=50, label=oracle_wrapper)
+    
+    # The best row is the one with the lowest ydist
+    best_row = min(best_rows, key=lambda r: ezr.ydist(tbl, r))
+    
+    # Return the index of the best row found
+    return rows.index(best_row)
+
+if __name__ == "__main__":
+    # Load the data
+    data = list(ezr.csv("WA_Fn-UseC_-HR-Employee-Attrition.train.csv"))
+    header = data[0]
+    rows = data[1:]
+    
+    # Create a copy with masked goals for the simulation
+    masked_rows = []
+    goal_indices = [i for i, h in enumerate(header) if h.endswith(("+", "-"))]
+    
+    for row in rows:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_rows.append(new_row)
+        
+    # Define the label function for the simulation
+    def label(i):
+        return [rows[i][idx] for idx in goal_indices]
+    
+    # Run the selection
+    best_idx = choose(header, masked_rows, label)
+    
+    print(f"Analyzed {len(rows)} records with a budget of 50 labels.")
+    print(f"The best working arrangement found is at index {best_idx}.")
+    print(f"Row details: {rows[best_idx]}")
+    exit(0)
