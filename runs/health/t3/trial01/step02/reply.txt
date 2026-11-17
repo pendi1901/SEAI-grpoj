@@ -1,0 +1,50 @@
+```python
+import pandas as pd
+from sklearn.tree import DecisionTreeRegressor
+
+
+def guess(header, train, test):
+    goals = ["MRE-", "ACC+", "PRED40+"]
+    goal_cols = [c for c in header if c in goals]
+    input_cols = [c for c in header if c not in goals]
+
+    X_train = []
+    y_train = []
+    for row in train:
+        x = [float(row[header.index(c)]) for c in input_cols]
+        y = float(row[header.index(goal_cols[0])])
+        X_train.append(x)
+        y_train.append(y)
+
+    X_test = []
+    for row in test:
+        x = [float(row[header.index(c)]) for c in input_cols]
+        X_test.append(x)
+
+    model = DecisionTreeRegressor(max_depth=5, random_state=42)
+    model.fit(X_train, y_train)
+    return model.predict(X_test).tolist()
+
+
+if __name__ == "__main__":
+    df = pd.read_csv("Health-ClosedIssues0000.train.csv")
+    header = list(df.columns)
+    rows = [list(r) for r in df.values]
+
+    train_rows = []
+    test_rows = []
+    for r in rows:
+        new_row = list(r)
+        for i, col in enumerate(header):
+            if col in goals:
+                new_row[i] = "?"
+        if len(train_rows) < 100:
+            train_rows.append(new_row)
+        else:
+            test_rows.append(new_row)
+
+    preds = guess(header, train_rows, test_rows)
+    print(f"Predicted MRE- for {len(preds)} setups:")
+    for p in preds:
+        print(f"  {p:.4f}")
+```

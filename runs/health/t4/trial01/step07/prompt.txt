@@ -1,0 +1,484 @@
+You are writing one Python file, step07.py.
+
+The data is the csv file Health-ClosedIssues0000.train.csv in the current directory. Column names starting in upper case are numeric, lower case are symbolic. A name ending in - is a goal to minimise, in + a goal to maximise; all other columns are inputs. Its first lines:
+
+MRE-,ACC+,PRED40+,N_estimators,criterion,Min_sample_leaves,Min_impurity_decrease,Max_depth
+0.7771723122238585,0.4546619673181672,0,10,squared_error,17,7.75,11
+0.42238586156111924,0.6920858699134893,0.5714285714285714,150,absolute_error,3,4.25,10
+0.8817378497790869,0.40820249919897467,0,110,absolute_error,18,4,14
+
+You may use scikit-learn, numpy and pandas.
+
+These files, written earlier, are in the same directory:
+
+--- step01.py ---
+import csv
+import pandas as pd
+import numpy as np
+
+
+def remember(header, rows):
+    goals = [h for h in header if h.endswith('-') or h.endswith('+')]
+    n = len(rows)
+    scores = np.zeros(n)
+
+    for col in goals:
+        vals = []
+        for row in rows:
+            v = float(row[header.index(col)])
+            vals.append(v)
+        arr = np.array(vals)
+        if arr.max() == arr.min():
+            scores += 0.5
+        else:
+            normed = (arr - arr.min()) / (arr.max() - arr.min())
+            if col.endswith('-'):
+                scores += (1.0 - normed)
+            else:
+                scores += normed
+
+    threshold_idx = max(1, int(n * 0.05))
+    sorted_indices = np.argsort(scores)[::-1]
+    return sorted_indices[:threshold_idx].tolist()
+
+
+if __name__ == "__main__":
+    df = pd.read_csv("Health-ClosedIssues0000.train.csv")
+    header = list(df.columns)
+    rows = [list(row) for row in df.values]
+
+    best_positions = remember(header, rows)
+    print(f"Best {len(best_positions)} out of {len(rows)} setups:")
+    for pos in best_positions:
+        print(
+            f"  Row {pos}: MRE={df.iloc[pos]['MRE-']:.4f}, "
+            f"ACC={df.iloc[pos]['ACC+']:.4f}, PRED40={df.iloc[pos]['PRED40+']:.4f}"
+        )
+
+
+--- step02.py ---
+import csv
+import pandas as pd
+import numpy as np
+
+
+def remember(header, rows):
+    goals = [h for h in header if h.endswith('-') or h.endswith('+')]
+    n = len(rows)
+    scores = np.zeros(n)
+
+    for col in goals:
+        vals = []
+        for row in rows:
+            v = float(row[header.index(col)])
+            vals.append(v)
+        arr = np.array(vals)
+        if arr.max() == arr.min():
+            scores += 0.5
+        else:
+            normed = (arr - arr.min()) / (arr.max() - arr.min())
+            if col.endswith('-'):
+                scores += (1.0 - normed)
+            else:
+                scores += normed
+
+    threshold_idx = max(1, int(n * 0.05))
+    sorted_indices = np.argsort(scores)[::-1]
+    return sorted_indices[:threshold_idx].tolist()
+
+
+if __name__ == "__main__":
+    df = pd.read_csv("Health-ClosedIssues0000.train.csv")
+    header = list(df.columns)
+    rows = [list(row) for row in df.values]
+
+    best_positions = remember(header, rows)
+    print(f"Best {len(best_positions)} out of {len(rows)} setups:")
+    for pos in best_positions:
+        print(
+            f"  Row {pos}: MRE={df.iloc[pos]['MRE-']:.4f}, "
+            f"ACC={df.iloc[pos]['ACC+']:.4f}, PRED40={df.iloc[pos]['PRED40+']:.4f}"
+        )
+
+
+def guess(header, train, test):
+    goals = [h for h in header if h.endswith('-') or h.endswith('+')]
+
+    # Build a lookup: for each goal column, collect the values from training rows.
+    # We will use simple nearest-neighbor prediction based on symbolic features only.
+    numeric_cols = [c for c in header if c.isupper()]
+    symbolic_cols = [c for c in header if not c.isupper() and not c.endswith('-') and not c.endswith('+')]
+
+    def encode_row(row):
+        # Return a tuple of (numeric_vals, symbolic_vals) for matching.
+        return (tuple(float(row[header.index(c)]) for c in numeric_cols),
+                tuple(row[header.index(c)] for c in symbolic_cols))
+
+    train_enc = [encode_row(r) for r in train]
+    test_enc = [encode_row(r) for r in test]
+
+    # For each goal column, compute the mean value across training rows.
+    n_train = len(train)
+    goal_means = {}
+    for col in goals:
+        vals = []
+        for row in train:
+            v = float(row[header.index(col)])
+            vals.append(v)
+        goal_means[col] = np.mean(vals)
+
+    # Simple prediction: use the training mean as a baseline.
+    # To improve, we can try to find similar training rows based on symbolic features.
+    def predict_for_row(test_row):
+        test_enc_tuple = encode_row(test_row)
+        best_match_idx = None
+        best_dist = float('inf')
+
+        for i in range(n_train):
+            train_enc_tuple = train_enc[i]
+            # Compare only symbolic columns (numeric may vary, but we use them too for distance).
+            dist = 0.0
+            for c in header:
+                if c.endswith('-') or c.endswith('+'):
+                    continue
+                tv = test_enc_tuple[header.index(c)]
+                trv = train_enc_tuple[header.index(c)]
+                # For symbolic, use categorical distance (0 or 1).
+                if isinstance(tv, str) and isinstance(trv, str):
+                    dist += 0.0 if tv == trv else 1.0
+                elif isinstance(tv, float) and isinstance(trv, float):
+                    dist += abs(tv - trv) / 100.0  # normalize roughly
+
+            if dist < best_dist:
+                best_dist = dist
+                best_match_idx = i
+
+        # Return the goal values from the best matching training row.
+        result = []
+        for col in goals:
+            v = float(test_row[header.index(col)])
+            return [v]  # We don't know the true value, so we return a placeholder.
+            # Actually, we should predict based on the matched row.
+
+    # Let's redo this properly.
+    def predict_goals(test_row):
+        test_enc_tuple = encode_row(test_row)
+        best_match_idx = None
+        best_dist = float('inf')
+
+        for i in range(n_train):
+            train_enc_tuple = train_enc[i]
+            dist = 0.0
+            for c in header:
+                if c.endswith('-') or c.endswith('+'):
+                    continue
+                tv = test_enc_tuple[header.index(c)]
+                trv = train_enc_tuple[header.index(c)]
+                if isinstance(tv, str) and isinstance(trv, str):
+                    dist += 0.0 if tv == trv else 1.0
+                elif isinstance(tv, float) and isinstance(trv, float):
+                    dist += abs(tv - trv) / 100.0
+
+            if dist < best_dist:
+                best_dist = dist
+                best_match_idx = i
+
+        # Return the goal values from the best matching training row.
+        result = []
+        for col in goals:
+            v = float(train[best_match_idx][header.index(col)])
+            result.append(v)
+        return result
+
+    predictions = [predict_goals(r) for r in test]
+    return predictions
+
+
+if __name__ == "__main__":
+    df = pd.read_csv("Health-ClosedIssues0000.train.csv")
+    header = list(df.columns)
+    rows = [list(row) for row in df.values]
+
+    # Create a dummy test row with "?" for goals.
+    test_row = ["?" for _ in range(len(header))]
+    predictions = guess(header, rows, [test_row])
+    print(f"Predicted MRE: {predictions[0][0]:.4f}, ACC: {predictions[0][1]:.4f}, PRED40: {predictions[0][2]:.4f}")
+
+
+--- step03.py ---
+import sys
+sys.path.insert(0, '.')
+from step01 import remember
+
+
+def certify(xs, ys):
+    """Return True if xs and ys are the same apart from noise."""
+    n = min(len(xs), len(ys))
+    if n == 0:
+        return False
+
+    diffs = [abs(xs[i] - ys[i]) for i in range(n)]
+    max_diff = max(diffs)
+
+    # Scale-dependent tolerance with absolute floor
+    avg_val = (sum(xs[:n]) + sum(ys[:n])) / (2 * n)
+    if abs(avg_val) < 1e-6:
+        return max_diff < 0.05
+    rel_tol = 0.05 * abs(avg_val)
+    return max_diff < rel_tol
+
+
+if __name__ == "__main__":
+    import pandas as pd
+    import numpy as np
+
+    df = pd.read_csv("Health-ClosedIssues0000.train.csv")
+    header = list(df.columns)
+    rows = [list(row) for row in df.values]
+
+    goals = ['MRE-', 'ACC+', 'PRED40+']
+    n_est_col_idx = header.index('N_estimators')
+
+    all_n_est = [float(r[n_est_col_idx]) for r in rows]
+    med = np.median(all_n_est)
+
+    small_rows = [r for r in rows if float(r[n_est_col_idx]) <= med]
+    big_rows = [r for r in rows if float(r[n_est_col_idx]) > med]
+
+    def mean_goals(rows):
+        result = []
+        for col in goals:
+            vals = [float(row[header.index(col)]) for row in rows]
+            result.append(np.mean(vals))
+        return result
+
+    small_means = mean_goals(small_rows)
+    big_means = mean_goals(big_rows)
+
+    answer = certify(big_means, small_means)
+    print(f"Big vs Small setups: {'same (noise)' if answer else 'different'}")
+
+
+--- step04.py ---
+from step01 import remember
+
+
+def flow(header, row, seen):
+    """Return True if the current row is good enough to ship."""
+    pos = len(seen)  # rows arrive in order; position = how many we've already seen
+    return pos in GOOD_POSITIONS
+
+
+if __name__ == "__main__":
+    import pandas as pd
+
+    df = pd.read_csv("Health-ClosedIssues0000.train.csv")
+    header = list(df.columns)
+    rows = [list(row) for row in df.values]
+
+    good_positions = set(remember(header, rows))  # top positions from step01 scoring
+
+    print(f"Pre-identified {len(good_positions)} good setup positions out of {len(rows)}.")
+
+    for i, row in enumerate(rows):
+        if flow(header, row, list(rows[:i])):
+            print(
+                f"Shipped at position {i}: "
+                f"MRE={row[header.index('MRE-')]:.4f}, "
+                f"ACC={row[header.index('ACC+')]:.4f}, "
+                f"PRED40={row[header.index('PRED40+')]:.4f}"
+            )
+            break
+    else:
+        print("No row was good enough to ship.")
+
+
+--- step05.py ---
+import sys
+sys.path.insert(0, '.')
+from step01 import remember
+
+
+def blame(header, rows):
+    goals = [h for h in header if h.endswith('-') or h.endswith('+')]
+    n = len(rows)
+
+    # Score every row with the same normalisation as remember().
+    scores = np.zeros(n)
+    for col in goals:
+        vals = []
+        for row in rows:
+            v = float(row[header.index(col)])
+            vals.append(v)
+        arr = np.array(vals)
+        if arr.max() == arr.min():
+            scores += 0.5
+        else:
+            normed = (arr - arr.min()) / (arr.max() - arr.min())
+            if col.endswith('-'):
+                scores += (1.0 - normed)
+            else:
+                scores += normed
+
+    sorted_indices = np.argsort(scores)[::-1]
+    top_k = max(1, int(n * 0.05))
+    good_set = set(sorted_indices[:top_k].tolist())
+    bad_set = set(sorted_indices[-top_k:].tolist())
+
+    input_cols = [c for c in header if not c.endswith('-') and not c.endswith('+')]
+
+    blame_vals = []
+    for col in input_cols:
+        good_vals = []
+        bad_vals = []
+        for i, row in enumerate(rows):
+            v = float(row[header.index(col)])
+            if i in good_set:
+                good_vals.append(v)
+            elif i in bad_set:
+                bad_vals.append(v)
+
+        if not good_vals or not bad_vals:
+            blame_vals.append((0.0, col))
+            continue
+
+        g_mean = np.mean(good_vals)
+        b_mean = np.mean(bad_vals)
+        diff = abs(g_mean - b_mean)
+
+        all_vals = [float(row[header.index(col)]) for row in rows]
+        arr_all = np.array(all_vals)
+        col_range = float(arr_all.max() - arr_all.min()) if len(all_vals) > 1 else 1.0
+        norm_diff = diff / col_range if col_range > 0 else 0.0
+
+        blame_vals.append((norm_diff, col))
+
+    blame_vals.sort(key=lambda x: -x[0])
+    return [col for _, col in blame_vals[:3]]
+
+
+if __name__ == "__main__":
+    import pandas as pd
+    import numpy as np
+
+    df = pd.read_csv("Health-ClosedIssues0000.train.csv")
+    header = list(df.columns)
+    rows = [list(row) for row in df.values]
+
+    bad_cols = blame(header, rows)
+    print(f"Blame: {bad_cols}")
+
+
+--- step06.py ---
+import sys
+sys.path.insert(0, '.')
+from step01 import remember
+
+
+def justify(header, rows, row):
+    """Returns (p, reason) where p is fraction of rows that row beats."""
+    
+    goals = [h for h in header if h.endswith('-') or h.endswith('+')]
+    numeric_cols = [c for c in header if c.isupper()]
+    symbolic_cols = [c for c in header if not c.isupper() and not c.endswith('-') and not c.endswith('+')]
+
+    def encode_row(row):
+        return (tuple(float(row[header.index(c)]) for c in numeric_cols),
+                tuple(row[header.index(c)] for c in symbolic_cols))
+
+    # Predict goals for the test row using nearest neighbor on non-goal features.
+    train_enc = [encode_row(r) for r in rows if not any(v == '?' for v in r)]
+    test_enc = encode_row(row)
+
+    best_match_idx = None
+    best_dist = float('inf')
+
+    for i, enc in enumerate(train_enc):
+        dist = 0.0
+        for c in header:
+            if c.endswith('-') or c.endswith('+'):
+                continue
+            tv = test_enc[header.index(c)]
+            trv = enc[header.index(c)]
+            if isinstance(tv, str) and isinstance(trv, str):
+                dist += 0.0 if tv == trv else 1.0
+            elif isinstance(tv, float) and isinstance(trv, float):
+                dist += abs(tv - trv) / 100.0
+
+        if dist < best_dist:
+            best_dist = dist
+            best_match_idx = i
+
+    predicted_goals = []
+    for col in goals:
+        v = float(train_enc[best_match_idx][header.index(col)])
+        predicted_goals.append(v)
+
+    n = len(rows)
+    better_count = 0
+
+    for i, r in enumerate(rows):
+        if any(v == '?' for v in r):
+            continue
+
+        all_better = True
+        for col in goals:
+            actual = float(r[header.index(col)])
+            pred = predicted_goals[goals.index(col)]
+            if col.endswith('-'):
+                # Lower is better (minimize)
+                if pred <= actual:
+                    continue
+                else:
+                    all_better = False
+            else:
+                # Higher is better (maximize)
+                if pred >= actual:
+                    continue
+                else:
+                    all_better = False
+
+        if all_better:
+            better_count += 1
+
+    p = better_count / n
+    reason = f"This setup beats {better_count} out of {n} other setups."
+
+    return (p, reason)
+
+
+if __name__ == "__main__":
+    import pandas as pd
+    df = pd.read_csv("Health-ClosedIssues0000.train.csv")
+    header = list(df.columns)
+    rows = [list(row) for row in df.values]
+
+    test_row_idx = None
+    for i, r in enumerate(rows):
+        if any(v == '?' for v in r):
+            test_row_idx = i
+            break
+
+    if test_row_idx is not None:
+        p, reason = justify(header, rows, rows[test_row_idx])
+        print(f"{p:.4f} - {reason}")
+
+
+Reuse the earlier files wherever you can: import from them rather than rewriting. Write as little new code as possible. Do not edit the earlier files.
+
+The customer asks:
+
+  I have time to try 50 setups. Find me the best one.
+
+Write step07.py to answer that ask on this data.
+
+A test harness will import your file and call this function, so you must define it exactly:
+
+def choose(header, rows, label)
+  Returns an int.   Every goal cell in `rows` is "?". Calling label(i) returns the list of true goal values for rows[i]; you may label at most 50 different rows. Return the position of the best row you found.
+
+Conventions: `header` is the list of column names. `rows` is a list of rows; each row is a list of cells in header order, floats for numeric columns and strings for symbolic ones. A cell shown as "?" is hidden from you. A row is better when its goals are closer to their best (low for names ending in -, high for names ending in +).
+
+Keep everything that prints or reads the csv file under `if __name__ == "__main__":` so that importing the file prints nothing. Plain built-in types are all you need: do not import anything from `typing`.
+
+Running `python step07.py` must load the csv, call your function, print a short answer a customer could read, and exit with status 0. Reply with the complete file in one ```python fenced block and nothing else.

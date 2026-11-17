@@ -1,0 +1,274 @@
+You are writing one Python file, step05.py.
+
+The data is the csv file pom3a.train.csv in the current directory. Column names starting in upper case are numeric, lower case are symbolic. A name ending in - is a goal to minimise, in + a goal to maximise; all other columns are inputs. Its first lines:
+
+Culture,Criticality,Criticality Modifier,Initial Known,Inter-Dependency,Dynamism,Size,Plan,Team Size,Cost-,Score-,Idle-
+0.0398226348789376,0.4187697102690966,0.3161703902572166,0.959348346991444,0.2103972800854883,0.0012522910308919,0.6979456136102667,0.1708306261451138,0.3500716982826897,0.200104493,0.01402719,0.321856287
+0.8178056583175877,0.3082578231712947,0.6206926231796946,0.1199646773715625,0.2164255013970158,0.4846586144618353,0.294210224703445,0.9507425179765736,0.6096404500113382,0.163698034,0.592347249,0.522540984
+0.56468123803359,0.7539537892599035,0.9559574534085812,0.7971286605248636,0.1481054831420605,0.1838254939038858,0.3179577323742758,0.8793894950349531,0.5030407165929099,0.384975817,0.365612315,0.610119048
+
+You may use scikit-learn, numpy and pandas.
+
+These files, written earlier, are in the same directory:
+
+--- step01.py ---
+import numpy as np
+
+
+def remember(header, rows):
+    goal_cols = [c for c in header if c.endswith('-')]
+
+    n = len(rows)
+    data = {}
+    for col in goal_cols:
+        vals = []
+        for row in rows:
+            v = row[header.index(col)]
+            if v == '?':
+                vals.append(np.nan)
+            else:
+                vals.append(float(v))
+        data[col] = np.array(vals)
+
+    min_vals = {}
+    ranges = {}
+    for col in goal_cols:
+        arr = data[col]
+        valid = arr[~np.isnan(arr)]
+        if len(valid) == 0:
+            continue
+        mn = float(valid.min())
+        mx = float(valid.max())
+        min_vals[col] = mn
+        ranges[col] = (mx - mn) if mx > mn else 1.0
+
+    scores = []
+    for i in range(n):
+        s = 0.0
+        for col in goal_cols:
+            v = data[col][i]
+            if np.isnan(v):
+                continue
+            s += (v - min_vals[col]) / ranges[col]
+        scores.append(s)
+
+    threshold_idx = int(0.05 * n)
+    sorted_indices = np.argsort(scores)[:threshold_idx]
+    return sorted_indices.tolist()
+
+
+if __name__ == "__main__":
+    import pandas as pd
+
+    df = pd.read_csv('pom3a.train.csv')
+    header = list(df.columns)
+    rows = [list(row) for row in df.values]
+
+    best_positions = remember(header, rows)
+    print(f"Top {len(best_positions)} out of {len(rows)} setups:")
+    for pos in best_positions:
+        print(
+            f"  Row {pos}: Cost-={rows[pos][header.index('Cost-')]:.4f}, "
+            f"Score-={rows[pos][header.index('Score-')]:.4f}, "
+            f"Idle-={rows[pos][header.index('Idle-')]:.4f}"
+        )
+
+
+--- step02.py ---
+import numpy as np
+from sklearn.linear_model import LinearRegression
+
+
+def guess(header, train, test):
+    goal_cols = [c for c in header if c.endswith('-')]
+    first_goal = goal_cols[0]  # Cost-
+
+    input_cols = [c for c in header if not c.endswith('-')]
+
+    def parse_row(row):
+        vals = []
+        for col in input_cols:
+            v = row[header.index(col)]
+            try:
+                vals.append(float(v))
+            except (ValueError, TypeError):
+                vals.append(np.nan)
+        return np.array(vals)
+
+    X_train = np.array([parse_row(r) for r in train])
+    y_train = []
+    for row in train:
+        v = row[header.index(first_goal)]
+        if v == '?':
+            y_train.append(np.nan)
+        else:
+            y_train.append(float(v))
+
+    X_test = np.array([parse_row(r) for r in test])
+    y_test = []
+    for row in test:
+        v = row[header.index(first_goal)]
+        if v == '?':
+            y_test.append(np.nan)
+        else:
+            y_test.append(float(v))
+
+    valid_mask = ~np.isnan(X_train).any(axis=1) & ~np.isnan(y_train)
+    model = LinearRegression()
+    model.fit(X_train[valid_mask], y_train[valid_mask])
+
+    predictions = []
+    for i in range(len(test)):
+        x = X_test[i]
+        if np.isnan(x).any():
+            preds = model.predict(X_train[valid_mask].reshape(1, -1))
+            predictions.append(float(preds[0]))
+        else:
+            predictions.append(float(model.predict([x])[0]))
+
+    return predictions
+
+
+if __name__ == "__main__":
+    import pandas as pd
+
+    df = pd.read_csv('pom3a.train.csv')
+    header = list(df.columns)
+    rows = [list(row) for row in df.values]
+
+    test_rows = []
+    for i, row in enumerate(rows):
+        if any(v == '?' for v in row[-3:]):
+            test_rows.append(row)
+
+    results = guess(header, rows, test_rows)
+    print(f"Predicted Cost- for {len(results)} setups:")
+    for r, p in zip(test_rows, results):
+        print(f"  Row {r[header.index('Cost-')]}: predicted Cost-={p:.4f}")
+
+
+--- step03.py ---
+import numpy as np
+
+
+def certify(xs, ys):
+    """Returns True if xs and ys are the same apart from noise."""
+    arr_x = np.array(xs)
+    arr_y = np.array(ys)
+    
+    mean_diff = abs(np.mean(arr_x) - np.mean(arr_y))
+    std_x = float(np.std(arr_x))
+    std_y = float(np.std(arr_y))
+    combined_std = np.sqrt(std_x**2 + std_y**2) if (std_x > 0 or std_y > 0) else 1.0
+    
+    return mean_diff < 2 * combined_std
+
+
+if __name__ == "__main__":
+    import pandas as pd
+
+    df = pd.read_csv('pom3a.train.csv')
+    header = list(df.columns)
+    rows = [list(row) for row in df.values]
+
+    team_size_col = 'Team Size'
+    cost_col = 'Cost-'
+
+    ts_vals = []
+    costs = []
+    for row in rows:
+        v = row[header.index(team_size_col)]
+        if v == '?':
+            continue
+        ts_vals.append(float(v))
+        c = float(row[header.index(cost_col)])
+        costs.append(c)
+
+    median_ts = np.median(ts_vals)
+    
+    small_cost = [c for t, c in zip(ts_vals, costs) if t <= median_ts]
+    big_cost = [c for t, c in zip(ts_vals, costs) if t > median_ts]
+
+    result = certify(small_cost, big_cost)
+    print(
+        f"Small-team Cost- vs Big-team Cost-: "
+        f"{'same apart from noise' if result else 'really different'}"
+    )
+
+
+--- step04.py ---
+def flow(header, row, seen):
+    goal_cols = [c for c in header if c.endswith('-')]
+
+    def parse_goals(row_dict):
+        vals = []
+        for col in goal_cols:
+            v = row_dict[header.index(col)]
+            try:
+                vals.append(float(v))
+            except (ValueError, TypeError):
+                return None
+        return vals
+
+    current = parse_goals(row)
+    if current is None:
+        return False
+
+    if not seen:
+        return True
+
+    best = {}
+    for s in seen:
+        sg = parse_goals(s)
+        if sg is None:
+            continue
+        for col, val in zip(goal_cols, sg):
+            if col not in best or val < best[col]:
+                best[col] = val
+
+    for i, col in enumerate(goal_cols):
+        if current[i] > best[col]:
+            return False
+
+    return True
+
+
+if __name__ == "__main__":
+    import pandas as pd
+
+    df = pd.read_csv('pom3a.train.csv')
+    header = list(df.columns)
+    rows = [list(row) for row in df.values]
+
+    chosen_idx = 0
+    seen = []
+    for i, row in enumerate(rows):
+        if flow(header, row, seen):
+            chosen_idx = i
+            break
+        seen.append(row)
+
+    print(
+        f"Approved proposal #{chosen_idx + 1} "
+        f"(Cost-={rows[chosen_idx][header.index('Cost-')]:.4f}, "
+        f"Score-={rows[chosen_idx][header.index('Score-')]:.4f}, "
+        f"Idle-={rows[chosen_idx][header.index('Idle-')]:.4f})"
+    )
+
+
+The customer asks:
+
+  Why do our worst setups leave so many people waiting around?
+
+Write step05.py to answer that ask on this data.
+
+A test harness will import your file and call this function, so you must define it exactly:
+
+def blame(header, rows)
+  Returns a list of strings.   Return the names of the input columns (not goals) that best explain why the worst rows are bad.
+
+Conventions: `header` is the list of column names. `rows` is a list of rows; each row is a list of cells in header order, floats for numeric columns and strings for symbolic ones. A cell shown as "?" is hidden from you. A row is better when its goals are closer to their best (low for names ending in -, high for names ending in +).
+
+Keep everything that prints or reads the csv file under `if __name__ == "__main__":` so that importing the file prints nothing. Plain built-in types are all you need: do not import anything from `typing`.
+
+Running `python step05.py` must load the csv, call your function, print a short answer a customer could read, and exit with status 0. Reply with the complete file in one ```python fenced block and nothing else.

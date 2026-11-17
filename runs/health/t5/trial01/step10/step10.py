@@ -1,0 +1,93 @@
+import ezr
+import random
+
+
+def race(header, rows, label):
+    """Compare three strategies; return winner dict."""
+    n = len(rows)
+    budget = 50
+    tried = ["random", "ydist", "holdout"]
+
+    def _score(r):
+        tbl = ezr.Tbl(zip(header, [r]))
+        goals = [c for c in tbl.y if c.goal != 0]
+        return ezr.ydist(tbl, r)
+
+    # --- random ---------------------------------------------------
+    rng = random.Random(42)
+    rand_idx = rng.sample(range(n), min(budget, n))
+    rand_rows = [label(i) for i in rand_idx]
+    rand_tbl = ezr.Tbl(zip(header, rand_rows))
+    rand_node = ezr.tree(rand_tbl, rand_tbl.rows)
+    rand_preds = [ezr.leaf(rand_node, r).mu for r in rand_rows]
+
+    # --- ydist ----------------------------------------------------
+    y_idx = sorted(range(n), key=lambda i: _score(rows[i]))[:budget]
+    y_rows = [label(i) for i in y_idx]
+    y_tbl = ezr.Tbl(zip(header, y_rows))
+    y_node = ezr.tree(y_tbl, y_tbl.rows)
+    y_preds = [ezr.leaf(y_node, r).mu for r in y_rows]
+
+    # --- holdout --------------------------------------------------
+    h_rng = random.Random(42)
+    h_idx = h_rng.sample(range(n), n)
+    h_train = rows[:n // 2]
+    h_test = rows[n // 2:]
+    h_lab_budget = budget - len(y_idx) - len(rand_idx)
+    h_lab_rows = [label(i) for i in h_rng.sample(h_test, min(h_lab_budget, len(h_test)))]
+    h_tbl = ezr.Tbl(zip(header, h_train + h_lab_rows))
+    h_node = ezr.tree(h_tbl, h_tbl.rows)
+
+    # Score each test row by its leaf mu on the holdout tree.
+    h_scores = [ezr.leaf(h_node, r).mu for r in h_test]
+    best_h_idx = min(range(len(h_test)), key=lambda i: h_scores[i])
+    h_rows = [label(i) for i in range(n // 2, n // 2 + len(h_lab_rows))]
+
+    # Combine holdout predictions with ydist-based ones.
+    all_y_rows = y_rows + h_lab_rows
+    all_y_tbl = ezr.Tbl(zip(header, all_y_rows))
+    all_y_node = ezr.tree(all_y_tbl, all_y_tbl.rows)
+    all_y_preds = [ezr.leaf(all_y_node, r).mu for r in all_y_rows]
+
+    # Find best row across strategies by lowest ydist on the combined tree.
+    def _best_row(preds_list):
+        return min(range(len(preds_list)), key=lambda i: preds_list[i])
+
+    rand_best = _best_row(rand_preds)
+    y_best = _best_row(y_preds)
+    h_best = best_h_idx - n // 2 if best_h_idx >= n // 2 else None
+    combined_best = _best_row(all_y_preds)
+
+    # Determine which strategy won.
+    scores = {
+        "random": rand_preds[rand_best],
+        "ydist": y_preds[y_best],
+        "holdout": h_scores[best_h_idx - n // 2] if best_h_idx >= n // 2 else None,
+    }
+
+    # Pick the strategy with lowest score.
+    valid = [(k, v) for k, v in scores.items() if v is not None]
+    winner_name, winner_score = min(valid, key=lambda x: x[1])
+
+    # Map back to row position.
+    if winner_name == "random":
+        winner_row = rand_idx[rand_best]
+    elif winner_name == "ydist":
+        winner_row = y_idx[y_best]
+    else:
+        winner_row = best_h_idx
+
+    return {"winner": winner_name, "row": winner_row, "tried": tried}
+
+
+if __name__ == "__main__":
+    import os
+    path = os.path.join(os.path.dirname(__file__) or ".", "Health-ClosedIssues0000.train.csv")
+    with open(path, encoding="utf-8-sig") as f:
+        lines = [l.strip() for l in f if l.strip()]
+    header = lines[0].split(",")
+    rows = [[ezr.atom(s) for s in line.split(",")] for line in lines[1:]]
+
+    result = race(header, rows, label)
+    print(f"Winner: {result['winner']} found row {result['row']} "
+          f"(score {min(result.get('scores', {}), default=0):.4f}})")

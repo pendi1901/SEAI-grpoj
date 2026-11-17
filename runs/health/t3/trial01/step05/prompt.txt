@@ -1,0 +1,234 @@
+You are writing one Python file, step05.py.
+
+The data is the csv file Health-ClosedIssues0000.train.csv in the current directory. Column names starting in upper case are numeric, lower case are symbolic. A name ending in - is a goal to minimise, in + a goal to maximise; all other columns are inputs. Its first lines:
+
+MRE-,ACC+,PRED40+,N_estimators,criterion,Min_sample_leaves,Min_impurity_decrease,Max_depth
+0.7771723122238585,0.4546619673181672,0,10,squared_error,17,7.75,11
+0.42238586156111924,0.6920858699134893,0.5714285714285714,150,absolute_error,3,4.25,10
+0.8817378497790869,0.40820249919897467,0,110,absolute_error,18,4,14
+
+You may use scikit-learn, numpy and pandas.
+
+These files, written earlier, are in the same directory:
+
+--- step01.py ---
+import pandas as pd
+
+
+def remember(header, rows):
+    """Return positions (0-based) of rows whose forecasts are unusually trustworthy."""
+    # Goals to minimise: MRE-
+    # Goals to maximise: ACC+, PRED40+
+    goals = ["MRE-", "ACC+", "PRED40+"]
+
+    best_scores = {}
+    for g in goals:
+        vals = []
+        for r in rows:
+            v = float(r[header.index(g)])
+            if g.endswith("-"):
+                # lower is better -> score = value (smaller = closer to 0)
+                vals.append(v)
+            else:
+                # higher is better -> score = -value (so larger original => smaller score)
+                vals.append(-v)
+
+        best_scores[g] = min(vals)
+
+    scored_rows = []
+    for i, r in enumerate(rows):
+        s = 0.0
+        for g in goals:
+            v = float(r[header.index(g)])
+            if g.endswith("-"):
+                s += (v - best_scores[g])
+            else:
+                s += (-v - best_scores[g])
+        scored_rows.append((i, s))
+
+    scored_rows.sort(key=lambda x: x[1])
+    n = len(rows)
+    top_k = max(1, int(n * 0.05))
+    return [pos for pos, _ in scored_rows[:top_k]]
+
+
+if __name__ == "__main__":
+    df = pd.read_csv("Health-ClosedIssues0000.train.csv")
+    header = list(df.columns)
+    rows = df.values.tolist()
+    positions = remember(header, rows)
+    print(f"Top {len(positions)} trustworthy setups: {positions}")
+
+
+--- step02.py ---
+import pandas as pd
+from sklearn.tree import DecisionTreeRegressor
+
+
+def guess(header, train, test):
+    goals = ["MRE-", "ACC+", "PRED40+"]
+    goal_cols = [c for c in header if c in goals]
+    input_cols = [c for c in header if c not in goals]
+
+    X_train = []
+    y_train = []
+    for row in train:
+        x = [float(row[header.index(c)]) for c in input_cols]
+        y = float(row[header.index(goal_cols[0])])
+        X_train.append(x)
+        y_train.append(y)
+
+    X_test = []
+    for row in test:
+        x = [float(row[header.index(c)]) for c in input_cols]
+        X_test.append(x)
+
+    model = DecisionTreeRegressor(max_depth=5, random_state=42)
+    model.fit(X_train, y_train)
+    return model.predict(X_test).tolist()
+
+
+if __name__ == "__main__":
+    df = pd.read_csv("Health-ClosedIssues0000.train.csv")
+    header = list(df.columns)
+    rows = [list(r) for r in df.values]
+
+    train_rows = []
+    test_rows = []
+    for r in rows:
+        new_row = list(r)
+        for i, col in enumerate(header):
+            if col in goals:
+                new_row[i] = "?"
+        if len(train_rows) < 100:
+            train_rows.append(new_row)
+        else:
+            test_rows.append(new_row)
+
+    preds = guess(header, train_rows, test_rows)
+    print(f"Predicted MRE- for {len(preds)} setups:")
+    for p in preds:
+        print(f"  {p:.4f}")
+
+
+--- step03.py ---
+import pandas as pd
+
+
+def certify(xs, ys):
+    """Return True if xs and ys are the same apart from noise."""
+    n = min(len(xs), len(ys))
+    diffs = [xs[i] - ys[i] for i in range(n)]
+    mean_diff = sum(diffs) / n
+    std_diff = (sum((d - mean_diff) ** 2 for d in diffs) / max(n - 1, 1)) ** 0.5
+    if std_diff < 1e-6:
+        return True
+    z = abs(mean_diff) / std_diff
+    return z < 2.0
+
+
+if __name__ == "__main__":
+    df = pd.read_csv("Health-ClosedIssues0000.train.csv")
+    header = list(df.columns)
+    rows = [list(r) for r in df.values]
+
+    goals = ["MRE-", "ACC+", "PRED40+"]
+    input_cols = [c for c in header if c not in goals]
+    goal_cols = [header[header.index(g)] for g in goals]
+
+    big_rows = []
+    small_rows = []
+    for r in rows:
+        n_est = float(r[header.index("N_estimators")])
+        if n_est >= 50:
+            big_rows.append(r)
+        else:
+            small_rows.append(r)
+
+    def extract_goals(rows):
+        out = []
+        for r in rows:
+            vals = [float(r[header.index(c)]) for c in goal_cols]
+            out.append(vals)
+        return out
+
+    big_goals = extract_goals(big_rows)
+    small_goals = extract_goals(small_rows)
+
+    print(f"Big setups (N_estimators >= 50): {len(big_rows)}")
+    print(f"Small setups (N_estimators < 50): {len(small_rows)}")
+    print("Certify result:", certify(big_goals, small_goals))
+
+
+--- step04.py ---
+import pandas as pd
+from sklearn.tree import DecisionTreeRegressor
+
+
+def flow(header, row, seen):
+    goals = ["MRE-", "ACC+", "PRED40+"]
+    goal_cols = [c for c in header if c in goals]
+    input_cols = [c for c in header if c not in goals]
+
+    # Predict current row's MRE- using a model trained on seen rows
+    X_train = []
+    y_train = []
+    best_mre_so_far = None
+    for s_row in seen:
+        x = [float(s_row[header.index(c)]) for c in input_cols]
+        y = float(s_row[header.index(goal_cols[0])])  # MRE-
+        X_train.append(x)
+        y_train.append(y)
+        if best_mre_so_far is None or y < best_mre_so_far:
+            best_mre_so_far = y
+
+    model = DecisionTreeRegressor(max_depth=5, random_state=42)
+    model.fit(X_train, y_train)
+
+    x_new = [float(row[header.index(c)]) for c in input_cols]
+    pred = float(model.predict([x_new])[0])
+
+    # First row: can't decide yet
+    if not seen:
+        return False
+
+    # Stop when prediction is significantly better than any seen so far
+    if best_mre_so_far is None:
+        return False
+
+    improvement_ratio = (best_mre_so_far - pred) / max(best_mre_so_far, 1e-6)
+    return improvement_ratio >= 0.5
+
+
+if __name__ == "__main__":
+    df = pd.read_csv("Health-ClosedIssues0000.train.csv")
+    header = list(df.columns)
+    rows = [list(r) for r in df.values]
+
+    seen = []
+    stop_idx = None
+    for i, row in enumerate(rows):
+        if flow(header, row, seen):
+            stop_idx = i
+            break
+        seen.append(row)
+
+    print(f"Stopped at row {stop_idx} (0-indexed), MRE- = {float(rows[stop_idx][header.index('MRE-')]):.4f}")
+
+
+The customer asks:
+
+  Why do the bad setups miss so badly? Which settings are doing the damage?
+
+Write step05.py to answer that ask on this data.
+
+A test harness will import your file and call this function, so you must define it exactly:
+
+def blame(header, rows)
+  Returns a list of strings.   Return the names of the input columns (not goals) that best explain why the worst rows are bad.
+
+Conventions: `header` is the list of column names. `rows` is a list of rows; each row is a list of cells in header order, floats for numeric columns and strings for symbolic ones. A cell shown as "?" is hidden from you. A row is better when its goals are closer to their best (low for names ending in -, high for names ending in +).
+
+Keep everything that prints or reads the csv file under `if __name__ == "__main__":` so that importing the file prints nothing. Plain built-in types are all you need: do not import anything from `typing`.
+
+Running `python step05.py` must load the csv, call your function, print a short answer a customer could read, and exit with status 0. Reply with the complete file in one ```python fenced block and nothing else.

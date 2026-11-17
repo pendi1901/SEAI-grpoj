@@ -1,0 +1,55 @@
+```python
+import pandas as pd
+from sklearn.tree import DecisionTreeRegressor
+
+
+def flow(header, row, seen):
+    goals = ["MRE-", "ACC+", "PRED40+"]
+    goal_cols = [c for c in header if c in goals]
+    input_cols = [c for c in header if c not in goals]
+
+    # Predict current row's MRE- using a model trained on seen rows
+    X_train = []
+    y_train = []
+    best_mre_so_far = None
+    for s_row in seen:
+        x = [float(s_row[header.index(c)]) for c in input_cols]
+        y = float(s_row[header.index(goal_cols[0])])  # MRE-
+        X_train.append(x)
+        y_train.append(y)
+        if best_mre_so_far is None or y < best_mre_so_far:
+            best_mre_so_far = y
+
+    model = DecisionTreeRegressor(max_depth=5, random_state=42)
+    model.fit(X_train, y_train)
+
+    x_new = [float(row[header.index(c)]) for c in input_cols]
+    pred = float(model.predict([x_new])[0])
+
+    # First row: can't decide yet
+    if not seen:
+        return False
+
+    # Stop when prediction is significantly better than any seen so far
+    if best_mre_so_far is None:
+        return False
+
+    improvement_ratio = (best_mre_so_far - pred) / max(best_mre_so_far, 1e-6)
+    return improvement_ratio >= 0.5
+
+
+if __name__ == "__main__":
+    df = pd.read_csv("Health-ClosedIssues0000.train.csv")
+    header = list(df.columns)
+    rows = [list(r) for r in df.values]
+
+    seen = []
+    stop_idx = None
+    for i, row in enumerate(rows):
+        if flow(header, row, seen):
+            stop_idx = i
+            break
+        seen.append(row)
+
+    print(f"Stopped at row {stop_idx} (0-indexed), MRE- = {float(rows[stop_idx][header.index('MRE-')]):.4f}")
+```

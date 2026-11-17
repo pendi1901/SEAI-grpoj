@@ -1,0 +1,54 @@
+import sys
+sys.path.insert(0, ".")
+from step01 import remember
+
+
+def choose(header, rows, label):
+    """Pick the best setup by labelling up to 50 candidates."""
+    # remember() picks top indices; with "?" goals all scores are equal so it
+    # returns the first ~5% of row indices — a cheap sampling strategy.
+    candidates = remember(header, rows)
+
+    goal_cols = [h for h in header if h.endswith('-')]
+    best_idx = None
+    best_score = float('-inf')
+
+    for idx in candidates:
+        true_goals = label(idx)
+        score = 0.0
+        for col in goal_cols:
+            val = true_goals[header.index(col)]
+            try:
+                f = float(val)
+            except (ValueError, TypeError):
+                continue
+            if col.endswith('-'):
+                score -= f
+            else:
+                score += f
+
+        if score > best_score:
+            best_score = score
+            best_idx = idx
+
+    return best_idx
+
+
+if __name__ == "__main__":
+    import pandas as pd
+
+    df = pd.read_csv("pom3a.train.csv")
+    header = list(df.columns)
+    rows = []
+    for _, row in df.iterrows():
+        r = []
+        for col in header:
+            val = row[col]
+            if pd.isna(val):
+                r.append("?")
+            else:
+                r.append(float(val))
+        rows.append(r)
+
+    best_idx = choose(header, rows, lambda i: df.iloc[i][header].tolist())
+    print(f"Best setup is row {best_idx}")

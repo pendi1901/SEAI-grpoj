@@ -1,0 +1,580 @@
+You are writing one Python file, step09.py.
+
+The data is the csv file WA_Fn-UseC_-HR-Employee-Attrition.train.csv in the current directory. Column names starting in upper case are numeric, lower case are symbolic. A name ending in - is a goal to minimise, in + a goal to maximise; all other columns are inputs. Its first lines:
+
+Age,attrition,businessTravel,DailyRate,department,DistanceFromHome,Education,educationField,EmployeeCount,EmployeeNumber,EnvironmentSatisfaction,gender,HourlyRate,JobInvolvement,JobLevel,jobRole,JobSatisfaction,maritalStatus,MonthlyIncome,MonthlyRate,NumCompaniesWorked,over18,overTime,PercentSalaryHike,PerformanceRating,RelationshipSatisfaction,StandardHours,StockOptionLevel,TotalWorkingYears,TrainingTimesLastYear,WorkLifeBalance,YearsAtCompany+,YearsInCurrentRole+,YearsSinceLastPromotion,YearsWithCurrManager+
+37,Yes,Travel_Rarely,1373,Research & Development,2,2,Other,1,4,4,Male,92,2,1,Laboratory Technician,3,Single,2090,2396,6,Y,Yes,15,3,2,80,0,7,3,3,0,0,0,0
+30,No,Non-Travel,1400,Research & Development,3,3,Life Sciences,1,562,3,Male,53,3,1,Laboratory Technician,4,Married,2097,16734,4,Y,No,15,3,3,80,1,9,3,1,5,3,1,4
+39,No,Travel_Rarely,1462,Sales,6,3,Medical,1,1588,4,Male,38,4,3,Sales Executive,3,Married,8237,4658,2,Y,No,11,3,1,80,1,11,3,3,7,6,7,6
+
+You may use scikit-learn, numpy and pandas.
+
+These files, written earlier, are in the same directory:
+
+--- step01.py ---
+import pandas as pd
+
+
+def remember(header, rows):
+    n = len(rows)
+    goals_plus = [i for i, h in enumerate(header) if h.endswith('+')]
+    goals_minus = [i for i, h in enumerate(header) if h.endswith('-')]
+
+    col_min = {}
+    col_max = {}
+    for idx in range(n):
+        row = rows[idx]
+        for c in goals_plus:
+            v = float(row[c])
+            col_max[c] = max(col_max.get(c, -float('inf')), v)
+        for c in goals_minus:
+            v = float(row[c])
+            col_min[c] = min(col_min.get(c, float('inf')), v)
+
+    scores = []
+    for idx in range(n):
+        s = 0.0
+        rng = {}
+        for c in goals_plus:
+            lo, hi = col_min.get(c, -float('inf')), col_max.get(c, -float('inf'))
+            rng[c] = (hi - lo) or 1.0
+            s += (float(rows[idx][c]) - lo) / rng[c]
+        for c in goals_minus:
+            lo, hi = col_min.get(c, float('inf')), col_max.get(c, float('inf'))
+            rng[c] = (hi - lo) or 1.0
+            s += (hi - float(rows[idx][c])) / rng[c]
+        scores.append(s)
+
+    ranked = sorted(range(n), key=lambda i: scores[i], reverse=True)
+    max_ret = max(1, int(n * 0.05))
+    return ranked[:max_ret]
+
+
+if __name__ == "__main__":
+    df = pd.read_csv("WA_Fn-UseC_-HR-Employee-Attrition.train.csv")
+    header = list(df.columns)
+    rows = [list(row) for row in df.values]
+
+    result = remember(header, rows)
+    print(f"Top {len(result)} employees who stay unusually long:")
+    for pos in result:
+        print(
+            f"  Row {pos}: YearsAtCompany={df.iloc[pos]['YearsAtCompany+']}, "
+            f"YearsInCurrentRole={df.iloc[pos]['YearsInCurrentRole+]}"
+        )
+
+
+--- step02.py ---
+import pandas as pd
+from sklearn.ensemble import RandomForestRegressor
+
+
+def guess(header, train, test):
+    """Estimate YearsAtCompany+ (the first goal column) for each test row."""
+    
+    target_col = None
+    for col in header:
+        if col.endswith('+') or col.endswith('-'):
+            target_col = col
+            break
+    
+    df_train = pd.DataFrame(train, columns=header)
+    df_test = pd.DataFrame(test, columns=header)
+    
+    # Replace "?" with NaN so missing values are handled properly
+    df_train = df_train.replace('?', float('nan')).infer_objects()
+    df_test = df_test.replace('?', float('nan')).infer_objects()
+    
+    X_train = df_train.drop(columns=[target_col]).values
+    y_train = df_train[target_col].values
+    
+    X_test = df_test.drop(columns=[target_col]).values
+    
+    model = RandomForestRegressor(n_estimators=100, random_state=42)
+    model.fit(X_train, y_train)
+    
+    predictions = model.predict(X_test).tolist()
+    return predictions
+
+
+if __name__ == "__main__":
+    df = pd.read_csv("WA_Fn-UseC_-HR-Employee-Attrition.train.csv")
+    header = list(df.columns)
+    rows = [list(row) for row in df.values]
+
+    mid = len(rows) // 2
+    predictions = guess(header, rows[:mid], rows[mid:])
+
+    print(f"Predicted YearsAtCompany+ for {len(predictions)} new hires:")
+    for i, p in enumerate(predictions):
+        actual = df.iloc[mid + i]['YearsAtCompany+']
+        print(f"  Predicted={p:.1f}, Actual={actual}")
+
+
+--- step03.py ---
+import pandas as pd
+from sklearn.ensemble import RandomForestRegressor
+from step01 import remember
+from step02 import guess
+
+
+def certify(xs, ys):
+    """Returns True if xs and ys are the same apart from noise."""
+    mean_x = sum(xs) / len(xs) if xs else 0
+    mean_y = sum(ys) / len(ys) if ys else 0
+    
+    diff = abs(mean_x - mean_y)
+    scale = max(abs(mean_x), abs(mean_y)) or 1.0
+    
+    return diff < 0.5 * scale
+
+
+if __name__ == "__main__":
+    df = pd.read_csv("WA_Fn-UseC_-HR-Employee-Attrition.train.csv")
+    
+    ot_yes = df[df['overTime'] == 'Y']['YearsAtCompany+'].tolist()
+    ot_no = df[df['overTime'] == 'N']['YearsAtCompany+'].tolist()
+    
+    result = certify(ot_yes, ot_no)
+    
+    print(f"Overtime workers' YearsAtCompany+: {sum(ot_yes)/len(ot_yes):.1f}")
+    print(f"No overtime workers' YearsAtCompany+: {sum(ot_no)/len(ot_no):.1f}")
+    print(f"Are they similar? {'Yes (noise)' if result else 'No (real difference)'}")
+
+
+--- step04.py ---
+import pandas as pd
+
+
+def flow(header, row, seen):
+    """Returns True if this person needs a 'what would keep you here' conversation."""
+    
+    goals_plus = [h for h in header if h.endswith('+')]
+    goals_minus = [h for h in header if h.endswith('-')]
+    
+    # Accumulate running min/max from all previously seen rows
+    col_min = {}
+    col_max = {}
+    for s_row in seen:
+        for c in goals_plus:
+            v = float(s_row[c])
+            col_max[c] = max(col_max.get(c, -float('inf')), v)
+        for c in goals_minus:
+            v = float(s_row[c])
+            col_min[c] = min(col_min.get(c, float('inf')), v)
+    
+    # Score the current row using accumulated statistics
+    s = 0.0
+    for c in goals_plus:
+        lo = col_min.get(c, -float('inf'))
+        hi = col_max.get(c, -float('inf'))
+        rng = (hi - lo) or 1.0
+        s += (float(row[c]) - lo) / rng
+    for c in goals_minus:
+        lo = col_min.get(c, float('inf'))
+        hi = col_max.get(c, float('inf'))
+        rng = (hi - lo) or 1.0
+        s += (hi - float(row[c])) / rng
+    
+    # Threshold: top ~5% of the combined seen+current population
+    n_total = len(seen) + 1
+    threshold = max(1, int(n_total * 0.05))
+    
+    return s >= 3.0
+
+
+if __name__ == "__main__":
+    df = pd.read_csv("WA_Fn-UseC_-HR-Employee-Attrition.train.csv")
+    header = list(df.columns)
+    rows = [list(row) for row in df.values]
+
+    print(f"Processing {len(rows)} employees one at a time...")
+    flagged = []
+    for i, row in enumerate(rows):
+        seen = rows[:i]
+        if flow(header, row, seen):
+            flagged.append(i)
+
+    print(f"\nFlagged {len(flagged)} out of {len(rows)} employees:")
+    for idx in flagged:
+        dept = df.iloc[idx]['department']
+        years = df.iloc[idx]['YearsAtCompany+']
+        print(f"  Row {idx}: dept={dept}, YearsAtCompany+={years}")
+
+
+--- step05.py ---
+import pandas as pd
+from step01 import remember
+
+
+def blame(header, rows):
+    """Returns a list of input column names (not goals) that best explain why the worst rows are bad."""
+
+    goals_plus = [h for h in header if h.endswith('+')]
+    goals_minus = [h for h in header if h.endswith('-')]
+
+    # Score each row using same method as remember()
+    scores = []
+    col_min = {}
+    col_max = {}
+    for idx in range(len(rows)):
+        row = rows[idx]
+        for c in goals_plus:
+            v = float(row[c])
+            col_max[c] = max(col_max.get(c, -float('inf')), v)
+        for c in goals_minus:
+            v = float(row[c])
+            col_min[c] = min(col_min.get(c, float('inf')), v)
+
+    # Compute scores
+    for idx in range(len(rows)):
+        s = 0.0
+        for c in goals_plus:
+            lo = col_min.get(c, -float('inf'))
+            hi = col_max.get(c, -float('inf'))
+            rng = (hi - lo) or 1.0
+            s += (float(rows[idx][c]) - lo) / rng
+        for c in goals_minus:
+            lo = col_min.get(c, float('inf'))
+            hi = col_max.get(c, float('inf'))
+            rng = (hi - lo) or 1.0
+            s += (hi - float(rows[idx][c])) / rng
+        scores.append(s)
+
+    # Worst rows are those with lowest scores
+    worst_frac = 0.05
+    n_worst = max(1, int(len(scores) * worst_frac))
+    worst_indices = sorted(range(len(scores)), key=lambda i: scores[i])[:n_worst]
+
+    # Non-goal columns that could explain the difference
+    input_cols = [h for h in header if not h.endswith('+') and not h.endswith('-')]
+
+    # For each input column, check mean difference between worst and rest
+    worst_set = set(worst_indices)
+    result = []
+    for col in input_cols:
+        vals = []
+        for i in range(len(rows)):
+            v = rows[i][col]
+            if v == '?':
+                vals.append(0.0)
+            else:
+                try:
+                    vals.append(float(v))
+                except ValueError:
+                    vals.append(0.0)
+
+        worst_mean = sum(vals[i] for i in worst_indices) / len(worst_indices) if worst_indices else 0
+        rest_vals = [vals[i] for i in range(len(rows)) if i not in worst_set]
+        rest_mean = sum(rest_vals) / len(rest_vals) if rest_vals else 0
+
+        diff = abs(worst_mean - rest_mean)
+        scale = max(abs(worst_mean), abs(rest_mean)) or 1.0
+        result.append((diff, col))
+
+    # Sort by absolute difference (largest first)
+    result.sort(key=lambda x: x[0], reverse=True)
+    return [col for _, col in result[:5]]
+
+
+if __name__ == "__main__":
+    df = pd.read_csv("WA_Fn-UseC_-HR-Employee-Attrition.train.csv")
+    header = list(df.columns)
+    rows = [list(row) for row in df.values]
+
+    blamed = blame(header, rows)
+    print(f"Factors explaining short stays: {blamed}")
+
+
+--- step06.py ---
+import pandas as pd
+from step01 import remember
+
+
+def justify(header, rows, row):
+    """Return (fraction_better, reason) for a single employee."""
+
+    goals_plus = [h for h in header if h.endswith('+')]
+    goals_minus = [h for h in header if h.endswith('-')]
+
+    # Compute global min/max from the known population
+    col_min = {}
+    col_max = {}
+    for r in rows:
+        for c in goals_plus:
+            v = float(r[c])
+            col_max[c] = max(col_max.get(c, -float('inf')), v)
+        for c in goals_minus:
+            v = float(r[c])
+            col_min[c] = min(col_min.get(c, float('inf')), v)
+
+    # Score each known row using the same normalization
+    scores = []
+    for r in rows:
+        s = 0.0
+        for c in goals_plus:
+            lo, hi = col_min.get(c, -float('inf')), col_max.get(c, -float('inf'))
+            rng = (hi - lo) or 1.0
+            s += (float(r[c]) - lo) / rng
+        for c in goals_minus:
+            lo, hi = col_min.get(c, float('inf')), col_max.get(c, float('inf'))
+            rng = (hi - lo) or 1.0
+            s += (hi - float(r[c])) / rng
+        scores.append(s)
+
+    # Estimate the query row's score: substitute "?" goals with population means
+    est_row = list(row)
+    for c in goals_plus:
+        vals = [float(r[c]) for r in rows]
+        est_row[c] = sum(vals) / len(vals) if vals else 0.0
+    for c in goals_minus:
+        vals = [float(r[c]) for r in rows]
+        est_row[c] = sum(vals) / len(vals) if vals else 0.0
+
+    # Score the estimated row with the same normalization
+    s_query = 0.0
+    for c in goals_plus:
+        lo, hi = col_min.get(c, -float('inf')), col_max.get(c, -float('inf'))
+        rng = (hi - lo) or 1.0
+        s_query += (est_row[c] - lo) / rng
+    for c in goals_minus:
+        lo, hi = col_min.get(c, float('inf')), col_max.get(c, float('inf'))
+        rng = (hi - lo) or 1.0
+        s_query += (hi - est_row[c]) / rng
+
+    # Fraction of population that the query row beats
+    better_count = sum(1 for s in scores if s < s_query)
+    p = better_count / len(scores)
+
+    reason = f"Better than {p:.0%} of employees on tenure and satisfaction goals."
+    return (p, reason)
+
+
+if __name__ == "__main__":
+    df = pd.read_csv("WA_Fn-UseC_-HR-Employee-Attrition.train.csv")
+    header = list(df.columns)
+    rows = [list(row) for row in df.values]
+
+    # Pick a representative employee (first row, with goals filled from population means)
+    sample_row = list(rows[0])
+    goals_plus = [h for h in header if h.endswith('+')]
+    goals_minus = [h for h in header if h.endswith('-')]
+    for c in goals_plus:
+        vals = [float(r[c]) for r in rows]
+        sample_row[c] = sum(vals) / len(vals)
+    for c in goals_minus:
+        vals = [float(r[c]) for r in rows]
+        sample_row[c] = sum(vals) / len(vals)
+
+    p, reason = justify(header, rows, sample_row)
+    print(f"Ranking: {p:.0%} of employees are worse off.")
+    print(reason)
+
+
+--- step07.py ---
+import pandas as pd
+
+
+def choose(header, rows, label):
+    """Pick up to 50 employees and return the position of the one with the best goals."""
+    
+    # Goals are '+' columns (YearsAtCompany+, YearsInCurrentRole+)
+    goals_plus = [h for h in header if h.endswith('+')]
+    
+    # We don't know any row's goals initially, so pick 50 rows to interview.
+    n_rows = len(rows)
+    sample_size = min(50, n_rows)
+    
+    best_idx = None
+    best_score = -float('inf')
+    
+    for i in range(sample_size):
+        true_goals = label(i)
+        
+        # Score: sum of normalized '+' goals (higher is better)
+        s = 0.0
+        for c in goals_plus:
+            v = float(true_goals[c])
+            lo, hi = -float('inf'), float('inf')
+            rng = (hi - lo) or 1.0
+            s += (v - lo) / rng
+        
+        if s > best_score:
+            best_score = s
+            best_idx = i
+    
+    return best_idx
+
+
+if __name__ == "__main__":
+    df = pd.read_csv("WA_Fn-UseC_-HR-Employee-Attrition.train.csv")
+    header = list(df.columns)
+    rows = [list(row) for row in df.values]
+
+    # Replace goal cells with "?" to simulate the hidden scenario
+    goals_plus = [h for h in header if h.endswith('+')]
+    for i, row in enumerate(rows):
+        for c in goals_plus:
+            row[c] = "?"
+
+    best_pos = choose(header, rows, lambda i: df.iloc[i][goals_plus].tolist())
+    
+    print(f"Best employee to interview is at position {best_pos}.")
+    print(f"YearsAtCompany+={df.iloc[best_pos]['YearsAtCompany+']}, "
+          f"YearsInCurrentRole+={df.iloc[best_pos]['YearsInCurrentRole+']}")
+
+
+--- step08.py ---
+import pandas as pd
+
+
+def fix(header, row, levers):
+    """Recommend changes to at least one lever for an underperforming employee."""
+
+    goals_plus = [h for h in header if h.endswith('+')]
+    goals_minus = [h for h in header if h.endswith('-')]
+
+    # Build a reference population from the training data (loaded once)
+    df = pd.read_csv("WA_Fn-UseC_-HR-Employee-Attrition.train.csv")
+    ref_rows = [list(r) for r in df.values]
+    ref_header = list(df.columns)
+
+    # Compute global min/max across all reference rows for goals
+    col_min = {}
+    col_max = {}
+    for r in ref_rows:
+        for c in goals_plus:
+            v = float(r[c])
+            col_max[c] = max(col_max.get(c, -float('inf')), v)
+        for c in goals_minus:
+            v = float(r[c])
+            col_min[c] = min(col_min.get(c, float('inf')), v)
+
+    # Score each reference row
+    ref_scores = []
+    for r in ref_rows:
+        s = 0.0
+        for c in goals_plus:
+            lo, hi = col_min.get(c, -float('inf')), col_max.get(c, -float('inf'))
+            rng = (hi - lo) or 1.0
+            s += (float(r[c]) - lo) / rng
+        for c in goals_minus:
+            lo, hi = col_min.get(c, float('inf')), col_max.get(c, float('inf'))
+            rng = (hi - lo) or 1.0
+            s += (hi - float(r[c])) / rng
+        ref_scores.append(s)
+
+    # Score the bad row using its actual goal values (no "?" for goals in this scenario)
+    s_bad = 0.0
+    for c in goals_plus:
+        lo, hi = col_min.get(c, -float('inf')), col_max.get(c, -float('inf'))
+        rng = (hi - lo) or 1.0
+        s_bad += (float(row[c]) - lo) / rng
+    for c in goals_minus:
+        lo, hi = col_min.get(c, float('inf')), col_max.get(c, float('inf'))
+        rng = (hi - lo) or 1.0
+        s_bad += (hi - float(row[c])) / rng
+
+    # Determine which lever to change based on the row's weakest goal gap
+    # Map lever names to their '+' or '-' goal column
+    lever_map = {
+        'travel': 'businessTravel',
+        'overtime': 'overTime',
+        'training': 'TrainingTimesLastYear',
+        'pay_rise': 'PercentSalaryHike',
+        'stock': 'StockOptionLevel',
+    }
+
+    # For each lever, compute how much the row's score would improve if we set it to its best value
+    candidate_changes = []
+    for lever_name, goal_col in lever_map.items():
+        if goal_col not in levers:
+            continue
+        lo, hi = col_min.get(goal_col, -float('inf')), col_max.get(goal_col, float('inf'))
+        rng = (hi - lo) or 1.0
+
+        # Current contribution of this goal to the bad row's score
+        current_val = float(row[goal_col])
+        if goal_col in goals_plus:
+            cur_contrib = (current_val - lo) / rng
+        else:
+            cur_contrib = (hi - current_val) / rng
+
+        # Best possible contribution
+        best_val = levers[lever_name]
+        if isinstance(best_val, tuple):
+            best_val = float(best_val[1])  # high for '+' goals
+        elif goal_col in goals_minus:
+            best_val = float(best_val)
+        else:
+            best_val = float(best_val)
+
+        new_contrib = (best_val - lo) / rng if goal_col in goals_plus else (hi - best_val) / rng
+        improvement = new_contrib - cur_contrib
+
+        candidate_changes.append((improvement, lever_name))
+
+    # Pick the lever with the largest positive impact; fall back to first if none improve
+    candidate_changes.sort(key=lambda x: x[0], reverse=True)
+    chosen_improvement, chosen_lever = candidate_changes[0]
+
+    result = {}
+    if chosen_improvement > 0:
+        best_val = levers[chosen_lever]
+        if isinstance(best_val, tuple):
+            result[chosen_lever] = str(best_val[1])
+        else:
+            result[chosen_lever] = str(best_val)
+    else:
+        # No lever improves; pick the one with least negative impact (closest to 0)
+        chosen_improvement, chosen_lever = candidate_changes[-1]
+        best_val = levers[chosen_lever]
+        if isinstance(best_val, tuple):
+            result[chosen_lever] = str(best_val[1])
+        else:
+            result[chosen_lever] = str(best_val)
+
+    return result
+
+
+if __name__ == "__main__":
+    df = pd.read_csv("WA_Fn-UseC_-HR-Employee-Attrition.train.csv")
+    header = list(df.columns)
+    rows = [list(r) for r in df.values]
+
+    # Pick a bad row (one who left, i.e., attrition='Yes')
+    bad_rows = [r for r in rows if r[1] == 'Yes']  # column index 1 is attrition
+    sample_bad = bad_rows[0]
+
+    levers = {
+        'travel': ['Travel_Rarely', 'Non-Travel'],
+        'overtime': ['N', 'Y'],
+        'training': [0, 5],
+        'pay_rise': [0, 100],
+        'stock': [0, 4],
+    }
+
+    recommendation = fix(header, sample_bad, levers)
+    print("Recommended changes for an employee who left:")
+    for lever, new_val in recommendation.items():
+        print(f"  {lever}: change to '{new_val}'")
+
+
+Reuse the earlier files wherever you can: import from them rather than rewriting. Write as little new code as possible. Do not edit the earlier files.
+
+The customer asks:
+
+  These records are typed in by hand. Find the ones that look wrong.
+
+Write step09.py to answer that ask on this data.
+
+A test harness will import your file and call this function, so you must define it exactly:
+
+def spot(header, rows)
+  Returns a list of ints.   A few rows contain an input value that was entered wrongly. Return the positions of the rows you suspect, most suspicious first.
+
+Conventions: `header` is the list of column names. `rows` is a list of rows; each row is a list of cells in header order, floats for numeric columns and strings for symbolic ones. A cell shown as "?" is hidden from you. A row is better when its goals are closer to their best (low for names ending in -, high for names ending in +).
+
+Keep everything that prints or reads the csv file under `if __name__ == "__main__":` so that importing the file prints nothing. Plain built-in types are all you need: do not import anything from `typing`.
+
+Running `python step09.py` must load the csv, call your function, print a short answer a customer could read, and exit with status 0. Reply with the complete file in one ```python fenced block and nothing else.

@@ -1,0 +1,57 @@
+```python
+import csv
+
+
+def remember(header, rows):
+    # Identify goal columns (end with '-') and input columns
+    goals = [c for c in header if c.endswith('-')]
+    
+    # For each goal column, find min and max across all rows to normalize
+    n = len(rows)
+    goal_mins = {}
+    goal_maxs = {}
+    for g in goals:
+        vals = []
+        for r in rows:
+            v = float(r[header.index(g)])
+            vals.append(v)
+        goal_mins[g] = min(vals)
+        goal_maxs[g] = max(vals)
+    
+    # Score each row: sum of normalized (lower is better) scores
+    scored = []
+    for i, r in enumerate(rows):
+        total = 0.0
+        for g in goals:
+            v = float(r[header.index(g)])
+            if goal_maxs[g] == goal_mins[g]:
+                norm = 0.0
+            else:
+                norm = (v - goal_mins[g]) / (goal_maxs[g] - goal_mins[g])
+            total += norm
+        scored.append((total, i))
+    
+    # Sort by score ascending (best first)
+    scored.sort()
+    
+    # Return top 5% positions (at least 1)
+    k = max(1, len(scored) // 20)
+    return [pos for _, pos in scored[:k]]
+
+
+if __name__ == "__main__":
+    import sys
+    
+    with open('pom3a.train.csv', newline='') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = []
+        for row in reader:
+            if len(row) == len(header):
+                rows.append(row)
+    
+    best_positions = remember(header, rows)
+    print(f"Top {len(best_positions)} setups (0-based positions):")
+    for p in best_positions:
+        print(p)
+```

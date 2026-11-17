@@ -1,0 +1,58 @@
+import ezr
+
+
+def choose(header, rows, label):
+    """Label up to 50 rows near the best arrangement; return its index."""
+    tbl = ezr.Tbl([header] + rows)
+
+    # First, seed with a few random labels so we have an initial picture.
+    seeded = set()
+    for i in range(min(10, len(rows))):
+        label(i)
+        seeded.add(i)
+
+    best_idx = None
+    best_score = float("inf")
+
+    # Greedy: repeatedly pick the unlabelled row closest to the current best.
+    while len(seeded) < 50 and any(r[c.at] == "?" for c in tbl.x):
+        # Find an unlabelled row (one whose goal cells are still "?").
+        candidates = [i for i, r in enumerate(rows) if i not in seeded]
+        if not candidates:
+            break
+
+        # Score each candidate by how close it is to the current best labelled set.
+        scored = []
+        for idx in candidates:
+            row = rows[idx]
+            # Use ydist from ezr (normalises numeric goals toward their targets).
+            score = ezr.ydist(tbl, row)
+            scored.append((score, idx))
+
+        scored.sort(key=lambda x: x[0])
+        pick_idx = scored[0][1]
+        label(pick_idx)
+        seeded.add(pick_idx)
+
+    # Now find the best labelled row.
+    for i in range(len(rows)):
+        if i not in seeded:
+            continue
+        score = ezr.ydist(tbl, rows[i])
+        if score < best_score:
+            best_score = score
+            best_idx = i
+
+    return best_idx
+
+
+if __name__ == "__main__":
+    import csv
+
+    with open("WA_Fn-UseC_-HR-Employee-Attrition.train.csv", encoding="utf-8-sig") as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = [next(reader) for _ in range(1470)]
+
+    best = choose(header, rows, label)
+    print(f"Best arrangement is at row {best}.")

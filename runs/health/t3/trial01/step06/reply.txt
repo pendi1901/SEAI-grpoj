@@ -1,0 +1,78 @@
+```python
+import pandas as pd
+from sklearn.tree import DecisionTreeRegressor
+
+
+def justify(header, rows, row):
+    """Return (p, reason) where p is the fraction of `rows` that my predicted setup beats."""
+    goals = ["MRE-", "ACC+", "PRED40+"]
+    goal_cols = [c for c in header if c in goals]
+    input_cols = [c for c in header if c not in goals and c != "?"]
+
+    # Precompute best scores from the reference rows (same convention as step01.py)
+    bests = {}
+    for g in goals:
+        vals = []
+        for r in rows:
+            v = float(r[header.index(g)])
+            if g.endswith("-"):
+                vals.append(v)
+            else:
+                vals.append(-v)
+        bests[g] = min(vals)
+
+    # Train a separate regressor per goal column on the reference data
+    models = {}
+    for g in goals:
+        X_g, y_g = [], []
+        for r in rows:
+            x = [float(r[header.index(c)]) for c in input_cols]
+            y = float(r[header.index(g)])
+            X_g.append(x)
+            y_g.append(y)
+        model = DecisionTreeRegressor(max_depth=5, random_state=42)
+        model.fit(X_g, y_g)
+        models[g] = model
+
+    # Predict the hidden goal cells of `row` from its input features
+    x_new = [float(row[header.index(c)]) for c in input_cols]
+    predicted_goals = {}
+    for g in goals:
+        predicted_goals[g] = float(models[g].predict([x_new])[0])
+
+    # Score a set of goal values against the precomputed bests (lower is better)
+    def score(goal_vals):
+        s = 0.0
+        for g in goals:
+            v = goal_vals[g]
+            if g.endswith("-"):
+                s += (v - bests[g])
+            else:
+                s += (-v - bests[g])
+        return s
+
+    my_score = score(predicted_goals)
+
+    # Score every reference row and count how many are worse than mine
+    scores = [score({g: float(r[header.index(g)]) for g in goals}) for r in rows]
+    n_worse = sum(1 for s in scores if s > my_score)
+    p = n_worse / len(rows) if len(rows) else 0.0
+
+    reason = f"Better than {p:.0%} of the other setups."
+    return (p, reason)
+
+
+if __name__ == "__main__":
+    df = pd.read_csv("Health-ClosedIssues0000.train.csv")
+    header = list(df.columns)
+    rows = [list(r) for r in df.values]
+
+    # Take the first row and mask its goal cells so we can evaluate a predicted setup
+    test_row = list(rows[0])
+    for g in ["MRE-", "ACC+", "PRED40+"]:
+        idx = header.index(g)
+        test_row[idx] = "?"
+
+    p, reason = justify(header, rows, test_row)
+    print(f"{reason} (p={p:.4f})")
+```

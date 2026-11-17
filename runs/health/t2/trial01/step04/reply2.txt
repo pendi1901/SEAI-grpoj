@@ -1,0 +1,163 @@
+```python
+import csv
+
+
+def remember(header, rows):
+    goal_cols = [c for c in header if c.endswith('-') or c.endswith('+')]
+
+    col_vals = {}
+    row_valid = [True] * len(rows)
+    for i, row in enumerate(rows):
+        for col in goal_cols:
+            val_str = row[header.index(col)]
+            if val_str == '?' or val_str is None:
+                row_valid[i] = False
+            else:
+                try:
+                    val = float(val_str)
+                except ValueError:
+                    row_valid[i] = False
+                    break
+                col_vals.setdefault(col, []).append((i, val))
+
+    scored = []
+    for i in range(len(rows)):
+        if not row_valid[i]:
+            continue
+        score = 0.0
+        for col in goal_cols:
+            vals = col_vals[col]
+            mn = min(v[1] for v in vals)
+            mx = max(v[1] for v in vals)
+            val_str = row[header.index(col)]
+            val = float(val_str)
+            if col.endswith('-'):
+                score += (mx - val) / (mx - mn + 1e-9)
+            else:
+                score += (val - mn) / (mx - mn + 1e-9)
+        scored.append((i, score))
+
+    scored.sort(key=lambda x: -x[1])
+    n = len(scored)
+    k = max(1, int(n * 0.05))
+    return [pos for pos, _ in scored[:k]]
+
+
+def guess(header, train, test):
+    goal_cols = [c for c in header if c.endswith('-') or c.endswith('+')]
+    target_col = goal_cols[0]
+
+    input_cols = []
+    for col in header:
+        if col == target_col:
+            continue
+        if col[0].isupper():
+            input_cols.append(col)
+
+    train_data = []
+    for row in train:
+        inputs = [float(row[col]) for col in input_cols]
+        mre_str = row[target_col]
+        try:
+            mre = float(mre_str)
+        except ValueError:
+            continue
+        train_data.append((inputs, mre))
+
+    predictions = []
+    for row in test:
+        inputs = [float(row[col]) for col in input_cols]
+        dists = []
+        for train_inputs, train_mre in train_data:
+            d = 0.0
+            for a, b in zip(inputs, train_inputs):
+                diff = a - b
+                d += diff * diff
+            dists.append((d ** 0.5, train_mre))
+
+        dists.sort(key=lambda x: x[0])
+        k = max(1, min(len(dists), len(train_data) // 2))
+        avg_mre = sum(m for _, m in dists[:k]) / k
+        predictions.append(avg_mre)
+
+    return predictions
+
+
+def certify(xs, ys):
+    n = len(xs)
+    if n != len(ys):
+        return False
+    diffs = [abs(a - b) for a, b in zip(xs, ys)]
+    bad = sum(1 for d in diffs if d > 0.1)
+    return bad <= n // 2
+
+
+def flow(header, row, seen):
+    goal_cols = [c for c in header if c.endswith('-') or c.endswith('+')]
+
+    col_vals = {}
+    row_valid = [True] * (len(seen) + 1)
+    for i, r in enumerate(seen):
+        for col in goal_cols:
+            val_str = r[header.index(col)]
+            if val_str == '?' or val_str is None:
+                row_valid[i] = False
+            else:
+                try:
+                    val = float(val_str)
+                except ValueError:
+                    row_valid[i] = False
+                    break
+                col_vals.setdefault(col, []).append((i, val))
+
+    for col in goal_cols:
+        vals = col_vals[col]
+        mn = min(v[1] for v in vals)
+        mx = max(v[1] for v in vals)
+
+    score = 0.0
+    for col in goal_cols:
+        vals = col_vals[col]
+        mn = min(v[1] for v in vals)
+        mx = max(v[1] for v in vals)
+        val_str = row[header.index(col)]
+        try:
+            val = float(val_str)
+        except ValueError:
+            return False
+        if col.endswith('-'):
+            score += (mx - val) / (mx - mn + 1e-9)
+        else:
+            score += (val - mn) / (mx - mn + 1e-9)
+
+    scored = [(i, score) for i in range(len(seen) + 1)]
+    scored.sort(key=lambda x: -x[1])
+    n = len(scored)
+    k = max(1, int(n * 0.05))
+    return [pos for pos, _ in scored[:k]]
+
+
+if __name__ == "__main__":
+    with open("Health-ClosedIssues0000.train.csv", "r") as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = [row for row in reader]
+
+    print(f"Loaded {len(rows)} setups.")
+    print("Streaming one at a time — the first good enough wins:")
+    best_row = None
+    count = 0
+    for i, row in enumerate(rows):
+        seen = rows[:i]
+        if flow(header, row, seen):
+            best_row = row
+            break
+        count += 1
+
+    if best_row is not None:
+        print(f"Chosen after {count + 1} rows:")
+        for col in header:
+            print(f"  {col}: {best_row[header.index(col)]}")
+    else:
+        print("No row was good enough.")
+```

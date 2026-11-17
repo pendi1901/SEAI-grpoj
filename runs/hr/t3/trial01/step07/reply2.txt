@@ -1,0 +1,68 @@
+```python
+import csv
+
+
+def choose(header, rows, label):
+    """Pick the best row among up to 50 candidates (labelled)."""
+    plus = [c for c in header if c.endswith('+')]
+    minus = [c for c in header if c.endswith('-')]
+
+    # Collect all labelled indices.
+    labelled = []
+    for i, vals in enumerate(label):
+        if any(v != "?" for v in vals):
+            labelled.append(i)
+
+    n = len(labelled)
+    best_i = 0
+    best_score = float("-inf")
+
+    for idx in labelled:
+        row = rows[idx]
+        score = 0.0
+        for col in plus:
+            v = float(row[header.index(col)])
+            score += v
+        for col in minus:
+            v = float(row[header.index(col)])
+            score -= v
+
+        if score > best_score:
+            best_score = score
+            best_i = idx
+
+    return best_i
+
+
+if __name__ == "__main__":
+    with open("WA_Fn-UseC_-HR-Employee-Attrition.train.csv", "r") as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = []
+        for row in reader:
+            parsed = []
+            for cell in row:
+                try:
+                    parsed.append(float(cell))
+                except ValueError:
+                    parsed.append(cell)
+            rows.append(parsed)
+
+    # Label the first 50 rows (or fewer if there are <50).
+    n_label = min(50, len(rows))
+    labels = [[None] * len(header) for _ in range(n_label)]
+    for i in range(n_label):
+        row = rows[i]
+        for j, col in enumerate(header):
+            if col.endswith('+') or col.endswith('-'):
+                try:
+                    labels[i][j] = float(row[j])
+                except ValueError:
+                    labels[i][j] = "?"
+
+    best_idx = choose(header, rows, labels)
+    age = int(rows[best_idx][header.index("Age")])
+    years = float(rows[best_idx][header.index("YearsAtCompany+")])
+    role = rows[best_idx][header.index("jobRole")]
+    print(f"Best candidate: Age={age}, YearsAtCompany+={years:.1f} yrs, Role={role}")
+```

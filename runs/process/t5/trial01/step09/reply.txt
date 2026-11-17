@@ -1,0 +1,45 @@
+```python
+#!/usr/bin/env python3 -B
+"""step09.py: find rows with mistyped or made-up input values."""
+import ezr
+
+
+def spot(header, rows):
+    """Return row indices whose input features look wrong, most suspicious first.
+
+    Strategy: build a tree on the full dataset (goals filled in), then for each
+    row compute its actual ydist and compare with what the trained tree predicts.
+    A large gap means the row's feature values are inconsistent with its goals —
+    i.e., something was mistyped or made up.
+    """
+    tbl = ezr.Tbl([header] + rows)
+
+    # Train a decision tree on all rows (goals already filled in).
+    node = ezr.tree(tbl, tbl.rows)
+    ranker_fn = ezr.ranker(tbl)
+
+    scored = []
+    for i, row in enumerate(rows):
+        actual_yd = ezr.ydist(tbl, row)
+        predicted_yd = ranker_fn(row)
+        gap = abs(actual_yd - predicted_yd)
+        scored.append((gap, i))
+
+    # Sort by discrepancy (largest first).  Rows with very small gaps are fine.
+    scored.sort(key=lambda x: -x[0])
+    return [idx for _, idx in scored]
+
+
+if __name__ == "__main__":
+    import os
+
+    path = os.path.join(os.path.dirname(__file__), "pom3a.train.csv")
+    with open(path, encoding="utf-8-sig") as f:
+        lines = [l.strip() for l in f if l.strip()]
+
+    header = lines[0].split(",")
+    rows = [[ezr.atom(s) for s in line.split(",")] for line in lines[1:]]
+
+    suspicious = spot(header, rows)
+    print(f"Suspect rows (most suspicious first): {suspicious}")
+```

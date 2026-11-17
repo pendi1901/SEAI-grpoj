@@ -1,0 +1,60 @@
+import csv
+
+
+def blame(header, rows):
+    """Returns list of input column names that best explain why worst rows are bad."""
+
+    goal_cols = [c for c in header if c.endswith('+')]
+    feature_cols = [c for c in header if not c.endswith('+') and c != 'attrition']
+
+    scores = []
+    for row in rows:
+        s = 0.0
+        valid = True
+        for col in goal_cols:
+            val = row[header.index(col)]
+            try:
+                s += float(val)
+            except ValueError:
+                valid = False
+                break
+        if not valid:
+            continue
+        scores.append((s, row))
+
+    scores.sort()
+
+    n_worst = max(1, len(scores) // 5)
+    worst_rows = [row for _, row in scores[:n_worst]]
+
+    result = []
+    for col in feature_cols:
+        vals = [float(row[header.index(col)]) for row in rows]
+        n = len(vals)
+        mean_v = sum(vals) / n
+        mean_s = sum(s for s, _ in scores) / len(scores) if scores else 0.0
+
+        num = sum((vals[i] - mean_v) * (scores[i][0] - mean_s) for i in range(n))
+        den_x = sum((v - mean_v) ** 2 for v in vals) ** 0.5
+        den_y = sum((s - mean_s) ** 2 for s, _ in scores) ** 0.5
+
+        if den_x > 1e-10 and den_y > 1e-10:
+            corr = num / (den_x * den_y)
+        else:
+            corr = 0.0
+
+        result.append((abs(corr), col))
+
+    result.sort(reverse=True)
+
+    return [col for _, col in result[:5]]
+
+
+if __name__ == "__main__":
+    with open("WA_Fn-UseC_-HR-Employee-Attrition.train.csv", "r") as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = list(reader)
+
+    answer = blame(header, rows)
+    print(f"Factors explaining short stays: {', '.join(answer)}")

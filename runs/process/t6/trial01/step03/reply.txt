@@ -1,0 +1,45 @@
+```python
+import ezr
+
+def certify(xs, ys):
+    """Returns True if xs and ys agree apart from noise."""
+    return bool(ezr.same(xs, ys))
+
+if __name__ == "__main__":
+    import os
+    path = os.path.join(os.path.dirname(__file__) or ".", "pom3a.train.csv")
+    with open(path, encoding="utf-8-sig") as f:
+        lines = [l.strip() for l in f if l.strip()]
+    header = lines[0].split(",")
+
+    rows = []
+    for line in lines[1:]:
+        cells = line.split(",")
+        row = []
+        for c in cells:
+            s = c.strip()
+            try: row.append(float(s))
+            except ValueError:
+                if s.lower() == "true":  row.append(True)
+                elif s.lower() == "false": row.append(False)
+                else:                   row.append(s)
+        rows.append(row)
+
+    tbl = ezr.Tbl(rows)
+
+    # Split on Team Size (column index 8): small vs big teams
+    ts_idx = header.index("Team Size")
+    costs_idx = header.index("Cost-")
+    med = sorted(r[ts_idx] for r in rows if isinstance(r[ts_idx], float))[len(rows)//2]
+
+    small_cost = [r[costs_idx] for r in rows if isinstance(r[ts_idx], float) and r[ts_idx] <= med]
+    big_cost   = [r[costs_idx] for r in rows if isinstance(r[ts_idx], float) and r[ts_idx] >  med]
+
+    print(f"Small-team (n={len(small_cost)}): mean Cost- = {sum(small_cost)/max(1,len(small_cost)):.4f}")
+    print(f"Big-team   (n={len(big_cost)}):  mean Cost- = {sum(big_cost)/max(1,len(big_cost)):.4f}")
+
+    if certify(small_cost, big_cost):
+        print("Verdict: The cost difference is noise — small teams were not really cheaper.")
+    else:
+        print("Verdict: The cost difference is real — small teams genuinely cost less.")
+```

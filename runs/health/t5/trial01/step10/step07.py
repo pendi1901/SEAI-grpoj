@@ -1,0 +1,55 @@
+import ezr
+
+
+def choose(header, rows, label):
+    """Find the best row among up to 50 labelled candidates."""
+    tbl = ezr.Tbl(zip(header, rows))
+    goals = [c for c in tbl.y if c.goal != 0]
+
+    # Label up to 50 rows.
+    cap = min(50, len(rows))
+    idxs = list(range(len(rows)))
+    random.seed(ezr.the.Seed)
+    chosen = random.sample(idxs, cap)
+
+    labelled_rows = []
+    for i in chosen:
+        true_row = label(i)
+        # Fill ? goals with the true values; keep everything else as-is.
+        filled = list(true_row)
+        labelled_rows.append(filled)
+
+    lab_tbl = ezr.Tbl(zip(header, labelled_rows))
+    node = ezr.tree(lab_tbl, lab_tbl.rows)
+
+    best_pos = -1
+    best_score = 1e30
+
+    for i in chosen:
+        true_row = label(i)
+        filled = list(true_row)
+        # Replace ? goals with the true values.
+        for c in goals:
+            if rows[i][c.at] == "?":
+                filled[c.at] = true_row[c.at]
+
+        row_tbl = ezr.Tbl(zip(header, [filled]))
+        pred = ezr.leaf(ezr.tree(row_tbl, row_tbl.rows), row_tbl.rows[0]).mu
+
+        if pred < best_score:
+            best_score = pred
+            best_pos = i
+
+    return best_pos
+
+
+if __name__ == "__main__":
+    import os
+    path = os.path.join(os.path.dirname(__file__) or ".", "Health-ClosedIssues0000.train.csv")
+    with open(path, encoding="utf-8-sig") as f:
+        lines = [l.strip() for l in f if l.strip()]
+    header = lines[0].split(",")
+    rows = [[ezr.atom(s) for s in line.split(",")] for line in lines[1:]]
+
+    best_pos = choose(header, rows, label)
+    print(f"Best row position: {best_pos}")

@@ -1,0 +1,60 @@
+#!/usr/bin/env python3 -B
+"""step02.py: predict cost- and idle- for setups with hidden goals."""
+import ezr
+
+
+def guess(header, train, test):
+    """Estimate the first goal column (Cost-) for each test row.
+
+    Returns a list of floats in header order matching `test`.
+    """
+    tbl = ezr.Tbl([header] + train)
+    # Build a tree on training rows to learn ydist from x features
+    node = ezr.tree(tbl, tbl.rows)
+    ranker_fn = ezr.ranker(tbl)
+
+    # For each test row, fill in the goal cells with "?" and predict
+    predictions = []
+    for row in test:
+        # Clone the training table to get a fresh copy with "?" goals
+        pred_row = list(row)
+        # Replace goal columns (ending in - or +) with "?" if they are not already
+        for i, col_name in enumerate(header):
+            if col_name[-1] in "+-":
+                if pred_row[i] != "?":
+                    pred_row[i] = "?"
+
+        # Use the trained tree to predict ydist for this row
+        predicted_ydist = ranker_fn(pred_row)
+        predictions.append(predicted_ydist)
+
+    return predictions
+
+
+if __name__ == "__main__":
+    import os
+
+    path = os.path.join(os.path.dirname(__file__), "pom3a.train.csv")
+    with open(path, encoding="utf-8-sig") as f:
+        lines = [l.strip() for l in f if l.strip()]
+    header = lines[0].split(",")
+    rows = [[ezr.atom(s) for s in line.split(",")] for line in lines[1:]]
+
+    # Split into train and test (80/20)
+    import random
+    random.seed(42)
+    shuffled = list(range(len(rows)))
+    random.shuffle(shuffled)
+    split_idx = int(0.8 * len(shuffled))
+    train_indices = set(shuffled[:split_idx])
+    test_indices = set(shuffled[split_idx:])
+
+    train_rows = [rows[i] for i in shuffled if i in train_indices]
+    test_rows = [rows[i] for i in shuffled if i in test_indices]
+
+    predictions = guess(header, train_rows, test_rows)
+
+    print(f"Predicted Cost- values for {len(predictions)} setups:")
+    for i, pred in enumerate(predictions):
+        row_idx = list(shuffled)[i + split_idx - split_idx]  # recover original index
+        print(f"  Setup {row_idx}: predicted Cost- ≈ {pred:.4f}")

@@ -1,0 +1,107 @@
+import csv
+
+
+def remember(header, rows):
+    # Identify goal columns: '-' → minimise, '+' → maximise
+    goal_cols = [c for c in header if c.endswith('-') or c.endswith('+')]
+
+    # Pass 1 – collect numeric values per goal column; mark rows with any '?' as invalid
+    col_vals = {}
+    row_valid = [True] * len(rows)
+    for i, row in enumerate(rows):
+        for col in goal_cols:
+            val_str = row[header.index(col)]
+            if val_str == '?' or val_str is None:
+                row_valid[i] = False
+            else:
+                try:
+                    val = float(val_str)
+                except ValueError:
+                    row_valid[i] = False
+                    break
+                col_vals.setdefault(col, []).append((i, val))
+
+    # Pass 2 – normalise each goal to [0,1] and sum; higher is better
+    scored = []
+    for i in range(len(rows)):
+        if not row_valid[i]:
+            continue
+        score = 0.0
+        for col in goal_cols:
+            vals = col_vals[col]
+            mn = min(v[1] for v in vals)
+            mx = max(v[1] for v in vals)
+            val_str = row[header.index(col)]
+            val = float(val_str)
+            if col.endswith('-'):          # minimise → low is best
+                score += (mx - val) / (mx - mn + 1e-9)
+            else:                          # maximise → high is best
+                score += (val - mn) / (mx - mn + 1e-9)
+        scored.append((i, score))
+
+    scored.sort(key=lambda x: -x[1])
+    n = len(scored)
+    k = max(1, int(n * 0.05))           # at most 5% of rows
+    return [pos for pos, _ in scored[:k]]
+
+
+def guess(header, train, test):
+    """Predict the first goal column (MRE-) for each test row."""
+
+    # Identify goal columns and pick the first one as our target
+    goal_cols = [c for c in header if c.endswith('-') or c.endswith('+')]
+    target_col = goal_cols[0]  # "MRE-"
+
+    # Determine which columns are numeric (uppercase) vs symbolic (lowercase)
+    input_cols = []
+    for col in header:
+        if col == target_col:
+            continue
+        if col[0].isupper():
+            input_cols.append(col)
+
+    # Collect training data: (input_vector, mre_value)
+    train_data = []
+    for row in train:
+        inputs = [float(row[col]) for col in input_cols]
+        mre_str = row[target_col]
+        try:
+            mre = float(mre_str)
+        except ValueError:
+            continue
+        train_data.append((inputs, mre))
+
+    # For each test row, predict MRE using k-nearest neighbors on inputs
+    predictions = []
+    for row in test:
+        inputs = [float(row[col]) for col in input_cols]
+
+        # Compute distances to all training rows
+        dists = []
+        for train_inputs, train_mre in train_data:
+            d = 0.0
+            for a, b in zip(inputs, train_inputs):
+                diff = a - b
+                d += diff * diff
+            dists.append((d ** 0.5, train_mre))
+
+        # Sort by distance and take the closest k
+        dists.sort(key=lambda x: x[0])
+        k = max(1, min(len(dists), len(train_data) // 2))
+        avg_mre = sum(m for _, m in dists[:k]) / k
+
+        predictions.append(avg_mre)
+
+    return predictions
+
+
+if __name__ == "__main__":
+    with open("Health-ClosedIssues0000.train.csv", "r") as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = [row for row in reader]
+
+    result = guess(header, rows, rows)
+    print(f"Predicted MRE- values:")
+    for i, v in enumerate(result):
+        print(f"  Row {i}: {v:.4f}")

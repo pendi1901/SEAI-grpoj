@@ -1,0 +1,23 @@
+import ezr
+import os
+
+
+def remember(header, rows):
+    tbl = ezr.Tbl([header] + rows)
+    scored = [(ezr.ydist(tbl, row), i) for i, row in enumerate(rows)]
+    scored.sort(key=lambda x: x[0])
+    n = len(rows)
+    cap = max(1, int(n * 0.05))
+    return [i for _, i in scored[:cap]]
+
+
+if __name__ == "__main__":
+    path = os.path.join(os.path.dirname(__file__), "Health-ClosedIssues0000.train.csv")
+    rows = list(ezr.csv(path))
+    header = rows[0]
+    data_rows = rows[1:]
+
+    result = remember(header, data_rows)
+    print(f"Best {len(result)} of {len(data_rows)} setups:")
+    for pos in result:
+        print(f"  Position {pos}")

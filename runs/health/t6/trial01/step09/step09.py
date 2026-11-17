@@ -1,0 +1,71 @@
+import ezr
+from step01 import remember
+
+
+def spot(header, rows):
+    """Find rows that look like failed runs — where an input value was entered wrongly."""
+    
+    # Build a reference table from all rows to understand the data landscape
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Score each row by ydist (lower is better)
+    scored = [(ezr.ydist(tbl, r), i) for i, r in enumerate(rows)]
+    scored.sort(key=lambda x: x[0])  # best first
+    
+    # Get the top few rows as reference "good" setups
+    n_good = max(1, int(len(scored) * 0.05))
+    good_rows = [rows[i] for _, i in scored[:n_good]]
+    
+    suspicious = []
+    
+    for rank, (ydist_val, idx) in enumerate(scored):
+        row = rows[idx]
+        
+        # Skip if this is one of the genuinely best rows
+        if rank < n_good:
+            continue
+        
+        # Check if this row has any "?" cells — these are hidden from us but might indicate issues
+        has_unknowns = any(c == "?" for c in row)
+        
+        # For rows without unknowns, check if they're outliers compared to good setups
+        is_outlier = False
+        
+        if not has_unknowns:
+            # Compare this row's numeric values against the distribution of good rows
+            for col_name in header:
+                if col_name[0].isupper():  # numeric column
+                    try:
+                        val = float(row[col_name])
+                        good_vals = [float(good_rows[j][col_name]) 
+                                   for j in range(len(good_rows)) 
+                                   if row[col_name] != "?" and good_rows[j][col_name] != "?"]
+                        
+                        if len(good_vals) >= 2:
+                            mean_g = sum(good_vals) / len(good_vals)
+                            var_g = sum((v - mean_g)**2 for v in good_vals) / (len(good_vals) - 1)
+                            sd_g = var_g ** 0.5 if var_g > 0 else 1e-32
+                            
+                            # If this value is far from the typical range of good rows
+                            z_score = abs(val - mean_g) / sd_g
+                            if z_score > 3:  # more than 3 standard deviations away
+                                is_outlier = True
+                                break
+                    except (ValueError, TypeError):
+                        continue
+        
+        if is_outlier or has_unknowns:
+            suspicious.append(idx)
+    
+    return suspicious
+
+
+if __name__ == "__main__":
+    import os
+    path = os.path.join(os.path.dirname(__file__), "Health-ClosedIssues0000.train.csv")
+    rows = list(ezr.csv(path))
+    header = rows[0]
+    data_rows = rows[1:]
+
+    result = spot(header, data_rows)
+    print(f"Suspected failed runs: {result}")

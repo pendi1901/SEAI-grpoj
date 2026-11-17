@@ -1,0 +1,51 @@
+import sys
+sys.path.insert(0, '.')
+from step01 import remember
+
+
+def certify(xs, ys):
+    """Return True if xs and ys are the same apart from noise."""
+    n = min(len(xs), len(ys))
+    if n == 0:
+        return False
+
+    diffs = [abs(xs[i] - ys[i]) for i in range(n)]
+    max_diff = max(diffs)
+
+    # Scale-dependent tolerance with absolute floor
+    avg_val = (sum(xs[:n]) + sum(ys[:n])) / (2 * n)
+    if abs(avg_val) < 1e-6:
+        return max_diff < 0.05
+    rel_tol = 0.05 * abs(avg_val)
+    return max_diff < rel_tol
+
+
+if __name__ == "__main__":
+    import pandas as pd
+    import numpy as np
+
+    df = pd.read_csv("Health-ClosedIssues0000.train.csv")
+    header = list(df.columns)
+    rows = [list(row) for row in df.values]
+
+    goals = ['MRE-', 'ACC+', 'PRED40+']
+    n_est_col_idx = header.index('N_estimators')
+
+    all_n_est = [float(r[n_est_col_idx]) for r in rows]
+    med = np.median(all_n_est)
+
+    small_rows = [r for r in rows if float(r[n_est_col_idx]) <= med]
+    big_rows = [r for r in rows if float(r[n_est_col_idx]) > med]
+
+    def mean_goals(rows):
+        result = []
+        for col in goals:
+            vals = [float(row[header.index(col)]) for row in rows]
+            result.append(np.mean(vals))
+        return result
+
+    small_means = mean_goals(small_rows)
+    big_means = mean_goals(big_rows)
+
+    answer = certify(big_means, small_means)
+    print(f"Big vs Small setups: {'same (noise)' if answer else 'different'}")

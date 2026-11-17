@@ -1,0 +1,506 @@
+You are writing one Python file, step07.py.
+
+The data is the csv file pom3a.train.csv in the current directory. Column names starting in upper case are numeric, lower case are symbolic. A name ending in - is a goal to minimise, in + a goal to maximise; all other columns are inputs. Its first lines:
+
+Culture,Criticality,Criticality Modifier,Initial Known,Inter-Dependency,Dynamism,Size,Plan,Team Size,Cost-,Score-,Idle-
+0.0398226348789376,0.4187697102690966,0.3161703902572166,0.959348346991444,0.2103972800854883,0.0012522910308919,0.6979456136102667,0.1708306261451138,0.3500716982826897,0.200104493,0.01402719,0.321856287
+0.8178056583175877,0.3082578231712947,0.6206926231796946,0.1199646773715625,0.2164255013970158,0.4846586144618353,0.294210224703445,0.9507425179765736,0.6096404500113382,0.163698034,0.592347249,0.522540984
+0.56468123803359,0.7539537892599035,0.9559574534085812,0.7971286605248636,0.1481054831420605,0.1838254939038858,0.3179577323742758,0.8793894950349531,0.5030407165929099,0.384975817,0.365612315,0.610119048
+
+Use only the Python standard library.
+
+These files, written earlier, are in the same directory:
+
+--- step01.py ---
+import csv
+
+
+def remember(header, rows):
+    # Identify goal columns (end with '-') and input columns
+    goals = [c for c in header if c.endswith('-')]
+    
+    # For each goal column, find min and max across all rows to normalize
+    n = len(rows)
+    goal_mins = {}
+    goal_maxs = {}
+    for g in goals:
+        vals = []
+        for r in rows:
+            v = float(r[header.index(g)])
+            vals.append(v)
+        goal_mins[g] = min(vals)
+        goal_maxs[g] = max(vals)
+    
+    # Score each row: sum of normalized (lower is better) scores
+    scored = []
+    for i, r in enumerate(rows):
+        total = 0.0
+        for g in goals:
+            v = float(r[header.index(g)])
+            if goal_maxs[g] == goal_mins[g]:
+                norm = 0.0
+            else:
+                norm = (v - goal_mins[g]) / (goal_maxs[g] - goal_mins[g])
+            total += norm
+        scored.append((total, i))
+    
+    # Sort by score ascending (best first)
+    scored.sort()
+    
+    # Return top 5% positions (at least 1)
+    k = max(1, len(scored) // 20)
+    return [pos for _, pos in scored[:k]]
+
+
+if __name__ == "__main__":
+    import sys
+    
+    with open('pom3a.train.csv', newline='') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = []
+        for row in reader:
+            if len(row) == len(header):
+                rows.append(row)
+    
+    best_positions = remember(header, rows)
+    print(f"Top {len(best_positions)} setups (0-based positions):")
+    for p in best_positions:
+        print(p)
+
+
+--- step02.py ---
+import csv
+
+
+def guess(header, train, test):
+    goals = [c for c in header if c.endswith('-')]
+    inputs = [c for c in header if not c.endswith('-')]
+    first_goal = goals[0]
+
+    n_inputs = len(inputs)
+    m = n_inputs + 1  # rows of augmented normal-equation matrix
+
+    X = []
+    y = []
+    for row in train:
+        x_row = [1.0]
+        for col in inputs:
+            x_row.append(float(row[header.index(col)]))
+        X.append(x_row)
+        y.append(float(row[header.index(first_goal)]))
+
+    # Build X^T X and X^T y
+    XtX = [[0.0] * m for _ in range(m)]
+    for i in range(n_inputs):
+        for j in range(i, m):
+            s = 0.0
+            for k in range(len(train)):
+                s += X[k][i] * X[k][j]
+            XtX[i][j] = s
+            if i != j:
+                XtX[j][i] = s
+
+    Xty = [0.0] * m
+    for i in range(m):
+        for k in range(len(train)):
+            Xty[i] += X[k][i] * y[k]
+
+    # Solve via Gaussian elimination with partial pivoting
+    aug = []
+    for i in range(m):
+        aug.append(list(XtX[i]) + [Xty[i]])
+
+    pivot_row = 0
+    for col in range(m):
+        if pivot_row >= m:
+            break
+        max_val = abs(aug[pivot_row][col])
+        max_idx = pivot_row
+        for row in range(pivot_row + 1, m):
+            if abs(aug[row][col]) > max_val:
+                max_val = abs(aug[row][col])
+                max_idx = row
+        aug[pivot_row], aug[max_idx] = aug[max_idx], aug[pivot_row]
+
+        pivot = aug[pivot_row][col]
+        for row in range(m):
+            if row != pivot_row:
+                factor = aug[row][col] / pivot
+                for j in range(col, m + 1):
+                    aug[row][j] -= factor * aug[pivot_row][j]
+
+        pivot_row += 1
+
+    beta = [aug[i][m] for i in range(m)]
+
+    predictions = []
+    for row in test:
+        pred = 0.0
+        for col in inputs:
+            pred += float(row[header.index(col)]) * beta[header.index(col) + 1]
+        pred += beta[0]
+        predictions.append(pred)
+
+    return predictions
+
+
+if __name__ == "__main__":
+    with open('pom3a.train.csv', newline='') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = []
+        for row in reader:
+            if len(row) == len(header):
+                rows.append(row)
+
+    predictions = guess(header, rows, [])
+    print("Predicted Cost- values:")
+    for v in predictions:
+        print(v)
+
+
+--- step03.py ---
+import csv
+import math
+
+
+def certify(xs, ys):
+    """Returns True if xs and ys are the same apart from noise."""
+    n1 = len(xs)
+    n2 = len(ys)
+    if n1 < 3 or n2 < 3:
+        return False
+
+    mean_x = sum(xs) / n1
+    mean_y = sum(ys) / n2
+
+    var_x = sum((x - mean_x) ** 2 for x in xs) / (n1 - 1) if n1 > 1 else 0.0
+    var_y = sum((y - mean_y) ** 2 for y in ys) / (n2 - 1) if n2 > 1 else 0.0
+
+    se = math.sqrt(var_x / n1 + var_y / n2)
+    if se == 0:
+        return True
+
+    t_stat = abs(mean_x - mean_y) / se
+    return t_stat < 2.0
+
+
+def remember(header, rows):
+    goals = [c for c in header if c.endswith('-')]
+
+    goal_mins = {}
+    goal_maxs = {}
+    n = len(rows)
+    for g in goals:
+        vals = []
+        for r in rows:
+            v = float(r[header.index(g)])
+            vals.append(v)
+        goal_mins[g] = min(vals)
+        goal_maxs[g] = max(vals)
+
+    scored = []
+    for i, r in enumerate(rows):
+        total = 0.0
+        for g in goals:
+            v = float(r[header.index(g)])
+            if goal_maxs[g] == goal_mins[g]:
+                norm = 0.0
+            else:
+                norm = (v - goal_mins[g]) / (goal_maxs[g] - goal_mins[g])
+            total += norm
+        scored.append((total, i))
+
+    scored.sort()
+    k = max(1, len(scored) // 20)
+    return [pos for _, pos in scored[:k]]
+
+
+def main():
+    with open('pom3a.train.csv', newline='') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = []
+        for row in reader:
+            if len(row) == len(header):
+                rows.append(row)
+
+    team_size_col = 'Team Size'
+    cost_col = 'Cost-'
+
+    ts_values = [float(r[header.index(team_size_col)]) for r in rows]
+    median_ts = sorted(ts_values)[len(ts_values) // 2]
+
+    small_cost = []
+    big_cost = []
+
+    for r in rows:
+        ts = float(r[header.index(team_size_col)])
+        c = float(r[header.index(cost_col)])
+        if ts < median_ts:
+            small_cost.append(c)
+        else:
+            big_cost.append(c)
+
+    print(f"Small-team average Cost-: {sum(small_cost)/len(small_cost):.4f}")
+    print(f"Big-team average Cost-: {sum(big_cost)/len(big_cost):.4f}")
+
+    result = certify(small_cost, big_cost)
+    if result:
+        print("The difference is likely just noise - small and big teams cost about the same.")
+    else:
+        print("There's a real difference - one team size genuinely costs more/less than the other.")
+
+
+if __name__ == "__main__":
+    main()
+
+
+--- step04.py ---
+import csv
+
+
+# Module-level state that persists across calls to flow()
+_state = {
+    'goal_mins': {},
+    'goal_maxs': {},
+    'scores': [],
+}
+
+
+def flow(header, row, seen):
+    """Approve (True) or reject (False) a proposal as it arrives."""
+    goals = [c for c in header if c.endswith('-')]
+
+    # Update running min/max from previously-seen rows
+    n_seen_before = len(_state['scores'])
+    for s_row in seen:
+        for g in goals:
+            v = float(s_row[header.index(g)])
+            if g not in _state['goal_mins']:
+                _state['goal_mins'][g] = v
+                _state['goal_maxs'][g] = v
+            else:
+                _state['goal_mins'][g] = min(_state['goal_mins'][g], v)
+                _state['goal_maxs'][g] = max(_state['goal_maxs'][g], v)
+
+    # Score the current row (lower total is better for '-' goals)
+    total = 0.0
+    for g in goals:
+        v = float(row[header.index(g)])
+        mn = _state['goal_mins'].get(g, v)
+        mx = _state['goal_maxs'].get(g, v)
+        if mx == mn:
+            norm = 0.0
+        else:
+            norm = (v - mn) / (mx - mn)
+        total += norm
+
+    score = total
+    _state['scores'].append(score)
+
+    # First row is always approved; thereafter use top-5% threshold
+    if n_seen_before == 0:
+        return True
+
+    all_scores = sorted(_state['scores'])
+    k = max(1, len(all_scores) // 20)
+    threshold = all_scores[-k]
+
+    return score <= threshold
+
+
+def main():
+    with open('pom3a.train.csv', newline='') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = []
+        for row in reader:
+            if len(row) == len(header):
+                rows.append(row)
+
+    approved = 0
+    total = len(rows)
+    for i, row in enumerate(rows):
+        seen = [rows[j] for j in range(i)]
+        if flow(header, row, seen):
+            approved += 1
+
+    print(f"Approved {approved} out of {total} proposals.")
+
+
+if __name__ == "__main__":
+    main()
+
+
+--- step05.py ---
+import csv
+import math
+
+
+def blame(header, rows):
+    """Identify input columns that explain why the worst setups are bad."""
+
+    goals = [c for c in header if c.endswith('-')]
+    inputs = [c for c in header if not c.endswith('-')]
+
+    n = len(rows)
+
+    # Compute total normalized score per row (lower is better)
+    goal_mins = {}
+    goal_maxs = {}
+    for g in goals:
+        vals = []
+        for r in rows:
+            v = float(r[header.index(g)])
+            vals.append(v)
+        goal_mins[g] = min(vals)
+        goal_maxs[g] = max(vals)
+
+    scores = []
+    for i, r in enumerate(rows):
+        total = 0.0
+        for g in goals:
+            v = float(r[header.index(g)])
+            if goal_maxs[g] == goal_mins[g]:
+                norm = 0.0
+            else:
+                norm = (v - goal_mins[g]) / (goal_maxs[g] - goal_mins[g])
+            total += norm
+        scores.append((total, i))
+
+    # Sort descending so worst rows come first
+    scores.sort(reverse=True)
+
+    k = max(1, n // 5)
+    worst_indices = sorted([pos for _, pos in scores[:k]])
+    best_indices = sorted([pos for _, pos in scores[-k:]])
+
+    result = []
+    for col in inputs:
+        worst_vals = [float(r[header.index(col)]) for i, r in enumerate(rows) if i in worst_indices]
+        best_vals = [float(r[header.index(col)]) for i, r in enumerate(rows) if i in best_indices]
+
+        if not worst_vals or not best_vals:
+            continue
+
+        mean_worst = sum(worst_vals) / len(worst_vals)
+        mean_best = sum(best_vals) / len(best_vals)
+
+        var_w = sum((v - mean_worst) ** 2 for v in worst_vals) / max(len(worst_vals) - 1, 1) if len(worst_vals) > 1 else 0.0
+        var_b = sum((v - mean_best) ** 2 for v in best_vals) / max(len(best_vals) - 1, 1) if len(best_vals) > 1 else 0.0
+
+        se = math.sqrt(var_w / len(worst_vals) + var_b / len(best_vals))
+        if se == 0:
+            continue
+
+        t_stat = abs(mean_worst - mean_best) / se
+
+        # Significant difference means this column explains badness
+        if t_stat > 2.0:
+            direction = "high" if mean_worst > mean_best else "low"
+            result.append(f"{col} tends to be {direction} in bad setups")
+
+    return result
+
+
+if __name__ == "__main__":
+    with open('pom3a.train.csv', newline='') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = []
+        for row in reader:
+            if len(row) == len(header):
+                rows.append(row)
+
+    reasons = blame(header, rows)
+    print("Why the worst setups are bad:")
+    for r in reasons:
+        print(f"  - {r}")
+
+
+--- step06.py ---
+def justify(header, rows, row):
+    """Return (p, reason) where p is the fraction of `rows` that this setup beats."""
+    goals = [c for c in header if c.endswith('-')]
+
+    # Compute min/max per goal across all existing rows
+    goal_mins = {}
+    goal_maxs = {}
+    n_rows = len(rows)
+    for g in goals:
+        vals = []
+        for r in rows:
+            v = float(r[header.index(g)])
+            vals.append(v)
+        goal_mins[g] = min(vals)
+        goal_maxs[g] = max(vals)
+
+    # Count how many existing rows are worse than an ideal hypothetical row (score=0)
+    better_count = 0
+    for r in rows:
+        total_score = 0.0
+        for g in goals:
+            v = float(r[header.index(g)])
+            if goal_maxs[g] == goal_mins[g]:
+                norm = 0.0
+            else:
+                norm = (v - goal_mins[g]) / (goal_maxs[g] - goal_mins[g])
+            total_score += norm
+        if total_score > 0:
+            better_count += 1
+
+    p = better_count / n_rows
+
+    if p >= 0.95:
+        reason = "This setup would be in the top tier, beating most others."
+    elif p >= 0.8:
+        reason = "This setup is strong, outperforming a large majority of alternatives."
+    elif p >= 0.6:
+        reason = "This setup performs well above average compared to existing setups."
+    else:
+        reason = "This setup would rank below most existing configurations."
+
+    return (p, reason)
+
+
+if __name__ == "__main__":
+    import csv
+
+    with open('pom3a.train.csv', newline='') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = []
+        for row in reader:
+            if len(row) == len(header):
+                rows.append(row)
+
+    # Build a hypothetical row by replacing goal cells of the first data row with "?"
+    goals = [c for c in header if c.endswith('-')]
+    sample_row = list(rows[0])
+    for g in goals:
+        idx = header.index(g)
+        sample_row[idx] = '?'
+
+    p, reason = justify(header, rows, sample_row)
+    print(f"Rank: {p:.1%} of existing setups are worse than this ideal configuration.")
+    print(reason)
+
+
+The customer asks:
+
+  I can afford to trial 50 setups for real. Find me the best one.
+
+Write step07.py to answer that ask on this data.
+
+A test harness will import your file and call this function, so you must define it exactly:
+
+def choose(header, rows, label)
+  Returns an int.   Every goal cell in `rows` is "?". Calling label(i) returns the list of true goal values for rows[i]; you may label at most 50 different rows. Return the position of the best row you found.
+
+Conventions: `header` is the list of column names. `rows` is a list of rows; each row is a list of cells in header order, floats for numeric columns and strings for symbolic ones. A cell shown as "?" is hidden from you. A row is better when its goals are closer to their best (low for names ending in -, high for names ending in +).
+
+Keep everything that prints or reads the csv file under `if __name__ == "__main__":` so that importing the file prints nothing. Plain built-in types are all you need: do not import anything from `typing`.
+
+Running `python step07.py` must load the csv, call your function, print a short answer a customer could read, and exit with status 0. Reply with the complete file in one ```python fenced block and nothing else.

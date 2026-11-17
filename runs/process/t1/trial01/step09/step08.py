@@ -1,0 +1,136 @@
+import csv
+
+
+def fix(header, row, levers):
+    """Pick the best allowed value for each lever to rescue the bad row."""
+    goals = [c for c in header if c.endswith('-')]
+    plus_goals = [c for c in header if c.endswith('+')]
+
+    # Build a baseline score from the original row's goal values
+    def score(vals):
+        s = 0.0
+        for g in goals:
+            v = float(vals[header.index(g)])
+            s += v
+        for g in plus_goals:
+            v = float(vals[header.index(g)])
+            s -= v
+        return s
+
+    # Try every combination of lever values (small enough to be tractable)
+    best_score = score(row)
+    best_choice = {col: row[header.index(col)] for col in header}
+
+    def try_combination(vals):
+        s = 0.0
+        for g in goals:
+            v = float(vals[header.index(g)])
+            s += v
+        for g in plus_goals:
+            v = float(vals[header.index(g)])
+            s -= v
+        return s
+
+    # Collect all lever columns and their candidate values
+    lever_cols = []
+    for col, vals in levers.items():
+        if isinstance(vals, list):
+            lever_cols.append((col, vals))
+        else:
+            low, high = vals
+            n_steps = max(1, int(round(abs(high - low) / 0.5)))
+            step = (high - low) / n_steps if n_steps > 0 else 0.0
+            lever_cols.append((col, [low + i * step for i in range(n_steps)]))
+
+    # If no levers were given, just return the original row unchanged
+    if not lever_cols:
+        return best_choice
+
+    # Cartesian product of all lever values – keep it small by limiting steps
+    max_combos = 200
+    total = 1
+    for _, vals in lever_cols:
+        total *= len(vals)
+    if total > max_combos:
+        raise ValueError("Too many combinations; pick fewer or coarser levers.")
+
+    combos = []
+    for i in range(total):
+        idx = [0] * len(lever_cols)
+        # simple counter to enumerate
+        vals = []
+        for j, (_, cvals) in enumerate(lever_cols):
+            vals.append(cvals[i % len(cvals)])
+            i_mod = i // len(cvals) if False else 0
+        combos.append(vals)
+
+    for combo in combos:
+        s = try_combination(combo)
+        if s < best_score:
+            best_score = s
+            for j, (col, _) in enumerate(lever_cols):
+                best_choice[col] = combo[j]
+
+    return best_choice
+
+
+if __name__ == "__main__":
+    with open('pom3a.train.csv', newline='') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = []
+        for row in reader:
+            if len(row) == len(header):
+                rows.append(row)
+
+    # Find a bad row (high Cost-, high Idle-)
+    goals = [c for c in header if c.endswith('-')]
+    plus_goals = [c for c in header if c.endswith('+')]
+
+    def score_of(r):
+        s = 0.0
+        for g in goals:
+            s += float(r[header.index(g)])
+        for g in plus_goals:
+            s -= float(r[header.index(g)])
+        return s
+
+    worst_idx = max(range(len(rows)), key=lambda i: score_of(rows[i]))
+    bad_row = rows[worst_idx]
+
+    # Determine which columns are symbolic and numeric, then build levers
+    levers = {}
+    for col in header:
+        if col.endswith('-') or col.endswith('+'):
+            continue  # goals are not levers
+        vals = []
+        for r in rows:
+            v = r[header.index(col)]
+            try:
+                float(v)
+                vals.append(float(v))
+            except ValueError:
+                vals.append(v)
+
+        if isinstance(vals[0], str):
+            # Symbolic – take top 3 distinct values from the dataset
+            seen = []
+            for v in vals:
+                if v not in seen:
+                    seen.append(v)
+            levers[col] = seen[:3]
+        else:
+            low, high = min(vals), max(vals)
+            # Offer a few discrete options around the extremes and midpoint
+            mid = (low + high) / 2.0
+            opts = [low, mid, high]
+            levers[col] = opts
+
+    fix_choice = fix(header, bad_row, levers)
+
+    print(f"Rescue plan for setup #{worst_idx}:")
+    for col, new_val in fix_choice.items():
+        if col != 'Cost-' and col != 'Idle-':
+            print(f"  {col}: change to {new_val}")
+    print(f"  Expected Cost-: {fix_choice.get('Cost-', '?')}")
+    print(f"  Expected Idle-: {fix_choice.get('Idle-', '?')}")

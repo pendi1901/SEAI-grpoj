@@ -1,0 +1,77 @@
+import pandas as pd
+
+
+def spot(header, rows):
+    """Return row indices whose input values look wrong (most suspicious first)."""
+
+    goals_plus = [h for h in header if h.endswith('+')]
+    goals_minus = [h for h in header if h.endswith('-')]
+
+    # Build a reference population from the training data to know what "normal" looks like.
+    df_ref = pd.read_csv("WA_Fn-UseC_-HR-Employee-Attrition.train.csv")
+    ref_header = list(df_ref.columns)
+    ref_rows = [list(r) for r in df_ref.values]
+
+    # Compute global min/max across reference rows for goals (skip '?' cells).
+    col_min = {}
+    col_max = {}
+    for r in ref_rows:
+        for c in goals_plus:
+            v = float(r[c]) if r[c] != '?' else 0.0
+            col_max[c] = max(col_max.get(c, -float('inf')), v)
+        for c in goals_minus:
+            v = float(r[c]) if r[c] != '?' else 0.0
+            col_min[c] = min(col_min.get(c, float('inf')), v)
+
+    # Score each reference row using the same normalization as earlier steps.
+    ref_scores = []
+    for r in ref_rows:
+        s = 0.0
+        for c in goals_plus:
+            lo, hi = col_min.get(c, -float('inf')), col_max.get(c, -float('inf'))
+            rng = (hi - lo) or 1.0
+            s += (float(r[c]) if r[c] != '?' else 0.0 - lo) / rng
+        for c in goals_minus:
+            lo, hi = col_min.get(c, float('inf')), col_max.get(c, float('inf'))
+            rng = (hi - lo) or 1.0
+            s += (hi - (float(r[c]) if r[c] != '?' else 0.0)) / rng
+        ref_scores.append(s)
+
+    # Determine the typical score range for reference rows.
+    mean_ref = sum(ref_scores) / len(ref_scores)
+    std_ref = (sum((s - mean_ref) ** 2 for s in ref_scores) / len(ref_scores)) ** 0.5 or 1.0
+
+    suspicious = []
+    for i, row in enumerate(rows):
+        # Compute score for the current row using reference statistics.
+        s = 0.0
+        for c in goals_plus:
+            lo, hi = col_min.get(c, -float('inf')), col_max.get(c, -float('inf'))
+            rng = (hi - lo) or 1.0
+            v = float(row[c]) if row[c] != '?' else 0.0
+            s += (v - lo) / rng
+        for c in goals_minus:
+            lo, hi = col_min.get(c, float('inf')), col_max.get(c, float('inf'))
+            rng = (hi - lo) or 1.0
+            v = float(row[c]) if row[c] != '?' else 0.0
+            s += (hi - v) / rng
+
+        # A suspicious row has a score far from the reference distribution.
+        z = abs(s - mean_ref) / std_ref
+        if z > 2.5:
+            suspicious.append((z, i))
+
+    suspicious.sort(key=lambda x: x[0], reverse=True)
+    return [idx for _, idx in suspicious[:10]]
+
+
+if __name__ == "__main__":
+    df = pd.read_csv("WA_Fn-UseC_-HR-Employee-Attrition.train.csv")
+    header = list(df.columns)
+    rows = [list(row) for row in df.values]
+
+    flagged = spot(header, rows)
+    print(f"Found {len(flagged)} suspicious entries:")
+    for pos in flagged:
+        print(f"  Row {pos}: YearsAtCompany+={df.iloc[pos]['YearsAtCompany+']}, "
+              f"YearsInCurrentRole+={df.iloc[pos]['YearsInCurrentRole+']}")

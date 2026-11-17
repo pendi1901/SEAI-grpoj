@@ -1,0 +1,222 @@
+You are writing one Python file, step05.py.
+
+The data is the csv file WA_Fn-UseC_-HR-Employee-Attrition.train.csv in the current directory. Column names starting in upper case are numeric, lower case are symbolic. A name ending in - is a goal to minimise, in + a goal to maximise; all other columns are inputs. Its first lines:
+
+Age,attrition,businessTravel,DailyRate,department,DistanceFromHome,Education,educationField,EmployeeCount,EmployeeNumber,EnvironmentSatisfaction,gender,HourlyRate,JobInvolvement,JobLevel,jobRole,JobSatisfaction,maritalStatus,MonthlyIncome,MonthlyRate,NumCompaniesWorked,over18,overTime,PercentSalaryHike,PerformanceRating,RelationshipSatisfaction,StandardHours,StockOptionLevel,TotalWorkingYears,TrainingTimesLastYear,WorkLifeBalance,YearsAtCompany+,YearsInCurrentRole+,YearsSinceLastPromotion,YearsWithCurrManager+
+37,Yes,Travel_Rarely,1373,Research & Development,2,2,Other,1,4,4,Male,92,2,1,Laboratory Technician,3,Single,2090,2396,6,Y,Yes,15,3,2,80,0,7,3,3,0,0,0,0
+30,No,Non-Travel,1400,Research & Development,3,3,Life Sciences,1,562,3,Male,53,3,1,Laboratory Technician,4,Married,2097,16734,4,Y,No,15,3,3,80,1,9,3,1,5,3,1,4
+39,No,Travel_Rarely,1462,Sales,6,3,Medical,1,1588,4,Male,38,4,3,Sales Executive,3,Married,8237,4658,2,Y,No,11,3,1,80,1,11,3,3,7,6,7,6
+
+You may use scikit-learn, numpy and pandas.
+
+These files, written earlier, are in the same directory:
+
+--- step01.py ---
+import pandas as pd
+
+
+def remember(header, rows):
+    n = len(rows)
+    goals_plus = [i for i, h in enumerate(header) if h.endswith('+')]
+    goals_minus = [i for i, h in enumerate(header) if h.endswith('-')]
+
+    col_min = {}
+    col_max = {}
+    for idx in range(n):
+        row = rows[idx]
+        for c in goals_plus:
+            v = float(row[c])
+            col_max[c] = max(col_max.get(c, -float('inf')), v)
+        for c in goals_minus:
+            v = float(row[c])
+            col_min[c] = min(col_min.get(c, float('inf')), v)
+
+    scores = []
+    for idx in range(n):
+        s = 0.0
+        rng = {}
+        for c in goals_plus:
+            lo, hi = col_min.get(c, -float('inf')), col_max.get(c, -float('inf'))
+            rng[c] = (hi - lo) or 1.0
+            s += (float(rows[idx][c]) - lo) / rng[c]
+        for c in goals_minus:
+            lo, hi = col_min.get(c, float('inf')), col_max.get(c, float('inf'))
+            rng[c] = (hi - lo) or 1.0
+            s += (hi - float(rows[idx][c])) / rng[c]
+        scores.append(s)
+
+    ranked = sorted(range(n), key=lambda i: scores[i], reverse=True)
+    max_ret = max(1, int(n * 0.05))
+    return ranked[:max_ret]
+
+
+if __name__ == "__main__":
+    df = pd.read_csv("WA_Fn-UseC_-HR-Employee-Attrition.train.csv")
+    header = list(df.columns)
+    rows = [list(row) for row in df.values]
+
+    result = remember(header, rows)
+    print(f"Top {len(result)} employees who stay unusually long:")
+    for pos in result:
+        print(
+            f"  Row {pos}: YearsAtCompany={df.iloc[pos]['YearsAtCompany+']}, "
+            f"YearsInCurrentRole={df.iloc[pos]['YearsInCurrentRole+]}"
+        )
+
+
+--- step02.py ---
+import pandas as pd
+from sklearn.ensemble import RandomForestRegressor
+
+
+def guess(header, train, test):
+    """Estimate YearsAtCompany+ (the first goal column) for each test row."""
+    
+    target_col = None
+    for col in header:
+        if col.endswith('+') or col.endswith('-'):
+            target_col = col
+            break
+    
+    df_train = pd.DataFrame(train, columns=header)
+    df_test = pd.DataFrame(test, columns=header)
+    
+    # Replace "?" with NaN so missing values are handled properly
+    df_train = df_train.replace('?', float('nan')).infer_objects()
+    df_test = df_test.replace('?', float('nan')).infer_objects()
+    
+    X_train = df_train.drop(columns=[target_col]).values
+    y_train = df_train[target_col].values
+    
+    X_test = df_test.drop(columns=[target_col]).values
+    
+    model = RandomForestRegressor(n_estimators=100, random_state=42)
+    model.fit(X_train, y_train)
+    
+    predictions = model.predict(X_test).tolist()
+    return predictions
+
+
+if __name__ == "__main__":
+    df = pd.read_csv("WA_Fn-UseC_-HR-Employee-Attrition.train.csv")
+    header = list(df.columns)
+    rows = [list(row) for row in df.values]
+
+    mid = len(rows) // 2
+    predictions = guess(header, rows[:mid], rows[mid:])
+
+    print(f"Predicted YearsAtCompany+ for {len(predictions)} new hires:")
+    for i, p in enumerate(predictions):
+        actual = df.iloc[mid + i]['YearsAtCompany+']
+        print(f"  Predicted={p:.1f}, Actual={actual}")
+
+
+--- step03.py ---
+import pandas as pd
+from sklearn.ensemble import RandomForestRegressor
+from step01 import remember
+from step02 import guess
+
+
+def certify(xs, ys):
+    """Returns True if xs and ys are the same apart from noise."""
+    mean_x = sum(xs) / len(xs) if xs else 0
+    mean_y = sum(ys) / len(ys) if ys else 0
+    
+    diff = abs(mean_x - mean_y)
+    scale = max(abs(mean_x), abs(mean_y)) or 1.0
+    
+    return diff < 0.5 * scale
+
+
+if __name__ == "__main__":
+    df = pd.read_csv("WA_Fn-UseC_-HR-Employee-Attrition.train.csv")
+    
+    ot_yes = df[df['overTime'] == 'Y']['YearsAtCompany+'].tolist()
+    ot_no = df[df['overTime'] == 'N']['YearsAtCompany+'].tolist()
+    
+    result = certify(ot_yes, ot_no)
+    
+    print(f"Overtime workers' YearsAtCompany+: {sum(ot_yes)/len(ot_yes):.1f}")
+    print(f"No overtime workers' YearsAtCompany+: {sum(ot_no)/len(ot_no):.1f}")
+    print(f"Are they similar? {'Yes (noise)' if result else 'No (real difference)'}")
+
+
+--- step04.py ---
+import pandas as pd
+
+
+def flow(header, row, seen):
+    """Returns True if this person needs a 'what would keep you here' conversation."""
+    
+    goals_plus = [h for h in header if h.endswith('+')]
+    goals_minus = [h for h in header if h.endswith('-')]
+    
+    # Accumulate running min/max from all previously seen rows
+    col_min = {}
+    col_max = {}
+    for s_row in seen:
+        for c in goals_plus:
+            v = float(s_row[c])
+            col_max[c] = max(col_max.get(c, -float('inf')), v)
+        for c in goals_minus:
+            v = float(s_row[c])
+            col_min[c] = min(col_min.get(c, float('inf')), v)
+    
+    # Score the current row using accumulated statistics
+    s = 0.0
+    for c in goals_plus:
+        lo = col_min.get(c, -float('inf'))
+        hi = col_max.get(c, -float('inf'))
+        rng = (hi - lo) or 1.0
+        s += (float(row[c]) - lo) / rng
+    for c in goals_minus:
+        lo = col_min.get(c, float('inf'))
+        hi = col_max.get(c, float('inf'))
+        rng = (hi - lo) or 1.0
+        s += (hi - float(row[c])) / rng
+    
+    # Threshold: top ~5% of the combined seen+current population
+    n_total = len(seen) + 1
+    threshold = max(1, int(n_total * 0.05))
+    
+    return s >= 3.0
+
+
+if __name__ == "__main__":
+    df = pd.read_csv("WA_Fn-UseC_-HR-Employee-Attrition.train.csv")
+    header = list(df.columns)
+    rows = [list(row) for row in df.values]
+
+    print(f"Processing {len(rows)} employees one at a time...")
+    flagged = []
+    for i, row in enumerate(rows):
+        seen = rows[:i]
+        if flow(header, row, seen):
+            flagged.append(i)
+
+    print(f"\nFlagged {len(flagged)} out of {len(rows)} employees:")
+    for idx in flagged:
+        dept = df.iloc[idx]['department']
+        years = df.iloc[idx]['YearsAtCompany+']
+        print(f"  Row {idx}: dept={dept}, YearsAtCompany+={years}")
+
+
+Reuse the earlier files wherever you can: import from them rather than rewriting. Write as little new code as possible. Do not edit the earlier files.
+
+The customer asks:
+
+  Some departments keep people only briefly. What is it about those jobs that explains the short stays?
+
+Write step05.py to answer that ask on this data.
+
+A test harness will import your file and call this function, so you must define it exactly:
+
+def blame(header, rows)
+  Returns a list of strings.   Return the names of the input columns (not goals) that best explain why the worst rows are bad.
+
+Conventions: `header` is the list of column names. `rows` is a list of rows; each row is a list of cells in header order, floats for numeric columns and strings for symbolic ones. A cell shown as "?" is hidden from you. A row is better when its goals are closer to their best (low for names ending in -, high for names ending in +).
+
+Keep everything that prints or reads the csv file under `if __name__ == "__main__":` so that importing the file prints nothing. Plain built-in types are all you need: do not import anything from `typing`.
+
+Running `python step05.py` must load the csv, call your function, print a short answer a customer could read, and exit with status 0. Reply with the complete file in one ```python fenced block and nothing else.

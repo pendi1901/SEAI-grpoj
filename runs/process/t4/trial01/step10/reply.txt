@@ -1,0 +1,95 @@
+```python
+import sys
+sys.path.insert(0, ".")
+from step01 import remember
+from step09 import spot
+
+
+def race(header, rows, label):
+    goal_cols = [h for h in header if h.endswith('-')]
+
+    def score_row(idx):
+        goals = label(idx)
+        s = 0.0
+        for col in goal_cols:
+            val = goals[header.index(col)]
+            try:
+                f = float(val)
+            except (ValueError, TypeError):
+                continue
+            if col.endswith('-'):
+                s -= f
+            else:
+                s += f
+        return s
+
+    n_rows = len(rows)
+    tried = set()  # globally tracked unique row indices
+
+    def strategy_random():
+        import random
+        idxs = list(range(n_rows))
+        random.shuffle(idxs)
+        return [i for i in idxs if i not in tried][:50]
+
+    def strategy_remember():
+        return remember(header, rows)
+
+    def strategy_spot():
+        suspicious = spot(header, rows)
+        return [i for i in suspicious if i not in tried][:50]
+
+    strategies = {
+        "random": strategy_random(),
+        "remember": strategy_remember(),
+        "spot": strategy_spot()
+    }
+
+    # Evaluate each strategy's candidates, skipping already-tried rows
+    results = {}
+    for name, indices in strategies.items():
+        best_idx = None
+        best_score = float('-inf')
+        for idx in indices:
+            if idx not in tried:
+                s = score_row(idx)
+                tried.add(idx)
+                if s > best_score:
+                    best_score = s
+                    best_idx = idx
+        results[name] = (best_idx, best_score)
+
+    # Find overall winner among strategies that actually tried rows
+    valid_results = {n: v for n, v in results.items() if v[0] is not None}
+    if not valid_results:
+        return {"winner": "random", "row": 0, "tried": list(strategies.keys())}
+
+    winner_name = max(valid_results.keys(), key=lambda n: valid_results[n][1])
+    winner_row = valid_results[winner_name][0]
+
+    return {
+        "winner": winner_name,
+        "row": winner_row,
+        "tried": list(strategies.keys())
+    }
+
+
+if __name__ == "__main__":
+    import pandas as pd
+
+    df = pd.read_csv("pom3a.train.csv")
+    header = list(df.columns)
+    rows = []
+    for _, row in df.iterrows():
+        r = []
+        for col in header:
+            val = row[col]
+            if pd.isna(val):
+                r.append("?")
+            else:
+                r.append(float(val))
+        rows.append(r)
+
+    result = race(header, rows, lambda i: df.iloc[i][header].tolist())
+    print(f"Winner: {result['winner']}, Row: {result['row']}")
+```

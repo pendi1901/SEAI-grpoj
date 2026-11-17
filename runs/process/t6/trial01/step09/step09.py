@@ -1,0 +1,44 @@
+import ezr
+
+
+def spot(header, rows):
+    """Return positions of rows whose input values look mistyped or made up."""
+    tbl = ezr.Tbl(rows)
+    node = ezr.tree(tbl, tbl.rows)
+
+    def predict_ydist(r):
+        leaf_node = ezr.leaf(node, r)
+        return leaf_node.mu
+
+    ydists = [ezr.ydist(tbl, r) for r in rows]
+    preds = [predict_ydist(r) for r in rows]
+
+    # Rows where prediction and reality disagree strongly are suspicious.
+    diffs = [(abs(preds[i] - ydists[i]), i) for i in range(len(rows))]
+    diffs.sort(reverse=True)
+
+    return [i for _, i in diffs[:10]]
+
+
+if __name__ == "__main__":
+    import os
+    path = os.path.join(os.path.dirname(__file__) or ".", "pom3a.train.csv")
+    with open(path, encoding="utf-8-sig") as f:
+        lines = [l.strip() for l in f if l.strip()]
+    header = lines[0].split(",")
+
+    rows = []
+    for line in lines[1:]:
+        cells = line.split(",")
+        row = []
+        for c in cells:
+            s = c.strip()
+            try: row.append(float(s))
+            except ValueError:
+                if s.lower() == "true":  row.append(True)
+                elif s.lower() == "false": row.append(False)
+                else:                   row.append(s)
+        rows.append(row)
+
+    suspicious = spot(header, rows)
+    print(f"Suspect {len(suspicious)} of {len(rows)} records (rows {suspicious}).")

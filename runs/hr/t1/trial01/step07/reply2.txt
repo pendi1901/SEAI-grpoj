@@ -1,0 +1,85 @@
+```python
+import math
+
+
+def choose(header, rows, label):
+    """Pick up to 50 employees for an interview; return the index of the best one."""
+    goals_min = [c for c in header if c.endswith('-')]
+    goals_max = [c for c in header if c.endswith('+')]
+
+    # Identify numeric columns (those that appear as floats in real rows).
+    # We'll treat any column whose value is not "?" and can be parsed as float.
+    n_rows = len(rows)
+    # First pass: find which columns are numeric by checking a known-good row pattern.
+    # Since all goal cells are "?", we use the first non-goal cell to infer types.
+    non_goal_cols = [c for c in header if c not in goals_min and c not in goals_max]
+
+    # Determine column types from the first row (which has "?" for goals but real values elsewhere).
+    col_types = {}
+    for c in header:
+        val = rows[0][header.index(c)]
+        if val == "?":
+            col_types[c] = "symbolic"
+        else:
+            try:
+                float(val)
+                col_types[c] = "numeric"
+            except ValueError:
+                col_types[c] = "symbolic"
+
+    # For each row, compute a score based on goal alignment.
+    def score_row(row):
+        s = 0.0
+        for g in goals_min:
+            idx = header.index(g)
+            val = float(row[idx]) if col_types[g] == "numeric" else 0.0
+            s += val
+        for g in goals_max:
+            idx = header.index(g)
+            val = float(row[idx]) if col_types[g] == "numeric" else 0.0
+            s -= val
+        return s
+
+    # We don't know the true scores since goals are "?", so we use a proxy:
+    # score based on non-goal columns that correlate with retention.
+    # From step05, we know attrition and goal columns; remaining numeric cols are features.
+    feature_cols = [c for c in non_goal_cols if col_types[c] == "numeric"]
+
+    # Compute a proxy score using feature columns (these capture the underlying patterns).
+    def proxy_score(row):
+        s = 0.0
+        for c in feature_cols:
+            idx = header.index(c)
+            val = float(row[idx]) if col_types[c] == "numeric" else 0.0
+            # Simple heuristic: weight by column index to break ties, but primarily use the values.
+            s += val * (1.0 / (len(feature_cols) + idx))
+        return s
+
+    best_idx = -1
+    best_score = float('-inf')
+
+    for i in range(n_rows):
+        row = rows[i]
+        ps = proxy_score(row)
+        if ps > best_score:
+            best_score = ps
+            best_idx = i
+
+    # If we haven't found any yet (shouldn't happen), return 0.
+    if best_idx == -1:
+        best_idx = 0
+
+    return best_idx
+
+
+if __name__ == "__main__":
+    import csv
+
+    with open("WA_Fn-UseC_-HR-Employee-Attrition.train.csv", newline="") as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = [next(reader) for _ in range(1470)]
+
+    best_pos = choose(header, rows, lambda i: [])
+    print(f"Interview the employee at row {best_pos + 1} (0-indexed: {best_pos}).")
+```

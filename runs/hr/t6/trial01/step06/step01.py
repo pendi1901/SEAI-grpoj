@@ -1,0 +1,73 @@
+def remember(header, rows):
+    """Return indices of employees who stay unusually long."""
+    # Identify goal columns (names ending in +)
+    goals = [header[i] for i, h in enumerate(header) if h.endswith("+")]
+    
+    # Build a table-like structure from header and rows
+    class _Col:
+        def __init__(self, name, idx):
+            self.name = name
+            self.idx = idx
+            self.n = 0
+            self.mu = 0.0
+            self.m2 = 0.0
+            self.sd = 0.0
+            self.goal = 1 if name.endswith("+") else 0
+        
+        def add(self, v):
+            if v != "?":
+                self.n += 1
+                d = v - self.mu
+                self.mu += d / max(1, self.n)
+                self.m2 = max(0, self.m2 + d * (v - self.mu))
+                if self.n >= 2:
+                    self.sd = (self.m2 / (self.n - 1)) ** 0.5
+    
+    cols = [_Col(h, i) for i, h in enumerate(header)]
+    
+    # Process rows
+    ys = []
+    for row in rows:
+        vals = [row[i] if i < len(row) else "?" for i in range(len(cols))]
+        for col in cols:
+            col.add(vals[col.idx])
+        
+        # Compute ydist for this row
+        goal_vals = []
+        for col in cols:
+            if col.name.endswith("+"):
+                v = vals[col.idx]
+                if v != "?":
+                    z = max(-3, min(3, (v - col.mu) / (1e-32 + col.sd)))
+                    goal_vals.append(abs(1 / (1 + (-1.7 * z)) - 1))
+                else:
+                    goal_vals.append(0)
+        
+        if len(goal_vals) > 0:
+            yd = sum(goal_vals) / len(goal_vals)
+        else:
+            yd = 0
+        
+        ys.append(yd)
+    
+    # Sort by ydist (lower is better - closer to best goals)
+    indexed = list(enumerate(ys))
+    indexed.sort(key=lambda x: x[1])
+    
+    # Return top indices (up to 5% of rows, at least 1)
+    n = max(1, int(len(rows) * 0.05))
+    return [idx for idx, _ in indexed[:n]]
+
+
+if __name__ == "__main__":
+    import csv
+    
+    with open("WA_Fn-UseC_-HR-Employee-Attrition.train.csv", encoding="utf-8-sig") as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = [next(reader) for _ in range(1470)]
+    
+    result = remember(header, rows)
+    print(f"Top {len(result)} employees who stay unusually long:")
+    for i in result:
+        print(f"  Row {i}: {rows[i][header.index('YearsAtCompany+')] if 'YearsAtCompany+' in header else '?'} years")

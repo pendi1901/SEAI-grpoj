@@ -1,0 +1,100 @@
+```python
+import csv
+
+
+def choose(header, rows, label):
+    """Pick the best setup among up to 50 candidates."""
+
+    goal_cols = [c for c in header if c.endswith('-') or c.endswith('+')]
+    is_numeric = [c[0].isupper() for c in header]
+
+    def to_float(cell):
+        try:
+            return float(cell)
+        except (ValueError, TypeError):
+            return 0.0
+
+    goal_dirs = {}
+    for c in goal_cols:
+        goal_dirs[c] = 'min' if c.endswith('-') else 'max'
+
+    # Precompute best/worst per goal column from training data
+    n_rows = len(rows)
+    best_vals = []
+    worst_vals = []
+    for gcol in goal_cols:
+        vals = [to_float(r[header.index(gcol)]) for r in rows]
+        best_vals.append(min(vals))
+        worst_vals.append(max(vals))
+
+    # For each row, estimate its goals via nearest-neighbour on non-goal numeric columns.
+    # We'll evaluate up to 50 candidates (the first 50 whose goal cells are "?").
+    def score_row(row):
+        """Score a row assuming all goal cells are "?" and using NN."""
+        s = 0.0
+        for j, gcol in enumerate(goal_cols):
+            best_dist = float('inf')
+            best_val = None
+            for i in range(n_rows):
+                dist = 0.0
+                for k in range(len(header)):
+                    if not is_numeric[k]:
+                        continue
+                    if k == header.index(gcol):
+                        continue
+                    tv = to_float(rows[i][k])
+                    rv = to_float(row[k])
+                    diff = tv - rv
+                    dist += diff * diff
+                if dist < best_dist:
+                    best_dist = dist
+                    best_val = to_float(rows[i][header.index(gcol)])
+            v = best_val if best_val is not None else 0.0
+            denom = best_vals[j] - worst_vals[j]
+            if denom <= 0:
+                s += 1.0
+            else:
+                s += (v - worst_vals[j]) / denom
+        return s / len(goal_cols)
+
+    # Try up to 50 rows whose goal cells are "?"
+    candidates = []
+    for i, row in enumerate(rows):
+        if any(to_float(row[header.index(c)]) == '?' for c in goal_cols):
+            candidates.append(i)
+            if len(candidates) >= 50:
+                break
+
+    # If no "?" rows found, fall back to first 50 rows
+    if not candidates:
+        candidates = list(range(min(50, n_rows)))
+
+    best_idx = None
+    best_score = -1e9
+    for i in candidates:
+        s = score_row(rows[i])
+        if s > best_score:
+            best_score = s
+            best_idx = i
+
+    return best_idx
+
+
+if __name__ == "__main__":
+    import csv
+
+    with open("Health-ClosedIssues0000.train.csv") as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = [next(reader) for _ in range(10000)]
+
+    # Replace goal cells with "?" to simulate the hidden-goal scenario
+    goal_cols = [c for c in header if c.endswith('-') or c.endswith('+')]
+    goal_indices = [header.index(c) for c in goal_cols]
+    for row in rows:
+        for idx in goal_indices:
+            row[idx] = "?"
+
+    best_pos = choose(header, rows, lambda i: None)  # label unused; we already scored internally
+    print(f"Best setup is at position {best_pos} (score={best_score:.4f}).")
+```

@@ -1,0 +1,74 @@
+import csv
+from step01 import remember
+
+
+def guess(header, train, test):
+    goal_cols = [c for c in header if c.endswith('+')]
+    feature_cols = [c for c in header if not c.endswith('+')]
+
+    def fit_and_predict(X, Y):
+        n = len(Y)
+        p = len(X[0])
+        mean_x = [sum(row[j] for row in X) / n for j in range(p)]
+        mean_y = sum(Y) / n
+        lam = 0.01
+        XtX = [[0.0]*p for _ in range(p)]
+        for j in range(p):
+            for k in range(j, p):
+                s = sum(X[i][j] * X[i][k] for i in range(n))
+                if j == k:
+                    XtX[j][k] += lam
+                else:
+                    XtX[j][k] *= 2
+        Xty = [sum(X[i][j] * Y[i] for i in range(n)) for j in range(p)]
+        aug = [list(row) + [Xty[j]] for j, row in enumerate(XtX)]
+        for col in range(p):
+            if abs(aug[col][col]) < 1e-10:
+                continue
+            for row in range(col+1, p):
+                factor = aug[row][col] / aug[col][col]
+                for k in range(col, p+1):
+                    aug[row][k] -= factor * aug[col][k]
+        weights = [aug[i][p] / aug[i][i] if abs(aug[i][i]) > 1e-10 else 0.0 for i in range(p)]
+
+        def predict(x):
+            return sum(weights[j] * (x[j] - mean_x[j]) for j in range(p)) + mean_y
+        return weights, mean_x, mean_y
+
+    X_train = []
+    Y_train = []
+    for row in train:
+        x_row = [float(row[header.index(c)]) for c in feature_cols]
+        y_val = float(row[header.index(goal_cols[0])])
+        X_train.append(x_row)
+        Y_train.append(y_val)
+
+    weights, mean_x, mean_y = fit_and_predict(X_train, Y_train)
+
+    predictions = []
+    for row in test:
+        x_test = [float(row[header.index(c)]) for c in feature_cols]
+        pred = sum(weights[j] * (x_test[j] - mean_x[j]) for j in range(len(weights))) + mean_y
+        predictions.append(pred)
+
+    return predictions
+
+
+if __name__ == "__main__":
+    with open("WA_Fn-UseC_-HR-Employee-Attrition.train.csv", "r") as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = list(reader)
+
+    positions = remember(header, rows)
+
+    print(f"Top {len(positions)} employees who stay longest:")
+    for pos in positions[:5]:
+        row = rows[pos]
+        years_at_company = row[header.index('YearsAtCompany+')]
+        years_in_role = row[header.index('YearsInCurrentRole+')]
+        years_with_manager = row[header.index('YearsWithCurrManager+')]
+        print(f"  Employee {row[header.index('EmployeeNumber')]}, "
+              f"At company: {years_at_company} yrs, "
+              f"In current role: {years_in_role} yrs, "
+              f"With manager: {years_with_manager} yrs")

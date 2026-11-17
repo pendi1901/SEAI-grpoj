@@ -1,0 +1,58 @@
+import csv
+
+
+def choose(header, rows, label):
+    """Find best employee among up to 50 labeled candidates."""
+
+    goal_cols = [c for c in header if c.endswith('+')]
+    feature_cols = [c for c in header if not c.endswith('+') and c != 'attrition']
+
+    n = len(rows)
+    p = len(feature_cols)
+
+    # Compute feature means across all rows (goals are "?" so we use features only)
+    mean_x = []
+    for j in range(p):
+        col_name = feature_cols[j]
+        vals = [float(row[header.index(col_name)]) for row in rows]
+        mean_x.append(sum(vals) / n)
+
+    # Score each row using centered features (simple additive model)
+    scores = []
+    for i, row in enumerate(rows):
+        s = 0.0
+        for j in range(p):
+            col_name = feature_cols[j]
+            val = float(row[header.index(col_name)]) - mean_x[j]
+            s += val
+        scores.append((s, i))
+
+    # Pick top candidates to verify with label()
+    max_candidates = min(50, n)
+    scores.sort(reverse=True)
+    candidate_indices = [i for _, i in scores[:max_candidates]]
+
+    best_score = -1e9
+    best_idx = -1
+
+    for idx in candidate_indices:
+        true_goals = label(idx)
+        if not true_goals or len(true_goals) != len(goal_cols):
+            continue
+
+        goal_score = sum(true_goals)  # All goals end with +, so maximize all
+        if goal_score > best_score:
+            best_score = goal_score
+            best_idx = idx
+
+    return best_idx
+
+
+if __name__ == "__main__":
+    with open("WA_Fn-UseC_-HR-Employee-Attrition.train.csv", "r") as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = list(reader)
+
+    answer = choose(header, rows, lambda i: [float(rows[i][header.index(c)]) for c in [c for c in header if c.endswith('+')]])
+    print(f"Best employee: #{answer}")

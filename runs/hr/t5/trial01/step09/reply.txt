@@ -1,0 +1,46 @@
+```python
+import ezr
+
+
+def spot(header, rows):
+    """Find rows that look wrong (hand-typing errors)."""
+    tbl = ezr.Tbl([header] + rows)
+
+    # Build a tree on all rows to learn normal patterns.
+    node = ezr.tree(tbl, rows)
+
+    def predict_ydist(row):
+        """Predict ydist for ROW using the trained tree."""
+        cur = node
+        while cur.kids:
+            if cur.go(row):
+                cur = cur.kids[0]
+            else:
+                cur = cur.kids[1]
+        return cur.mu
+
+    suspicious = []
+    for i, row in enumerate(rows):
+        actual = ezr.ydist(tbl, row)
+        predicted = predict_ydist(row)
+        # If the tree's prediction differs significantly from reality,
+        # the row likely has a wrong cell.
+        if abs(actual - predicted) > 0.3:
+            suspicious.append(i)
+
+    suspicious.sort(reverse=True)
+    return suspicious
+
+
+if __name__ == "__main__":
+    import csv
+    with open("WA_Fn-UseC_-HR-Employee-Attrition.train.csv", encoding="utf-8-sig") as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = [next(reader) for _ in range(1470)]
+
+    bad = spot(header, rows)
+    print(f"Found {len(bad)} suspicious rows:")
+    for i in bad[:20]:
+        print(f"  Row {i}: ydist={ezr.ydist(ezr.Tbl([header] + [rows[i]]), rows[i]):.3f}")
+```

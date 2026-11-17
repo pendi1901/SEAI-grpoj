@@ -1,0 +1,49 @@
+import ezr
+import random
+
+
+def spot(header, rows):
+    """Find rows with wrongly entered input values."""
+    tbl = ezr.Tbl(zip(header, rows))
+
+    # Build tree on all labeled rows (skip ?)
+    node = ezr.tree(tbl, tbl.rows)
+
+    # Predict ydist for each row
+    preds = [ezr.leaf(node, r).mu for r in rows]
+
+    # Identify goal columns and check for ? goals
+    goals = [c for c in tbl.y if c.goal != 0]
+
+    suspicious = []
+    for i, (row, pred) in enumerate(zip(rows, preds)):
+        has_question = any(row[c.at] == "?" for c in goals)
+
+        # Rows with ? goals are automatically suspicious
+        if has_question:
+            suspicious.append(i)
+            continue
+
+        # For clean rows, check if prediction is anomalously high
+        n = len(preds)
+        avg_pred = sum(preds) / n
+        std_pred = ezr.dist(preds, n)
+
+        if pred > avg_pred + 2 * std_pred:
+            suspicious.append(i)
+
+    # Sort by suspicion (most suspicious first - highest ydist)
+    suspicious.sort(key=lambda i: preds[i], reverse=True)
+    return suspicious[:10]
+
+
+if __name__ == "__main__":
+    import os
+    path = os.path.join(os.path.dirname(__file__) or ".", "Health-ClosedIssues0000.train.csv")
+    with open(path, encoding="utf-8-sig") as f:
+        lines = [l.strip() for l in f if l.strip()]
+    header = lines[0].split(",")
+    rows = [[ezr.atom(s) for s in line.split(",")] for line in lines[1:]]
+
+    positions = spot(header, rows)
+    print(f"Rows with wrong inputs ({len(positions)}): {positions}")

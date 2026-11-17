@@ -1,0 +1,18 @@
+```python
+def guess(header, train, test):
+    goals_min = [c for c in header if c.endswith('-')]
+    goals_max = [c for c in header if c.endswith('+')]
+
+    first_goal = None
+    for col in header:
+        if col.endswith('-') or col.endswith('+'):
+            first_goal = col
+            break
+
+    if first_goal is None:
+        return []
+
+    numeric_cols = [c for c in header if c[0].isupper() and c != first_goal]
+
+    n_train = len(train)
+    k = min(10, n_train

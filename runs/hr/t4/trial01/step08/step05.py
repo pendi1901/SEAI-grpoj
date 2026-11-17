@@ -1,0 +1,81 @@
+import pandas as pd
+from step01 import remember
+
+
+def blame(header, rows):
+    """Returns a list of input column names (not goals) that best explain why the worst rows are bad."""
+
+    goals_plus = [h for h in header if h.endswith('+')]
+    goals_minus = [h for h in header if h.endswith('-')]
+
+    # Score each row using same method as remember()
+    scores = []
+    col_min = {}
+    col_max = {}
+    for idx in range(len(rows)):
+        row = rows[idx]
+        for c in goals_plus:
+            v = float(row[c])
+            col_max[c] = max(col_max.get(c, -float('inf')), v)
+        for c in goals_minus:
+            v = float(row[c])
+            col_min[c] = min(col_min.get(c, float('inf')), v)
+
+    # Compute scores
+    for idx in range(len(rows)):
+        s = 0.0
+        for c in goals_plus:
+            lo = col_min.get(c, -float('inf'))
+            hi = col_max.get(c, -float('inf'))
+            rng = (hi - lo) or 1.0
+            s += (float(rows[idx][c]) - lo) / rng
+        for c in goals_minus:
+            lo = col_min.get(c, float('inf'))
+            hi = col_max.get(c, float('inf'))
+            rng = (hi - lo) or 1.0
+            s += (hi - float(rows[idx][c])) / rng
+        scores.append(s)
+
+    # Worst rows are those with lowest scores
+    worst_frac = 0.05
+    n_worst = max(1, int(len(scores) * worst_frac))
+    worst_indices = sorted(range(len(scores)), key=lambda i: scores[i])[:n_worst]
+
+    # Non-goal columns that could explain the difference
+    input_cols = [h for h in header if not h.endswith('+') and not h.endswith('-')]
+
+    # For each input column, check mean difference between worst and rest
+    worst_set = set(worst_indices)
+    result = []
+    for col in input_cols:
+        vals = []
+        for i in range(len(rows)):
+            v = rows[i][col]
+            if v == '?':
+                vals.append(0.0)
+            else:
+                try:
+                    vals.append(float(v))
+                except ValueError:
+                    vals.append(0.0)
+
+        worst_mean = sum(vals[i] for i in worst_indices) / len(worst_indices) if worst_indices else 0
+        rest_vals = [vals[i] for i in range(len(rows)) if i not in worst_set]
+        rest_mean = sum(rest_vals) / len(rest_vals) if rest_vals else 0
+
+        diff = abs(worst_mean - rest_mean)
+        scale = max(abs(worst_mean), abs(rest_mean)) or 1.0
+        result.append((diff, col))
+
+    # Sort by absolute difference (largest first)
+    result.sort(key=lambda x: x[0], reverse=True)
+    return [col for _, col in result[:5]]
+
+
+if __name__ == "__main__":
+    df = pd.read_csv("WA_Fn-UseC_-HR-Employee-Attrition.train.csv")
+    header = list(df.columns)
+    rows = [list(row) for row in df.values]
+
+    blamed = blame(header, rows)
+    print(f"Factors explaining short stays: {blamed}")

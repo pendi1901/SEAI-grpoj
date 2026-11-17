@@ -1,0 +1,71 @@
+import csv
+
+
+def justify(header, rows, row):
+    """Returns (p, reason) where p is the fraction of rows this row beats."""
+    goal_cols = [c for c in header if c.endswith('+')]
+    feature_cols = [c for c in header if not c.endswith('+') and c != 'attrition']
+
+    # Build training data from known rows
+    X_train = []
+    Y_train = []
+    for r in rows:
+        x_row = [float(r[header.index(c)]) for c in feature_cols]
+        y_val = float(r[header.index(goal_cols[0])])
+        X_train.append(x_row)
+        Y_train.append(y_val)
+
+    n = len(Y_train)
+    p = len(X_train[0])
+    mean_x = [sum(row[j] for row in X_train) / n for j in range(p)]
+    mean_y = sum(Y_train) / n
+
+    # Simple OLS with ridge-like regularization
+    lam = 0.01
+    XtX = [[0.0]*p for _ in range(p)]
+    for j in range(p):
+        for k in range(j, p):
+            s = sum(X_train[i][j] * X_train[i][k] for i in range(n))
+            if j == k:
+                XtX[j][k] += lam
+            else:
+                XtX[j][k] *= 2
+
+    Xty = [sum(X_train[i][j] * Y_train[i] for i in range(n)) for j in range(p)]
+    aug = [list(row) + [Xty[j]] for j, row in enumerate(XtX)]
+    for col in range(p):
+        if abs(aug[col][col]) < 1e-10:
+            continue
+        for row_idx in range(col+1, p):
+            factor = aug[row_idx][col] / aug[col][col]
+            for k in range(col, p+1):
+                aug[row_idx][k] -= factor * aug[col][k]
+
+    weights = [aug[i][p] / aug[i][i] if abs(aug[i][i]) > 1e-10 else 0.0 for i in range(p)]
+
+    # Predict goal values for the test row
+    x_test = [float(row[header.index(c)]) for c in feature_cols]
+    pred = sum(weights[j] * (x_test[j] - mean_x[j]) for j in range(len(weights))) + mean_y
+
+    # Fraction of rows with lower predicted goals
+    p = 0.0
+    for r in rows:
+        x_row = [float(r[header.index(c)]) for c in feature_cols]
+        pred_r = sum(weights[j] * (x_row[j] - mean_x[j]) for j in range(len(weights))) + mean_y
+        if pred_r < pred:
+            p += 1.0
+
+    fraction = p / len(rows)
+
+    reason = f"This employee ranks better than {fraction:.0%} of others based on tenure predictors."
+    return (fraction, reason)
+
+
+if __name__ == "__main__":
+    with open("WA_Fn-UseC_-HR-Employee-Attrition.train.csv", "r") as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = list(reader)
+
+    result = justify(header, rows, rows[0])
+    print(result)

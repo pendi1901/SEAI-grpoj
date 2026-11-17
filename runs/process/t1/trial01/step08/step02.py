@@ -1,0 +1,88 @@
+import csv
+
+
+def guess(header, train, test):
+    goals = [c for c in header if c.endswith('-')]
+    inputs = [c for c in header if not c.endswith('-')]
+    first_goal = goals[0]
+
+    n_inputs = len(inputs)
+    m = n_inputs + 1  # rows of augmented normal-equation matrix
+
+    X = []
+    y = []
+    for row in train:
+        x_row = [1.0]
+        for col in inputs:
+            x_row.append(float(row[header.index(col)]))
+        X.append(x_row)
+        y.append(float(row[header.index(first_goal)]))
+
+    # Build X^T X and X^T y
+    XtX = [[0.0] * m for _ in range(m)]
+    for i in range(n_inputs):
+        for j in range(i, m):
+            s = 0.0
+            for k in range(len(train)):
+                s += X[k][i] * X[k][j]
+            XtX[i][j] = s
+            if i != j:
+                XtX[j][i] = s
+
+    Xty = [0.0] * m
+    for i in range(m):
+        for k in range(len(train)):
+            Xty[i] += X[k][i] * y[k]
+
+    # Solve via Gaussian elimination with partial pivoting
+    aug = []
+    for i in range(m):
+        aug.append(list(XtX[i]) + [Xty[i]])
+
+    pivot_row = 0
+    for col in range(m):
+        if pivot_row >= m:
+            break
+        max_val = abs(aug[pivot_row][col])
+        max_idx = pivot_row
+        for row in range(pivot_row + 1, m):
+            if abs(aug[row][col]) > max_val:
+                max_val = abs(aug[row][col])
+                max_idx = row
+        aug[pivot_row], aug[max_idx] = aug[max_idx], aug[pivot_row]
+
+        pivot = aug[pivot_row][col]
+        for row in range(m):
+            if row != pivot_row:
+                factor = aug[row][col] / pivot
+                for j in range(col, m + 1):
+                    aug[row][j] -= factor * aug[pivot_row][j]
+
+        pivot_row += 1
+
+    beta = [aug[i][m] for i in range(m)]
+
+    predictions = []
+    for row in test:
+        pred = 0.0
+        for col in inputs:
+            pred += float(row[header.index(col)]) * beta[header.index(col) + 1]
+        pred += beta[0]
+        predictions.append(pred)
+
+    return predictions
+
+
+if __name__ == "__main__":
+    with open('pom3a.train.csv', newline='') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = []
+        for row in reader:
+            if len(row) == len(header):
+                rows.append(row)
+
+    predictions = guess(header, rows, [])
+    print("Predicted Cost- values:")
+    for v in predictions:
+        print(v)

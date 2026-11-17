@@ -1,0 +1,70 @@
+```python
+import pandas as pd
+
+
+def choose(header, rows, label):
+    """Try up to 50 different row positions and return the best one."""
+    goals = ["MRE-", "ACC+", "PRED40+"]
+    
+    # Precompute best scores from step01 convention (lower is better)
+    bests = {}
+    for g in goals:
+        vals = []
+        for r in rows:
+            v = float(r[header.index(g)])
+            if g.endswith("-"):
+                vals.append(v)
+            else:
+                vals.append(-v)
+        bests[g] = min(vals)
+
+    def score_row(goal_vals):
+        s = 0.0
+        for g in goals:
+            v = goal_vals[g]
+            if g.endswith("-"):
+                s += (v - bests[g])
+            else:
+                s += (-v - bests[g])
+        return s
+
+    # Probe a diverse set of rows: first few, then evenly spaced
+    n_rows = len(rows)
+    probe_indices = list(range(min(50, n_rows)))  # start with first 50
+    
+    if n_rows > 100:
+        # Add more spread-out probes beyond the first 50
+        step = max(2, n_rows // 50)
+        for i in range(step, n_rows, step):
+            probe_indices.append(i)
+    
+    best_pos = None
+    best_score = float('inf')
+    
+    for idx in probe_indices:
+        goals_dict = label(idx)
+        s = score_row(goals_dict)
+        if s < best_score:
+            best_score = s
+            best_pos = idx
+    
+    return best_pos
+
+
+if __name__ == "__main__":
+    df = pd.read_csv("Health-ClosedIssues0000.train.csv")
+    header = list(df.columns)
+    rows = [list(r) for r in df.values]
+    
+    # Create a label function that returns true goals
+    def label(i):
+        row = rows[i]
+        goal_vals = {}
+        for g in ["MRE-", "ACC+", "PRED40+"]:
+            idx = header.index(g)
+            goal_vals[g] = float(row[idx])
+        return goal_vals
+    
+    pos = choose(header, rows, label)
+    print(f"Best setup found at position {pos}")
+```

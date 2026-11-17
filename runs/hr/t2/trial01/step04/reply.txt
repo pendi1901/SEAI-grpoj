@@ -1,0 +1,44 @@
+```python
+import csv
+
+
+def flow(header, row, seen):
+    goal_cols = [c for c in header if c.endswith('+')]
+
+    def score(r):
+        s = 0.0
+        valid = True
+        for col in goal_cols:
+            val = r[header.index(col)]
+            try:
+                s += float(val)
+            except ValueError:
+                return -1e9
+        return s
+
+    current_score = score(row)
+
+    if not seen:
+        # First row always qualifies.
+        return True
+
+    best_seen = max(score(r) for r in seen)
+    threshold = best_seen * 0.95
+    return current_score >= threshold
+
+
+if __name__ == "__main__":
+    with open("WA_Fn-UseC_-HR-Employee-Attrition.train.csv", "r") as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = list(reader)
+
+    chosen = None
+    for row in rows:
+        if flow(header, row, []):
+            chosen = row
+            break
+
+    print(f"Chosen employee #{chosen[header.index('EmployeeNumber')]}, "
+          f"At company {rows[chosen[header.index('YearsAtCompany+')]} yrs")
+```

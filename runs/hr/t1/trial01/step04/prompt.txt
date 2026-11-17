@@ -1,0 +1,215 @@
+You are writing one Python file, step04.py.
+
+The data is the csv file WA_Fn-UseC_-HR-Employee-Attrition.train.csv in the current directory. Column names starting in upper case are numeric, lower case are symbolic. A name ending in - is a goal to minimise, in + a goal to maximise; all other columns are inputs. Its first lines:
+
+Age,attrition,businessTravel,DailyRate,department,DistanceFromHome,Education,educationField,EmployeeCount,EmployeeNumber,EnvironmentSatisfaction,gender,HourlyRate,JobInvolvement,JobLevel,jobRole,JobSatisfaction,maritalStatus,MonthlyIncome,MonthlyRate,NumCompaniesWorked,over18,overTime,PercentSalaryHike,PerformanceRating,RelationshipSatisfaction,StandardHours,StockOptionLevel,TotalWorkingYears,TrainingTimesLastYear,WorkLifeBalance,YearsAtCompany+,YearsInCurrentRole+,YearsSinceLastPromotion,YearsWithCurrManager+
+37,Yes,Travel_Rarely,1373,Research & Development,2,2,Other,1,4,4,Male,92,2,1,Laboratory Technician,3,Single,2090,2396,6,Y,Yes,15,3,2,80,0,7,3,3,0,0,0,0
+30,No,Non-Travel,1400,Research & Development,3,3,Life Sciences,1,562,3,Male,53,3,1,Laboratory Technician,4,Married,2097,16734,4,Y,No,15,3,3,80,1,9,3,1,5,3,1,4
+39,No,Travel_Rarely,1462,Sales,6,3,Medical,1,1588,4,Male,38,4,3,Sales Executive,3,Married,8237,4658,2,Y,No,11,3,1,80,1,11,3,3,7,6,7,6
+
+Use only the Python standard library.
+
+These files, written earlier, are in the same directory:
+
+--- step01.py ---
+def remember(header, rows):
+    goals_min = [c for c in header if c.endswith('-')]
+    goals_max = [c for c in header if c.endswith('+')]
+
+    scored = []
+    for i, row in enumerate(rows):
+        if row[header.index('attrition')] == 'No':
+            score = sum(row[c] for c in goals_min) + sum(-row[c] for c in goals_max)
+            scored.append((score, i))
+
+    scored.sort(reverse=True)
+    max_count = int(len(rows) * 0.05)
+    best_positions = [pos for _, pos in scored[:max_count]]
+    return best_positions
+
+
+if __name__ == "__main__":
+    import csv
+
+    with open("WA_Fn-UseC_-HR-Employee-Attrition.train.csv", newline="") as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = [next(reader) for _ in range(1470)]
+
+    positions = remember(header, rows)
+    print(f"Best {len(positions)} of 1470 stayers (by goal alignment):")
+    for p in positions:
+        print(f"  row {p}")
+
+
+--- step02.py ---
+import csv
+
+
+def guess(header, train, test):
+    goals_min = [c for c in header if c.endswith('-')]
+    goals_max = [c for c in header if c.endswith('+')]
+
+    # Build a simple linear model: predict each goal column from all numeric inputs.
+    # We use only the non-goal columns as features (symbolic + numeric).
+    feature_cols = []
+    for c in header:
+        if c not in goals_min and c not in goals_max:
+            feature_cols.append(c)
+
+    n_train = len(train)
+    n_features = len(feature_cols)
+
+    # Collect training data per goal column.
+    train_data = {c: [] for c in goals_min + goals_max}
+    for row in train:
+        feats = [float(row[c]) if c in feature_cols else 0.0 for c in feature_cols]
+        for g in goals_min:
+            train_data[g].append((feats, float(row[g])))
+        for g in goals_max:
+            train_data[g].append((feats, float(row[g])))
+
+    # Fit a simple linear regression per goal using normal equations.
+    # y = X @ w + b  ->  minimize sum((y - Xw - b)^2)
+    def fit_linear(data):
+        n = len(data)
+        if n == 0:
+            return [0.0] * n_features, 0.0
+
+        # Compute sums for normal equations: (X^T X + reg*I) w = X^T y
+        reg = 1e-6
+        XtX = [[reg] * n_features for _ in range(n_features)]
+        Xty = [0.0] * n_features
+        sum_y = 0.0
+
+        for feats, y in data:
+            sum_y += y
+            for j in range(n_features):
+                xj = feats[j] if j < len(feats) else 0.0
+                Xty[j] += xj * y
+                for i in range(j + 1):
+                    Xi = feats[i] if i < len(feats) else 0.0
+                    XtX[i][j] += xj * Xi
+
+        # Solve using Gaussian elimination with partial pivoting.
+        m = n_features
+        aug = [XtX[i][:] + [Xty[i]] for i in range(m)]
+        for col in range(m):
+            max_row = col
+            for row in range(col + 1, m):
+                if abs(aug[row][col]) > abs(aug[max_row][col]):
+                    max_row = row
+            aug[col], aug[max_row] = aug[max_row], aug[col]
+            pivot = aug[col][col]
+            if abs(pivot) < 1e-12:
+                continue
+            for row in range(col + 1, m):
+                factor = aug[row][col] / pivot
+                for k in range(col, m + 1):
+                    aug[row][k] -= factor * aug[col][k]
+
+        w = [0.0] * m
+        b = sum_y / n if n > 0 else 0.0
+        for i in range(m - 1, -1, -1):
+            s = aug[i][m]
+            for j in range(i + 1, m):
+                s -= aug[i][j] * w[j]
+            if abs(aug[i][i]) < 1e-12:
+                w[i] = 0.0
+            else:
+                w[i] = s / aug[i][i]
+
+        return w, b
+
+    models = {}
+    for g in goals_min + goals_max:
+        w, b = fit_linear(train_data[g])
+        models[g] = (w, b)
+
+    # Predict first goal column for each test row.
+    results = []
+    for row in test:
+        feats = [float(row[c]) if c in feature_cols else 0.0 for c in feature_cols]
+        g = goals_min[0]  # first goal column
+        w, b = models[g]
+        pred = sum(w[j] * feats[j] for j in range(len(feats))) + b
+        results.append(pred)
+
+    return results
+
+
+if __name__ == "__main__":
+    import csv
+
+    with open("WA_Fn-UseC_-HR-Employee-Attrition.train.csv", newline="") as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        train = [next(reader) for _ in range(1470)]
+
+    # Create a synthetic test row (day-one new hire, goals hidden).
+    test_row = ["?"] * len(header)
+    results = guess(header, train, [test_row])
+    print(f"Estimated stay ({results[0]:.2f}) for the newly hired employee.")
+
+
+--- step03.py ---
+import csv
+
+
+def certify(xs, ys):
+    """Returns True if xs and ys are the same apart from noise, False if they really differ."""
+    mean_x = sum(xs) / len(xs) if xs else 0.0
+    mean_y = sum(ys) / len(ys) if ys else 0.0
+
+    # Use standard deviations to gauge natural variability in each group.
+    def sd(vals):
+        m = sum(vals) / len(vals)
+        return (sum((v - m) ** 2 for v in vals) / len(vals)) ** 0.5 if len(vals) > 1 else 0.0
+
+    sx, sy = sd(xs), sd(ys)
+    # If both groups vary a lot, allow more tolerance; otherwise be stricter.
+    noise_scale = (sx + sy) * 0.3
+    return abs(mean_x - mean_y) <= max(noise_scale, 1.5)
+
+
+def main():
+    with open("WA_Fn-UseC_-HR-Employee-Attrition.train.csv", newline="") as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = [next(reader) for _ in range(1470)]
+
+    ot_y_years = []
+    ot_n_years = []
+    for row in rows:
+        if row[header.index("overTime")] == "Y":
+            ot_y_years.append(float(row[header.index("YearsAtCompany+")]))
+        else:
+            ot_n_years.append(float(row[header.index("YearsAtCompany+")]))
+
+    same = certify(ot_y_years, ot_n_years)
+    if same:
+        print("Overtime workers and non-overtime workers have similar tenure — the difference is likely noise.")
+    else:
+        print("Overtime workers leave sooner than those who don't work overtime — this appears to be a real effect.")
+
+
+if __name__ == "__main__":
+    main()
+
+
+The customer asks:
+
+  Annual reviews reach me one at a time. Tell me the same day whether this person needs a "what would keep you here" conversation; I will not get to revisit the pile.
+
+Write step04.py to answer that ask on this data.
+
+A test harness will import your file and call this function, so you must define it exactly:
+
+def flow(header, row, seen)
+  Returns True or False.   Rows arrive one at a time. `row` is the one that just arrived; `seen` is the list of rows that arrived before it. Return True to choose `row` and stop, False to let it go. You cannot go back.
+
+Conventions: `header` is the list of column names. `rows` is a list of rows; each row is a list of cells in header order, floats for numeric columns and strings for symbolic ones. A cell shown as "?" is hidden from you. A row is better when its goals are closer to their best (low for names ending in -, high for names ending in +).
+
+Keep everything that prints or reads the csv file under `if __name__ == "__main__":` so that importing the file prints nothing. Plain built-in types are all you need: do not import anything from `typing`.
+
+Running `python step04.py` must load the csv, call your function, print a short answer a customer could read, and exit with status 0. Reply with the complete file in one ```python fenced block and nothing else.

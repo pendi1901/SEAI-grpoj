@@ -1,0 +1,75 @@
+import sys
+sys.path.insert(0, '.')
+from step01 import remember
+
+
+def spot(header, rows):
+    goals = [h for h in header if h.endswith('-') or h.endswith('+')]
+    numeric_cols = [c for c in header if c.isupper()]
+    symbolic_cols = [c for c in header if not c.isupper() and not c.endswith('-') and not c.endswith('+')]
+
+    def encode_row(row):
+        return (tuple(float(row[header.index(c)]) for c in numeric_cols),
+                tuple(row[header.index(c)] for c in symbolic_cols))
+
+    n = len(rows)
+    suspicious = []
+
+    # For each row, find its nearest neighbor among the other rows.
+    # If a row has wrong input values (a failed run written down anyway),
+    # no real setup will match it well and the predicted goals won't agree.
+    for i in range(n):
+        test_enc = encode_row(rows[i])
+
+        best_match_idx = None
+        best_dist = float('inf')
+
+        for j in range(n):
+            if j == i:
+                continue
+            train_enc = encode_row(rows[j])
+
+            dist = 0.0
+            for c in header:
+                if c.endswith('-') or c.endswith('+'):
+                    continue
+                tv = test_enc[header.index(c)]
+                trv = train_enc[header.index(c)]
+                if isinstance(tv, str) and isinstance(trv, str):
+                    dist += 0.0 if tv == trv else 1.0
+                elif isinstance(tv, float) and isinstance(trv, float):
+                    dist += abs(tv - trv) / 100.0
+
+            if dist < best_dist:
+                best_dist = dist
+                best_match_idx = j
+
+        # Predict goals from the nearest neighbor.
+        predicted_goals = []
+        for col in goals:
+            v = float(rows[best_match_idx][header.index(col)])
+            predicted_goals.append(v)
+
+        actual_goals = [float(rows[i][header.index(col)]) for col in goals]
+
+        max_diff = 0.0
+        for k in range(len(goals)):
+            diff = abs(predicted_goals[k] - actual_goals[k])
+            if diff > max_diff:
+                max_diff = diff
+
+        # A row is suspicious if its nearest neighbor is far away or goals disagree.
+        if best_dist > 3.0 or max_diff > 0.15:
+            suspicious.append((i, max_diff))
+
+    return sorted(suspicious, key=lambda x: -x[1])
+
+
+if __name__ == "__main__":
+    import pandas as pd
+    df = pd.read_csv("Health-ClosedIssues0000.train.csv")
+    header = list(df.columns)
+    rows = [list(row) for row in df.values]
+
+    suspicious = spot(header, rows)
+    print(f"Suspect rows: {suspicious}")

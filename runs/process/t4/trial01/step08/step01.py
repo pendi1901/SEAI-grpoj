@@ -1,0 +1,69 @@
+import csv
+import numpy as np
+
+
+def remember(header, rows):
+    goal_cols = [h for h in header if h.endswith('-')]
+    n = len(rows)
+
+    def safe_float(val):
+        try:
+            return float(val)
+        except (ValueError, TypeError):
+            return None
+
+    col_vals = {}
+    for col in goal_cols:
+        vals = []
+        for row in rows:
+            f = safe_float(row[header.index(col)])
+            if f is not None:
+                vals.append(f)
+        col_vals[col] = np.array(vals, dtype=float)
+
+    normalized = {}
+    for col in goal_cols:
+        arr = col_vals[col]
+        mn, mx = float(arr.min()), float(arr.max())
+        if mx == mn or len(arr) == 0:
+            norm = np.zeros(n)
+        else:
+            norm = (arr - mn) / (mx - mn)
+        normalized[col] = norm
+
+    total_scores = []
+    for i in range(n):
+        s = 0.0
+        for col in goal_cols:
+            if normalized[col][i] is not None:
+                s += float(normalized[col][i])
+        total_scores.append(s)
+
+    max_ret = max(1, int(0.05 * n))
+    sorted_indices = np.argsort(total_scores)[:max_ret]
+    return sorted_indices.tolist()
+
+
+if __name__ == "__main__":
+    import pandas as pd
+
+    df = pd.read_csv("pom3a.train.csv")
+
+    header = list(df.columns)
+    rows = []
+    for _, row in df.iterrows():
+        r = []
+        for col in header:
+            val = row[col]
+            if pd.isna(val):
+                r.append("?")
+            else:
+                r.append(float(val))
+        rows.append(r)
+
+    best_indices = remember(header, rows)
+
+    print(f"Best {len(best_indices)} out of {len(rows)} setups:")
+    for idx in best_indices[:10]:
+        c, s, i = (rows[idx][header.index(c)] for c in ['Cost-', 'Score-', 'Idle-'])
+        print(f"  Row {idx}: Cost-={c:.4f}, Score-={s:.4f}, Idle-={i:.4f}")

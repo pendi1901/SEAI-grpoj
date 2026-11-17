@@ -1,0 +1,171 @@
+You are writing one Python file, step03.py.
+
+The data is the csv file Health-ClosedIssues0000.train.csv in the current directory. Column names starting in upper case are numeric, lower case are symbolic. A name ending in - is a goal to minimise, in + a goal to maximise; all other columns are inputs. Its first lines:
+
+MRE-,ACC+,PRED40+,N_estimators,criterion,Min_sample_leaves,Min_impurity_decrease,Max_depth
+0.7771723122238585,0.4546619673181672,0,10,squared_error,17,7.75,11
+0.42238586156111924,0.6920858699134893,0.5714285714285714,150,absolute_error,3,4.25,10
+0.8817378497790869,0.40820249919897467,0,110,absolute_error,18,4,14
+
+Use only the Python standard library.
+
+These files, written earlier, are in the same directory:
+
+--- step01.py ---
+import csv
+
+
+def remember(header, rows):
+    # Goal columns: '-' suffix -> minimise, '+' suffix -> maximise
+    goal_cols = [c for c in header if c.endswith('-') or c.endswith('+')]
+    goal_map = {}  # col -> 'min' or 'max'
+    for c in goal_cols:
+        goal_map[c] = 'min' if c.endswith('-') else 'max'
+
+    n = len(rows)
+    best = []
+    worst = []
+    for c in goal_cols:
+        vals = [float(r[header.index(c)]) for r in rows]
+        best.append(min(vals))
+        worst.append(max(vals))
+
+    scores = []
+    for i, row in enumerate(rows):
+        s = 0.0
+        for j, c in enumerate(goal_cols):
+            v = float(row[header.index(c)])
+            if goal_map[c] == 'min':
+                s += (v - worst[j]) / (best[j] - worst[j])
+            else:
+                s += (best[j] - v) / (best[j] - worst[j])
+        scores.append(s / len(goal_cols))
+
+    # pick top rows, at most 5% of total
+    k = max(1, int(n * 0.05))
+    order = sorted(range(n), key=lambda i: scores[i], reverse=True)
+    return list(order[:k])
+
+
+if __name__ == "__main__":
+    import sys
+
+    with open("Health-ClosedIssues0000.train.csv") as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = [next(reader) for _ in range(10000)]
+
+    positions = remember(header, rows)
+    print(f"Top {len(positions)} trustworthy setups (positions): {positions}")
+
+
+--- step02.py ---
+import csv
+
+
+def guess(header, train, test):
+    """Estimate the first goal column for each test row using nearest-neighbour on training data."""
+    # Identify columns: upper-case = numeric, lower-case = symbolic
+    is_numeric = [c[0].isupper() for c in header]
+
+    # Find the first goal column (one ending in '-' or '+')
+    goal_col_idx = None
+    for i, c in enumerate(header):
+        if c.endswith('-') or c.endswith('+'):
+            goal_col_idx = i
+            break
+
+    def to_float(cell):
+        try:
+            return float(cell)
+        except (ValueError, TypeError):
+            return 0.0
+
+    # Precompute training distances using only non-goal numeric columns
+    train_data = []
+    for row in train:
+        vals = [to_float(row[i]) if is_numeric[i] else row[i] for i in range(len(header))]
+        train_data.append(vals)
+
+    def distance(a, b):
+        d = 0.0
+        for i in range(len(header)):
+            if not is_numeric[i]:
+                continue
+            av = a[i]
+            bv = b[i]
+            if isinstance(av, float) and isinstance(bv, float):
+                d += (av - bv) ** 2
+        return d
+
+    def predict(row):
+        best_dist = float('inf')
+        best_val = None
+        for i in range(len(train)):
+            td = train_data[i]
+            if row[goal_col_idx] == "?":
+                # skip goal column in distance
+                continue
+            dist = 0.0
+            for j in range(len(header)):
+                if not is_numeric[j]:
+                    continue
+                if j == goal_col_idx:
+                    continue
+                av = td[j]
+                bv = row[j]
+                if isinstance(av, float) and isinstance(bv, float):
+                    diff = av - bv
+                    dist += diff * diff
+            if dist < best_dist:
+                best_dist = dist
+                best_val = to_float(row[goal_col_idx])
+        return best_val
+
+    results = [predict(row) for row in test]
+    return results
+
+
+if __name__ == "__main__":
+    with open("Health-ClosedIssues0000.train.csv") as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        train_rows = []
+        for i, row in enumerate(reader):
+            if i < 10000:
+                train_rows.append(row)
+
+    # Use a small test set from the training data (goals are "?" in real scenario; here we simulate)
+    import random
+    random.seed(42)
+    test_indices = sorted(random.sample(range(len(train_rows)), 50))
+    test_rows = [train_rows[i] for i in test_indices]
+
+    # For the __main__ demo, replace "?" goals with actual values from training to show output
+    goal_cols = [c for c in header if c.endswith('-') or c.endswith('+')]
+    goal_idx_map = {header.index(c): c for c in goal_cols}
+
+    print(f"Estimated first goal ({goal_cols[0]}) for 50 test rows:")
+    for i, row in enumerate(test_rows):
+        est = guess(header, train_rows, [row])[0]
+        actual = float(row[header.index(goal_cols[0])])
+        err = abs(est - actual)
+        print(f"  Row {i}: estimate={est:.4f}, actual={actual:.4f}, error={err:.4f}")
+
+
+The customer asks:
+
+  In my last batch the big setups looked more accurate than the small ones. Is that real, or noise?
+
+Write step03.py to answer that ask on this data.
+
+A test harness will import your file and call this function, so you must define it exactly:
+
+def certify(xs, ys)
+  Returns True or False.   `xs` and `ys` are lists of numbers. Return True if they are the same apart from noise, False if they really differ.
+
+Conventions: `header` is the list of column names. `rows` is a list of rows; each row is a list of cells in header order, floats for numeric columns and strings for symbolic ones. A cell shown as "?" is hidden from you. A row is better when its goals are closer to their best (low for names ending in -, high for names ending in +).
+
+Keep everything that prints or reads the csv file under `if __name__ == "__main__":` so that importing the file prints nothing. Plain built-in types are all you need: do not import anything from `typing`.
+
+Running `python step03.py` must load the csv, call your function, print a short answer a customer could read, and exit with status 0. Reply with the complete file in one ```python fenced block and nothing else.

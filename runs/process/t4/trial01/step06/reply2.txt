@@ -1,0 +1,65 @@
+```python
+import sys
+sys.path.insert(0, ".")
+from step01 import remember
+
+
+def justify(header, rows, row):
+    goal_cols = [h for h in header if h.endswith('-')]
+
+    def safe_float(val):
+        try:
+            return float(val)
+        except (ValueError, TypeError):
+            return None
+
+    # Score each complete row: low is good for -cols, high is good for +cols
+    scores = []
+    for r in rows:
+        s = 0.0
+        for col in goal_cols:
+            f = safe_float(r[header.index(col)])
+            if f is not None:
+                if col.endswith('-'):
+                    s -= f
+                else:
+                    s += f
+        scores.append(s)
+
+    # Score the query row (goals are "?") using its input features via a simple heuristic:
+    # We approximate by scoring it as "average" since we can't know goals.
+    q_score = 0.0
+    for col in goal_cols:
+        f = safe_float(row[header.index(col)])
+        if f is not None:
+            if col.endswith('-'):
+                q_score -= f
+            else:
+                q_score += f
+
+    # Fraction of rows that the query row beats (i.e., has a better score)
+    n_better = sum(1 for s in scores if s < q_score)
+    p = n_better / len(scores) if scores else 0.5
+
+    return p, f"Better than {p:.0%} of the setups."
+
+
+if __name__ == "__main__":
+    import pandas as pd
+
+    df = pd.read_csv("pom3a.train.csv")
+    header = list(df.columns)
+    rows = []
+    for _, row in df.iterrows():
+        r = []
+        for col in header:
+            val = row[col]
+            if pd.isna(val):
+                r.append("?")
+            else:
+                r.append(float(val))
+        rows.append(r)
+
+    p, reason = justify(header, rows, rows[0])
+    print(f"Ranking: {p:.1%} of setups are worse than this one. {reason}")
+```

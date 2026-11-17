@@ -1,0 +1,49 @@
+```python
+import sys
+sys.path.insert(0, '.')
+from step01 import remember
+
+
+def choose(header, rows, label):
+    goals = [h for h in header if h.endswith('-') or h.endswith('+')]
+
+    n_est_col_idx = header.index('N_estimators')
+    candidates = []
+    seen_nest = set()
+
+    # Pick diverse N_estimators values so we cover the parameter space.
+    for i, row in enumerate(rows):
+        try:
+            v = float(row[n_est_col_idx])
+            if abs(v) > 1e-6 and v not in seen_nest:
+                candidates.append((v, i))
+                seen_nest.add(v)
+        except (ValueError, TypeError):
+            pass
+
+    # Sort by N_estimators to get a spread across the range.
+    candidates.sort()
+
+    best_pos = None
+    best_score = -float('inf')
+    goal_mins = {col: float('inf') for col in goals}
+    goal_maxs = {col: float('-inf') for col in goals}
+
+    for v, i in candidates[:50]:
+        try:
+            goals_val = label(i)
+            score = 0.0
+            for col in goals:
+                gval = float(goals_val[header.index(col)])
+                if col.endswith('-'):
+                    goal_mins[col] = min(goal_mins[col], gval)
+                    goal_maxs[col] = max(goal_maxs[col], gval)
+                    normed = (gval - goal_mins[col]) / (goal_maxs[col] - goal_mins[col]) if goal_maxs[col] != goal_mins[col] else 0.5
+                    score += (1.0 - normed)
+                else:
+                    goal_mins[col] = min(goal_mins[col], gval)
+                    goal_maxs[col] = max(goal_maxs[col], gval)
+                    normed = (gval - goal_mins[col]) / (goal_maxs[col] - goal_mins[col]) if goal_maxs[col] != goal_mins[col] else 0.5
+                    score += normed
+
+            if score > best_score:

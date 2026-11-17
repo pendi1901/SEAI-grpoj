@@ -1,0 +1,57 @@
+import pandas as pd
+
+
+def flow(header, row, seen):
+    """Returns True if this person needs a 'what would keep you here' conversation."""
+    
+    goals_plus = [h for h in header if h.endswith('+')]
+    goals_minus = [h for h in header if h.endswith('-')]
+    
+    # Accumulate running min/max from all previously seen rows
+    col_min = {}
+    col_max = {}
+    for s_row in seen:
+        for c in goals_plus:
+            v = float(s_row[c])
+            col_max[c] = max(col_max.get(c, -float('inf')), v)
+        for c in goals_minus:
+            v = float(s_row[c])
+            col_min[c] = min(col_min.get(c, float('inf')), v)
+    
+    # Score the current row using accumulated statistics
+    s = 0.0
+    for c in goals_plus:
+        lo = col_min.get(c, -float('inf'))
+        hi = col_max.get(c, -float('inf'))
+        rng = (hi - lo) or 1.0
+        s += (float(row[c]) - lo) / rng
+    for c in goals_minus:
+        lo = col_min.get(c, float('inf'))
+        hi = col_max.get(c, float('inf'))
+        rng = (hi - lo) or 1.0
+        s += (hi - float(row[c])) / rng
+    
+    # Threshold: top ~5% of the combined seen+current population
+    n_total = len(seen) + 1
+    threshold = max(1, int(n_total * 0.05))
+    
+    return s >= 3.0
+
+
+if __name__ == "__main__":
+    df = pd.read_csv("WA_Fn-UseC_-HR-Employee-Attrition.train.csv")
+    header = list(df.columns)
+    rows = [list(row) for row in df.values]
+
+    print(f"Processing {len(rows)} employees one at a time...")
+    flagged = []
+    for i, row in enumerate(rows):
+        seen = rows[:i]
+        if flow(header, row, seen):
+            flagged.append(i)
+
+    print(f"\nFlagged {len(flagged)} out of {len(rows)} employees:")
+    for idx in flagged:
+        dept = df.iloc[idx]['department']
+        years = df.iloc[idx]['YearsAtCompany+']
+        print(f"  Row {idx}: dept={dept}, YearsAtCompany+={years}")

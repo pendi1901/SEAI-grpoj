@@ -1,0 +1,73 @@
+```python
+from step01 import remember
+
+
+def justify(header, rows, row):
+    """Return (p, reason) where p is fraction of rows that `row` beats."""
+
+    goal_cols = [c for c in header if c.endswith('-') or c.endswith('+')]
+
+    # Score all complete rows to understand the landscape
+    scored_rows = remember(header, rows)
+    n_complete = len(scored_rows)
+
+    # For the new row with "?", predict MRE using KNN on input columns
+    target_col = goal_cols[0]  # "MRE-"
+
+    input_cols = []
+    for col in header:
+        if col == target_col:
+            continue
+        if col[0].isupper():
+            input_cols.append(col)
+
+    # Build training data from complete rows
+    train_data = []
+    for r in rows:
+        inputs = [float(r[col]) for col in input_cols]
+        mre_str = r[target_col]
+        try:
+            mre = float(mre_str)
+        except ValueError:
+            continue
+        train_data.append((inputs, mre))
+
+    # Predict MRE for the new row using KNN
+    inputs_new = [float(row[col]) for col in input_cols]
+
+    dists = []
+    for train_inputs, train_mre in train_data:
+        d = 0.0
+        for a, b in zip(inputs_new, train_inputs):
+            diff = a - b
+            d += diff * diff
+        dists.append((d ** 0.5, train_mre))
+
+    dists.sort(key=lambda x: x[0])
+    k = max(1, min(len(dists), len(train_data) // 2))
+    predicted_mre = sum(m for _, m in dists[:k]) / k
+
+    # Count how many complete rows have MRE- <= predicted_mre (lower is better)
+    count_better = sum(1 for r in rows if float(r[target_col]) <= predicted_mre)
+
+    n_total = len(rows) + 1  # including the new row
+    p = count_better / n_total
+
+    reason = f"This setup is better than {p:.1%} of all configurations."
+
+    return (p, reason)
+
+
+if __name__ == "__main__":
+    import csv
+
+    with open("Health-ClosedIssues0000.train.csv", "r") as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = [row for row in reader]
+
+    # The last row should be the new one with "?" goals
+    new_row = rows[-1]
+    p, reason = justify(header, rows[:-1], new_row)
+    print(reason)
+```

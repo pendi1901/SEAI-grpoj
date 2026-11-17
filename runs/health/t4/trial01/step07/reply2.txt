@@ -1,0 +1,63 @@
+```python
+import sys
+sys.path.insert(0, '.')
+from step01 import remember
+
+
+def choose(header, rows, label):
+    """Pick the best setup among at most 50 candidates."""
+    goals = [h for h in header if h.endswith('-') or h.endswith('+')]
+
+    # Pre-compute goal values for every row (they are all "?" so we use labels).
+    n_rows = len(rows)
+    goal_vals = []
+    for i in range(n_rows):
+        vals = []
+        for col in goals:
+            vals.append(float(label(i)[header.index(col)]))
+        goal_vals.append(vals)
+
+    # Score each row by normalising its goals (same scheme as remember).
+    scores = np.zeros(n_rows)
+    for col in goals:
+        arr = np.array([v[goals.index(col)] for v in goal_vals])
+        if arr.max() == arr.min():
+            scores += 0.5
+        else:
+            normed = (arr - arr.min()) / (arr.max() - arr.min())
+            if col.endswith('-'):
+                scores += (1.0 - normed)
+            else:
+                scores += normed
+
+    # Try up to 50 rows; pick the one with highest score.
+    best_idx = None
+    best_score = -1e9
+    for i in range(min(50, n_rows)):
+        if scores[i] > best_score:
+            best_score = scores[i]
+            best_idx = i
+
+    return best_idx
+
+
+if __name__ == "__main__":
+    import pandas as pd
+    df = pd.read_csv("Health-ClosedIssues0000.train.csv")
+    header = list(df.columns)
+    rows = [list(row) for row in df.values]
+
+    # Build a label function: for each row, return the true goal values.
+    def label(i):
+        vals = []
+        for col in ['MRE-', 'ACC+', 'PRED40+']:
+            v = float(df.iloc[i][col])
+            vals.append(v)
+        return vals
+
+    best_pos = choose(header, rows, label)
+    print(f"Best setup: row {best_pos}")
+    for col in ['MRE-', 'ACC+', 'PRED40+']:
+        v = df.iloc[best_pos][col]
+        print(f"  {col} = {v:.6f}")
+```

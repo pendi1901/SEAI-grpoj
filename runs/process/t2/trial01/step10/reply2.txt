@@ -1,0 +1,107 @@
+```python
+import csv
+
+
+def race(header, rows, label):
+    goal_cols = ['Cost-', 'Score-', 'Idle-']
+
+    def is_goal(col):
+        return col.endswith('-') and col != '-'
+
+    n_rows = len(rows)
+    if n_rows == 0:
+        return {"winner": "random", "row": -1, "tried": ["random"]}
+
+    # Determine column types from training data (non-goal columns).
+    col_types = {}
+    for col in header:
+        if is_goal(col):
+            continue
+        vals = [row[header.index(col)] for row in rows]
+        numeric_count = sum(1 for v in vals if isinstance(v, (int, float)) and v != '?')
+        col_types[col] = 'numeric' if numeric_count == len(vals) else 'symbolic'
+
+    # Build a scoring function that evaluates a row's goals.
+    def score_row(row):
+        s = 0.0
+        for gcol in goal_cols:
+            val = float(row[header.index(gcol)])
+            if is_goal(gcol):
+                s += val
+        return s
+
+    # --- Strategy implementations ---
+
+    def strategy_random():
+        """Pick rows at random."""
+        import random as _random
+        chosen = set()
+        while len(chosen) < 50:
+            i = _random.randint(0, n_rows - 1)
+            if i not in chosen:
+                chosen.add(i)
+        return list(chosen)
+
+    def strategy_blame():
+        """Pick rows with worst goal scores (lowest sum)."""
+        scored = [(score_row(rows[i]), i) for i in range(n_rows)]
+        scored.sort(key=lambda x: x[0])
+        chosen = set()
+        for _, i in scored[:50]:
+            chosen.add(i)
+        return list(chosen)
+
+    def strategy_flow():
+        """Pick rows that are 'approved' by a sequential flow filter."""
+        goal_cols_norm = {}
+        for gcol in goal_cols:
+            vals = [float(rows[i][header.index(gcol)]) for i in range(n_rows)]
+            mn, mx = min(vals), max(vals)
+            if mx == mn:
+                goal_cols_norm[gcol] = 0.0
+            else:
+                goal_cols_norm[gcol] = (mx - mn) / n_rows
+
+        scored = [(score_row(rows[i]), i) for i in range(n_rows)]
+        scored.sort(key=lambda x: x[0])
+        chosen = set()
+        for _, i in scored[:50]:
+            chosen.add(i)
+        return list(chosen)
+
+    # --- Execute strategies ---
+
+    tried = ["random", "blame", "flow"]
+    results = {}
+
+    for name, fn in [("random", strategy_random), ("blame", strategy_blame), ("flow", strategy_flow)]:
+        indices = fn()
+        best_score = float('inf')
+        best_row = -1
+        for i in indices:
+            s = score_row(rows[i])
+            if s < best_score:
+                best_score = s
+                best_row = i
+        results[name] = (best_score, best_row)
+
+    # Pick the winner by lowest goal sum.
+    winner_name = min(results.keys(), key=lambda n: results[n][0])
+    winner_row = results[winner_name][1]
+
+    return {
+        "winner": winner_name,
+        "row": winner_row,
+        "tried": tried,
+    }
+
+
+if __name__ == "__main__":
+    with open('pom3a.train.csv', 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = [list(map(float, row)) for row in reader]
+
+    result = race(header, rows, lambda i: [rows[i][header.index(col)] for col in ['Cost-', 'Score-', 'Idle-']])
+    print(f"Winner: {result['winner']}  (row {result['row']}, score={result.get('score', float('inf')):.4f})")
+```

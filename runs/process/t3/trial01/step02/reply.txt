@@ -1,0 +1,72 @@
+```python
+import numpy as np
+from sklearn.linear_model import LinearRegression
+
+
+def guess(header, train, test):
+    goal_cols = [c for c in header if c.endswith('-')]
+    first_goal = goal_cols[0]  # Cost-
+
+    input_cols = [c for c in header if not c.endswith('-')]
+
+    def parse_row(row):
+        vals = []
+        for col in input_cols:
+            v = row[header.index(col)]
+            try:
+                vals.append(float(v))
+            except (ValueError, TypeError):
+                vals.append(np.nan)
+        return np.array(vals)
+
+    X_train = np.array([parse_row(r) for r in train])
+    y_train = []
+    for row in train:
+        v = row[header.index(first_goal)]
+        if v == '?':
+            y_train.append(np.nan)
+        else:
+            y_train.append(float(v))
+
+    X_test = np.array([parse_row(r) for r in test])
+    y_test = []
+    for row in test:
+        v = row[header.index(first_goal)]
+        if v == '?':
+            y_test.append(np.nan)
+        else:
+            y_test.append(float(v))
+
+    valid_mask = ~np.isnan(X_train).any(axis=1) & ~np.isnan(y_train)
+    model = LinearRegression()
+    model.fit(X_train[valid_mask], y_train[valid_mask])
+
+    predictions = []
+    for i in range(len(test)):
+        x = X_test[i]
+        if np.isnan(x).any():
+            preds = model.predict(X_train[valid_mask].reshape(1, -1))
+            predictions.append(float(preds[0]))
+        else:
+            predictions.append(float(model.predict([x])[0]))
+
+    return predictions
+
+
+if __name__ == "__main__":
+    import pandas as pd
+
+    df = pd.read_csv('pom3a.train.csv')
+    header = list(df.columns)
+    rows = [list(row) for row in df.values]
+
+    test_rows = []
+    for i, row in enumerate(rows):
+        if any(v == '?' for v in row[-3:]):
+            test_rows.append(row)
+
+    results = guess(header, rows, test_rows)
+    print(f"Predicted Cost- for {len(results)} setups:")
+    for r, p in zip(test_rows, results):
+        print(f"  Row {r[header.index('Cost-')]}: predicted Cost-={p:.4f}")
+```

@@ -1,0 +1,57 @@
+def spot(header, rows):
+    """Return list of row indices that likely have wrong input values."""
+
+    goal_cols = [c for c in header if c.endswith('-') or c.endswith('+')]
+    is_numeric = [c[0].isupper() for c in header]
+
+    # Input columns: numeric and not goals
+    input_cols = []
+    for i, col in enumerate(header):
+        if is_numeric[i] and col not in goal_cols:
+            input_cols.append((col, i))
+
+    n = len(rows)
+    suspicious = set()
+
+    for col_name, col_idx in input_cols:
+        vals = []
+        row_indices = []
+        for i, row in enumerate(rows):
+            v = row[col_idx]
+            if v == "?":
+                continue
+            try:
+                fv = float(v)
+                vals.append(fv)
+                row_indices.append(i)
+            except (ValueError, TypeError):
+                continue
+
+        if len(vals) < 3:
+            continue
+
+        mean_v = sum(vals) / len(vals)
+        var_v = sum((x - mean_v) ** 2 for x in vals) / len(vals)
+        std_v = var_v ** 0.5
+
+        if std_v == 0:
+            continue
+
+        threshold = 3 * std_v
+        for i, v in zip(row_indices, vals):
+            if abs(v - mean_v) > threshold:
+                suspicious.add(i)
+
+    return sorted(suspicious)
+
+
+if __name__ == "__main__":
+    import csv
+
+    with open("Health-ClosedIssues0000.train.csv") as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = [next(reader) for _ in range(10000)]
+
+    suspicious = spot(header, rows)
+    print(f"Suspicious rows (likely wrong input values): {suspicious}")

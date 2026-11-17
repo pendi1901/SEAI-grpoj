@@ -1,0 +1,27 @@
+You are writing one Python file, step01.py.
+
+The data is the csv file Health-ClosedIssues0000.train.csv in the current directory. Column names starting in upper case are numeric, lower case are symbolic. A name ending in - is a goal to minimise, in + a goal to maximise; all other columns are inputs. Its first lines:
+
+MRE-,ACC+,PRED40+,N_estimators,criterion,Min_sample_leaves,Min_impurity_decrease,Max_depth
+0.7771723122238585,0.4546619673181672,0,10,squared_error,17,7.75,11
+0.42238586156111924,0.6920858699134893,0.5714285714285714,150,absolute_error,3,4.25,10
+0.8817378497790869,0.40820249919897467,0,110,absolute_error,18,4,14
+
+You may use scikit-learn, numpy and pandas.
+
+The customer asks:
+
+  Out of the 10,000 setups already tried, show me the handful whose forecasts were unusually trustworthy.
+
+Write step01.py to answer that ask on this data.
+
+A test harness will import your file and call this function, so you must define it exactly:
+
+def remember(header, rows)
+  Returns a list of ints.   Return the positions (0-based) in `rows` of the rows you judge best. Return at least one and at most 5% of the rows.
+
+Conventions: `header` is the list of column names. `rows` is a list of rows; each row is a list of cells in header order, floats for numeric columns and strings for symbolic ones. A cell shown as "?" is hidden from you. A row is better when its goals are closer to their best (low for names ending in -, high for names ending in +).
+
+Keep everything that prints or reads the csv file under `if __name__ == "__main__":` so that importing the file prints nothing. Plain built-in types are all you need: do not import anything from `typing`.
+
+Running `python step01.py` must load the csv, call your function, print a short answer a customer could read, and exit with status 0. Reply with the complete file in one ```python fenced block and nothing else.

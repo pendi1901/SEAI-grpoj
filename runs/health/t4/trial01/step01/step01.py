@@ -1,0 +1,42 @@
+import csv
+import pandas as pd
+import numpy as np
+
+
+def remember(header, rows):
+    goals = [h for h in header if h.endswith('-') or h.endswith('+')]
+    n = len(rows)
+    scores = np.zeros(n)
+
+    for col in goals:
+        vals = []
+        for row in rows:
+            v = float(row[header.index(col)])
+            vals.append(v)
+        arr = np.array(vals)
+        if arr.max() == arr.min():
+            scores += 0.5
+        else:
+            normed = (arr - arr.min()) / (arr.max() - arr.min())
+            if col.endswith('-'):
+                scores += (1.0 - normed)
+            else:
+                scores += normed
+
+    threshold_idx = max(1, int(n * 0.05))
+    sorted_indices = np.argsort(scores)[::-1]
+    return sorted_indices[:threshold_idx].tolist()
+
+
+if __name__ == "__main__":
+    df = pd.read_csv("Health-ClosedIssues0000.train.csv")
+    header = list(df.columns)
+    rows = [list(row) for row in df.values]
+
+    best_positions = remember(header, rows)
+    print(f"Best {len(best_positions)} out of {len(rows)} setups:")
+    for pos in best_positions:
+        print(
+            f"  Row {pos}: MRE={df.iloc[pos]['MRE-']:.4f}, "
+            f"ACC={df.iloc[pos]['ACC+']:.4f}, PRED40={df.iloc[pos]['PRED40+']:.4f}"
+        )

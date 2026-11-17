@@ -1,0 +1,170 @@
+```python
+import csv
+
+
+def race(header, rows, label):
+    """Compare three strategies for finding the best employee row."""
+    plus = [c for c in header if c.endswith('+')]
+    minus = [c for c in header if c.endswith('-')]
+    goal_cols = plus + minus
+
+    # Collect labelled indices.
+    labelled = []
+    for i, vals in enumerate(label):
+        if any(v != "?" for v in vals):
+            labelled.append(i)
+
+    n_labelled = len(labelled)
+    best_score = float("-inf")
+    best_row_idx = 0
+    tried = ["random", "greedy", "spot"]
+
+    # --- Strategy: random (pick one of the labelled rows at random) ---
+    if n_labelled > 0:
+        import random as _rand
+        r = _rand.Random(42)
+        chosen = r.choice(labelled)
+        score = _score(rows, header, goal_cols, rows[chosen])
+        if score > best_score:
+            best_score = score
+            best_row_idx = chosen
+
+    # --- Strategy: greedy (pick the labelled row with highest score) ---
+    for idx in labelled:
+        score = _score(rows, header, goal_cols, rows[idx])
+        if score > best_score:
+            best_score = score
+            best_row_idx = idx
+
+    # --- Strategy: spot (use domain knowledge to find suspicious/valid rows) ---
+    import numpy as np
+    VALID_DEPT = {'Sales', 'Research & Development', 'Operations',
+                  'Human Resources', 'Engineering'}
+    VALID_GENDER = {'Male', 'Female'}
+    VALID_MARITAL = {'Single', 'Married', 'Divorced', 'Widowed'}
+    VALID_ROLE = {'Laboratory Technician', 'Sales Executive',
+                  'Sales Representative', 'Research Scientist',
+                  'Manufacturing Director', 'Human Resources'}
+    VALID_EDU = {'Other', 'Life Sciences', 'Medical',
+                 'Marketing', 'Sales', 'Technical'}
+    VALID_TRAVEL = {'Non-Travel', 'Travel_Rarely', 'Travel_Frequently'}
+
+    input_cols = [c for c in header if c not in goal_cols]
+    row_scores = {i: 0 for i in range(n_labelled)}
+
+    for col in input_cols:
+        idx = header.index(col)
+        try:
+            vals = [float(row[idx]) for row in rows]
+            arr = np.array(vals)
+            mean_v, std_v = float(arr.mean()), float(arr.std())
+            if std_v < 1e-9:
+                target = mean_v
+                for i, v in enumerate(rows):
+                    if abs(float(v[idx]) - target) > 0.5:
+                        row_scores[i] += 1
+            else:
+                threshold = 3.0 * std_v
+                for i, v in enumerate(rows):
+                    diff = abs(float(v[idx]) - mean_v)
+                    if diff > threshold:
+                        row_scores[i] += 1
+        except (ValueError, TypeError):
+            vals = [row[idx] for row in rows]
+            valid_set = None
+            if col == 'department':
+                valid_set = VALID_DEPT
+            elif col == 'gender':
+                valid_set = VALID_GENDER
+            elif col == 'maritalStatus':
+                valid_set = VALID_MARITAL
+            elif col == 'jobRole':
+                valid_set = VALID_ROLE
+            elif col == 'educationField':
+                valid_set = VALID_EDU
+            elif col == 'businessTravel':
+                valid_set = VALID_TRAVEL
+
+            if valid_set is not None:
+                for i, v in enumerate(vals):
+                    if v.strip() not in valid_set:
+                        row_scores[i] += 1
+
+    # Among labelled rows, pick the one with lowest suspicion score.
+    best_spot_score = float("inf")
+    for idx in labelled:
+        s = row_scores.get(idx, 0)
+        if s < best_spot_score:
+            best_spot_score = s
+            best_row_idx = idx
+
+    # --- Determine winner ---
+    tried_scores = {
+        "random": _score(rows, header, goal_cols, rows[best_row_idx]) if best_row_idx in labelled else float("-inf"),
+        "greedy": best_score,
+        "spot": _score(rows, header, goal_cols, rows[best_row_idx]),
+    }
+
+    # Re-evaluate: the winner is the strategy that produced the best score.
+    # We track which strategy found the overall best row.
+    winner = "greedy"  # default
+    for strat in ["random", "greedy", "spot"]:
+        if strat == "random":
+            s = _score(rows, header, goal_cols, rows[best_row_idx]) if best_row_idx in labelled else float("-inf")
+        elif strat == "greedy":
+            s = best_score
+        else:  # spot
+            s = _score(rows, header, goal_cols, rows[best_row_idx])
+
+        if s > tried_scores.get("random", float("-inf")) and s >= best_score:
+            winner = strat
+            break
+
+    return {"winner": winner, "row": best_row_idx, "tried": tried}
+
+
+def _score(rows, header, goal_cols, row):
+    """Compute a score for a row: higher is better."""
+    s = 0.0
+    for col in goal_cols:
+        idx = header.index(col)
+        v = float(row[idx]) if row[idx] != "?" else 0.0
+        if col.endswith('+'):
+            s += v
+        else:
+            s -= v
+    return s
+
+
+if __name__ == "__main__":
+    with open("WA_Fn-UseC_-HR-Employee-Attrition.train.csv", "r") as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = []
+        for row in reader:
+            parsed = []
+            for cell in row:
+                try:
+                    parsed.append(float(cell))
+                except ValueError:
+                    parsed.append(cell)
+            rows.append(parsed)
+
+    # Label the first 50 rows (or fewer if there are <50).
+    n_label = min(50, len(rows))
+    labels = [[None] * len(header) for _ in range(n_label)]
+    target_col = "YearsAtCompany+"
+    for i in range(n_label):
+        row = rows[i]
+        for j, col in enumerate(header):
+            if col.endswith('+') or col.endswith('-'):
+                try:
+                    labels[i][j] = float(row[j])
+                except ValueError:
+                    labels[i][j] = "?"
+
+    result = race(header, rows, labels)
+    print(f"Winner: {result['winner']}")
+    print(f"Best row index: {result['row']}")
+    print(f"All tried strategies: {result['tried']}")
+```

@@ -1,0 +1,59 @@
+```python
+def certify(xs, ys):
+    """Return True if xs and ys are statistically indistinguishable (same apart from noise)."""
+    n_x = len(xs)
+    n_y = len(ys)
+
+    mean_x = sum(xs) / n_x
+    mean_y = sum(ys) / n_y
+
+    var_x = sum((v - mean_x) ** 2 for v in xs) / (n_x - 1) if n_x > 1 else 0.0
+    var_y = sum((v - mean_y) ** 2 for v in ys) / (n_y - 1) if n_y > 1 else 0.0
+
+    se = ((var_x / n_x) + (var_y / n_y)) ** 0.5
+
+    diff = abs(mean_x - mean_y)
+
+    if se == 0:
+        return diff == 0
+    return diff < 2 * se
+
+
+if __name__ == "__main__":
+    import csv
+
+    with open("Health-ClosedIssues0000.train.csv") as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = [next(reader) for _ in range(10000)]
+
+    is_numeric = [c[0].isupper() for c in header]
+    goal_cols = [c for c in header if c.endswith("-") or c.endswith("+")]
+    goal_idx_map = {header.index(c): c for c in goal_cols}
+
+    def to_float(cell):
+        try:
+            return float(cell)
+        except (ValueError, TypeError):
+            return 0.0
+
+    # Get first goal value for each row (MRE- is the accuracy-like goal here; lower = better)
+    accuracies = []
+    for row in rows:
+        v = to_float(row[header.index(goal_cols[0])])
+        accuracies.append(v)
+
+    # Split into big vs small based on N_estimators threshold
+    n_est_idx = header.index("N_estimators")
+    big_indices = [i for i, row in enumerate(rows) if to_float(row[n_est_idx]) >= 50]
+    small_indices = [i for i in range(len(rows)) if i not in big_indices]
+
+    big_accs = [accuracies[i] for i in big_indices]
+    small_accs = [accuracies[i] for i in small_indices]
+
+    result = certify(big_accs, small_accs)
+
+    print(f"Big setups (N_estimators >= 50): mean accuracy {sum(big_accs)/len(big_accs):.4f}")
+    print(f"Small setups: mean accuracy {sum(small_accs)/len(small_accs):.4f}")
+    print(f"Their accuracies are {'indistinguishable' if result else 'significantly different'} apart from noise.")
+```

@@ -1,0 +1,40 @@
+#!/usr/bin/env python3 -B
+"""step06.py: justify any setup against all others."""
+import ezr
+
+
+def justify(header, rows, row):
+    """Return (p, reason) where p is the fraction of rows this one beats.
+
+    Build a tree on `rows`, predict ydist for `row` (goals hidden), then
+    compare to actual ydist of every training row.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    ranker_fn = ezr.ranker(tbl)
+
+    pred_ydist = ranker_fn(row)
+    actuals = [ezr.ydist(tbl, r) for r in rows]
+
+    p = sum(1 for a in actuals if pred_ydist < a) / len(actuals)
+
+    reason = f"This setup beats {p:.0%} of all others."
+    return (p, reason)
+
+
+if __name__ == "__main__":
+    import os
+
+    path = os.path.join(os.path.dirname(__file__), "pom3a.train.csv")
+    with open(path, encoding="utf-8-sig") as f:
+        lines = [l.strip() for l in f if l.strip()]
+
+    header = lines[0].split(",")
+    rows = [[ezr.atom(s) for s in line.split(",")] for line in lines[1:]]
+
+    test_row = list(rows[0])
+    goal_cols = [i for i, name in enumerate(header) if name[-1] in "+-"]
+    for i in goal_cols:
+        test_row[i] = "?"
+
+    p, reason = justify(header, rows, test_row)
+    print(f"{reason}")

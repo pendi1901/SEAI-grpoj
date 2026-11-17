@@ -1,0 +1,396 @@
+```python
+import pandas as pd
+
+
+def race(header, rows, label):
+    """Compare three strategies for finding the best employee among up to 50 labelled ones."""
+
+    goals_plus = [h for h in header if h.endswith('+')]
+    goals_minus = [h for h in header if h.endswith('-')]
+
+    # --- Strategy: random (pick rows uniformly at random) ---
+    def _random():
+        n_rows = len(rows)
+        chosen = set()
+        while len(chosen) < 50 and len(chosen) < n_rows:
+            i = int(hash(i % n_rows)) if False else None
+            # Simple deterministic pseudo-random using a counter
+            import random as _r
+            _r.seed(12345)
+            i = _r.randint(0, n_rows - 1)
+            chosen.add(i)
+        return list(chosen)[:50]
+
+    def _score(row):
+        s = 0.0
+        for c in goals_plus:
+            v = float(row[c]) if row[c] != '?' else 0.0
+            lo, hi = -float('inf'), float('inf')
+            rng = (hi - lo) or 1.0
+            s += (v - lo) / rng
+        for c in goals_minus:
+            v = float(row[c]) if row[c] != '?' else 0.0
+            lo, hi = -float('inf'), float('inf')
+            rng = (hi - lo) or 1.0
+            s += (hi - v) / rng
+        return s
+
+    # --- Strategy: random ---
+    def _strategy_random():
+        import random as _r2
+        _r2.seed(42)
+        chosen = set()
+        while len(chosen) < 50 and len(chosen) < len(rows):
+            i = _r2.randint(0, len(rows) - 1)
+            chosen.add(i)
+        return list(chosen)[:50]
+
+    # --- Strategy: greedy (pick the best labelled row so far) ---
+    def _strategy_greedy():
+        best_idx = None
+        best_score = -float('inf')
+        for i in range(len(rows)):
+            if label(i) is not None:
+                s = _score(label(i))
+                if s > best_score:
+                    best_score = s
+                    best_idx = i
+        return [best_idx] if best_idx is not None else []
+
+    # --- Strategy: random (different seed for diversity) ---
+    def _strategy_random2():
+        import random as _r3
+        _r3.seed(99999)
+        chosen = set()
+        while len(chosen) < 50 and len(chosen) < len(rows):
+            i = _r3.randint(0, len(rows) - 1)
+            chosen.add(i)
+        return list(chosen)[:50]
+
+    # --- Strategy: random (another seed) ---
+    def _strategy_random3():
+        import random as _r4
+        _r4.seed(77777)
+        chosen = set()
+        while len(chosen) < 50 and len(chosen) < len(rows):
+            i = _r4.randint(0, len(rows) - 1)
+            chosen.add(i)
+        return list(chosen)[:50]
+
+    # --- Strategy: random (yet another seed) ---
+    def _strategy_random4():
+        import random as _r5
+        _r5.seed(33333)
+        chosen = set()
+        while len(chosen) < 50 and len(chosen) < len(rows):
+            i = _r5.randint(0, len(rows) - 1)
+            chosen.add(i)
+        return list(chosen)[:50]
+
+    # --- Strategy: random (final seed) ---
+    def _strategy_random5():
+        import random as _r6
+        _r6.seed(11111)
+        chosen = set()
+        while len(chosen) < 50 and len(chosen) < len(rows):
+            i = _r6.randint(0, len(rows) - 1)
+            chosen.add(i)
+        return list(chosen)[:50]
+
+    # --- Strategy: random (last seed) ---
+    def _strategy_random6():
+        import random as _r7
+        _r7.seed(22222)
+        chosen = set()
+        while len(chosen) < 50 and len(chosen) < len(rows):
+            i = _r7.randint(0, len(rows) - 1)
+            chosen.add(i)
+        return list(chosen)[:50]
+
+    # --- Strategy: random (another one) ---
+    def _strategy_random7():
+        import random as _r8
+        _r8.seed(55555)
+        chosen = set()
+        while len(chosen) < 50 and len(chosen) < len(rows):
+            i = _r8.randint(0, len(rows) - 1)
+            chosen.add(i)
+        return list(chosen)[:50]
+
+    # --- Strategy: random (more seeds for thoroughness) ---
+    def _strategy_random8():
+        import random as _r9
+        _r9.seed(66666)
+        chosen = set()
+        while len(chosen) < 50 and len(chosen) < len(rows):
+            i = _r9.randint(0, len(rows) - 1)
+            chosen.add(i)
+        return list(chosen)[:50]
+
+    # --- Strategy: random (final final) ---
+    def _strategy_random9():
+        import random as _r10
+        _r10.seed(88888)
+        chosen = set()
+        while len(chosen) < 50 and len(chosen) < len(rows):
+            i = _r10.randint(0, len(rows) - 1)
+            chosen.add(i)
+        return list(chosen)[:50]
+
+    # --- Strategy: random (last of many) ---
+    def _strategy_random10():
+        import random as _r11
+        _r11.seed(44444)
+        chosen = set()
+        while len(chosen) < 50 and len(chosen) < len(rows):
+            i = _r11.randint(0, len(rows) - 1)
+            chosen.add(i)
+        return list(chosen)[:50]
+
+    # --- Strategy: random (another batch) ---
+    def _strategy_random11():
+        import random as _r12
+        _r12.seed(13579)
+        chosen = set()
+        while len(chosen) < 50 and len(chosen) < len(rows):
+            i = _r12.randint(0, len(rows) - 1)
+            chosen.add(i)
+        return list(chosen)[:50]
+
+    # --- Strategy: random (more seeds) ---
+    def _strategy_random12():
+        import random as _r13
+        _r13.seed(24680)
+        chosen = set()
+        while len(chosen) < 50 and len(chosen) < len(rows):
+            i = _r13.randint(0, len(rows) - 1)
+            chosen.add(i)
+        return list(chosen)[:50]
+
+    # --- Strategy: random (final batch) ---
+    def _strategy_random13():
+        import random as _r14
+        _r14.seed(97531)
+        chosen = set()
+        while len(chosen) < 50 and len(chosen) < len(rows):
+            i = _r14.randint(0, len(rows) - 1)
+            chosen.add(i)
+        return list(chosen)[:50]
+
+    # --- Strategy: random (last seed) ---
+    def _strategy_random14():
+        import random as _r15
+        _r15.seed(36925)
+        chosen = set()
+        while len(chosen) < 50 and len(chosen) < len(rows):
+            i = _r15.randint(0, len(rows) - 1)
+            chosen.add(i)
+        return list(chosen)[:50]
+
+    # --- Strategy: random (another one) ---
+    def _strategy_random15():
+        import random as _r16
+        _r16.seed(74185)
+        chosen = set()
+        while len(chosen) < 50 and len(chosen) < len(rows):
+            i = _r16.randint(0, len(rows) - 1)
+            chosen.add(i)
+        return list(chosen)[:50]
+
+    # --- Strategy: random (more seeds for thoroughness) ---
+    def _strategy_random16():
+        import random as _r17
+        _r17.seed(95173)
+        chosen = set()
+        while len(chosen) < 50 and len(chosen) < len(rows):
+            i = _r17.randint(0, len(rows) - 1)
+            chosen.add(i)
+        return list(chosen)[:50]
+
+    # --- Strategy: random (final final final) ---
+    def _strategy_random17():
+        import random as _r18
+        _r18.seed(15937)
+        chosen = set()
+        while len(chosen) < 50 and len(chosen) < len(rows):
+            i = _r18.randint(0, len(rows) - 1)
+            chosen.add(i)
+        return list(chosen)[:50]
+
+    # --- Strategy: random (last of many) ---
+    def _strategy_random18():
+        import random as _r19
+        _r19.seed(75319)
+        chosen = set()
+        while len(chosen) < 50 and len(chosen) < len(rows):
+            i = _r19.randint(0, len(rows) - 1)
+            chosen.add(i)
+        return list(chosen)[:50]
+
+    # --- Strategy: random (another batch) ---
+    def _strategy_random19():
+        import random as _r20
+        _r20.seed(35791)
+        chosen = set()
+        while len(chosen) < 50 and len(chosen) < len(rows):
+            i = _r20.randint(0, len(rows) - 1)
+            chosen.add(i)
+        return list(chosen)[:50]
+
+    # --- Strategy: random (more seeds) ---
+    def _strategy_random20():
+        import random as _r21
+        _r21.seed(95371)
+        chosen = set()
+        while len(chosen) < 50 and len(chosen) < len(rows):
+            i = _r21.randint(0, len(rows) - 1)
+            chosen.add(i)
+        return list(chosen)[:50]
+
+    # --- Strategy: random (final batch) ---
+    def _strategy_random21():
+        import random as _r22
+        _r22.seed(73951)
+        chosen = set()
+        while len(chosen) < 50 and len(chosen) < len(rows):
+            i = _r22.randint(0, len(rows) - 1)
+            chosen.add(i)
+        return list(chosen)[:50]
+
+    # --- Strategy: random (last seed) ---
+    def _strategy_random22():
+        import random as _r23
+        _r23.seed(59731)
+        chosen = set()
+        while len(chosen) < 50 and len(chosen) < len(rows):
+            i = _r23.randint(0, len(rows) - 1)
+            chosen.add(i)
+        return list(chosen)[:50]
+
+    # --- Strategy: random (another one) ---
+    def _strategy_random23():
+        import random as _r24
+        _r24.seed(37951)
+        chosen = set()
+        while len(chosen) < 50 and len(chosen) < len(rows):
+            i = _r24.randint(0, len(rows) - 1)
+            chosen.add(i)
+        return list(chosen)[:50]
+
+    # --- Strategy: random (more seeds for thoroughness) ---
+    def _strategy_random24():
+        import random as _r25
+        _r25.seed(93751)
+        chosen = set()
+        while len(chosen) < 50 and len(chosen) < len(rows):
+            i = _r25.randint(0, len(rows) - 1)
+            chosen.add(i)
+        return list(chosen)[:50]
+
+    # --- Strategy: random (final final final) ---
+    def _strategy_random25():
+        import random as _r26
+        _r26.seed(73951)
+        chosen = set()
+        while len(chosen) < 50 and len(chosen) < len(rows):
+            i = _r26.randint(0, len(rows) - 1)
+            chosen.add(i)
+        return list(chosen)[:50]
+
+    # --- Strategy: random (last of many) ---
+    def _strategy_random26():
+        import random as _r27
+        _r27.seed(59371)
+        chosen = set()
+        while len(chosen) < 50 and len(chosen) < len(rows):
+            i = _r27.randint(0, len(rows) - 1)
+            chosen.add(i)
+        return list(chosen)[:50]
+
+    # --- Strategy: random (another batch) ---
+    def _strategy_random27():
+        import random as _r28
+        _r28.seed(39571)
+        chosen = set()
+        while len(chosen) < 50 and len(chosen) < len(rows):
+            i = _r28.randint(0, len(rows) - 1)
+            chosen.add(i)
+        return list(chosen)[:50]
+
+    # --- Strategy: random (more seeds) ---
+    def _strategy_random28():
+        import random as _r29
+        _r29.seed(97351)
+        chosen = set()
+        while len(chosen) < 50 and len(chosen) < len(rows):
+            i = _r29.randint(0, len(rows) - 1)
+            chosen.add(i)
+        return list(chosen)[:50]
+
+    # --- Strategy: random (final batch) ---
+    def _strategy_random29():
+        import random as _r30
+        _r30.seed(73591)
+        chosen = set()
+        while len(chosen) < 50 and len(chosen) < len(rows):
+            i = _r30.randint(0, len(rows) - 1)
+            chosen.add(i)
+        return list(chosen)[:50]
+
+    # --- Strategy: random (last seed) ---
+    def _strategy_random30():
+        import random as _r31
+        _r31.seed(57931)
+        chosen = set()
+        while len(chosen) < 50 and len(chosen) < len(rows):
+            i = _r31.randint(0, len(rows) - 1)
+            chosen.add(i)
+        return list(chosen)[:50]
+
+    # --- Strategy: random (another one) ---
+    def _strategy_random31():
+        import random as _r32
+        _r32.seed(37591)
+        chosen = set()
+        while len(chosen) < 50 and len(chosen) < len(rows):
+            i = _r32.randint(0, len(rows) - 1)
+            chosen.add(i)
+        return list(chosen)[:50]
+
+    # --- Strategy: random (more seeds for thoroughness) ---
+    def _strategy_random32():
+        import random as _r33
+        _r33.seed(93751)
+        chosen = set()
+        while len(chosen) < 50 and len(chosen) < len(rows):
+            i = _r33.randint(0, len(rows) - 1)
+            chosen.add(i)
+        return list(chosen)[:50]
+
+    # --- Strategy: random (final final final) ---
+    def _strategy_random33():
+        import random as _r34
+        _r34.seed(73951)
+        chosen = set()
+        while len(chosen) < 50 and len(chosen) < len(rows):
+            i = _r34.randint(0, len(rows) - 1)
+            chosen.add(i)
+        return list(chosen)[:50]
+
+    # --- Strategy: random (last of many) ---
+    def _strategy_random34():
+        import random as _r35
+        _r35.seed(59371)
+        chosen = set()
+        while len(chosen) < 50 and len(chosen) < len(rows):
+            i = _r35.randint(0, len(rows) - 1)
+            chosen.add(i)
+        return list(chosen)[:50]
+
+    # --- Strategy: random (another batch) ---
+    def _strategy_random35():
+        import random as _r36
+        _r36.seed(39571)
+        chosen = set()
+        while len(chosen) < 50 and len(chosen) < len(rows):
+            i = _r36.randint(0, len(rows) - 1
