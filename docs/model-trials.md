@@ -101,3 +101,34 @@ crashes. Use Q for quality; keep `ran_ok` only as a diagnostic.
 The ezr programs are short and do call ezr (`Tbl`, `acquire`,
 `ranker`, `ydist`), but misuse it. All of the failures are the
 model's own; none traced to the rig.
+
+## The retry fix, on a full ten-step climb
+
+The first real run was paused after 11 calls: 3 of 5 late steps
+returned no file (thinking used the whole output budget) and 3 of 8
+files crashed on `from typing import list`. Two changes followed: one
+fresh retry with thinking off when no file comes back, and plainer
+signatures in the contract. One climb then ran on pom3a, treatment 1,
+and was scored on the held-out 20%:
+
+| step | skill | new lines | attempts | Q | baseline | scorer status |
+|--:|---|--:|--:|--:|--:|---|
+| 1 | remember | 28 | 1 | 0.69 | 0 | ok |
+| 2 | guess | 46 | 1 | 0 | 0 | error |
+| 3 | certify | 46 | 1 | 0.86 | 0.5 | ok |
+| 4 | flow | 33 | 2 | -0.07 | 0 | ok |
+| 5 | blame | 45 | 1 | 0 | 0 | error |
+| 6 | justify | 24 | 2 | 0 | 0 | error |
+| 7 | choose | 29 | 1 | 0.5 | 0.5 | error |
+| 8 | fix | 68 | 1 | 1.0 | 0 | ok |
+| 9 | spot | 58 | 2 | 0.04 | 0 | ok |
+| 10 | race | none | 2 | 0 | 0 | no file |
+
+Nine of ten steps returned a file (before: 2 of the 5 late steps).
+The retry fired four times and rescued three. No `typing` errors.
+Five programs scored without error; three beat their baseline
+clearly. The remaining failures are ordinary bugs in the model's
+code.
+
+Cost: about 100 s of model time per call on average, so roughly 5 h
+for one repeat of everything (180 calls) and 15 h for three (540).
