@@ -90,14 +90,41 @@ CONTRACT = {
 # gloss10 gives choose a chance level of 0.5, but that describes a skill
 # as good as random search, not a crash; a program that picks one poor
 # row scores about 0, so a failure must not earn more than that.
+# Prompt v3: each rule the scorer enforces, with what breaking it costs.
+# These restate the signed-off assessment sheet; they describe the
+# harness, never how to solve the skill.
+RULES = {
+  "remember": "Returning no rows, or more than 5% of the rows, scores zero.",
+  "guess": "Return exactly one number per test row, in the same order.",
+  "certify": "Return a plain True or False for every call.",
+  "flow": "The harness replays many arrival orders through the same "
+          "imported function, so do not keep state between calls: decide "
+          "from `row` and `seen` alone.",
+  "blame": "Name only input columns, spelled exactly as in `header`. A goal "
+           "column or an unknown name scores zero.",
+  "justify": "p must be a number from 0 to 1, not a percentage. The goal "
+             "cells of `row` are \"?\": estimate from its input columns.",
+  "choose": "label() raises an error if called on a 51st different row, "
+            "and that run then scores zero.",
+  "fix": "An empty dict, a column that is not in `levers`, or a value "
+         "outside its allowed values scores zero.",
+  "spot": "Return row positions as ints, most suspicious first.",
+  "race": "The 50-label budget is shared by all strategies together; the "
+          "51st different row raises an error. `tried` must contain the "
+          "exact name \"random\", and fewer than three strategies scores "
+          "zero.",
+}
+
 BASELINE = dict(remember=0, guess=0, certify=.5, flow=0, blame=0,
                 justify=0, choose=0, fix=0, spot=0, race=0)
 
 
-def prompt_text(skill):
+def prompt_text(skill, rules=False):
   "The paragraph the runner adds to the prompt for this skill."
   return ("A test harness will import your file and call this function, "
           "so you must define it exactly:\n\n" + CONTRACT[skill] + "\n\n"
+          + ("Rules the harness enforces: " + RULES[skill] + "\n\n"
+             if rules else "")
           + SHARED + "\n\nKeep everything that prints or reads the csv "
           "file under `if __name__ == \"__main__\":` so that importing "
           "the file prints nothing. Plain built-in types are all you need: "
