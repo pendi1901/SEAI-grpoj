@@ -23,7 +23,7 @@ def sandbox(tmp, asks_md):
   (tmp / "data.csv").write_text("Size,kind,Cost-\n1,a,3\n2,b,1\n", "utf8")
   (tmp / "req.md").write_text(asks_md, "utf8")
   cfg = json.loads((RIG / "config.json").read_text("utf8"))
-  cfg.update(backend="mock", trials=2, asks=[1, 2, 3],
+  cfg.update(backend="mock", trials=2, asks=[1, 2, 3], repair=False,
              runs=str(tmp / "runs"), log=str(tmp / "calls.csv"),
              domains={"toy": {"data": str(tmp / "data.csv"),
                               "requirements": str(tmp / "req.md")}},
@@ -188,6 +188,51 @@ try:
         all(not x["error"] for x in R if x["step"] != "2"))
 finally:
   srv.shutdown(); shutil.rmtree(tmp, ignore_errors=True)
+
+# -- prompt v3: one repair round, on training rows only ------------------
+tmp = Path(tempfile.mkdtemp(prefix="rigtest_"))
+try:
+  conf = sandbox(tmp, "| 1 | REPAIRME first. | certify |\n"
+                      "| 2 | GOODFIRST now. | certify |\n"
+                      "| 3 | Fine. | remember |\n")
+  c = json.loads(conf.read_text())
+  c.update(repair=True, prompt_version=3)
+  conf.write_text(json.dumps(c))
+  r = go(conf, "--treatments", "1", "--trials", "1")
+  R = rows(tmp)
+  s1 = tmp / "runs/toy/t1/trial01/step01"
+  check("v3: a crashing function triggers exactly one repair",
+        R[0]["repaired"] == "1" and R[0]["attempts"] == "2"
+        and R[0]["check_before"] == "error" and R[0]["check_after"] == "ok")
+  check("v3: the repaired file replaces the first, which is kept",
+        "raise ValueError" not in (s1 / "step01.py").read_text()
+        and "raise ValueError" in (s1 / "first_try.py").read_text())
+  rp = (s1 / "repair_prompt.txt").read_text()
+  check("v3: the repair prompt shows the error and the file's own line",
+        "ValueError: boom" in rp and "step01.py" in rp and "It failed:" in rp)
+  check("v3: no local path reaches the repair prompt",
+        str(tmp) not in rp and str(RIG) not in rp)
+  check("v3: a file that passes the check is not repaired",
+        R[1]["repaired"] == "0" and R[1]["check_before"] == "ok"
+        and R[1]["attempts"] == "1")
+  check("v3: a repair that still fails is logged as failing",
+        R[2]["repaired"] == "1" and R[2]["check_after"] != "ok")
+  check("v3: prompt version is logged", R[0]["prompt_version"] == "3")
+  # The check must be given the training file and never the test file.
+  seen_args, real = [], run.subprocess.run
+  def spy(cmd, **kw):
+    seen_args.extend(map(str, cmd)); return real(cmd, **kw)
+  run.subprocess.run = spy
+  try:
+    cfg = run.load_config(str(conf))
+    st, _ = run.contract_check(cfg, "toy", s1, "step01.py", "certify")
+  finally:
+    run.subprocess.run = real
+  check("v3: the contract check reads the training file only",
+        st == "ok" and any(a.endswith(".train.csv") for a in seen_args)
+        and not any(a.endswith(".test.csv") for a in seen_args))
+finally:
+  shutil.rmtree(tmp, ignore_errors=True)
 
 # -- the Gemini backend, against a fake server ------------------------
 gseen, gcount = [], [0]

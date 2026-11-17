@@ -43,7 +43,8 @@ LIB_TEXT = {
 FIELDS = ("when domain data treatment library reuse trial step skill ask "
           "backend model dir new_lines total_lines pct_new got_code ran_ok "
           "llm_secs run_secs prompt_chars reply_chars prompt_tokens "
-          "reply_tokens seed attempts error").split()
+          "reply_tokens seed attempts prompt_version check_before check_after "
+          "repaired error").split()
 LOCK = threading.Lock()
 
 
@@ -101,6 +102,27 @@ def extract_code(reply):
   return max(blocks, key=len).strip() + "\n" if blocks else None
 
 
+def parsed_rows(data_path, n=2):
+  """The header and the first N rows exactly as a skill function receives
+  them (the scorer's own parsing), plus each text column's values."""
+  import csv as _csv
+  rows = [r for r in _csv.reader(open(data_path, encoding="utf8")) if r]
+  head = [c.strip() for c in rows[0]]
+  num = [c[:1].isupper() for c in head]
+  def cell(k, v):
+    v = v.strip()
+    if v == "?" or not num[k]: return v
+    try: return float(v)
+    except ValueError: return "?"
+  sample = [[cell(k, v) for k, v in enumerate(r)] for r in rows[1:1 + n]]
+  text = {}
+  for k, c in enumerate(head):
+    if not num[k]:
+      vals = sorted({r[k].strip() for r in rows[1:]})
+      text[c] = vals[:8] + (["..."] if len(vals) > 8 else [])
+  return head, sample, text
+
+
 def build_prompt(cfg, domain, treat, step, ask, skill, prior, data_path):
   "Background library + earlier skills + the one-line ask."
   lib, reuse = treat["library"], treat["reuse"]
@@ -116,8 +138,16 @@ def build_prompt(cfg, domain, treat, step, ask, skill, prior, data_path):
        "the customer quotes describes their full records, not this file: "
        "never hard-code a row count, read the file to the end. "
        "Its first lines:",
-       "", *head, "",
-       LIB_TEXT[lib]]
+       "", *head, ""]
+  if cfg.get("prompt_version", 2) >= 3:
+    h, sample, text = parsed_rows(data_path)
+    p += ["Your function receives rows already parsed. The header and the "
+          "first two rows look like this in Python:", "",
+          f"header = {h!r}"] + [f"row = {r!r}" for r in sample] + [""]
+    if text:
+      p += ["These columns hold text, not numbers: " + "; ".join(
+            f"{c} ({', '.join(v)})" for c, v in text.items()) + ".", ""]
+  p += [LIB_TEXT[lib]]
   if lib == "ezr":
     p += ["", "--- ezr.py ---", (RIG / "lib" / "ezr.py").read_text("utf8")]
   if prior and (reuse or SHOW_PRIOR_TO_NO_REUSE):
@@ -130,7 +160,7 @@ def build_prompt(cfg, domain, treat, step, ask, skill, prior, data_path):
               "Do not edit the earlier files."]
   p += ["", "The customer asks:", "", f"  {ask}", "",
         f"Write step{step:02d}.py to answer that ask on this data.", "",
-        prompt_text(skill), "",
+        prompt_text(skill, cfg.get("prompt_version", 2) >= 3), "",
         f"Running `python step{step:02d}.py` must load the csv, call your "
         "function, print a short answer a customer could read, and exit "
         "with status 0. Reply with the complete file in one ```python "
@@ -290,7 +320,8 @@ def one_call(cfg, domain, tid, trial, step, ask, prior):
              prompt_chars=len(prompt), new_lines=0, total_lines=prior_total,
              pct_new=0, got_code=0, ran_ok=0, llm_secs=0, run_secs=0,
              reply_chars=0, prompt_tokens=0, reply_tokens=0, seed=seed,
-             attempts=1, error="")
+             attempts=1, prompt_version=cfg.get("prompt_version", 2),
+             check_before="", check_after="", repaired=0, error="")
   code = ""
   try:
     reply, secs, meta = call_llm(cfg, prompt, d, seed)
@@ -317,6 +348,33 @@ def one_call(cfg, domain, tid, trial, step, ask, prior):
     row["reply_chars"] = len(reply)
     if code:
       (d / name).write_text(code, "utf8")
+      if cfg.get("repair"):
+        # Prompt v3: one repair round. The file's function is called on
+        # training rows only; if it breaks, the model sees the error once
+        # and may send a corrected file. Same rule for every treatment.
+        st, why = contract_check(cfg, domain, d, name, ask[2])
+        row.update(check_before=st, check_after=st)
+        if st != "ok":
+          rp = repair_prompt(prompt, name, code, ask[2], data.name, why)
+          (d / "repair_prompt.txt").write_text(rp, "utf8")
+          try:
+            reply3, secs3, meta3 = call_llm(cfg, rp, d, seed + 1)
+            (d / "reply_repair.txt").write_text(reply3, "utf8")
+            row.update(repaired=1, attempts=row["attempts"] + 1,
+                       llm_secs=round(row["llm_secs"] + secs3, 1),
+                       prompt_tokens=row["prompt_tokens"]
+                       + meta3.get("prompt_tokens", 0),
+                       reply_tokens=row["reply_tokens"]
+                       + meta3.get("reply_tokens", 0))
+            fixed = extract_code(reply3)
+            if fixed:
+              (d / "first_try.py").write_text(code, "utf8")
+              code = fixed
+              (d / name).write_text(code, "utf8")
+              row["check_after"] = contract_check(cfg, domain, d, name,
+                                                  ask[2])[0]
+          except Exception as e:              # keep the first file
+            row["error"] = f"repair call failed: {type(e).__name__}: {e}"[:300]
       new = code_lines(code)
       row.update(got_code=1, new_lines=new, total_lines=prior_total + new,
                  pct_new=round(100 * new / (prior_total + new), 1))
@@ -329,6 +387,44 @@ def one_call(cfg, domain, tid, trial, step, ask, prior):
   log_row(cfg, row)
   (d / "done.json").write_text(json.dumps(row, indent=1), "utf8")
   return code
+
+
+def contract_check(cfg, domain, d, name, skill):
+  """Import the new file and call its skill function on a sample of the
+  TRAINING data, under the scorer's rules (rig/score.py --check). Returns
+  (status, detail); detail is what the model would be shown."""
+  train, _ = split(cfg, domain)
+  levers = json.dumps(cfg["domains"][domain].get("levers", []))
+  t = cfg.get("check_timeout", 120)
+  try:
+    r = subprocess.run([sys.executable, str(RIG / "score.py"), "--check",
+                        str(d / name), skill, str(train), levers],
+                       capture_output=True, text=True, encoding="utf8",
+                       errors="replace", timeout=t,
+                       env=dict(os.environ, PYTHONUTF8="1"))
+    (d / "check.out").write_text(r.stdout[-3000:] + "\n--- stderr ---\n"
+                                 + r.stderr[-3000:], "utf8")
+    last = [s for s in r.stdout.splitlines() if s.startswith("@@CHECK ")]
+    if last:
+      j = json.loads(last[-1][8:])
+      return j["status"], j["detail"]
+    return "error", ("Importing the file and calling the function stopped "
+                     "the process without a Python error (for example "
+                     "sys.exit or os._exit).")
+  except subprocess.TimeoutExpired:
+    return "timeout", (f"Calling `{skill}` on a sample of the training data "
+                       f"took longer than {t} seconds.")
+
+
+def repair_prompt(prompt, name, code, skill, data_name, detail):
+  "The original prompt, the failed file, and what went wrong. Nothing else."
+  return "\n".join([
+    prompt, "", f"--- your previous {name} ---", code, "",
+    f"A test harness imported that file and called `{skill}` on a sample "
+    f"of the training data in {data_name}. It failed:", "", detail, "",
+    "Fix the file. Keep the same function name and arguments and follow "
+    "every rule above. Reply with the complete corrected file in one "
+    "```python fenced block and nothing else."])
 
 
 def climb(cfg, domain, tid, trial, budget):

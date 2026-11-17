@@ -15,6 +15,17 @@ step = int(re.search(r"step(\d+)\.py", prompt)[1])
 csvs = re.findall(r"csv file (\S+) in the current", prompt)
 reuse = "Reuse the earlier files" in prompt
 
+if "REPAIRME" in prompt or "GOODFIRST" in prompt:
+  # A certify function that crashes, until the prompt carries an error
+  # report from the harness; then a working one.
+  fixed = "It failed:" in prompt or "GOODFIRST" in prompt
+  body = ("import statistics as st\n\ndef certify(xs, ys):\n"
+          + ("    return abs(st.mean(xs) - st.mean(ys)) < 0.3\n" if fixed
+             else "    raise ValueError('boom')\n")
+          + "\nif __name__ == '__main__':\n    print(certify([1, 2], [1, 2]))\n")
+  print("```python\n" + body + "```")
+  sys.exit(0)
+
 if "NOCODE" in prompt and "--force" not in sys.argv:
   print("I could not do that.")
   sys.exit(0)
