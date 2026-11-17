@@ -6,13 +6,14 @@ software process (pom3a), open-source project health, and HR employee
 attrition.
 
 This repo holds the reading of the course spec, draft requirements,
-and the runner and scorer for treatments 1 to 6. Only scouting calls
-have been made; no experiment has been run yet.
+and the runner and scorer for treatments 1 to 6. One full run (N = 1, Nov 17) is
+committed with its results; treatment 7 is not done yet.
 It is local, with no remote.
 
 | file | what it answers |
 |---|---|
 | [docs/plan.md](docs/plan.md) | **start here**: what to do, who does it, compute and time estimates, day by day |
+| [docs/results-n1.md](docs/results-n1.md) | **first full run (N = 1)**: what it shows, what it cannot, and the tooling fixes it forced |
 | [docs/lecturer-notes.md](docs/lecturer-notes.md) | the lecturer's Nov 16 instructions and what each one changes |
 | [docs/assessment.md](docs/assessment.md) | **to sign off before any big run**: how each of the ten skills is judged |
 | [docs/brief.md](docs/brief.md) | the whole spec: dates, marks, hypotheses, skills, treatments, report, rubric, every way to lose marks |
