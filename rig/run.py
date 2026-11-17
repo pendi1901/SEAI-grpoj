@@ -23,6 +23,8 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from contract import prompt_text
 RIG = ROOT / "rig"
 SKILLS = "remember guess certify flow blame justify choose fix spot race".split()
 
@@ -80,7 +82,7 @@ def extract_code(reply):
   return max(blocks, key=len).strip() + "\n" if blocks else None
 
 
-def build_prompt(cfg, domain, treat, step, ask, prior, data_path):
+def build_prompt(cfg, domain, treat, step, ask, skill, prior, data_path):
   "Background library + earlier skills + the one-line ask."
   lib, reuse = treat["library"], treat["reuse"]
   head = data_path.read_text("utf8").splitlines()[:4]
@@ -103,10 +105,12 @@ def build_prompt(cfg, domain, treat, step, ask, prior, data_path):
               "rather than rewriting. Write as little new code as possible. "
               "Do not edit the earlier files."]
   p += ["", "The customer asks:", "", f"  {ask}", "",
-        f"Write step{step:02d}.py to answer that ask on this data. Running "
-        f"`python step{step:02d}.py` must print a short answer a customer "
-        "could read, and exit with status 0. Reply with the complete file "
-        "in one ```python fenced block and nothing else."]
+        f"Write step{step:02d}.py to answer that ask on this data.", "",
+        prompt_text(skill), "",
+        f"Running `python step{step:02d}.py` must load the csv, call your "
+        "function, print a short answer a customer could read, and exit "
+        "with status 0. Reply with the complete file in one ```python "
+        "fenced block and nothing else."]
   return "\n".join(p)
 
 
@@ -200,7 +204,8 @@ def one_call(cfg, domain, tid, trial, step, ask, prior):
   for pname, ptext in prior: (d / pname).write_text(ptext, "utf8")
 
   b = cfg["backends"][cfg["backend"]]
-  prompt = build_prompt(cfg, domain, treat, step, ask[1], prior, d / data.name)
+  prompt = build_prompt(cfg, domain, treat, step, ask[1], ask[2], prior,
+                        d / data.name)
   (d / "prompt.txt").write_text(prompt, "utf8")
   prior_total = sum(code_lines(t) for _, t in prior)
   seed = zlib.crc32(f"{domain}/{tid}/{trial}/{step}".encode()) % 2**31
