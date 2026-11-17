@@ -35,7 +35,8 @@ def sandbox(tmp, asks_md):
 
 def go(conf, *extra):
   return subprocess.run([sys.executable, str(RIG / "run.py"), "go",
-                         "--config", str(conf), *extra],
+                         "--config", str(conf), "--backend",
+                         json.loads(conf.read_text())["backend"], *extra],
                         capture_output=True, text=True)
 
 
@@ -123,6 +124,48 @@ try:
             for x in R if x["step"] == "3"))
 finally:
   shutil.rmtree(tmp, ignore_errors=True)
+
+# -- the Ollama backend, against a fake server ------------------------
+import http.server, threading
+seen = []
+class Fake(http.server.BaseHTTPRequestHandler):
+  def do_POST(self):
+    q = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+    seen.append(q)
+    full = "FILLCTX" in q["prompt"]
+    out = json.dumps(dict(response="```python\nprint('hi')\n```",
+                          prompt_eval_count=4096 if full else 321,
+                          eval_count=12)).encode()
+    self.send_response(200); self.end_headers(); self.wfile.write(out)
+  def log_message(self, *a): pass
+srv = http.server.HTTPServer(("127.0.0.1", 0), Fake)
+threading.Thread(target=srv.serve_forever, daemon=True).start()
+tmp = Path(tempfile.mkdtemp(prefix="rigtest_"))
+try:
+  conf = sandbox(tmp, "| 1 | Fine. | remember |\n| 2 | FILLCTX. | guess |\n"
+                      "| 3 | Fine again. | certify |\n")
+  c = json.loads(conf.read_text())
+  c["backend"] = "fake"
+  c["backends"]["fake"] = dict(url=f"http://127.0.0.1:{srv.server_port}",
+                               model="m", options=dict(num_ctx=4096))
+  conf.write_text(json.dumps(c))
+  r = go(conf, "--treatments", "1", "--trials", "2")
+  R = rows(tmp)
+  check("ollama backend: 6 calls, all ran", len(R) == 6 and
+        all(x["ran_ok"] == "1" for x in R))
+  check("token counts are logged", R[0]["prompt_tokens"] == "321" and
+        R[0]["reply_tokens"] == "12")
+  check("request is stateless and sets num_ctx and a seed",
+        all("context" not in q and q["stream"] is False and
+            q["options"]["num_ctx"] == 4096 and "seed" in q["options"]
+            for q in seen))
+  check("each call gets its own seed",
+        len({q["options"]["seed"] for q in seen}) == 6)
+  check("a prompt that fills the context is flagged",
+        all("truncated" in x["error"] for x in R if x["step"] == "2") and
+        all(not x["error"] for x in R if x["step"] != "2"))
+finally:
+  srv.shutdown(); shutil.rmtree(tmp, ignore_errors=True)
 
 # -- the real requirements docs parse ---------------------------------
 cfg = run.load_config()

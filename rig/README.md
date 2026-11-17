@@ -46,11 +46,58 @@ Narrow a run with `--domains hr` or `--treatments 5 6`.
      version of the CLI, and add those flags to `cmd`. The runner
      checks for `CLAUDE.md` in the directory tree; it cannot see a
      user-level one in your home folder.
-   - `ollama`: needs Ollama and the model pulled. One GPU means use
-     `--workers 1`.
+   - `ollama` (the default): see the next section.
 2. **Install scikit-learn**, or treatments 3 and 4 will all crash.
 3. **Run `fetch`.** It downloads from `timm/moot` and `timm/ezr`.
 4. **Run the timing test**, then `status`, and decide N.
+
+## Running on local Ollama
+
+Chosen Nov 16 2026: a local model on the laptop's 8 GB RTX 5060. The
+runner talks to Ollama over HTTP at `localhost:11434`. Tested against
+a fake server only; Ollama is not installed on this machine yet.
+
+Set-up, once:
+
+    winget install Ollama.Ollama
+    ollama pull qwen2.5-coder:7b
+    pip install scikit-learn
+    python rig/run.py fetch
+
+Then:
+
+    python rig/run.py go --limit 10       # timing test
+    python rig/run.py status
+    python rig/run.py go --trials 3       # 540 calls; leave it overnight
+
+What the runner does for you on this backend:
+
+- **Stateless calls.** Each request carries the prompt and nothing
+  else (no `context` field), so no call can remember another. That is
+  the reset protocol; say so in Methods.
+- **A big enough context window.** Ollama's default window is small
+  and it drops the start of a long prompt without saying so. The ezr
+  treatments send all of `ezr.py` plus the earlier steps. The config
+  sets `num_ctx` to 16384, and any call whose prompt fills 95% of the
+  window is flagged in the log's `error` column.
+- **A seed per call**, derived from domain, treatment, trial and step,
+  and logged. Trials differ; reruns of the same call do not.
+- **Token counts** from the server, in the log.
+
+Things to decide and check:
+
+- **The model.** `qwen2.5-coder:7b` is a placeholder that fits in
+  8 GB; newer small coding models may exist. Whatever you use, a
+  4-bit model of about 7B parameters is the practical ceiling here.
+  Put its exact name in `config.json` and in Methods.
+- **Use one worker.** One GPU serves one call at a time.
+- **Watch the first ten calls.** If `status` shows few programs
+  running clean, or the log shows truncation flags, fix that before
+  the long run: lower the window pressure by raising `num_ctx` (uses
+  more GPU memory) or try another model.
+- **If the 16k window does not fit in 8 GB**, Ollama moves part of
+  the model to the CPU and calls get several times slower. `ollama ps`
+  shows the split.
 
 ## What the log holds
 
@@ -64,7 +111,8 @@ Narrow a run with `--domains hr` or `--treatments 5 6`.
 | total_lines | new_lines plus the earlier steps of this climb |
 | pct_new | 100 x new / total: the histogram's y-axis |
 | got_code, ran_ok, error | did it reply with code; did `python stepNN.py` exit 0 |
-| llm_secs, run_secs, prompt_chars, reply_chars | cost |
+| llm_secs, run_secs, prompt_chars, reply_chars, prompt_tokens, reply_tokens | cost (tokens on Ollama only) |
+| seed | the seed sent with the call |
 
 ## Choices made here that the report must state
 
@@ -84,6 +132,5 @@ Narrow a run with `--domains hr` or `--treatments 5 6`.
 
 - **No quality score.** `ran_ok` only says the program ran. The Q
   scores in `docs/stats.md` need a separate scorer, not yet written.
-- **No token counts**, only characters; the backends differ too much.
 - **No `same` tables or histograms.** Those read `calls.csv` and are
   the next piece.

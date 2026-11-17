@@ -17,6 +17,7 @@ and is never repeated. Written with LLM help (see rig/README.md); this is
 experiment tooling and is not part of the hand-written treatment 7.
 """
 import argparse, csv, json, re, shutil, subprocess, sys, threading, time
+import zlib
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -39,7 +40,8 @@ LIB_TEXT = {
 }
 FIELDS = ("when domain data treatment library reuse trial step skill ask "
           "backend model dir new_lines total_lines pct_new got_code ran_ok "
-          "llm_secs run_secs prompt_chars reply_chars error").split()
+          "llm_secs run_secs prompt_chars reply_chars prompt_tokens "
+          "reply_tokens seed error").split()
 LOCK = threading.Lock()
 
 
@@ -114,9 +116,29 @@ def claude_md_above(path):
           if (d / "CLAUDE.md").exists()]
 
 
-def call_llm(cfg, prompt, cwd):
-  "Send PROMPT on stdin to the backend command. Returns (reply, seconds)."
+def call_ollama(b, prompt, seed):
+  """One stateless call to a local Ollama server. No `context` is sent, so
+  the model sees this prompt and nothing else. Returns (reply, meta)."""
+  opts = dict(b.get("options", {}), seed=seed)
+  body = json.dumps(dict(model=b["model"], prompt=prompt, stream=False,
+                         options=opts)).encode()
+  req = urllib.request.Request(b["url"].rstrip("/") + "/api/generate", body,
+                               {"Content-Type": "application/json"})
+  with urllib.request.urlopen(req, timeout=b.get("timeout", 900)) as r:
+    out = json.loads(r.read())
+  return out.get("response", ""), dict(
+    prompt_tokens=out.get("prompt_eval_count", 0),
+    reply_tokens=out.get("eval_count", 0),
+    ctx=opts.get("num_ctx", 0))
+
+
+def call_llm(cfg, prompt, cwd, seed=0):
+  "Send PROMPT to the backend. Returns (reply, seconds, meta)."
   b = cfg["backends"][cfg["backend"]]
+  if "url" in b:
+    t = time.time()
+    reply, meta = call_ollama(b, prompt, seed)
+    return reply, time.time() - t, meta
   cmd = [c.replace("{rig}", str(RIG)).replace("{python}", sys.executable)
          for c in b["cmd"]]
   cmd[0] = shutil.which(cmd[0]) or cmd[0]
@@ -126,7 +148,7 @@ def call_llm(cfg, prompt, cwd):
                      timeout=b.get("timeout", 600))
   if r.returncode != 0:
     raise RuntimeError(f"backend exit {r.returncode}: {r.stderr[-300:]}")
-  return r.stdout, time.time() - t
+  return r.stdout, time.time() - t, {}
 
 
 def smoke(cfg, d, name):
@@ -176,6 +198,7 @@ def one_call(cfg, domain, tid, trial, step, ask, prior):
   prompt = build_prompt(cfg, domain, treat, step, ask[1], prior, d / data.name)
   (d / "prompt.txt").write_text(prompt, "utf8")
   prior_total = sum(code_lines(t) for _, t in prior)
+  seed = zlib.crc32(f"{domain}/{tid}/{trial}/{step}".encode()) % 2**31
   row = dict(when=time.strftime("%Y-%m-%dT%H:%M:%S"), domain=domain,
              data=data.name, treatment=tid, library=treat["library"],
              reuse=int(treat["reuse"]), trial=trial, step=step, skill=ask[2],
@@ -184,11 +207,16 @@ def one_call(cfg, domain, tid, trial, step, ask, prior):
                   ).as_posix(),
              prompt_chars=len(prompt), new_lines=0, total_lines=prior_total,
              pct_new=0, got_code=0, ran_ok=0, llm_secs=0, run_secs=0,
-             reply_chars=0, error="")
+             reply_chars=0, prompt_tokens=0, reply_tokens=0, seed=seed,
+             error="")
   code = ""
   try:
-    reply, row["llm_secs"] = call_llm(cfg, prompt, d)
-    row["llm_secs"] = round(row["llm_secs"], 1)
+    reply, secs, meta = call_llm(cfg, prompt, d, seed)
+    row["llm_secs"] = round(secs, 1)
+    row.update({k: meta[k] for k in ("prompt_tokens", "reply_tokens")
+                if k in meta})
+    if meta.get("ctx") and meta.get("prompt_tokens", 0) >= .95 * meta["ctx"]:
+      row["error"] = "prompt filled the context window: likely truncated"
     (d / "reply.txt").write_text(reply, "utf8")
     row["reply_chars"] = len(reply)
     code = extract_code(reply) or ""
@@ -200,7 +228,7 @@ def one_call(cfg, domain, tid, trial, step, ask, prior):
       ok, secs = smoke(cfg, d, name)
       row.update(ran_ok=int(ok), run_secs=round(secs, 1))
     else:
-      row["error"] = "no fenced code in reply"
+      row["error"] = (row["error"] + "; no fenced code in reply").strip("; ")
   except Exception as e:                    # a failed call is a logged result
     row["error"] = f"{type(e).__name__}: {e}"[:300]
   log_row(cfg, row)
@@ -246,7 +274,8 @@ def cmd_go(cfg, a):
 def cmd_plan(cfg, a):
   todo = climbs(cfg, a)
   steps = {d: len(asks(cfg, d)) for d in {d for d, _, _ in todo}}
-  print(f"backend   {cfg['backend']}: {cfg['backends'][cfg['backend']]['cmd']}")
+  b = cfg["backends"][cfg["backend"]]
+  print(f"backend   {cfg['backend']}: {b.get('url') or b.get('cmd')}")
   print(f"climbs    {len(todo)}")
   print(f"LLM calls {sum(steps[d] for d, _, _ in todo)}")
   for d in sorted(steps):
