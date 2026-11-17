@@ -11,6 +11,7 @@ to be mixed into the experiment's data.
 | qwen3.5:9b | thinking off, defaults (temperature 1, presence penalty 1.5), 4,096 output cap | 6 | 4 | 0 | 138 |
 | qwen3.5:9b | thinking on, 8,192 output cap | 4 (stopped) | 1 | 0 | 277 |
 | ornith:9b | thinking off, temperature 0.2, 8,192 output cap | 6 | 6 | 1* | 43 |
+| **ornith:9b** | **thinking on**, temperature 0.2, 8,192 output cap | 6 | 6 | **5** | 49 |
 
 \* Logged as 0. One program failed only because the rig ran it under
 the Windows console code page and it printed a "greater or equal"
@@ -45,15 +46,32 @@ the prompt, the model may copy instead of extend. A copy has few new
 lines and so looks like perfect reuse. Line counts alone cannot tell
 the two apart; the quality score must.
 
+**ornith:9b, thinking on.** Five of six programs ran, at about the
+same speed (thinking here costs a few hundred to 1,500 tokens, not
+thousands). The one failure was a type error in treatment 1, step 2.
+The copying seen with thinking off did not recur: the three ezr files
+differ, are 13, 43 and 22 lines long, and step 3 calls `ezr.same` to
+answer the "is it real or noise" ask, which is the reuse the
+hypothesis predicts.
+
+**But "ran" is not "right".** Two of the five that ran give a wrong
+answer. Both step-3 programs test `overTime == "Y"` when the data
+says `Yes`, so they find no overtime workers: one reports "0 people"
+in each group, the other "not enough data for a statistical test".
+Both exit with status 0. Only a scorer that checks the answer would
+catch this.
+
 ## Where this leaves the choice
 
-ornith:9b is clearly the better of the two. One working program in
-six is still low, and it is six calls, on one data set, with one
-seed each: enough to rank the models, not enough to predict a
-failure rate.
+**ornith:9b with thinking on** is set in `rig/config.json`. It is the
+only configuration tried that mostly produces running programs.
 
-Not yet tried: ornith with thinking on; ornith at a higher
-temperature (to reduce copying); granite4.2:8b; any hosted model.
+It is still six calls on one data set with one seed each: enough to
+rank the configurations, not to predict a failure rate. The first
+real batch should be watched for the same reason.
 
-At 43 s per call: about 6.5 hours for N = 3 (540 calls) and about
-21.5 hours for N = 10 (1,800 calls), one call at a time.
+Not tried: a higher temperature, granite4.2:8b, any hosted model.
+
+At about 50 s per call: about 7.5 hours for N = 3 (540 calls) and
+about 25 hours for N = 10 (1,800 calls), one call at a time. Later
+steps carry longer prompts, so expect somewhat more.

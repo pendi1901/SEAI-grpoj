@@ -59,7 +59,7 @@ a fake server only; Ollama is not installed on this machine yet.
 
 Ollama runs in the Docker container `ollama`, with GPU
 access, on port 11434. The model in the config is `ornith:9b`, with
-thinking off; why is in `docs/model-trials.md`. The data and `ezr.py`
+thinking on; why is in `docs/model-trials.md`. The data and `ezr.py`
 are already fetched. Still to install: `pip install scikit-learn`.
 
     python rig/run.py go --limit 10       # timing test
