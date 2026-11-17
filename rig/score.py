@@ -21,7 +21,7 @@ Outputs, beside the calls log:
 Each program is graded in its own child process with a time limit.
 Written with LLM help; experiment tooling, not part of treatment 7.
 """
-import argparse, contextlib, csv, importlib.util, io, json, os, random
+import argparse, contextlib, csv, importlib.util, io, json, os, random, re
 import statistics as st, subprocess, sys, threading, time, zlib
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -348,6 +348,61 @@ def child(file, skill, train, test, levers):
                                  extra=D.extra)))
 
 
+# -- contract check: training rows only, used by the runner's repair round
+def check(file, skill, train, levers):
+  """Call FILE's skill function on a small sample of TRAINING rows, with the
+  scorer's own rules, and print whether it worked. The test file is never
+  read: the training file stands in for both halves, so no test-suite
+  information can reach the model through the repair round."""
+  import traceback
+  global PAIRS, ORDERS, RUNS, COPIES      # fewer repetitions only: every
+  PAIRS, ORDERS, RUNS, COPIES = 6, 3, 2, 1  # size, cap and budget is the scorer's
+  file, train = Path(file).resolve(), str(Path(train).resolve())
+  os.chdir(file.parent)
+  sys.path.insert(0, str(file.parent))
+  rnd = random.Random(zlib.crc32(f"check/{skill}".encode()))
+  D = Data(train, train, json.loads(levers))
+  D.rows, D.test = rnd.sample(D.rows, min(400, len(D.rows))), \
+                   rnd.sample(D.rows, min(POOL + 50, len(D.rows)))
+  status, detail = "ok", ""
+  try:
+    with contextlib.redirect_stdout(io.StringIO()):
+      spec = importlib.util.spec_from_file_location(file.stem, file)
+      mod = importlib.util.module_from_spec(spec)
+      spec.loader.exec_module(mod)
+      f = getattr(mod, skill, None)
+      if not callable(f): raise Invalid(f"no function named {skill}")
+      cases = SCORERS[skill](f, D, rnd)
+      if skill == "fix" and not any(cases):  # fix's number is validity alone
+        raise Invalid("every change returned was empty, used a column that "
+                      "is not a lever, or was outside the allowed values")
+  except BaseException as e:
+    if isinstance(e, KeyboardInterrupt): raise
+    status = "invalid" if isinstance(e, Invalid) else "error"
+    detail = explain(e)
+  print("@@CHECK " + json.dumps(dict(status=status, detail=detail)))
+
+
+def explain(e):
+  """The error as the generated program would see it: its own frames and
+  library frames only (no lines of this harness), and every path cut to a
+  bare file name, so no local path or user name leaves the machine."""
+  import traceback
+  if isinstance(e, Invalid): return f"Rule broken: {e}"
+  here = os.path.abspath(__file__)
+  tb = [f for f in traceback.extract_tb(e.__traceback__)
+        if os.path.abspath(f.filename) != here]
+  own = [f for f in tb if os.path.basename(f.filename).startswith("step")]
+  frames = [f for f in tb if f in own[-3:] or f in tb[-3:]]
+  lines = [f'  File "{os.path.basename(f.filename)}", line {f.lineno}, '
+           f'in {f.name}\n    {f.line}' for f in frames]
+  last = "".join(traceback.format_exception_only(type(e), e)).strip()
+  last = re.sub(r"[A-Za-z]:\\[^\s'\"]*\\|/(?:[^\s/'\"]+/)+",
+                "", last)                       # paths inside the message
+  return ("Traceback (most recent call last):\n" + "\n".join(lines) + "\n"
+          + last)[:1500]
+
+
 # -- parent: grade them all ---------------------------------------------
 DATA = {}
 def data_for(cfg, domain):
@@ -403,6 +458,8 @@ def grade(cfg, call, timeout):
 def main():
   if len(sys.argv) > 1 and sys.argv[1] == "--one":
     return child(*sys.argv[2:7])
+  if len(sys.argv) > 1 and sys.argv[1] == "--check":
+    return check(*sys.argv[2:6])
   ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
   ap.add_argument("--config")
   ap.add_argument("--workers", type=int, default=4)
