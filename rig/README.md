@@ -126,12 +126,54 @@ Things to decide and check:
 
 | version | used by | change |
 |---|---|---|
-| 1 | the N = 1 run of Nov 17, in `runs/` and `results/` | |
-| 2 | everything after, in `runs-v2/` and `results-v2/` | states the data file's row count and says not to hard-code one |
+| 1 | Ollama N = 1 run, in `runs/` and `results/` | |
+| 2 | Ollama run stopped at 144/180 (`runs-v2/`); Gemini N = 1 run (`runs-gemini/`, `results-gemini/`) | states the data file's row count and says not to hard-code one |
+| 3 | not yet run; configured for `runs-gemini-v3/` and `results-gemini-v3/` (Gemini), `runs-v3/` (Ollama) | clearer contract, plus one repair round (below) |
 
-Never pool results from two prompt versions. To report on version 1,
-run `score.py` and `report.py` with a config whose `runs` and `log`
-point at the old folders.
+Never pool results from two prompt versions. To report on an older
+version, run `score.py` and `report.py` with a config whose `runs` and
+`log` point at its folders. Each config's `prompt_version` sets the
+version; it is also logged on every call from version 3 on.
+
+## Prompt version 3
+
+Built Nov 17 2026 after the error breakdown of the first two runs. Not
+yet piloted or run.
+
+**A clearer contract.** The prompt now also shows:
+
+- the header and the first two rows exactly as the function receives
+  them (floats and strings, already parsed);
+- every text column and its values, e.g. `overTime (No, Yes)`;
+- each skill's rules and what breaking them costs (`RULES` in
+  `rig/contract.py`): the 5% cap, the shared 50-label budget, "p from
+  0 to 1, not a percentage", no state kept between flow calls, and so
+  on. These restate the signed-off assessment sheet. They describe the
+  data and the harness, never how to solve a skill.
+
+**One repair round.** After a file comes back, the runner calls its
+skill function on a sample of the *training* data, with the scorer's
+own rules, sizes and label budget and only fewer repetitions
+(`score.py --check`). If that fails, the model gets one more call: the
+original prompt, its file, and the error. The corrected file replaces
+the first, which is kept as `first_try.py`. Then the run moves on;
+there is no second repair.
+
+- **Never the test suite.** The check reads the training file for
+  both halves, and a test confirms it is never passed the test file.
+- **No local paths leave the machine.** The error shown keeps only
+  the generated file's own lines and library lines, each cut to a
+  bare file name, and drops every line of the harness.
+- **Same rule for every treatment.** Logged per call: `check_before`,
+  `check_after`, `repaired`, and the extra call in `attempts`,
+  `llm_secs` and the token counts.
+- **What it changes for Methods:** the treatments become "an LLM with
+  one repair round on training data". Treatment 7 (hand-written) also
+  runs its code before submitting, so this brings the LLM treatments
+  closer to it, not further. New lines are counted on the final file.
+
+Cost: one extra call for each file that fails its check. On the last
+Gemini run that would have been about 40 of 180 calls.
 
 ## The scorer
 
