@@ -111,4 +111,4 @@ runs before and after are not comparable and the earlier ones must be
 rescored or dropped. Rescoring is cheap (minutes, CPU only); rerunning
 the LLM is not needed, because every generated program is kept.
 
-Signed off by: ____________  Date: ____________
+Signed off by: Pendyala Ritvik & Luke Shafer  Date: 11/17/2026
