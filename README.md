@@ -5,8 +5,9 @@ Notes for the CSC 591 graduate project (SE for AI, NC State, Fall
 software process (pom3a), open-source project health, and HR employee
 attrition.
 
-This repo holds the reading of the course spec only. No experiment
-code yet. It is local, with no remote.
+This repo holds the reading of the course spec, draft requirements,
+and the runner for treatments 1 to 6. No experiment has been run yet.
+It is local, with no remote.
 
 | file | what it answers |
 |---|---|
@@ -15,6 +16,8 @@ code yet. It is local, with no remote.
 | [docs/stats.md](docs/stats.md) | `same`, `ranks`, the per-skill Q score, Z, and what to log after every run |
 | [docs/runs.md](docs/runs.md) | how many LLM calls, how long, the reset protocol |
 | [docs/domains.md](docs/domains.md) | the three data sets, measured, with their traps |
+| [docs/requirements.md](docs/requirements.md) | DRAFT: three clients, twenty skill-tagged asks each |
+| [rig/README.md](rig/README.md) | the runner: one command per stage, what it logs, what it does not do |
 | [docs/open-questions.md](docs/open-questions.md) | what the spec leaves unsettled, and what to ask the lecturer |
 
 Source: `github.com/txt/seai26f` at commit `5fb51c8` (Nov 16 2026) and
