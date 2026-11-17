@@ -10,6 +10,7 @@ code yet. It is local, with no remote.
 
 | file | what it answers |
 |---|---|
+| [docs/plan.md](docs/plan.md) | **start here**: what to do, who does it, compute and time estimates, day by day |
 | [docs/brief.md](docs/brief.md) | the whole spec: dates, marks, hypotheses, skills, treatments, report, rubric, every way to lose marks |
 | [docs/stats.md](docs/stats.md) | `same`, `ranks`, the per-skill Q score, Z, and what to log after every run |
 | [docs/runs.md](docs/runs.md) | how many LLM calls, how long, the reset protocol |
