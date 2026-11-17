@@ -19,6 +19,7 @@ from pathlib import Path
 RIG = Path(__file__).resolve().parent
 sys.path.insert(0, str(RIG))
 from contract import BASELINE, CONTRACT
+import run
 
 GOOD = r'''
 import random, statistics as st
@@ -99,11 +100,15 @@ def check(name, ok):
 
 
 def grade(file, skill, data):
+  "Returns (Q, status, number of test cases)."
   r = subprocess.run([sys.executable, str(RIG / "score.py"), "--one",
-                      str(file), skill, str(data), json.dumps(["B", "kind"])],
+                      str(file), skill, str(data[0]), str(data[1]),
+                      json.dumps(["B", "kind"])],
                      capture_output=True, text=True, timeout=300)
   q = [s for s in r.stdout.splitlines() if s.startswith("@@Q ")]
-  return (float(q[-1][4:]) if r.returncode == 0 and q else None), r.stderr
+  if not q: return None, r.stderr[-300:], 0
+  res = json.loads(q[-1][4:])
+  return sum(res["cases"]) / len(res["cases"]), res["status"], len(res["cases"])
 
 
 tmp = Path(tempfile.mkdtemp(prefix="scoretest_"))
@@ -116,6 +121,12 @@ try:
                  f"{10*a + rnd.gauss(0, .5):.3f},{5 - 4*a + rnd.gauss(0, .3):.3f}")
   data = tmp / "toy.csv"
   data.write_text("\n".join(lines) + "\n")
+  cfg = dict(domains=dict(toy=dict(data=str(data))))
+  data = run.split(cfg, "toy")                 # (train 80%, test 20%)
+  n_train = len(data[0].read_text().splitlines()) - 1
+  n_test = len(data[1].read_text().splitlines()) - 1
+  check("split is 80/20 and loses no rows", (n_train, n_test) == (480, 120))
+  check("split is repeatable", run.split(cfg, "toy") == data)
   for name, text in (("good", GOOD), ("dumb", DUMB), ("crash", CRASH)):
     (tmp / f"{name}.py").write_text(text)
 
@@ -123,18 +134,18 @@ try:
         set(CONTRACT) == set(BASELINE))
   print(f"\n{'skill':9} {'base':>5} {'good':>6} {'dumb':>6}")
   for skill, base in BASELINE.items():
-    good, e1 = grade(tmp / "good.py", skill, data)
-    dumb, e2 = grade(tmp / "dumb.py", skill, data)
-    crash, _ = grade(tmp / "crash.py", skill, data)
+    good, e1, n1 = grade(tmp / "good.py", skill, data)
+    dumb, e2, n2 = grade(tmp / "dumb.py", skill, data)
+    crash, e3, n3 = grade(tmp / "crash.py", skill, data)
     show = lambda v: "fail" if v is None else f"{v:.2f}"
     print(f"{skill:9} {base:5.2f} {show(good):>6} {show(dumb):>6}")
-    if good is None: print(e1[-400:])
+    if good is None or e1 != "ok": print("   ", e1)
     check(f"{skill}: a good answer beats the baseline",
           good is not None and good > base + .1)
     check(f"{skill}: a dumb answer does not",
           dumb is None or dumb < base + .1)
-    check(f"{skill}: a crash earns the baseline, no more",
-          crash is None or crash == base)
+    check(f"{skill}: a crash earns the baseline on every test case",
+          crash == base and n3 > 0)
 finally:
   shutil.rmtree(tmp, ignore_errors=True)
 

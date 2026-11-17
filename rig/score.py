@@ -1,21 +1,25 @@
 #!/usr/bin/env python3
 """
-score.py: grade every generated program with one number, Q.
-
-Follows the ten-skill table in the course's gloss10 page: pick a dumb
-rival, scale against it so the baseline means "no better than dumb", and
-score every failure at the baseline. Higher Q is better.
+score.py: grade every generated program on a fixed test suite.
 
   python rig/score.py                 # score every call not yet scored
   python rig/score.py --workers 8
   python rig/score.py --config timing/x.json
 
-Each program is graded in its own child process with a time limit, so a
-crash or a hang costs that program its baseline and nothing else. Every
-program of one skill in one domain faces the same test cases.
+How each skill is judged is set out, for a human to agree or change, in
+docs/assessment.md. In short: each data set is split 80/20 once; skills
+work from the 80% and are tested on the 20%; every program for a skill
+faces the same test cases; each test case yields one number scaled so
+that a no-effort answer earns the skill's baseline; Q is the mean over
+test cases; any failure earns the baseline on every case.
 
+Outputs, beside the calls log:
+  scores.csv    one row per program: Q and what happened
+  cases.jsonl   one line per program: the per-test-case numbers, which
+                are what `same` compares across treatments
+
+Each program is graded in its own child process with a time limit.
 Written with LLM help; experiment tooling, not part of treatment 7.
-Where this departs from gloss10 is listed in rig/README.md.
 """
 import argparse, contextlib, csv, importlib.util, io, json, os, random
 import statistics as st, subprocess, sys, threading, time, zlib
@@ -27,34 +31,38 @@ sys.path.insert(0, str(RIG))
 import run
 from contract import BASELINE
 
-FIELDS = ("domain treatment trial step skill q status detail secs dir").split()
+FIELDS = "domain treatment trial step skill q n status detail secs dir".split()
 LOCK = threading.Lock()
 
-# Repetitions. gloss10's figures are in the comments.
-SPLITS, ORDERS, PAIRS = 30, 100, 200     # guess 30; flow 100; certify 200
-RUNS, BUDGET = 30, 50                    # choose and race: 30 runs, 50 labels
-COPIES, INJECT, TOP = 10, 10, 20         # spot: gloss10 uses 30 copies
-POOL = 300                               # rows per choose/race run
-CAP = 2000                               # rows sampled from a big table
+PAIRS, ORDERS, RUNS, BUDGET = 200, 100, 30, 50
+COPIES, INJECT, TOP = 10, 10, 20
+POOL = 150                 # rows per choose/race run
+CAP_TRAIN, CAP_TEST = 2000, 400
 
 
 class Invalid(Exception):
   "The skill answered, but outside the rules."
 
 
+def read(path):
+  rows = [r for r in csv.reader(open(path, encoding="utf8")) if r]
+  return [c.strip() for c in rows[0]], rows[1:]
+
+
 class Data:
-  "A table, with the distance-to-best score the gloss calls disty."
-  def __init__(i, path, levers=()):
-    rows = list(csv.reader(open(path, encoding="utf8")))
-    i.header = [c.strip() for c in rows[0]]
+  "Train rows (what skills learn from) and test rows (what they face)."
+  def __init__(i, train, test, levers=()):
+    i.header, a = read(train)
+    _, b = read(test)
     i.num = [c[0].isupper() for c in i.header]
     i.goal = [k for k, c in enumerate(i.header) if c[-1] in "+-"]
     i.x = [k for k, c in enumerate(i.header) if c[-1] not in "+-"]
-    i.rows = [[i.cell(k, v) for k, v in enumerate(r)] for r in rows[1:] if r]
-    if len(i.rows) > CAP:
-      i.rows = random.Random(1).sample(i.rows, CAP)
+    cells = lambda rows: [[i.cell(k, v) for k, v in enumerate(r)] for r in rows]
+    i.rows, i.test = cells(a), cells(b)
+    if len(i.rows) > CAP_TRAIN: i.rows = random.Random(1).sample(i.rows, CAP_TRAIN)
+    if len(i.test) > CAP_TEST: i.test = random.Random(2).sample(i.test, CAP_TEST)
     i.lo, i.hi, i.mu, i.sd = {}, {}, {}, {}
-    for k, isnum in enumerate(i.num):
+    for k, isnum in enumerate(i.num):           # ranges from train only
       if isnum:
         v = [r[k] for r in i.rows if r[k] != "?"]
         i.lo[k], i.hi[k] = min(v), max(v)
@@ -72,7 +80,7 @@ class Data:
     except ValueError: return "?"
 
   def norm(i, k, v):
-    return (v - i.lo[k]) / (i.hi[k] - i.lo[k] + 1e-32)
+    return max(0, min(1, (v - i.lo[k]) / (i.hi[k] - i.lo[k] + 1e-32)))
 
   def d(i, row):
     "0 = every goal at its best; 1 = every goal at its worst."
@@ -99,6 +107,26 @@ class Data:
       near = sorted(range(len(ref)), key=lambda j: i.gap(row, ref[j]))[:5]
       return st.mean(ds[j] for j in near)
     return guess
+
+  def worst(i, n, rnd):
+    by = sorted(i.test, key=i.d)
+    q = by[-max(1, len(by) // 4):]
+    return rnd.sample(q, min(n, len(q)))
+
+  def best(i, n, rnd):
+    by = sorted(i.test, key=i.d)
+    q = by[:max(1, len(by) // 4)]
+    return rnd.sample(q, min(n, len(q)))
+
+
+def ncases(skill, D):
+  "How many test cases a skill faces: needed to fill in a failure."
+  return dict(remember=max(1, len(D.test) // 20), guess=len(D.test),
+              certify=PAIRS, flow=ORDERS,
+              blame=min(30, max(1, len(D.test) // 4)),
+              justify=min(20, max(1, len(D.test) // 4)), choose=RUNS,
+              fix=min(20, max(1, len(D.test) // 4)), spot=COPIES,
+              race=RUNS)[skill]
 
 
 def indices(got, n):
@@ -133,47 +161,42 @@ def versus_random(D, pool, mine, rnd):
   return 1 if me < rival - 1e-12 else .5 if me <= rival + 1e-12 else 0
 
 
-# -- one function per skill: (skill's function, data, rng) -> Q ---------
+# -- one per skill: (skill's function, data, rng) -> list of case numbers
 def q_remember(f, D, rnd):
-  got = indices(f(D.header[:], copy(D.rows)), len(D.rows))
-  if not got or len(got) > max(1, len(D.rows) // 20):
+  got = indices(f(D.header[:], copy(D.test)), len(D.test))
+  if not got or len(got) > max(1, len(D.test) // 20):
     raise Invalid("must return 1 row to 5% of rows")
-  mine = st.median(D.d(D.rows[j]) for j in got)
-  dumb = st.mean(st.median(D.d(r) for r in rnd.sample(D.rows, len(got)))
+  dumb = st.mean(st.median(D.d(r) for r in rnd.sample(D.test, len(got)))
                  for _ in range(20))
-  return clip(1 - mine / dumb)
+  return [1 - D.d(D.test[j]) / dumb for j in got]
 
 
 def q_guess(f, D, rnd):
-  k, qs = D.goal[0], []
-  for _ in range(SPLITS):
-    s = rnd.sample(D.rows, min(len(D.rows), 600))
-    cut = len(s) * 5 // 6
-    train, test = s[:cut], s[cut:]
-    got = list(f(D.header[:], copy(train), [D.hide(r) for r in test]))
-    if len(got) != len(test): raise Invalid("one number per test row")
-    err = st.mean(abs(float(g) - r[k]) for g, r in zip(got, test))
-    mu = st.mean(r[k] for r in train)
-    qs.append(1 - err / (st.mean(abs(mu - r[k]) for r in test) + 1e-32))
-  return clip(st.mean(qs))
+  k = D.goal[0]
+  train = D.rows[:1000]
+  got = list(f(D.header[:], copy(train), [D.hide(r) for r in D.test]))
+  if len(got) != len(D.test): raise Invalid("one number per test row")
+  mu = st.mean(r[k] for r in train)
+  dumb = st.mean(abs(mu - r[k]) for r in D.test) + 1e-32
+  return [1 - abs(float(g) - r[k]) / dumb for g, r in zip(got, D.test)]
 
 
 def q_certify(f, D, rnd):
   shapes = [(lambda: rnd.gauss(0, 1), 1), (lambda: rnd.random(), 12 ** -.5),
             (lambda: rnd.expovariate(1), 1)]
-  hit = {True: 0, False: 0}
+  out = []
   for j in range(PAIRS):
     gen, sd = shapes[j % 3]
     n = (10, 30, 100)[(j // 3) % 3]
     same = j % 2 == 0
     shift = 0 if same else (.5, 1, 2)[(j // 2) % 3] * sd
     xs, ys = [gen() for _ in range(n)], [gen() + shift for _ in range(n)]
-    hit[same] += bool(f(xs, ys)) == same
-  return (hit[True] + hit[False]) / PAIRS       # classes are balanced
+    out.append(int(bool(f(xs, ys)) == same))
+  return out
 
 
 def q_flow(f, D, rnd):
-  pool, qs = rnd.sample(D.rows, min(100, len(D.rows))), []
+  pool, out = rnd.sample(D.test, min(100, len(D.test))), []
   avg = st.mean(D.d(r) for r in pool)
   for _ in range(ORDERS):
     rnd.shuffle(pool)
@@ -181,8 +204,8 @@ def q_flow(f, D, rnd):
     for j, row in enumerate(pool):
       if f(D.header[:], row[:], copy(pool[:j])):
         pick = row; break
-    qs.append(1 - D.d(pick) / avg)
-  return clip(st.mean(qs))
+    out.append(1 - D.d(pick) / avg)
+  return out
 
 
 def q_blame(f, D, rnd):
@@ -191,48 +214,49 @@ def q_blame(f, D, rnd):
   if not got or any(g not in names for g in got):
     raise Invalid("must name one or more input columns")
   by = sorted(D.rows, key=D.d)
-  best, worst = by[:len(by) // 4], by[-len(by) // 4:]
-  good = {k: (st.median(r[k] for r in best) if D.num[k] else
-              st.mode(r[k] for r in best)) for k in D.x}
+  top = by[:len(by) // 4]
+  good = {k: (st.median(r[k] for r in top) if D.num[k] else
+              st.mode(r[k] for r in top)) for k in D.x}
   guess = D.oracle(rnd.sample(D.rows, min(600, len(D.rows))))
-  bad = rnd.sample(worst, min(30, len(worst)))
-  old = st.mean(guess(r) for r in bad)
-  def gain(cols):
+  rivals = [rnd.sample(names, len(got)) for _ in range(10)]
+  def gain(row, old, cols):
     ks = [D.header.index(c) for c in cols]
-    new = st.mean(guess([(good[k] if k in ks else v)
-                         for k, v in enumerate(r)]) for r in bad)
+    new = guess([(good[k] if k in ks else v) for k, v in enumerate(row)])
     return (old - new) / (old + 1e-32)
-  dumb = st.mean(gain(rnd.sample(names, len(got))) for _ in range(10))
-  return clip(gain(got) - dumb)
+  out = []
+  for row in D.worst(30, rnd):
+    old = guess(row)
+    out.append(gain(row, old, got) - st.mean(gain(row, old, c) for c in rivals))
+  return out
 
 
 def q_justify(f, D, rnd):
-  by = sorted(D.rows, key=D.d)
-  rank = {id(r): j for j, r in enumerate(by)}
-  mine = dumb = 0
-  for row in rnd.sample(by[:len(by) // 4], 20):
-    truth = 1 - rank[id(row)] / (len(by) - 1)
+  ds = sorted(D.d(r) for r in D.rows)
+  errs, dumb = [], []
+  for row in D.best(20, rnd):
+    truth = sum(v > D.d(row) for v in ds) / len(ds)
     p, why = f(D.header[:], copy(D.rows), D.hide(row))
     if not isinstance(why, str) or not why.strip():
       raise Invalid("no reason given")
-    mine += abs(float(p) - truth)
-    dumb += abs(.5 - truth)
-  return clip((dumb - mine) / dumb)
+    errs.append(abs(float(p) - truth))
+    dumb.append(abs(.5 - truth))
+  m = st.mean(dumb) + 1e-32
+  return [(b - e) / m for e, b in zip(errs, dumb)]
 
 
 def q_choose(f, D, rnd):
-  qs = []
+  out = []
   for _ in range(RUNS):
-    pool = rnd.sample(D.rows, min(POOL, len(D.rows)))
+    pool = rnd.sample(D.test, min(POOL, len(D.test)))
     got = indices([f(D.header[:], [D.hide(r) for r in pool],
                      labeller(D, pool))], len(pool))
-    qs.append(versus_random(D, pool, got[0], rnd))
-  return st.mean(qs)
+    out.append(versus_random(D, pool, got[0], rnd))
+  return out
 
 
 def q_fix(f, D, rnd):
-  by, ok = sorted(D.rows, key=D.d), 0
-  for row in rnd.sample(by[-len(by) // 4:], 20):
+  out = []
+  for row in D.worst(20, rnd):
     try:
       got = f(D.header[:], row[:], dict(D.levers))
       good = isinstance(got, dict) and len(got) > 0
@@ -244,38 +268,38 @@ def q_fix(f, D, rnd):
                    and allowed[0] <= v <= allowed[1])
         else: good &= v in allowed
       good = good and any(row[D.header.index(n)] != v for n, v in got.items())
-      ok += bool(good)
-    except Exception: pass                       # that row gets no credit
-  return ok / 20
+      out.append(int(bool(good)))
+    except Exception: out.append(0)              # that row gets no credit
+  return out
 
 
 def q_spot(f, D, rnd):
-  nums, qs = [k for k in D.x if D.num[k] and D.sd[k] > 0], []
+  nums, out = [k for k in D.x if D.num[k] and D.sd[k] > 0], []
   if not nums: raise Invalid("no numeric input column to corrupt")
   for _ in range(COPIES):
-    rows = copy(rnd.sample(D.rows, min(1000, len(D.rows))))
+    rows = copy(rnd.sample(D.test, min(1000, len(D.test))))
     wrong = rnd.sample(range(len(rows)), INJECT)
     for j in wrong:
       k = rnd.choice(nums)
       rows[j][k] = D.mu[k] + rnd.choice((-1, 1)) * 6 * D.sd[k]
     got = indices(f(D.header[:], copy(rows)), len(rows))[:TOP]
-    qs.append(sum(j in wrong for j in got) / TOP)
-  return st.mean(qs)
+    out.append(sum(j in wrong for j in got) / TOP)
+  return out
 
 
 def q_race(f, D, rnd):
-  qs = []
+  out = []
   for _ in range(RUNS):
-    pool = rnd.sample(D.rows, min(POOL, len(D.rows)))
+    pool = rnd.sample(D.test, min(POOL, len(D.test)))
     try:
       got = f(D.header[:], [D.hide(r) for r in pool], labeller(D, pool))
       tried = {str(t).lower() for t in got["tried"]}
       if len(tried) < 3 or "random" not in tried:
         raise Invalid("needs three strategies, one named random")
       row = indices([got["row"]], len(pool))[0]
-      qs.append(versus_random(D, pool, row, rnd))
-    except Exception: qs.append(0)               # an invalid race has failed
-  return st.mean(qs)
+      out.append(versus_random(D, pool, row, rnd))
+    except Exception: out.append(0)              # an invalid race has failed
+  return out
 
 
 SCORERS = dict(remember=q_remember, guess=q_guess, certify=q_certify,
@@ -284,66 +308,85 @@ SCORERS = dict(remember=q_remember, guess=q_guess, certify=q_certify,
 
 
 # -- child: grade one program ------------------------------------------
-def child(file, skill, data, levers):
-  "Import FILE, call its skill function, print Q as the last line."
+def child(file, skill, train, test, levers):
+  "Import FILE, call its skill function, print the result as one line."
   file = Path(file).resolve()
   os.chdir(file.parent)
   sys.path.insert(0, str(file.parent))
-  seed = zlib.crc32(f"{Path(data).name}/{skill}".encode())
+  seed = zlib.crc32(f"{Path(train).name}/{skill}".encode())
   random.seed(seed)
-  D = Data(data, json.loads(levers))
-  with contextlib.redirect_stdout(io.StringIO()):
-    spec = importlib.util.spec_from_file_location(file.stem, file)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    f = getattr(mod, skill, None)
-    if not callable(f): raise Invalid(f"no function named {skill}")
-    q = SCORERS[skill](f, D, random.Random(seed))
-  print("@@Q " + json.dumps(float(q)))
+  D = Data(train, test, json.loads(levers))
+  status, detail = "ok", ""
+  try:
+    with contextlib.redirect_stdout(io.StringIO()):
+      spec = importlib.util.spec_from_file_location(file.stem, file)
+      mod = importlib.util.module_from_spec(spec)
+      spec.loader.exec_module(mod)
+      f = getattr(mod, skill, None)
+      if not callable(f): raise Invalid(f"no function named {skill}")
+      cases = [clip(float(v)) for v in SCORERS[skill](f, D, random.Random(seed))]
+  except BaseException as e:
+    if isinstance(e, KeyboardInterrupt): raise
+    status = "invalid" if isinstance(e, Invalid) else "error"
+    detail = f"{type(e).__name__}: {e}"[:200]
+    cases = [BASELINE[skill]] * ncases(skill, D)
+  print("@@Q " + json.dumps(dict(status=status, detail=detail,
+                                 cases=[round(v, 4) for v in cases])))
 
 
 # -- parent: grade them all ---------------------------------------------
+DATA = {}
+def data_for(cfg, domain):
+  with LOCK:
+    if domain not in DATA:
+      tr, te = run.split(cfg, domain)
+      DATA[domain] = (tr, te, Data(tr, te, cfg["domains"][domain].get("levers", [])))
+  return DATA[domain]
+
+
 def grade(cfg, call, timeout):
-  "Score one logged call. Any failure earns the baseline."
-  d = run.ROOT / call["dir"] if not Path(call["dir"]).is_absolute() \
-      else Path(call["dir"])
+  "Score one logged call. Any failure earns the baseline on every case."
+  d = Path(call["dir"])
+  d = d if d.is_absolute() else run.ROOT / d
   skill, dom = call["skill"], cfg["domains"][call["domain"]]
-  out = dict(domain=call["domain"], treatment=call["treatment"],
-             trial=call["trial"], step=call["step"], skill=skill,
-             q=BASELINE[skill], status="no_code", detail="", secs=0,
-             dir=call["dir"])
-  file = d / f"step{int(call['step']):02d}.py"
+  train, test, D = data_for(cfg, call["domain"])
+  res = dict(status="no_code", detail="", cases=None)
+  file, t = d / f"step{int(call['step']):02d}.py", time.time()
   if file.exists():
-    t = time.time()
     try:
       r = subprocess.run(
         [sys.executable, str(RIG / "score.py"), "--one", str(file), skill,
-         str(run.ROOT / dom["data"]), json.dumps(dom.get("levers", []))],
+         str(train), str(test), json.dumps(dom.get("levers", []))],
         capture_output=True, text=True, encoding="utf8", errors="replace",
         timeout=timeout, env=dict(os.environ, PYTHONUTF8="1"))
       last = [s for s in r.stdout.splitlines() if s.startswith("@@Q ")]
-      if r.returncode == 0 and last:
-        out.update(q=round(json.loads(last[-1][4:]), 4), status="ok")
+      if last: res = json.loads(last[-1][4:])
       else:
         tail = (r.stderr.strip().splitlines() or ["no output"])[-1]
-        out.update(status="invalid" if "Invalid" in tail else "error",
-                   detail=tail[:200])
+        res.update(status="error", detail=tail[:200])
     except subprocess.TimeoutExpired:
-      out.update(status="timeout", detail=f"over {timeout} s")
-    out["secs"] = round(time.time() - t, 1)
+      res.update(status="timeout", detail=f"over {timeout} s")
+  cases = res.get("cases") or [BASELINE[skill]] * ncases(skill, D)
+  key = dict(domain=call["domain"], treatment=call["treatment"],
+             trial=call["trial"], step=call["step"], skill=skill,
+             dir=call["dir"])
+  out = dict(key, q=round(st.mean(cases), 4), n=len(cases),
+             status=res["status"], detail=res["detail"],
+             secs=round(time.time() - t, 1))
   with LOCK:
-    log = cfg["scores"]
-    new = not log.exists()
-    with open(log, "a", newline="", encoding="utf8") as fh:
+    new = not cfg["scores"].exists()
+    with open(cfg["scores"], "a", newline="", encoding="utf8") as fh:
       w = csv.DictWriter(fh, FIELDS)
       if new: w.writeheader()
       w.writerow(out)
+    with open(cfg["cases"], "a", encoding="utf8") as fh:
+      fh.write(json.dumps(dict(key, cases=cases)) + "\n")
   return out
 
 
 def main():
   if len(sys.argv) > 1 and sys.argv[1] == "--one":
-    return child(*sys.argv[2:6])
+    return child(*sys.argv[2:7])
   ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
   ap.add_argument("--config")
   ap.add_argument("--workers", type=int, default=4)
@@ -351,6 +394,7 @@ def main():
   a = ap.parse_args()
   cfg = run.load_config(a.config)
   cfg["scores"] = cfg["log"].with_name("scores.csv")
+  cfg["cases"] = cfg["log"].with_name("cases.jsonl")
   if not cfg["log"].exists(): sys.exit(f"nothing to score: no {cfg['log']}")
   calls = list(csv.DictReader(open(cfg["log"], encoding="utf8")))
   done = ({r["dir"] for r in csv.DictReader(open(cfg["scores"],

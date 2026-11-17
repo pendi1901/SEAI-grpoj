@@ -67,6 +67,15 @@ def load(cfg):
     s = score.get(c["dir"])
     c["q"] = float(s["q"]) if s else None
     c["status"] = s["status"] if s else "unscored"
+    c["cases"] = None
+  cp = cfg["log"].with_name("cases.jsonl")
+  if cp.exists():
+    import json
+    by = {}
+    for line in open(cp, encoding="utf8"):
+      if line.strip():
+        j = json.loads(line); by[j["dir"]] = j["cases"]
+    for c in calls: c["cases"] = by.get(c["dir"])
   return calls
 
 
@@ -107,6 +116,24 @@ def rank_table(calls, key, big, fmt):
   return table(["treatment"] + [f"s{s}" for s in steps],
                [[NAMES.get(t, t)] + [cell[t].get(s, "") for s in steps]
                 for t in treats])
+
+
+def case_table(calls):
+  """The comparison the lecturer asked for: per skill, each treatment's
+  list of per-test-case numbers (pooled over its trials), compared with
+  `same`. Cell = mean (rank). Every treatment faced the same test cases."""
+  treats = sorted({c["treatment"] for c in calls})
+  rows = []
+  for skill in run.SKILLS:
+    d = defaultdict(list)
+    for c in calls:
+      if c["skill"] == skill and c["cases"]: d[c["treatment"]] += c["cases"]
+    if not d: continue
+    r = ranks(d, big=True) if len(d) > 1 else {k: 0 for k in d}
+    n = max(len(v) for v in d.values())
+    rows.append([skill, n] + [f"{st.mean(d[t]):.2f} ({r[t]})" if t in d else ""
+                              for t in treats])
+  return table(["skill", "cases"] + [NAMES.get(t, t) for t in treats], rows)
 
 
 def overall(calls, key, big, fmt):
@@ -204,6 +231,12 @@ def main():
            "means none did. Few lines is only reuse if Q held up: check "
            "the next table.", "",
            rank_table(cs, "new_lines", False, f1), "",
+           "### Per skill, on the test suite (higher is better)", "",
+           "Mean over test cases, pooled over trials, with rank. Every "
+           "treatment faced the same test cases, built from the held-out "
+           "20% of the data. A failed program earns the skill's baseline "
+           "on every case. This is the table to quote.", "",
+           case_table(cs), "",
            "### Q per step (higher is better)", "",
            "Each step is a different skill with its own scale, so compare "
            "down a column, not along a row.", "",
