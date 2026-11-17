@@ -34,9 +34,36 @@ Things that will bite:
   surprising".
 - KS at 1.36 is the 5% line, so it cries wolf about one time in twenty
   on identical generators. That is why one test never decides alone.
-- **`same` exists only in Lua.** `src/101.py` (51 lines) has no stats.
-  We need either a Lua install to call `ezr.lua`, or a Python port
-  checked against `lua ezr-eg6.lua --same` and `--ranks`.
+- The course repo has `same` only in Lua. The lecturer's stats link
+  (Discord, Nov 16) is the Python one: next section.
+
+### The Python `same` (the lecturer's link)
+
+`github.com/timm/ezr/blob/main/ezr.py`, section `#-- stats --`. The
+link given was `#L320-L359`; the file has moved since, and on Nov 16
+the stats sit at lines 325-364. Pin a commit hash when citing it.
+
+```python
+def same(xs, ys, eps=0):
+  xs, ys = sorted(xs), sorted(ys)
+  return (cliffs(xs,ys) and ks(xs,ys)
+          and (not eps or cohen(xs,ys,d=eps)))
+```
+
+It is not identical to the Lua version. State which one the report
+uses:
+
+| | Lua `ezr.lua` (course repo) | Python `ezr.py` (the link) |
+|---|---|---|
+| tests run by default | cohen, cliffs, ks | **cliffs and ks only** |
+| cohen | always, at 0.35 | only if `eps` is passed; `eps` is its threshold |
+| cliffs threshold | 0.195 | 0.197 |
+| ks threshold | 1.36 | 1.36 |
+| sorts its inputs | no, caller must | yes |
+| each test returns | a number | a boolean |
+| `ranks` | yes | **no**; write the median-sort-and-walk ourselves |
+
+To match the three-test rule in gloss6, call `same(xs, ys, eps=0.35)`.
 
 ### `ranks`: the table the paper prints
 

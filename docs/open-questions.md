@@ -15,6 +15,32 @@ repo and is not in these notes. Ask on Discord or by email
 | "the human part, the 7th task" | **Yes, as treatment 7**, not a task: we write every skill by hand with maximum reuse. It is the control. |
 | "grads have more stipulations" | **Yes.** Three domains, one codebase, pre-registered claim, transfer evidence, 6-9 pages, initial deliverable, task talk. |
 
+## Answered by the lecturer
+
+Relayed from the class Discord on Nov 16 2026 (pasted by a team
+member; not in the course repo).
+
+- **A21, treatment 7.** "one handwritten run of all ten skills." So
+  N = 1 for treatment 7, per data set. This settles question 4 below,
+  and "all ten skills" points to a ten-step ladder (question 3), though
+  that was not the question asked.
+- **A21, LLM help in treatment 7.** "LLM as a search tool 'where is
+  the stuff relating to xxxx or write me a tutorial with examples on
+  how to use a decision tree', is ok. but LLM auto assembly (please
+  build me that bit) is out of court." So: finding things and
+  tutorials are allowed; any generated code going into treatment 7 is
+  not. Debugging help was asked about and not answered directly; the
+  safe reading is that an LLM may explain an error but may not write
+  the fix. Log every LLM use in treatment 7 for the AI disclosure.
+- **Stats link.** `github.com/timm/ezr/blob/main/ezr.py`, the stats
+  section. A Python `same` exists; see [stats.md](stats.md). This
+  removes the "Lua only" tooling gap and bears on question 8.
+
+Asked, no answer seen yet:
+
+- **Q22.** "Will we still get full credit for 3-5 repeats?" Until
+  answered, the rubric stands: N >= 10 full, N = 3 half.
+
 ## Questions to ask
 
 1. **Is the gloss10 Q table now required?** The rubric (uproj.md) asks
@@ -31,8 +57,8 @@ repo and is not in these notes. Ask on Discord or by email
    steps (one per skill) or twenty (one per ask)? It doubles the run
    count.
 
-4. **What is N for treatment 7?** A human cannot be reset. One climb
-   per domain? One per team member?
+4. ~~What is N for treatment 7?~~ **Answered (A21): one handwritten
+   run of all ten skills.**
 
 5. **How are generated climbs tagged?** "Histograms derivable from the
    repo's tags" is clear for one ladder. For 6 treatments x N trials
@@ -74,6 +100,7 @@ repo and is not in these notes. Ask on Discord or by email
 
 ## Tooling gaps found on this machine
 
-- No `lua` or `luajit` installed, so `ezr.lua` and its `same` cannot
-  run here yet.
+- No `lua` or `luajit` installed, so `ezr.lua` cannot run here yet.
+  `same` is available in Python from `timm/ezr` `ezr.py`, which needs
+  Python 3.12+ (it uses `type` aliases); 3.14 is installed.
 - No GitHub CLI. This repo is local only; it has no remote.

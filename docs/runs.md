@@ -24,8 +24,11 @@ requirement").
 Whether a ladder has 10 steps or 20 is not stated (open question 3).
 The worked example and the ten-skill table both use 10.
 
-Treatment 7 adds 3 x S steps written by hand. A human cannot be reset
-between trials, so its N is unclear (open question 4).
+Treatment 7 adds one handwritten run of all ten skills per data set:
+30 steps by hand, no repeats (lecturer, Discord A21, Nov 16). With a
+single run, treatment 7 contributes one number per cell, so `same`
+cannot be applied to it; show it as a reference line beside the six
+LLM distributions.
 
 ## Counting scoring runs
 

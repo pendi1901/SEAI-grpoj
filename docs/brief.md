@@ -139,6 +139,12 @@ seventh task: a team member writes every skill by hand, trying as hard
 as possible to reuse, and it is the control the six LLM treatments are
 compared against.
 
+Lecturer's ruling (Discord A21, Nov 16): **one handwritten run of all
+ten skills** per data set is enough; no repeats. An LLM may be used as
+a search tool or tutor ("where is the stuff relating to xxxx", "write
+me a tutorial with examples on how to use a decision tree"). "LLM auto
+assembly (please build me that bit) is out of court."
+
 Same game in every treatment: to get skill i+1, supply the background
 library, the code for skills 1..i, and the one-line requirement. Then
 measure (a) how much new code appears and (b) how well the result runs.
