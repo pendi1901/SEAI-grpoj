@@ -90,6 +90,14 @@ def spot(header, rows): return random.sample(range(len(rows)), 20)
 def race(header, rows, label): return dict(winner="x", tried=["x"], row=0)
 '''
 
+NUMPY = r"""
+import numpy as np
+import good
+def remember(header, rows): return np.array(good.remember(header, rows), dtype=np.int64)
+def choose(header, rows, label): return np.int64(good.choose(header, rows, label))
+def spot(header, rows): return np.array(good.spot(header, rows))
+"""
+
 CRASH = "\n".join(f"def {s}(*a): raise ValueError('boom')" for s in BASELINE)
 
 fails, EXTRA = 0, {}
@@ -128,7 +136,8 @@ try:
   n_test = len(data[1].read_text().splitlines()) - 1
   check("split is 80/20 and loses no rows", (n_train, n_test) == (480, 120))
   check("split is repeatable", run.split(cfg, "toy") == data)
-  for name, text in (("good", GOOD), ("dumb", DUMB), ("crash", CRASH)):
+  for name, text in (("good", GOOD), ("dumb", DUMB), ("crash", CRASH),
+                     ("npgood", NUMPY)):
     (tmp / f"{name}.py").write_text(text)
 
   check("every skill has a contract, a baseline and a scorer",
@@ -147,6 +156,11 @@ try:
           dumb is None or dumb < base + .1)
     check(f"{skill}: a crash earns the baseline on every test case",
           crash == base and n3 > 0)
+  for skill in ("remember", "choose", "spot"):
+    a, _, _ = grade(tmp / "good.py", skill, data)
+    b, st_, _ = grade(tmp / "npgood.py", skill, data)
+    check(f"{skill}: numpy integers and arrays score like plain ints",
+          st_ == "ok" and b is not None and abs(a - b) < 1e-9)
   h = EXTRA["good", "fix"]["fix_helps"]
   check("fix also records whether each allowed change helps",
         len(h) == 20 and set(h) <= {0, 1})

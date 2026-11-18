@@ -21,7 +21,8 @@ Outputs, beside the calls log:
 Each program is graded in its own child process with a time limit.
 Written with LLM help; experiment tooling, not part of treatment 7.
 """
-import argparse, contextlib, csv, importlib.util, io, json, os, random, re
+import argparse, contextlib, csv, importlib.util, io, json, numbers, os
+import random, re
 import statistics as st, subprocess, sys, threading, time, zlib
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -130,10 +131,15 @@ def ncases(skill, D):
 
 
 def indices(got, n):
-  "A list of distinct valid row positions, in the order given."
+  """A list of distinct valid row positions, in the order given. Any whole
+  number counts, numpy's included: scikit-learn and numpy code returns
+  numpy integers and arrays, and rejecting them would penalise those
+  treatments for their library, not their answer."""
   out = []
-  for v in got or []:
-    if isinstance(v, bool) or not isinstance(v, int): raise Invalid("not ints")
+  for v in ([] if got is None else list(got)):
+    if isinstance(v, bool) or not isinstance(v, numbers.Integral):
+      raise Invalid("row positions must be whole numbers")
+    v = int(v)
     if not 0 <= v < n: raise Invalid("position out of range")
     if v not in out: out.append(v)
   return out
@@ -269,7 +275,7 @@ def q_fix(f, D, rnd):
         allowed = D.levers.get(name)
         if allowed is None: good = False
         elif isinstance(allowed, tuple):
-          good &= (isinstance(v, (int, float)) and not isinstance(v, bool)
+          good &= (isinstance(v, numbers.Real) and not isinstance(v, bool)
                    and allowed[0] <= v <= allowed[1])
         else: good &= v in allowed
       good = good and any(row[D.header.index(n)] != v for n, v in got.items())
@@ -469,6 +475,20 @@ def main():
   cfg["scores"] = cfg["log"].with_name("scores.csv")
   cfg["cases"] = cfg["log"].with_name("cases.jsonl")
   if not cfg["log"].exists(): sys.exit(f"nothing to score: no {cfg['log']}")
+  lock = cfg["log"].with_name("scoring.lock")   # one scorer per results
+  try:                                          # folder, or rows duplicate
+    fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    os.write(fd, str(os.getpid()).encode()); os.close(fd)
+  except FileExistsError:
+    sys.exit(f"another score.py is using {cfg['log'].parent} "
+             f"(delete {lock.name} if that run has died)")
+  try:
+    score_all(cfg, a)
+  finally:
+    lock.unlink(missing_ok=True)
+
+
+def score_all(cfg, a):
   calls = list(csv.DictReader(open(cfg["log"], encoding="utf8")))
   done = ({r["dir"] for r in csv.DictReader(open(cfg["scores"],
            encoding="utf8"))} if cfg["scores"].exists() else set())
