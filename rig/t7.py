@@ -3,7 +3,8 @@
 t7.py: register treatment 7 (hand-written skills) so it is scored and
 reported exactly like the LLM treatments.
 
-  python rig/t7.py --config rig/config.gemini.json
+  python rig/t7.py                 # register every file in t7/
+  python rig/t7.py --demo hr 3     # run one step's demo, one command
 
 Your team writes `t7/<domain>/stepNN.py` by hand, one file per skill, each
 defining the same function the LLM treatments must define (see
@@ -110,8 +111,18 @@ def register(cfg, root=run.ROOT):
 def main():
   ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
   ap.add_argument("--config")
+  ap.add_argument("--demo", nargs=2, metavar=("DOMAIN", "STEP"),
+                  help="run one registered step's demo and show its output")
   a = ap.parse_args()
   cfg = run.load_config(a.config)
+  if a.demo:
+    dom, step = a.demo[0], int(a.demo[1])
+    d = cfg["runs"] / dom / "t7" / "trial01" / f"step{step:02d}"
+    if not (d / f"step{step:02d}.py").exists():
+      sys.exit(f"not registered: run `python rig/t7.py` first ({d})")
+    ok, _ = run.smoke(cfg, d, f"step{step:02d}.py")
+    print((d / "run.out").read_text("utf8"))
+    sys.exit(0 if ok else 1)
   out = register(cfg)
   if not out:
     sys.exit("no treatment-7 files found under t7/<domain>/stepNN.py")

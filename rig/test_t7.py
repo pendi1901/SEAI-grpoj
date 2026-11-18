@@ -81,6 +81,17 @@ try:
   S = list(csv.DictReader(open(tmp / "results" / "scores.csv", encoding="utf8")))
   check("score.py grades both T7 programs",
         len(S) == 2 and all(s["status"] == "ok" for s in S))
+  (tmp / "results" / "scoring.lock").write_text("123")
+  r = subprocess.run([sys.executable, str(RIG / "score.py"), "--config",
+                      str(conf)], capture_output=True, text=True, timeout=120)
+  check("a second scorer on the same results is refused",
+        r.returncode != 0 and "another score.py" in (r.stderr + r.stdout))
+  (tmp / "results" / "scoring.lock").unlink()
+  r = subprocess.run([sys.executable, str(RIG / "t7.py"), "--config",
+                      str(conf), "--demo", "toy", "2"],
+                     capture_output=True, text=True, timeout=120)
+  check("one command runs one step's demo", r.returncode == 0
+        and "True" in r.stdout)
   t7.register(cfg, root=tmp)
   S2 = list(csv.DictReader(open(tmp / "results" / "scores.csv", encoding="utf8")))
   check("re-registering clears old T7 scores so changed files are regraded",
