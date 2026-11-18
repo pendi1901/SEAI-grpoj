@@ -44,7 +44,7 @@ FIELDS = ("when domain data treatment library reuse trial step skill ask "
           "backend model dir new_lines total_lines pct_new got_code ran_ok "
           "llm_secs run_secs prompt_chars reply_chars prompt_tokens "
           "reply_tokens seed attempts prompt_version check_before check_after "
-          "repaired error").split()
+          "repaired human_minutes error").split()
 LOCK = threading.Lock()
 
 
@@ -63,10 +63,14 @@ def split(cfg, domain):
   test file. So every treatment faces the same test suite."""
   import random
   src = ROOT / cfg["domains"][domain]["data"]
-  train = src.with_name(src.stem + ".train.csv")
-  test = src.with_name(src.stem + ".test.csv")
+  cap = cfg.get("max_rows")            # lecturer's A23: 1,000 rows at most,
+  tag = f".n{cap}" if cap else ""      # picked at random; own file names so
+  train = src.with_name(src.stem + tag + ".train.csv")   # older splits stay
+  test = src.with_name(src.stem + tag + ".test.csv")
   if not (train.exists() and test.exists()):
     head, *rows = [s for s in src.read_text("utf8").splitlines() if s.strip()]
+    if cap and len(rows) > cap:
+      rows = random.Random(cfg.get("split_seed", 1)).sample(rows, cap)
     random.Random(cfg.get("split_seed", 1)).shuffle(rows)
     n = round(len(rows) * cfg.get("test_fraction", 0.2))
     nl = chr(10)
@@ -281,8 +285,12 @@ def log_row(cfg, row):
   with LOCK:
     cfg["log"].parent.mkdir(parents=True, exist_ok=True)
     new = not cfg["log"].exists()
+    head = FIELDS                     # an older log keeps its own columns
+    if not new:
+      with open(cfg["log"], encoding="utf8") as f:
+        head = next(csv.reader(f), FIELDS)
     with open(cfg["log"], "a", newline="", encoding="utf8") as f:
-      w = csv.DictWriter(f, FIELDS)
+      w = csv.DictWriter(f, head, extrasaction="ignore")
       if new: w.writeheader()
       w.writerow(row)
 
@@ -477,8 +485,9 @@ def cmd_plan(cfg, a):
 def cmd_status(cfg, a):
   todo = climbs(cfg, a)
   total = sum(len(asks(cfg, d)) for d, _, _ in todo)
-  rows = (list(csv.DictReader(open(cfg["log"], encoding="utf8")))
-          if cfg["log"].exists() else [])
+  tids = {t for _, t, _ in todo}
+  rows = [r for r in (csv.DictReader(open(cfg["log"], encoding="utf8"))
+                      if cfg["log"].exists() else []) if r["treatment"] in tids]
   n = len(rows)
   if not n: return print(f"0 of {total} calls done")
   secs = sum(float(r["llm_secs"]) + float(r["run_secs"]) for r in rows) / n
