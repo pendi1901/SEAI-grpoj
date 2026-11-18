@@ -50,3 +50,46 @@ the time to ask questions."
 3. **The run of Nov 16 was paused** after 11 calls for separate
    reasons ([model-trials.md](model-trials.md)). It stays paused until
    the assessment sheet is agreed and the split is in.
+
+---
+
+# Further answers, Nov 17-18 2026 (A23, A28, Q25)
+
+Relayed from the class Discord by a team member. Quoted where the
+wording matters.
+
+## A28: treatment 7 and the stats
+
+| the note | what it means for us | status |
+|---|---|---|
+| Treatment 7, the "prudence checks", "is where you learn your expectation of what should be happening. this is a manual modeling task": "build the 20-50 lines of code that links the human task to the (say) EZR code (or whatever else ur comfortable with) to running algorithms." | Per skill, a human writes a small amount of glue (20-50 lines) from the customer's ask to an existing library. Not a from-scratch implementation. | The team's job. Files go in `t7/<domain>/stepNN.py` with the same function contract, so the scorer grades them exactly like T1-T6 (see `t7/README.md`). |
+| "The stats tests come later. They are when u compare the results of T1,T2...T7 to see if anyone is performing badly compared to everyone else." | `same` and `ranks` across all seven treatments, per skill. | Built (`rig/report.py`); T7 joins the tables once its files exist. |
+
+## A28: the talk
+
+| the note | what it means for us |
+|---|---|
+| "review of your progress on the assignment" | A progress report, not a finished result. |
+| "tell me things like LOC, token, $$ cost, over the 7 treatments. clock time to run." | A cost table per treatment: new lines, tokens, dollars, wall-clock. `rig/report.py` now prints it. |
+| "for the tasks, there is 7 ways of doing everything: where are your stats comparing those 7 ways?" (gloss6) | The per-skill `same`/rank table across T1-T7. |
+| "very rough and ready ... < 10 slides. charts. yes. beautiful powerpoint not" | Plain slides, mostly charts. |
+
+## Q25: talks next week are mandatory
+
+12 groups, six per hour, **10 minutes each** including the machine
+change, **10 slides at most** ("or even less"). "you will lose marks if
+your group does not present. or if you run over time." The lecturer
+asked every group to acknowledge the Discord post ("expecting 12
+clicks"). **To do: one of us clicks the acknowledgement.**
+
+## A23: runtimes, repeats, and competency
+
+| the note | what it means for us | status |
+|---|---|---|
+| Runtimes of days are bad: every experiment is run about **6 + 2R** times (fumbling, a first full run, an instrumented run, a fix run, R repeats, then R more after a forgotten measure). | Budget for reruns. One full pass must take minutes to an hour, not days. | Gemini N = 1 took about 45 minutes; Ollama took about 5 hours. |
+| "dumb down the model (e.g. Sonnet), reduce data set size (1000 rows, max, picked at random)" | Cap every data set at 1,000 random rows. | Built for prompt v3 runs: `max_rows: 1000` in the configs. HR (1,470 rows) is now capped too. |
+| "if you go too dumb on the model then all the results are bad. so you need numbers collected from each run to check for competency" | Every run must report whether the model was competent enough for its results to mean anything. | `rig/report.py` now prints a competency table per treatment (files returned, functions that work, skills that beat the dumb baseline). |
+| "you need those competency numbers anyway since you need those to test if one treatment does worse than any other" | Competency feeds the T1-T7 comparison directly. | Same table. |
+
+What A23 does not settle: R itself. The rubric still says N >= 10 for
+full marks (open question Q22).
