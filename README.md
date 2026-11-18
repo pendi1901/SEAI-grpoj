@@ -13,6 +13,8 @@ It is local, with no remote.
 | file | what it answers |
 |---|---|
 | [docs/plan.md](docs/plan.md) | **start here**: what to do, who does it, compute and time estimates, day by day |
+| [docs/talk.md](docs/talk.md) | **next week's talk**: slide outline mapped to the numbers, and the checklist of what is still owed |
+| [t7/README.md](t7/README.md) | treatment 7: what to write by hand, the exact contract, and how it gets scored |
 | [docs/results-gemini-n1.md](docs/results-gemini-n1.md) | **Gemini run (N = 1)**: 77% of skills work; reuse and ezr both cut new code |
 | [docs/results-n1.md](docs/results-n1.md) | **first full run (N = 1)**: what it shows, what it cannot, and the tooling fixes it forced |
 | [docs/lecturer-notes.md](docs/lecturer-notes.md) | the lecturer's Nov 16 instructions and what each one changes |
