@@ -1,6 +1,8 @@
 {
-  "backend": "ollama",
-  "trials": 3,
+  "backend": "gemini",
+  "prompt_version": 3,
+  "repair": true,
+  "trials": 1,
   "asks": [
     1,
     2,
@@ -13,11 +15,13 @@
     9,
     10
   ],
-  "runs": "runs-v3",
-  "log": "results-v3/calls.csv",
-  "run_timeout": 120,
+  "max_rows": 1000,
   "split_seed": 1,
   "test_fraction": 0.2,
+  "run_timeout": 120,
+  "check_timeout": 120,
+  "runs": "runs",
+  "log": "results/calls.csv",
   "backends": {
     "mock": {
       "cmd": [
@@ -27,30 +31,18 @@
       "model": "mock",
       "timeout": 30
     },
-    "claude": {
-      "cmd": [
-        "claude",
-        "-p"
-      ],
-      "model": "FILL IN",
-      "timeout": 600
-    },
-    "ollama": {
-      "url": "http://localhost:11434",
-      "model": "ornith:9b",
-      "timeout": 900,
-      "think": true,
+    "gemini": {
+      "api": "gemini",
+      "url": "https://generativelanguage.googleapis.com",
+      "model": "gemini-3.1-flash-lite",
+      "key_file": "rig/.secrets/gemini_key",
+      "timeout": 300,
       "options": {
-        "num_ctx": 16384,
-        "num_predict": 6000,
-        "temperature": 0.2
+        "temperature": 0.2,
+        "maxOutputTokens": 16384
       },
-      "fallback": {
-        "think": false,
-        "options": {
-          "num_predict": 4096
-        }
-      }
+      "price_in_per_m": 0.25,
+      "price_out_per_m": 1.5
     }
   },
   "treatments": {
@@ -117,9 +109,5 @@
     "data/Health-ClosedIssues0000.csv": "https://raw.githubusercontent.com/timm/moot/master/optimize/hpo/Health-ClosedIssues0000.csv",
     "data/WA_Fn-UseC_-HR-Employee-Attrition.csv": "https://raw.githubusercontent.com/timm/moot/master/optimize/behavior_data/WA_Fn-UseC_-HR-Employee-Attrition.csv",
     "rig/lib/ezr.py": "https://raw.githubusercontent.com/timm/ezr/main/ezr.py"
-  },
-  "prompt_version": 3,
-  "repair": true,
-  "check_timeout": 120,
-  "max_rows": 1000
+  }
 }

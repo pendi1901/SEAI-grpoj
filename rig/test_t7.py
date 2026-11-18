@@ -49,6 +49,8 @@ try:
   (tmp / "t7" / "toy" / "step01.py").write_text(STEP1)
   (tmp / "t7" / "toy" / "step02.py").write_text(STEP2)
   (tmp / "t7" / "minutes.csv").write_text("domain,step,minutes\ntoy,1,25\n")
+  (tmp / "t7" / "shared").mkdir()
+  (tmp / "t7" / "shared" / "mylib.py").write_text("def half(x):\n    return x / 2\n")
 
   out = t7.register(cfg, root=tmp)
   R = list(csv.DictReader(open(cfg["log"], encoding="utf8")))
@@ -61,8 +63,9 @@ try:
   check("each step has its own folder, so scores never collide",
         len({r["dir"] for r in R}) == 2)
   s2 = cfg["runs"] / "toy" / "t7" / "trial01" / "step02"
-  check("a step's folder holds the earlier steps and ezr.py",
-        (s2 / "step01.py").exists() and (s2 / "ezr.py").exists())
+  check("a step's folder holds the earlier steps, ezr.py and t7/shared",
+        (s2 / "step01.py").exists() and (s2 / "ezr.py").exists()
+        and (s2 / "mylib.py").exists())
   check("a demo that imports an earlier step runs", R[1]["ran_ok"] == "1")
   check("human minutes are logged when given",
         R[0]["human_minutes"] == "25.0" and R[1]["human_minutes"] == "")
@@ -87,6 +90,11 @@ try:
   check("a second scorer on the same results is refused",
         r.returncode != 0 and "another score.py" in (r.stderr + r.stdout))
   (tmp / "results" / "scoring.lock").unlink()
+  r = subprocess.run([sys.executable, str(RIG / "t7.py"), "--config",
+                      str(conf), "--check"], capture_output=True, text=True,
+                     timeout=300)
+  check("--check tests every step's function and passes good ones",
+        r.returncode == 0 and r.stdout.count(" ok") == 2)
   r = subprocess.run([sys.executable, str(RIG / "t7.py"), "--config",
                       str(conf), "--demo", "toy", "2"],
                      capture_output=True, text=True, timeout=120)

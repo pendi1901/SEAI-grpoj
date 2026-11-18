@@ -119,6 +119,12 @@ BASELINE = dict(remember=0, guess=0, certify=.5, flow=0, blame=0,
                 justify=0, choose=0, fix=0, spot=0, race=0)
 
 
+# What a no-effort answer scores, for judging competency. Equal to the
+# failure value except for choose and race, where a random strategy
+# (label 50 random rows, keep the best) wins about half its runs.
+DUMB = dict(BASELINE, choose=.5, race=.5)
+
+
 def prompt_text(skill, rules=False):
   "The paragraph the runner adds to the prompt for this skill."
   return ("A test harness will import your file and call this function, "

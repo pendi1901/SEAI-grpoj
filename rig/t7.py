@@ -5,6 +5,12 @@ reported exactly like the LLM treatments.
 
   python rig/t7.py                 # register every file in t7/
   python rig/t7.py --demo hr 3     # run one step's demo, one command
+  python rig/t7.py --check         # test every step's function on training rows
+
+Code shared across domains goes in `t7/shared/*.py`; it is copied into
+every step's folder, so `from mylib import x` works in any domain. Its
+lines are reported separately as the transfer evidence the 591 rubric
+asks for ("how much old machinery did it reuse?").
 
 Your team writes `t7/<domain>/stepNN.py` by hand, one file per skill, each
 defining the same function the LLM treatments must define (see
@@ -83,6 +89,8 @@ def register(cfg, root=run.ROOT):
       try: os.link(train, d / train.name)
       except OSError: shutil.copy(train, d / train.name)
       shutil.copy(RIG / "lib" / "ezr.py", d)
+      for lib in sorted((src_root / "shared").glob("*.py")):
+        shutil.copy(lib, d)                    # cross-domain code
       for pname, ptext in prior + [(name, code)]:
         (d / pname).write_text(ptext, "utf8")
       new = run.code_lines(code)
@@ -111,6 +119,8 @@ def register(cfg, root=run.ROOT):
 def main():
   ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
   ap.add_argument("--config")
+  ap.add_argument("--check", action="store_true",
+                  help="test each registered step's function on training rows")
   ap.add_argument("--demo", nargs=2, metavar=("DOMAIN", "STEP"),
                   help="run one registered step's demo and show its output")
   a = ap.parse_args()
@@ -123,6 +133,19 @@ def main():
     ok, _ = run.smoke(cfg, d, f"step{step:02d}.py")
     print((d / "run.out").read_text("utf8"))
     sys.exit(0 if ok else 1)
+  if a.check:                       # test what is registered; change nothing
+    rows = ([r for r in csv.DictReader(open(cfg["log"], encoding="utf8"))
+             if r.get("treatment") == "7"] if cfg["log"].exists() else [])
+    if not rows: sys.exit("nothing registered: run `python rig/t7.py` first")
+    bad = 0
+    for r in rows:
+      d = Path(r["dir"]); d = d if d.is_absolute() else run.ROOT / d
+      st, why = run.contract_check(cfg, r["domain"], d,
+                                   f"step{int(r['step']):02d}.py", r["skill"])
+      bad += st != "ok"
+      print(f"{r['domain']:8} step{int(r['step']):02d} {r['skill']:9} {st}")
+      if st != "ok": print("    " + why.replace("\n", "\n    "))
+    sys.exit(1 if bad else 0)
   out = register(cfg)
   if not out:
     sys.exit("no treatment-7 files found under t7/<domain>/stepNN.py")

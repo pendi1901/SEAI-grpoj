@@ -195,16 +195,37 @@ def run_reuse(calls, t):
   return any(c["reuse"] == "1" for c in calls if c["treatment"] == t)
 
 
+def transfer_table(calls):
+  """591 transfer evidence for T7: lines written per domain against lines
+  in t7/shared, which every domain may reuse. Empty when there is no T7."""
+  t7 = [c for c in calls if c["treatment"] == "7"]
+  if not t7: return ""
+  shared = sorted((run.ROOT / "t7" / "shared").glob("*.py"))
+  lines = sum(run.code_lines(p.read_text("utf8")) for p in shared)
+  rows = []
+  for dom in sorted({c["domain"] for c in t7}):
+    cs = [c for c in t7 if c["domain"] == dom]
+    own = sum(c["new_lines"] or 0 for c in cs)
+    rows.append([dom, len(cs), own, lines,
+                 f"{100 * lines // max(own + lines, 1)}%"])
+  return ("Treatment 7 across domains. Shared code (`t7/shared/`, "
+          f"{len(shared)} files) is available to every domain; a falling "
+          "per-domain count, in the order the domains were built, is the "
+          "transfer the hypothesis predicts.\n\n"
+          + table(["domain", "steps", "lines written for it",
+                   "shared lines", "shared share"], rows))
+
+
 def cost_table(calls, cfg):
   """The lecturer's talk numbers (A28) and competency numbers (A23), one
   row per treatment: did the code work, and what did it cost?"""
-  from contract import BASELINE
+  from contract import DUMB
   rows = []
   for t in sorted({c["treatment"] for c in calls}):
     cs = [c for c in calls if c["treatment"] == t]
     n = len(cs)
     worked = sum(c["status"] == "ok" for c in cs)
-    beat = sum(c["q"] is not None and c["q"] > BASELINE[c["skill"]] + 1e-9
+    beat = sum(c["q"] is not None and c["q"] > DUMB[c["skill"]] + 1e-9
                for c in cs)
     tin = sum(int(c.get("prompt_tokens") or 0) for c in cs)
     tout = sum(int(c.get("reply_tokens") or 0) for c in cs)
@@ -290,6 +311,8 @@ def main():
            overall(cs, "z", True, f2), ""]
   md += ["## All domains together", "",
          "### Competency and cost", "", cost_table(calls, cfg), "",
+         "### Transfer across domains (T7)", "",
+         transfer_table(calls) or "No treatment-7 files registered yet.", "",
          "Z is computed within each (domain, skill), then pooled.", "",
          overall(calls, "z", True, f2), "", "New lines, pooled:", "",
          overall(calls, "new_lines", False, f1), ""]
