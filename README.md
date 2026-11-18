@@ -1,44 +1,44 @@
 # seai26f-gproj
 
-Notes for the CSC 591 graduate project (SE for AI, NC State, Fall
-2026): the shrinking-code experiment on three MOOT domains, namely
-software process (pom3a), open-source project health, and HR employee
-attrition.
+CSC 591 graduate project (SE for AI, NC State, Fall 2026): the
+shrinking-code experiment on three MOOT domains, namely agile software
+process (pom3a), open-source project health, and staff retention (HR).
 
-This repo holds the reading of the course spec, draft requirements,
-and the runner and scorer for treatments 1 to 6. One full run (N = 1, Nov 17) is
-committed with its results; treatment 7 is not done yet.
-It is local, with no remote.
+Does a well-factored library let an LLM, or a person, build each new
+skill with less new code? Seven treatments build ten skills per domain:
+an LLM on plain Python, scikit-learn or ezr, each with and without being
+told to reuse earlier steps (T1-T6), and the team by hand (T7). Every
+program is scored on one held-out test suite and the seven are compared
+with the lecturer's `same` test.
+
+**Start here: [docs/status.md](docs/status.md)**, which says what is done,
+how it meets each instruction, and what is still owed.
 
 | file | what it answers |
 |---|---|
-| [docs/plan.md](docs/plan.md) | **start here**: what to do, who does it, compute and time estimates, day by day |
-| [docs/talk.md](docs/talk.md) | **next week's talk**: slide outline mapped to the numbers, and the checklist of what is still owed |
-| [t7/README.md](t7/README.md) | treatment 7: what to write by hand, the exact contract, and how it gets scored |
-| [docs/results-gemini-n1.md](docs/results-gemini-n1.md) | **Gemini run (N = 1)**: 77% of skills work; reuse and ezr both cut new code |
-| [docs/results-n1.md](docs/results-n1.md) | **first full run (N = 1)**: what it shows, what it cannot, and the tooling fixes it forced |
-| [docs/lecturer-notes.md](docs/lecturer-notes.md) | the lecturer's Nov 16 instructions and what each one changes |
-| [docs/assessment.md](docs/assessment.md) | **to sign off before any big run**: how each of the ten skills is judged |
-| [docs/brief.md](docs/brief.md) | the whole spec: dates, marks, hypotheses, skills, treatments, report, rubric, every way to lose marks |
-| [docs/stats.md](docs/stats.md) | `same`, `ranks`, the per-skill Q score, Z, and what to log after every run |
-| [docs/runs.md](docs/runs.md) | how many LLM calls, how long, the reset protocol |
-| [docs/domains.md](docs/domains.md) | the three data sets, measured, with their traps |
-| [docs/requirements.md](docs/requirements.md) | DRAFT: three clients, twenty skill-tagged asks each |
-| [rig/README.md](rig/README.md) | the runner and the scorer: one command per stage, what they log, how Q is computed |
-| [docs/model-trials.md](docs/model-trials.md) | why the local model is ornith:9b with thinking on |
-| [docs/open-questions.md](docs/open-questions.md) | what the spec leaves unsettled, and what to ask the lecturer |
+| [docs/status.md](docs/status.md) | where the project stands against every instruction |
+| [docs/talk.md](docs/talk.md) | next week's 10-minute talk: slides and checklist |
+| [docs/brief.md](docs/brief.md) | the course spec in one place: marks, hypotheses, treatments, rubric |
+| [docs/lecturer-notes.md](docs/lecturer-notes.md) | every later instruction from the lecturer, and what it changed |
+| [docs/assessment.md](docs/assessment.md) | how each skill is scored (signed off Nov 17) |
+| [docs/stats.md](docs/stats.md) | `same`, ranks, Q and Z |
+| [docs/requirements.md](docs/requirements.md) | three clients, twenty skill-tagged asks each (drafts) |
+| [docs/domains.md](docs/domains.md) | the three data sets and their traps |
+| [docs/open-questions.md](docs/open-questions.md) | what to ask the lecturer, and what only the team knows |
+| [rig/README.md](rig/README.md) | the tooling: one command per stage |
+| [t7/README.md](t7/README.md) | treatment 7: what to write by hand and how it is scored |
+| [docs/archive/](docs/archive/README.md) | earlier plans and the first runs' write-ups |
 
-Source: `github.com/txt/seai26f` at commit `5fb51c8` (Nov 16 2026) and
-`github.com/timm/moot` (master, same day).
+Course source: `github.com/txt/seai26f`; data: `github.com/timm/moot`.
 
-## The short version
+## Run it
 
-- 39 project marks plus a 15-mark talk. Final report due Mon Nov 30.
-- Three domains, one shared codebase, twenty skill-tagged customer asks
-  per domain, written before coding and okayed by the lecturer.
-- Seven treatments: an LLM on plain Python, scikit-learn and ezr, each
-  with and without being told to reuse; the seventh is us, by hand.
-- N trials, each a fresh headless LLM call in a fresh directory. N of
-  10 or more for full Results marks; 3 is the floor.
-- Every claimed difference certified by `same`. No `same`, no marks.
-- Negative results score. Hidden ones do not.
+    python rig/run.py fetch
+    python rig/run.py go
+    python rig/t7.py
+    python rig/score.py --workers 8
+    python rig/report.py
+
+The Gemini key goes in `rig/.secrets/gemini_key` (git-ignored) or the
+`GEMINI_API_KEY` environment variable. Earlier run outputs are kept at
+the git tag `archive/first-runs`.

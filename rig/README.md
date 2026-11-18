@@ -1,256 +1,131 @@
-# rig: the experiment runner
+# rig: the experiment tooling
 
-Tooling for treatments 1 to 6. Written by an LLM (Claude) on Nov 16
-2026; disclose that in the report. Nothing here is part of treatment 7,
-and nothing here should be counted in the hand-written line totals.
+Runs treatments 1 to 6 (an LLM writes each skill), registers treatment 7
+(written by hand, see `t7/README.md`), scores every program on one fixed
+test suite, and reports the comparison of all seven.
 
-**Tested only against a mock LLM.** No real model has been called, and
-no data has been downloaded yet.
+Written with LLM help (Claude); disclose that in the report. None of it
+is treatment 7, and none of it counts in any treatment's line totals.
 
-## What it does
+## The pipeline
 
-For every (data set, treatment, trial) it climbs the ladder: ten LLM
-calls in order, one per skill. Call i gets the background library, the
-code from calls 1..i-1 of the same climb, and the one-line customer
-ask. Each call:
+From the repo root. One config, `rig/config.json`; no flags needed.
 
-1. gets its own new directory, `runs/<domain>/t<k>/trial<nn>/step<nn>/`;
-2. receives only the data file, the library, and the earlier steps;
-3. is refused if any `CLAUDE.md` sits at or above that directory;
-4. has its prompt, reply, extracted file and run output saved there;
-5. appends one row to `results/calls.csv` the moment it ends.
+    python rig/run.py fetch            # data sets + ezr.py, once
+    python rig/run.py plan             # what would run: 180 calls per trial
+    python rig/run.py go               # T1-T6, N = 1 (about $0.50, under an hour)
+    python rig/run.py status           # progress and ETA
+    python rig/t7.py                   # register the hand-written T7 files
+    python rig/score.py --workers 8    # grade every program
+    python rig/report.py               # results/report.md and results/fig/
 
-A call that fails (no code, a crash, a timeout, a backend error) is
-logged with zeros and an error message. It is never dropped.
+`go` resumes: a finished call is never repeated, and `--trials 3` later
+adds trials 2 and 3 to the same folders. Narrow with `--domains hr` or
+`--treatments 5 6`; time-test with `--limit 10`.
 
-## Use
+Tests, no model and no network: `python rig/test_run.py`,
+`test_score.py`, `test_report.py`, `test_t7.py` (each wants "failures: 0").
 
-    python rig/test_run.py                  # want "failures: 0"
-    python rig/run.py fetch                 # 3 csv files + ezr.py, ~4 MB
-    python rig/run.py plan --trials 10      # what would run: 1,800 calls
-    python rig/run.py go --backend claude --limit 10     # timing test
-    python rig/run.py status --trials 10 --workers 8     # measured ETA
-    python rig/run.py go --backend claude --trials 3 --workers 8
-    python rig/run.py go --backend claude --trials 10 --workers 8
+## Files
 
-Raising `--trials` later keeps every finished call and only adds the
-new trials. Stopping and restarting loses at most the calls in flight.
-Narrow a run with `--domains hr` or `--treatments 5 6`.
-
-## Before the first real run
-
-1. **Pick a backend** in `config.json`. A backend is any command that
-   reads a prompt on stdin and prints a reply.
-   - `claude`: needs the `claude` CLI installed. Fill in `model`. Check
-     how to switch off memory and user-level instructions in your
-     version of the CLI, and add those flags to `cmd`. The runner
-     checks for `CLAUDE.md` in the directory tree; it cannot see a
-     user-level one in your home folder.
-   - `ollama` (the default): see the next section.
-2. **Install scikit-learn**, or treatments 3 and 4 will all crash.
-3. **Run `fetch`.** It downloads from `timm/moot` and `timm/ezr`.
-4. **Run the timing test**, then `status`, and decide N.
-
-## Running on local Ollama
-
-Chosen Nov 16 2026: a local model on the laptop's 8 GB RTX 5060. The
-runner talks to Ollama over HTTP at `localhost:11434`. Tested against
-a fake server only; Ollama is not installed on this machine yet.
-
-Ollama runs in the Docker container `ollama`, with GPU
-access, on port 11434. The model in the config is `ornith:9b`, with
-thinking on; why is in `docs/model-trials.md`. The data and `ezr.py`
-are already fetched. Still to install: `pip install scikit-learn`.
-
-    python rig/run.py go --limit 10       # timing test
-    python rig/run.py status
-    python rig/run.py go --trials 3       # 540 calls; leave it overnight
-
-What the runner does for you on this backend:
-
-- **Stateless calls.** Each request carries the prompt and nothing
-  else (no `context` field), so no call can remember another. That is
-  the reset protocol; say so in Methods.
-- **A big enough context window.** Ollama's default window is small
-  and it drops the start of a long prompt without saying so. The ezr
-  treatments send all of `ezr.py` plus the earlier steps. The config
-  sets `num_ctx` to 16384, and any call whose prompt fills 95% of the
-  window is flagged in the log's `error` column.
-- **A seed per call**, derived from domain, treatment, trial and step,
-  and logged. Trials differ; reruns of the same call do not.
-- **Token counts** from the server, in the log.
-
-Things to decide and check:
-
-- **The model is provisional.** Fix it, and its settings, before the
-  first real run and never change them partway.
-- **Use one worker.** One GPU serves one call at a time.
-- **Watch the first ten calls.** If `status` shows few programs
-  running clean, or the log shows truncation flags, fix that before
-  the long run: lower the window pressure by raising `num_ctx` (uses
-  more GPU memory) or try another model.
-- **If the 16k window does not fit in 8 GB**, Ollama moves part of
-  the model to the CPU and calls get several times slower. `ollama ps`
-  shows the split.
-
-## What the log holds
-
-`results/calls.csv`, one row per call:
-
-| column | meaning |
+| file | job |
 |---|---|
-| domain, data, treatment, library, reuse, trial, step, skill, ask | which call |
-| backend, model, dir, when | proof of the reset protocol |
-| new_lines | code lines in the new file (blank and comment lines not counted) |
-| total_lines | new_lines plus the earlier steps of this climb |
-| pct_new | 100 x new / total: the histogram's y-axis |
-| got_code, ran_ok, error | did it reply with code; did `python stepNN.py` exit 0 |
-| llm_secs, run_secs, prompt_chars, reply_chars, prompt_tokens, reply_tokens | cost (tokens on Ollama only) |
-| seed | the seed sent with the call |
+| `config.json` | the one config: model, prompt version, data cap, treatments, domains, levers, prices |
+| `run.py` | builds each prompt, calls the model, saves every file, logs every call |
+| `contract.py` | the function each skill must define, its rules, failure and no-effort values |
+| `score.py` | grades programs on the test suite; `--check` runs one on training rows |
+| `report.py` | rank tables with `same`, Z, histograms, competency and cost |
+| `t7.py` | registers and demos the hand-written treatment 7 |
+| `mock_llm.py` | a fake model for the tests |
+| `lib/ezr.py` | the lecturer's Python ezr (`timm/ezr`), given to T5 and T6 |
+| `.secrets/` | the Gemini API key; git-ignored, never committed |
 
-## Choices made here that the report must state
+## Settings, and what Methods must state
 
-- **Ten steps**, one per skill: asks 1 to 10 of each requirements doc.
-  Change `"asks"` in the config to use others.
-- **One file per step.** The model may import earlier files and may
-  not edit them. New code = the lines of the new file.
-- **No-reuse treatments still see the earlier code** but are not told
-  to reuse it. Flip `SHOW_PRIOR_TO_NO_REUSE` in `run.py` if the
-  lecturer says otherwise.
-- **The ezr treatment uses the Python `ezr.py`** from `timm/ezr`, not
-  the Lua one in the course repo.
-- **Each call is text in, text out.** The model writes a file; it does
-  not get to run tools or look around.
-
-## Prompt versions
-
-| version | used by | change |
+| setting | value | why |
 |---|---|---|
-| 1 | Ollama N = 1 run, in `runs/` and `results/` | |
-| 2 | Ollama run stopped at 144/180 (`runs-v2/`); Gemini N = 1 run (`runs-gemini/`, `results-gemini/`) | states the data file's row count and says not to hard-code one |
-| 3 | not yet run; configured for `runs-gemini-v3/` and `results-gemini-v3/` (Gemini), `runs-v3/` (Ollama) | clearer contract, plus one repair round (below) |
+| model | `gemini-3.1-flash-lite`, temperature 0.2, a seed per call | cheapest Gemini model the key can use; competent where a local 9B model was not (`docs/archive/`) |
+| data | 1,000 random rows per domain, split 800 / 200 with seed 1 | lecturer's A23; one test suite for every treatment (Nov 16 notes) |
+| steps | ten per domain, asks 1-10, one per skill | A21: "all ten skills" |
+| reset | one stateless API call per step, in a fresh folder; no history, no CLAUDE.md | uproj.md reset rule |
+| no-reuse treatments | still see the earlier steps' code, but are not told to reuse it | uproj.md: supply "the code for skills 1..i" in every treatment (open question 6) |
+| prompt version | 3 | below |
 
-Never pool results from two prompt versions. To report on an older
-version, run `score.py` and `report.py` with a config whose `runs` and
-`log` point at its folders. Each config's `prompt_version` sets the
-version; it is also logged on every call from version 3 on.
+### Prompt version 3: clearer contract, one repair round
 
-## Prompt version 3
+**Clearer contract.** Each prompt shows the header and two rows exactly
+as the function receives them, every text column with its values, and
+each skill's rules with what breaking them costs (`RULES` in
+`contract.py`). These restate the signed-off `docs/assessment.md`; they
+describe the data and the harness, never how to solve a skill.
 
-Built Nov 17 2026 after the error breakdown of the first two runs. Not
-yet piloted or run.
+**One repair round.** When a file comes back, its function is called on
+a sample of the *training* data under the scorer's own rules, sizes and
+label budget (fewer repetitions only). If that fails, the model gets one
+more call: the original prompt, its file and the error. The corrected
+file replaces the first (kept as `first_try.py`). There is no second
+repair. In Methods: "an LLM with one repair round on training data".
+T7 also runs its own code before submitting, so this brings the LLM
+treatments closer to it.
 
-**A clearer contract.** The prompt now also shows:
+- The check never reads the test file (a test confirms it).
+- The error shown keeps only the generated file's frames and library
+  frames, each cut to a bare file name: no local path or user name is
+  sent to the model provider.
+- Logged per call: `check_before`, `check_after`, `repaired`, and the
+  extra call in `attempts`, `llm_secs` and the token counts.
 
-- the header and the first two rows exactly as the function receives
-  them (floats and strings, already parsed);
-- every text column and its values, e.g. `overTime (No, Yes)`;
-- each skill's rules and what breaking them costs (`RULES` in
-  `rig/contract.py`): the 5% cap, the shared 50-label budget, "p from
-  0 to 1, not a percentage", no state kept between flow calls, and so
-  on. These restate the signed-off assessment sheet. They describe the
-  data and the harness, never how to solve a skill.
+### Earlier prompt versions
 
-**One repair round.** After a file comes back, the runner calls its
-skill function on a sample of the *training* data, with the scorer's
-own rules, sizes and label budget and only fewer repetitions
-(`score.py --check`). If that fails, the model gets one more call: the
-original prompt, its file, and the error. The corrected file replaces
-the first, which is kept as `first_try.py`. Then the run moves on;
-there is no second repair.
+| version | run | where |
+|---|---|---|
+| 1 | Ollama `ornith:9b`, N = 1 | tag `archive/first-runs`, `runs/` and `results/` |
+| 2 | adds the file's true row count; Gemini N = 1, and a stopped Ollama run | same tag, `runs-gemini/`, `results-gemini/`, `runs-v2/` |
+| 3 | current | `runs/`, `results/` |
 
-- **Never the test suite.** The check reads the training file for
-  both halves, and a test confirms it is never passed the test file.
-- **No local paths leave the machine.** The error shown keeps only
-  the generated file's own lines and library lines, each cut to a
-  bare file name, and drops every line of the harness.
-- **Same rule for every treatment.** Logged per call: `check_before`,
-  `check_after`, `repaired`, and the extra call in `attempts`,
-  `llm_secs` and the token counts.
-- **What it changes for Methods:** the treatments become "an LLM with
-  one repair round on training data". Treatment 7 (hand-written) also
-  runs its code before submitting, so this brings the LLM treatments
-  closer to it, not further. New lines are counted on the final file.
+Never pool results across prompt versions or models.
 
-Cost: one extra call for each file that fails its check. On the last
-Gemini run that would have been about 40 of 180 calls.
+## When the model cannot be reached
+
+Rate limits, server errors, dropped connections and timeouts are retried
+with back-off. If a call still fails, nothing is logged and its folder is
+removed: the step is not counted as the model failing, and the next
+`go` makes it again. A missing file, a crash or a broken rule *is* a
+result and is logged.
 
 ## The scorer
 
-`rig/score.py` grades every generated program on a fixed test suite.
-**How each skill is judged is defined in `docs/assessment.md`**, which
-a human on the team must agree before any large run. This section is
-only the mechanics.
+How each skill is judged is defined in `docs/assessment.md` (signed off
+by the team) and summarised in `docs/stats.md`. Mechanics:
 
-    python rig/test_score.py          # want "failures: 0"
-    python rig/score.py --workers 8   # scores every call not yet scored
+- Every program for one skill in one domain faces the same test cases,
+  seeded by domain and skill, built from the held-out 200 rows.
+- Each test case gives one number; Q is their mean. A missing function,
+  a crash, a timeout (300 s) or a broken rule earns the failure value
+  on every case. `status` says which: `ok`, `invalid`, `error`,
+  `timeout`, `no_code`.
+- Any whole number counts as a row position, numpy's included.
+- Only one `score.py` may run on a results folder at a time
+  (`scoring.lock`); a second is refused.
 
-It runs on the CPU, needs no LLM, and can be rerun at any time: scored
-programs are skipped. To rescore after a rule change, delete
-`results/scores.csv` and `results/cases.jsonl` and run it again; the
-generated programs are kept, so no model calls are needed.
-
-Files it writes, beside `results/calls.csv`:
-
-| file | holds |
-|---|---|
-| `scores.csv` | one row per program: Q (mean over its test cases), number of cases, status, detail |
-| `cases.jsonl` | one line per program: the per-test-case numbers, plus `fix_helps` for the fix skill |
-
-### The 80/20 split
-
-Each data set is split once, with the seed in `config.json`, into
-`data/<name>.train.csv` (80%) and `data/<name>.test.csv` (20%).
-Treatments are given the training file only. The scorer builds its
-test cases from the test file, seeded by domain and skill, so every
-treatment and every trial faces the same test suite.
-
-### The contract
-
-A program that only prints cannot be graded. So the prompt requires
-each step file to define one function, named after its skill, with a
-fixed signature (`rig/contract.py`). The scorer imports the file and
-calls that function.
-
-A missing function, a crash, a timeout (300 s) or an answer outside
-the rules earns the skill's baseline on every test case. The `status`
-column says which: `ok`, `invalid`, `error`, `timeout` or `no_code`.
-
-### Where this differs from gloss10
-
-No scorer was supplied with the course; these are readings of a
-one-line-per-skill table. State them in Methods.
-
-- **One fixed 80/20 split** replaces gloss10's repeated splits, as
-  the lecturer's Nov 16 notes describe.
-- **choose** fails to 0, not 0.5 (decision A in the assessment sheet).
-- **fix** keeps the course's number and adds "fix: helps" (decision B).
-- **blame** takes column names only, no rules; a rewritten row's new
-  score is estimated from its 5 nearest training rows.
-- **justify** hides the row's goals, or the percentile could be read
-  off.
-- **spot** plants errors 6 standard deviations out in a numeric
-  input, in 10 copies rather than 30.
-- **choose** and **race** search 150 test rows per run.
-- Training rows are capped at 2,000 and test rows at 400 (pom3a).
-- Each test case's number is clipped to the range -1 to 1.
-- **Levers** for fix come from `config.json` and are proposals.
-
-### What the checks show
-
-`test_score.py` grades three stand-in programs on a made-up table: a
-sensible answer beats the baseline on all ten skills, a random or
-constant answer does not, and a crash earns exactly the baseline on
-every test case.
+Outputs beside `results/calls.csv`: `scores.csv` (one row per program)
+and `cases.jsonl` (the per-test-case numbers that `same` compares).
 
 ## The report
 
-    python rig/test_report.py         # want "failures: 0"
-    python rig/report.py              # writes results/report.md, results/fig/
+`results/report.md`, per domain and for all domains together:
 
-Per domain: the % new code histogram; treatments ranked per skill on
-the test suite; new lines and Q per step; and Q rescaled to Z within
-each domain and skill for comparison across skills. Ranks use the
-lecturer's Python `same` with all three tests. It works on a partial
-run. If `results/t7.csv` exists (columns `domain,step,new_lines`),
-treatment 7 is drawn as a reference line.
+- **Competency and cost** per treatment: programs, demos that ran,
+  functions that worked, programs that beat a no-effort answer, new
+  LOC, tokens, dollars, clock minutes (lecturer's A23 and A28).
+- **Per skill on the test suite**: each treatment's mean and its `same`
+  rank. Rank 0 is the best group; a shared rank means `same` could not
+  tell them apart. `same` is the lecturer's Python one with all three
+  tests (Cliff's delta, Kolmogorov-Smirnov, Cohen at 0.35). Ties on the
+  median are broken by the mean.
+- New lines and Q per step, Z rescaled within each domain and skill,
+  and the "% new code" histogram (one line per treatment, T7 in black).
+
+A known limit, stated in the archived write-ups: "% new code" is new
+lines over all lines so far, so it falls for every treatment; reuse
+shows in absolute new lines, not in that histogram's slope.

@@ -48,7 +48,7 @@ the time to ask questions."
    judged; hand-write treatment 7; only then run the LLM treatments.
    We had it the other way round.
 3. **The run of Nov 16 was paused** after 11 calls for separate
-   reasons ([model-trials.md](model-trials.md)). It stays paused until
+   reasons ([archive/model-trials.md](archive/model-trials.md)). It stays paused until
    the assessment sheet is agreed and the split is in.
 
 ---

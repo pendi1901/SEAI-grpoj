@@ -21,6 +21,7 @@ every LLM use (what you asked, what you used) for the AI disclosure.
     t7/process/step01.py ... step10.py
     t7/health/step01.py  ... step10.py
     t7/hr/step01.py      ... step10.py
+    t7/shared/*.py       code shared by all three domains (the transfer)
     t7/minutes.csv       optional: domain,step,minutes  (time you spent)
 
 Step N answers the ask listed for step N below. A later step may import
@@ -47,17 +48,25 @@ To try your code on the data: the training files are
 
 From the repo root, after adding or changing any T7 file:
 
-    python rig/t7.py --config rig/config.gemini.json
-    python rig/score.py --config rig/config.gemini.json
-    python rig/report.py --config rig/config.gemini.json
+    python rig/t7.py                  # register: count lines, run demos
+    python rig/t7.py --check          # test each step's function on training rows
+    python rig/score.py               # grade every function on the test suite
+    python rig/report.py              # tables and charts, T7 beside T1-T6
+    python rig/t7.py --demo hr 3      # run one step's demo (one command each)
 
 `t7.py` counts new lines per step, runs each file's demo, and replaces
 any earlier T7 rows; `score.py` grades the functions; `report.py` puts
-T7 beside T1-T6 in every table and draws it as a black line.
+T7 beside T1-T6 in every table and draws it as a black line. Register T7
+after the LLM run you will report, since both land in `results/`.
 
-Note: T7 is compared with the LLM run in the same results folder, so
-register it against the config of the run you report (prompt v3:
-`rig/config.gemini.json`).
+**Build one shared codebase.** The grad rubric asks for transfer
+evidence: "a third domain with no transfer numbers (how much old
+machinery did it reuse?)" loses marks. Put anything a second domain can
+reuse in `t7/shared/`; the report's transfer table counts it.
+
+**Commit each step as you finish it, and tag it** (`git tag hr-step3`):
+the spec marks the step-by-step history, derives the new-code histogram
+from tags, and loses marks for "code dumped in one final commit".
 
 ### step01.py: remember
 

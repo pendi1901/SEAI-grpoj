@@ -107,6 +107,12 @@ objective, lower is better.
 | 9 spot | 30 copies of 1,000 rows with 10 injected errors | precision at 20 | about 0.01 |
 | 10 race | 30 runs; race >= 3 strategies, one random, within 50 labels | win rate of the returned winner vs random-50; invalid race = failed | 0.5 |
 
+The last column is the gloss10 "dumb" level. What a *failed* program
+earns differs for choose: 0, not 0.5 (decision A in
+[assessment.md](assessment.md)), so that a crash never outscores a weak
+working answer. Both values live in `rig/contract.py` (`BASELINE` is the
+failure value, `DUMB` the no-effort level).
+
 The three moves behind every Q:
 
 1. pick a dumb rival that costs nothing (random rows, the training

@@ -1,5 +1,9 @@
 # The three domains
 
+**Since Nov 18 every run uses 1,000 rows per data set, picked at random
+with a fixed seed, then split 800 training / 200 test** (lecturer's A23).
+The full sizes below describe the source files.
+
 Data: `github.com/timm/moot`, `optimize/`. Header convention: a name
 starting in upper case is numeric, lower case is symbolic; a trailing
 `-` is a goal to minimise, `+` to maximise; everything else is an x
