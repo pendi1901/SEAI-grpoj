@@ -12,6 +12,19 @@ In every table a number in brackets is a rank. Rank 0 is the best group. Treatme
 
 ![% new code per step](fig/health.png)
 
+### Competency and cost
+
+Competency (lecturer's A23): if a treatment's functions mostly fail, its other numbers say little. 'Beat dumb baseline' counts programs whose Q is above what a no-effort answer earns.
+
+| treatment | programs | demo ran | function worked | beat dumb baseline | new LOC | tokens in | tokens out | cost | clock (min) |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| T1 plain | 10 | 10 | 9 (90%) | 8 (80%) | 560 | 0.04M | 0.01M | $0.02 | 1 |
+| T2 plain+reuse | 10 | 9 | 10 (100%) | 10 (100%) | 538 | 0.04M | 0.01M | $0.02 | 2 |
+| T3 sklearn | 10 | 5 | 4 (40%) | 3 (30%) | 566 | 0.04M | 0.01M | $0.02 | 2 |
+| T4 sklearn+reuse | 10 | 6 | 4 (40%) | 4 (40%) | 503 | 0.04M | 0.01M | $0.02 | 2 |
+| T5 ezr | 10 | 10 | 9 (90%) | 8 (80%) | 423 | 0.09M | 0.01M | $0.03 | 3 |
+| T6 ezr+reuse | 10 | 9 | 9 (90%) | 9 (90%) | 414 | 0.09M | 0.01M | $0.03 | 2 |
+
 ### New lines of code per step (lower is better)
 
 Median over the trials that returned a file; a blank cell means none did. Few lines is only reuse if Q held up: check the next table.
@@ -85,6 +98,19 @@ Z (Q rescaled within each skill; higher is better):
 60 calls; 60 returned a file; 45 were scored without error (the rest earn the failure value).
 
 ![% new code per step](fig/hr.png)
+
+### Competency and cost
+
+Competency (lecturer's A23): if a treatment's functions mostly fail, its other numbers say little. 'Beat dumb baseline' counts programs whose Q is above what a no-effort answer earns.
+
+| treatment | programs | demo ran | function worked | beat dumb baseline | new LOC | tokens in | tokens out | cost | clock (min) |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| T1 plain | 10 | 10 | 9 (90%) | 8 (80%) | 534 | 0.04M | 0.01M | $0.02 | 1 |
+| T2 plain+reuse | 10 | 9 | 8 (80%) | 6 (60%) | 521 | 0.04M | 0.01M | $0.02 | 1 |
+| T3 sklearn | 10 | 7 | 5 (50%) | 5 (50%) | 429 | 0.04M | 0.01M | $0.02 | 1 |
+| T4 sklearn+reuse | 10 | 6 | 7 (70%) | 6 (60%) | 380 | 0.03M | 0.01M | $0.02 | 1 |
+| T5 ezr | 10 | 9 | 8 (80%) | 6 (60%) | 386 | 0.09M | 0.01M | $0.03 | 1 |
+| T6 ezr+reuse | 10 | 9 | 8 (80%) | 6 (60%) | 387 | 0.09M | 0.01M | $0.03 | 1 |
 
 ### New lines of code per step (lower is better)
 
@@ -160,6 +186,19 @@ Z (Q rescaled within each skill; higher is better):
 
 ![% new code per step](fig/process.png)
 
+### Competency and cost
+
+Competency (lecturer's A23): if a treatment's functions mostly fail, its other numbers say little. 'Beat dumb baseline' counts programs whose Q is above what a no-effort answer earns.
+
+| treatment | programs | demo ran | function worked | beat dumb baseline | new LOC | tokens in | tokens out | cost | clock (min) |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| T1 plain | 10 | 10 | 9 (90%) | 9 (90%) | 499 | 0.04M | 0.01M | $0.02 | 3 |
+| T2 plain+reuse | 10 | 10 | 9 (90%) | 9 (90%) | 453 | 0.04M | 0.01M | $0.02 | 2 |
+| T3 sklearn | 10 | 8 | 7 (70%) | 7 (70%) | 508 | 0.04M | 0.01M | $0.02 | 5 |
+| T4 sklearn+reuse | 10 | 9 | 8 (80%) | 6 (60%) | 446 | 0.04M | 0.01M | $0.02 | 2 |
+| T5 ezr | 10 | 10 | 8 (80%) | 6 (60%) | 372 | 0.09M | 0.01M | $0.03 | 3 |
+| T6 ezr+reuse | 10 | 6 | 7 (70%) | 6 (60%) | 383 | 0.09M | 0.01M | $0.03 | 6 |
+
 ### New lines of code per step (lower is better)
 
 Median over the trials that returned a file; a blank cell means none did. Few lines is only reuse if Q held up: check the next table.
@@ -229,6 +268,17 @@ Z (Q rescaled within each skill; higher is better):
 | T6 ezr+reuse | 10 | -0.69 | 0.79 | 1 |
 
 ## All domains together
+
+### Competency and cost
+
+| treatment | programs | demo ran | function worked | beat dumb baseline | new LOC | tokens in | tokens out | cost | clock (min) |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| T1 plain | 30 | 30 | 27 (90%) | 25 (83%) | 1593 | 0.12M | 0.02M | $0.06 | 6 |
+| T2 plain+reuse | 30 | 28 | 27 (90%) | 25 (83%) | 1512 | 0.11M | 0.02M | $0.06 | 4 |
+| T3 sklearn | 30 | 20 | 16 (53%) | 15 (50%) | 1503 | 0.12M | 0.02M | $0.06 | 8 |
+| T4 sklearn+reuse | 30 | 21 | 19 (63%) | 16 (53%) | 1329 | 0.11M | 0.02M | $0.06 | 6 |
+| T5 ezr | 30 | 29 | 25 (83%) | 20 (66%) | 1181 | 0.27M | 0.02M | $0.10 | 8 |
+| T6 ezr+reuse | 30 | 24 | 24 (80%) | 21 (70%) | 1184 | 0.27M | 0.02M | $0.09 | 9 |
 
 Z is computed within each (domain, skill), then pooled.
 

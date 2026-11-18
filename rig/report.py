@@ -167,7 +167,7 @@ def overall(calls, key, big, fmt):
   return table(["treatment", "n", "median", "sd", "rank"], rows)
 
 
-def figure(calls, domain, path, human=None):
+def figure(calls, domain, path):
   "The histogram of the spec: x = step, y = % new code, a line per treatment."
   import matplotlib
   matplotlib.use("Agg")
@@ -178,12 +178,10 @@ def figure(calls, domain, path, human=None):
     for c in calls:
       if c["treatment"] == t and c["new_lines"]: by[c["step"]].append(c["pct_new"])
     xs = sorted(by)
-    ax.plot(xs, [st.median(by[x]) for x in xs], marker="o", ms=3,
-            ls="-" if run_reuse(calls, t) else "--", label=NAMES.get(t, t))
-  if human:
-    xs = sorted(human)
-    ax.plot(xs, [human[x] for x in xs], color="black", lw=2, marker="s",
-            ms=4, label=NAMES["7"])
+    style = (dict(color="black", lw=2, marker="s", ms=4) if t == "7" else
+             dict(marker="o", ms=3, ls="-" if run_reuse(calls, t) else "--"))
+    ax.plot(xs, [st.median(by[x]) for x in xs], label=NAMES.get(t, t),
+            **style)
   ax.set(xlabel="step", ylabel="% new code (median over trials)",
          title=domain, ylim=(0, 105))
   ax.legend(fontsize=7, ncol=2)
@@ -197,18 +195,40 @@ def run_reuse(calls, t):
   return any(c["reuse"] == "1" for c in calls if c["treatment"] == t)
 
 
-def human_line(root, domain):
-  """Treatment 7, if results/t7.csv exists: columns domain,step,new_lines.
-  One hand-written run, so it is a reference line, not a distribution."""
-  p = root / "results" / "t7.csv"
-  if not p.exists(): return None
-  rows = [r for r in csv.DictReader(open(p, encoding="utf8"))
-          if r["domain"] == domain]
-  tot, out = 0, {}
-  for r in sorted(rows, key=lambda r: int(r["step"])):
-    tot += int(r["new_lines"])
-    out[int(r["step"])] = 100 * int(r["new_lines"]) / tot
-  return out or None
+def cost_table(calls, cfg):
+  """The lecturer's talk numbers (A28) and competency numbers (A23), one
+  row per treatment: did the code work, and what did it cost?"""
+  from contract import BASELINE
+  rows = []
+  for t in sorted({c["treatment"] for c in calls}):
+    cs = [c for c in calls if c["treatment"] == t]
+    n = len(cs)
+    worked = sum(c["status"] == "ok" for c in cs)
+    beat = sum(c["q"] is not None and c["q"] > BASELINE[c["skill"]] + 1e-9
+               for c in cs)
+    tin = sum(int(c.get("prompt_tokens") or 0) for c in cs)
+    tout = sum(int(c.get("reply_tokens") or 0) for c in cs)
+    usd = 0.0
+    for c in cs:
+      b = cfg["backends"].get(c.get("backend", ""), {})
+      usd += (int(c.get("prompt_tokens") or 0) * b.get("price_in_per_m", 0)
+              + int(c.get("reply_tokens") or 0) * b.get("price_out_per_m", 0)
+              ) / 1e6
+    if t == "7":
+      hm = [float(c["human_minutes"]) for c in cs if c.get("human_minutes")]
+      clock = f"{sum(hm):.0f} (human)" if hm else "not logged"
+    else:
+      clock = f"{sum(float(c.get('llm_secs') or 0) + float(c.get('run_secs') or 0) for c in cs) / 60:.0f}"
+    loc = sum(c["new_lines"] or 0 for c in cs)
+    rows.append([NAMES.get(t, t), n, f"{sum(c.get('ran_ok') == '1' for c in cs)}",
+                 f"{worked} ({100 * worked // max(n, 1)}%)",
+                 f"{beat} ({100 * beat // max(n, 1)}%)", loc,
+                 f"{tin / 1e6:.2f}M" if tin else "0",
+                 f"{tout / 1e6:.2f}M" if tout else "0",
+                 f"${usd:.2f}", clock])
+  return table(["treatment", "programs", "demo ran", "function worked",
+                "beat dumb baseline", "new LOC", "tokens in", "tokens out",
+                "cost", "clock (min)"], rows)
 
 
 def main():
@@ -237,13 +257,18 @@ def main():
            "report a difference. Read per-step ranks as provisional.", ""]
   for dom in sorted({c["domain"] for c in calls}):
     cs = [c for c in calls if c["domain"] == dom]
-    figure(cs, dom, out_dir / "fig" / f"{dom}.png", human_line(run.ROOT, dom))
+    figure(cs, dom, out_dir / "fig" / f"{dom}.png")
     wrote = sum(c["got_code"] == "1" for c in cs)
     md += [f"## {dom}", "",
            f"{len(cs)} calls; {wrote} returned a file; "
            f"{sum(c['status'] == 'ok' for c in cs)} were scored without "
            "error (the rest earn the failure value).", "",
            f"![% new code per step](fig/{dom}.png)", "",
+           "### Competency and cost", "",
+           "Competency (lecturer's A23): if a treatment's functions mostly "
+           "fail, its other numbers say little. 'Beat dumb baseline' counts "
+           "programs whose Q is above what a no-effort answer earns.", "",
+           cost_table(cs, cfg), "",
            "### New lines of code per step (lower is better)", "",
            "Median over the trials that returned a file; a blank cell "
            "means none did. Few lines is only reuse if Q held up: check "
@@ -264,6 +289,7 @@ def main():
            "Z (Q rescaled within each skill; higher is better):", "",
            overall(cs, "z", True, f2), ""]
   md += ["## All domains together", "",
+         "### Competency and cost", "", cost_table(calls, cfg), "",
          "Z is computed within each (domain, skill), then pooled.", "",
          overall(calls, "z", True, f2), "", "New lines, pooled:", "",
          overall(calls, "new_lines", False, f1), ""]

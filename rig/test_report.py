@@ -78,7 +78,7 @@ try:
   check("step 4: the reuse treatment wins on new lines",
         rows["T2 plain+reuse"][3].endswith("(0)") and
         rows["T1 plain"][3].endswith("(1)"))
-  ztab = md.split("## All domains together")[1].split("New lines, pooled")[0]
+  ztab = md.split("## All domains together")[1].split("Z is computed")[1]            .split("New lines, pooled")[0]
   first = [l for l in ztab.splitlines() if l.startswith("| T")][0]
   check("pooled Z ranks the better-scoring treatment first",
         first.startswith("| T2") and first.rstrip(" |").endswith("0"))
