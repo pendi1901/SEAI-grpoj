@@ -48,6 +48,11 @@ FIELDS = ("when domain data treatment library reuse trial step skill ask "
 LOCK = threading.Lock()
 
 
+class BackendDown(Exception):
+  """The model could not be reached (network, timeout, server error). Not a
+  result: the call is not logged, so a resumed run makes it again."""
+
+
 def load_config(path=None):
   "Read the config, resolving its paths against the repo root."
   cfg = json.loads(Path(path or RIG / "config.json").read_text("utf8"))
@@ -187,8 +192,11 @@ def call_ollama(b, prompt, seed):
   body = json.dumps(body).encode()
   req = urllib.request.Request(b["url"].rstrip("/") + "/api/generate", body,
                                {"Content-Type": "application/json"})
-  with urllib.request.urlopen(req, timeout=b.get("timeout", 900)) as r:
-    out = json.loads(r.read())
+  try:
+    with urllib.request.urlopen(req, timeout=b.get("timeout", 900)) as r:
+      out = json.loads(r.read())
+  except (OSError, ValueError) as e:
+    raise BackendDown(f"Ollama unreachable: {e}")
   return out.get("response", ""), dict(
     prompt_tokens=out.get("prompt_eval_count", 0),
     reply_tokens=out.get("eval_count", 0),
@@ -218,16 +226,20 @@ def call_gemini(b, prompt, seed):
                      "generationConfig": dict(b.get("options", {}), seed=seed)}
                     ).encode()
   hdr = {"Content-Type": "application/json", "x-goog-api-key": gemini_key(b)}
-  for attempt in range(b.get("retries", 6) + 1):
+  tries = b.get("retries", 6)
+  for attempt in range(tries + 1):
     try:
       req = urllib.request.Request(url, body, hdr)
       with urllib.request.urlopen(req, timeout=b.get("timeout", 300)) as r:
         out = json.loads(r.read())
       break
     except urllib.error.HTTPError as e:
-      if e.code not in (429, 500, 502, 503, 504) or attempt == b.get("retries", 6):
-        raise RuntimeError(f"Gemini HTTP {e.code}: {e.read().decode()[:200]}")
-      time.sleep(min(120, b.get("backoff", 5) * 2 ** attempt))
+      msg = f"Gemini HTTP {e.code}: {e.read().decode()[:200]}"
+      if e.code not in (429, 500, 502, 503, 504): raise BackendDown(msg)
+      if attempt == tries: raise BackendDown(msg)
+    except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
+      if attempt == tries: raise BackendDown(f"Gemini unreachable: {e}")
+    time.sleep(min(120, b.get("backoff", 5) * 2 ** attempt))
   cand = (out.get("candidates") or [{}])[0]
   text = "".join(p.get("text", "") for p in
                  cand.get("content", {}).get("parts", []) if not p.get("thought"))
@@ -257,7 +269,7 @@ def call_llm(cfg, prompt, cwd, seed=0, b=None):
                      encoding="utf8", errors="replace", cwd=cwd,
                      timeout=b.get("timeout", 600))
   if r.returncode != 0:
-    raise RuntimeError(f"backend exit {r.returncode}: {r.stderr[-300:]}")
+    raise BackendDown(f"backend exit {r.returncode}: {r.stderr[-300:]}")
   return r.stdout, time.time() - t, {}
 
 
@@ -350,6 +362,8 @@ def one_call(cfg, domain, tid, trial, step, ask, prior):
       reply, secs2, meta2 = call_llm(cfg, prompt, d, seed, b2)
       (d / "reply2.txt").write_text(reply, "utf8")
       row.update(attempts=2, llm_secs=round(secs + secs2, 1),
+                 prompt_tokens=row["prompt_tokens"]
+                 + meta2.get("prompt_tokens", 0),
                  reply_tokens=row["reply_tokens"]
                  + meta2.get("reply_tokens", 0))
       code = extract_code(reply) or ""
@@ -381,8 +395,8 @@ def one_call(cfg, domain, tid, trial, step, ask, prior):
               (d / name).write_text(code, "utf8")
               row["check_after"] = contract_check(cfg, domain, d, name,
                                                   ask[2])[0]
-          except Exception as e:              # keep the first file
-            row["error"] = f"repair call failed: {type(e).__name__}: {e}"[:300]
+          except BackendDown:
+            raise                             # not a result: redo the step
       new = code_lines(code)
       row.update(got_code=1, new_lines=new, total_lines=prior_total + new,
                  pct_new=round(100 * new / (prior_total + new), 1))
@@ -390,6 +404,10 @@ def one_call(cfg, domain, tid, trial, step, ask, prior):
       row.update(ran_ok=int(ok), run_secs=round(secs, 1))
     else:
       row["error"] = (row["error"] + "; no fenced code in reply").strip("; ")
+  except BackendDown as e:                  # not the model's fault: leave
+    print(f"  {d.relative_to(cfg['runs'])}: {e}", file=sys.stderr)
+    shutil.rmtree(d, ignore_errors=True)    # no trace, so resume redoes it
+    return None
   except Exception as e:                    # a failed call is a logged result
     row["error"] = f"{type(e).__name__}: {e}"[:300]
   log_row(cfg, row)
@@ -445,6 +463,7 @@ def climb(cfg, domain, tid, trial, budget):
         if budget[0] == 0: return
         if budget[0] > 0: budget[0] -= 1
     code = one_call(cfg, domain, tid, trial, step, ask, prior)
+    if code is None: return                 # backend down: stop this climb
     if code: prior.append((f"step{step:02d}.py", code))
 
 
@@ -464,6 +483,7 @@ def cmd_go(cfg, a):
   for d in {d for d, _, _ in todo}:
     if not (ROOT / cfg["domains"][d]["data"]).exists():
       sys.exit(f"{cfg['domains'][d]['data']} is missing: run fetch")
+  for d in {d for d, _, _ in todo}: split(cfg, d)   # once, before threads
   print(f"{len(todo)} climbs, backend={cfg['backend']}, workers={a.workers}")
   with ThreadPoolExecutor(a.workers) as ex:
     for f in [ex.submit(climb, cfg, *c, budget) for c in todo]: f.result()

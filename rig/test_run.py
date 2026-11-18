@@ -277,6 +277,31 @@ try:
 finally:
   gsrv.shutdown(); shutil.rmtree(tmp, ignore_errors=True)
 
+# -- an unreachable backend leaves no trace, and a resume redoes the step
+tmp = Path(tempfile.mkdtemp(prefix="rigtest_"))
+try:
+  conf = sandbox(tmp, GOOD)
+  (tmp / "k").write_text("TESTKEY")
+  c = json.loads(conf.read_text())
+  c["backend"] = "gem"
+  c["backends"]["gem"] = dict(api="gemini", model="m", retries=1, backoff=0,
+                              timeout=2, url="http://127.0.0.1:9",
+                              key_file=str(tmp / "k"))
+  conf.write_text(json.dumps(c))
+  r = go(conf, "--treatments", "1", "--trials", "1")
+  check("backend down: nothing logged as a model failure",
+        not (tmp / "calls.csv").exists())
+  check("backend down: no half-made step folder is left behind",
+        not (tmp / "runs/toy/t1/trial01/step01").exists())
+  check("backend down: the reason is reported", "unreachable" in r.stderr)
+  c["backend"] = "mock"
+  conf.write_text(json.dumps(c))
+  go(conf, "--treatments", "1", "--trials", "1")
+  check("after the backend returns, a resume completes the climb",
+        len(rows(tmp)) == 3)
+finally:
+  shutil.rmtree(tmp, ignore_errors=True)
+
 # -- the real requirements docs parse ---------------------------------
 cfg = run.load_config()
 for dom in cfg["domains"]:
