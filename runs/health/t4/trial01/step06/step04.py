@@ -1,0 +1,63 @@
+import csv
+
+def flow(header, row, seen):
+    """
+    Decides if the current row is 'good enough' to ship.
+    We define 'good enough' as being in the top 5% of the expected 
+    distribution based on the Pareto-like logic from step01.
+    """
+    idx_mre = header.index('MRE-')
+    idx_acc = header.index('ACC+')
+    idx_pred = header.index('PRED40+')
+
+    def get_score(r):
+        # Normalize goals: (1 - MRE) + ACC + PRED
+        return (1.0 - r[idx_mre]) + r[idx_acc] + r[idx_pred]
+
+    current_score = get_score(row)
+    
+    # If this is the first row, we can't compare yet
+    if not seen:
+        return False
+    
+    # Calculate scores of all seen rows
+    seen_scores = [get_score(r) for r in seen]
+    
+    # Threshold: Is this row better than 95% of what we've seen so far?
+    # We use a dynamic threshold based on the history.
+    seen_scores.sort(reverse=True)
+    limit_idx = max(0, int(len(seen_scores) * 0.05))
+    
+    # If the current score is better than the top 5% of seen rows, ship it.
+    if current_score >= seen_scores[limit_idx]:
+        return True
+    
+    return False
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed = []
+            for i, val in enumerate(row):
+                if header[i] in ['MRE-', 'ACC+', 'PRED40+', 'N_estimators', 'Min_sample_leaves', 'Min_impurity_decrease', 'Max_depth']:
+                    processed.append(float(val))
+                else:
+                    processed.append(val)
+            rows.append(processed)
+
+    seen = []
+    shipped = False
+    for i, row in enumerate(rows):
+        if flow(header, row, seen):
+            print(f"Shipping configuration found at row {i}!")
+            print(f"Row data: {row}")
+            shipped = True
+            break
+        seen.append(row)
+    
+    if not shipped:
+        print("No configuration met the shipping criteria.")

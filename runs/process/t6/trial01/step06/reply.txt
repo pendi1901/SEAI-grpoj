@@ -1,0 +1,62 @@
+```python
+import ezr
+import step01
+import step02
+
+def justify(header, rows, row):
+    """
+    Returns (p, reason): p is the fraction of rows that 'row' is better than,
+    and reason is a one-sentence explanation.
+    """
+    # Create a table to handle normalization and goal distance calculations
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Estimate the goals for the input row using the tree-based ranker
+    # We use the training data (all rows) to build the model
+    ranker_func = ezr.ranker(tbl)
+    
+    # The ranker returns the expected ydist (lower is better)
+    # We need to estimate the goals for the input row.
+    # Since the input row has '?' for goals, we use the leaf mean from the tree.
+    node = ezr.leaf(ezr.tree(tbl, tbl.rows), row)
+    estimated_ydist = node.mu
+    
+    # Calculate ydist for all known rows
+    all_ydists = [ezr.ydist(tbl, r) for r in rows]
+    
+    # Calculate p: fraction of rows that are worse (have higher ydist) than our estimate
+    # A row is better if its ydist is lower.
+    better_than_count = sum(1 for d in all_ydists if d > estimated_ydist)
+    p = better_than_count / len(all_ydists)
+    
+    # Construct the reason
+    # Identify the most influential column (the one at the root of the tree)
+    root = ezr.tree(tbl, tbl.rows)
+    reason = (f"This configuration is in the top {int((1-p)*100)}% of all possible setups "
+              f"because it satisfies the criteria defined by the primary split on "
+              f"'{header[root.at]}' in our decision model.")
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    
+    try:
+        header = next(data_gen)
+        rows = list(data_gen)
+    except StopIteration:
+        exit(1)
+        
+    # Pick a sample row and hide its goals to test the justification
+    test_row = rows[0][:]
+    test_row[9] = test_row[10] = test_row[11] = "?"
+    
+    p, reason = justify(header, rows, test_row)
+    
+    print(f"Justification for configuration:")
+    print(f"Rank: Better than {p:.2%} of all configurations.")
+    print(f"Reason: {reason}")
+    
+    exit(0)
+```

@@ -1,0 +1,65 @@
+import csv
+import random
+import step01
+
+def choose(header, rows, label):
+    """
+    Finds the best row by sampling 50 rows, labeling them, 
+    and returning the index of the one with the highest score.
+    """
+    # Identify goal indices
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    
+    # Randomly sample 50 indices
+    sample_size = min(50, len(rows))
+    indices = random.sample(range(len(rows)), sample_size)
+    
+    best_idx = -1
+    best_score = float('-inf')
+    
+    for idx in indices:
+        # Get true values via label()
+        true_goals = label(idx)
+        
+        # Calculate score: sum of '+' goals minus sum of '-' goals
+        score = 0
+        goal_ptr = 0
+        for i, name in enumerate(header):
+            if name.endswith('+'):
+                score += true_goals[goal_ptr]
+                goal_ptr += 1
+            elif name.endswith('-'):
+                score -= true_goals[goal_ptr]
+                goal_ptr += 1
+        
+        if score > best_score:
+            best_score = score
+            best_idx = idx
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    # Prepare the label function for the harness
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    
+    def label(i):
+        return [rows[i][idx] for idx in goal_indices]
+    
+    best_index = choose(header, rows, label)
+    
+    print(f"Analysis complete. The best working arrangement found is at row index {best_index}.")
+    print("This selection was determined by sampling 50 records to maximize tenure goals.")

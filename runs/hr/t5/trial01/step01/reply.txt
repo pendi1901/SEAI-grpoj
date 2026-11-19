@@ -1,0 +1,50 @@
+```python
+import ezr
+import random
+
+def remember(header, rows):
+    """
+    Finds the best rows based on the goals defined in the header.
+    - Columns ending in '-' are minimized.
+    - Columns ending in '+' are maximized.
+    - We return the top 5% of rows based on ydist.
+    """
+    # Create a table object to leverage ezr's goal handling
+    # We construct the table using the provided header and rows
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate ydist for all rows. 
+    # ydist measures how far a row is from the ideal goal values.
+    # Lower ydist is better.
+    scored_rows = []
+    for i, row in enumerate(rows):
+        score = ezr.ydist(tbl, row)
+        scored_rows.append((score, i))
+    
+    # Sort by score (ascending, as lower ydist is better)
+    scored_rows.sort(key=lambda x: x[0])
+    
+    # Return the top 5% of rows (at least 1)
+    limit = max(1, int(len(rows) * 0.05))
+    return [item[1] for item in scored_rows[:limit]]
+
+if __name__ == "__main__":
+    # Load the data
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Get the best rows
+    best_indices = remember(header, rows)
+    
+    print(f"Found {len(best_indices)} top-performing employee records.")
+    print("Top employee indices:", best_indices)
+    
+    # Print a summary of the first best row found
+    best_row = rows[best_indices[0]]
+    print("\nExample of a top-performing employee record:")
+    for name, val in zip(header, best_row):
+        if name.endswith('+') or name.endswith('-') or name == 'attrition':
+            print(f"  {name}: {val}")
+```

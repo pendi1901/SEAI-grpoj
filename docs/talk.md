@@ -23,10 +23,10 @@ the repo.
 | 1 | The bet | Both hypotheses, verbatim, and their win conditions, as pre-registered. One line: three clients, seven treatments. | `docs/brief.md` section 3 |
 | 2 | Set-up | Three domains (agile process, project health, staff retention), 1,000 random rows each, 80/20 split, one shared test suite. The seven treatments as a 3 x 2 grid plus T7. Model, fresh call per step, N. | `docs/brief.md`, `rig/README.md` |
 | 3 | What it cost (A28) | One table, all seven treatments: programs, functions that work, beat the dumb baseline, new LOC, tokens, dollars, clock time. | report: "Competency and cost", all domains |
-| 4 | Is the model competent? (A23) | Functions that work, per treatment, as a bar chart. The earlier Ollama run (45%) against Gemini (77%) as the reason for switching (`docs/archive/`). | report: competency columns; `results/report.md`; `docs/archive/results-gemini-n1.md` for the earlier run |
+| 4 | Is the model competent? (A23) | Functions that work, per treatment, as a bar chart. Earlier local Ollama runs worked far worse, the reason for switching to Gemini. | report: competency columns; `results/report.md` |
 | 5 | New code, seven ways | Bar chart of median new lines per step per treatment, labelled with `same` ranks. | report: "New lines, pooled" |
 | 6 | Quality, seven ways (gloss6) | Per-skill table across T1-T7 as a heatmap: mean Q and rank per cell. "Treatments that share a rank are not distinguishable." | report: "Per skill, on the test suite" |
-| 7 | Verdict so far, and next | Which hypothesis the evidence leans to, per domain and overall; the % new code artefact in one line; the decision (persevere / re-plan / descope) and what runs next. | `results/report.md`; `docs/archive/results-gemini-n1.md` for the earlier run |
+| 7 | Verdict so far, and next | Which hypothesis the evidence leans to, per domain and overall; the % new code artefact in one line; the decision (persevere / re-plan / descope) and what runs next. | `results/report.md` |
 
 Optional eighth slide only if time allows: one failure worth showing
 (for example, the scikit-learn programs that never encoded text

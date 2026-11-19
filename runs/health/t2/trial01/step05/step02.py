@@ -1,0 +1,78 @@
+import csv
+import step01
+
+def guess(header, train, test):
+    """
+    Estimates the first goal (MRE-) for each test row using a 
+    k-Nearest Neighbors approach based on Euclidean distance of 
+    input features.
+    """
+    # Identify input columns (those not ending in - or +)
+    input_indices = [
+        i for i, name in enumerate(header) 
+        if not (name.endswith('-') or name.endswith('+'))
+    ]
+    
+    # Identify the target column (first goal)
+    target_idx = 0 
+    
+    # Pre-calculate ranges for normalization of inputs
+    ranges = []
+    for i in input_indices:
+        col = [r[i] for r in train if isinstance(r[i], (int, float))]
+        if col:
+            ranges.append((i, min(col), max(col)))
+        else:
+            ranges.append((i, 0, 1)) # Default for symbolic/constant
+
+    def dist(row1, row2):
+        d = 0
+        for i, min_v, max_v in ranges:
+            v1, v2 = row1[i], row2[i]
+            if isinstance(v1, str):
+                d += 0 if v1 == v2 else 1
+            else:
+                d += ((v1 - v2) / (max_v - min_v + 1e-9))**2
+        return d**0.5
+
+    predictions = []
+    for t_row in test:
+        # Find 3 nearest neighbors
+        distances = sorted([(dist(t_row, train_row), train_row[target_idx]) 
+                            for train_row in train])
+        # Return average of top 3 neighbors
+        k = 3
+        avg = sum(d[1] for d in distances[:k]) / k
+        predictions.append(avg)
+        
+    return predictions
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed_row = []
+                for i, val in enumerate(row):
+                    if header[i] in ['MRE-', 'ACC+', 'PRED40+', 'N_estimators', 
+                                     'Min_sample_leaves', 'Min_impurity_decrease', 'Max_depth']:
+                        processed_row.append(float(val))
+                    else:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        # Split: use first 700 for training, next 100 for testing
+        train_data = rows[:700]
+        test_data = [[r[0] if i > 0 else "?" for i, r in enumerate(row)] for row in rows[700:800]]
+        
+        results = guess(header, train_data, test_data)
+        
+        print("Forecast estimation complete.")
+        print(f"Estimated MRE- for the first 5 test cases: {[round(x, 4) for x in results[:5]]}")
+        
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

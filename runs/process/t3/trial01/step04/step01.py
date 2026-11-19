@@ -1,0 +1,84 @@
+import csv
+
+def remember(header, rows):
+    """
+    Identifies rows that perform well across all goal columns.
+    Goals ending in '-' are minimized, goals ending in '+' are maximized.
+    Uses a simple Pareto-based approach: a row is 'good' if it has 
+    low values for '-' goals and high values for '+' goals.
+    """
+    # Identify goal columns and their indices
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('-') or name.endswith('+')]
+    
+    # Extract goal data
+    goal_data = []
+    for row in rows:
+        goal_data.append([row[i] for i in goal_indices])
+    
+    # Calculate min/max for normalization
+    num_goals = len(goal_indices)
+    mins = [min(row[i] for row in goal_data) for i in range(num_goals)]
+    maxs = [max(row[i] for row in goal_data) for i in range(num_goals)]
+    
+    # Calculate a score for each row
+    # Score = average of normalized goal values
+    # For '-', (max - val) / (max - min)
+    # For '+', (val - min) / (max - min)
+    scores = []
+    for r_idx, row in enumerate(goal_data):
+        row_score = 0
+        for i in range(num_goals):
+            col_name = header[goal_indices[i]]
+            val = row[i]
+            denom = maxs[i] - mins[i]
+            if denom == 0:
+                norm = 0
+            else:
+                if col_name.endswith('-'):
+                    norm = (maxs[i] - val) / denom
+                else:
+                    norm = (val - mins[i]) / denom
+            row_score += norm
+        scores.append((row_score / num_goals, r_idx))
+    
+    # Sort by score descending
+    scores.sort(key=lambda x: x[0], reverse=True)
+    
+    # Select top 5% (or at least one)
+    n_rows = len(rows)
+    k = max(1, int(n_rows * 0.05))
+    
+    top_indices = [item[1] for item in scores[:k]]
+    return sorted(top_indices)
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed_row = []
+                for val in row:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        best_indices = remember(header, rows)
+        
+        print(f"Found {len(best_indices)} top-performing setups.")
+        print("Indices of the best rows (0-based):")
+        print(best_indices)
+        
+        print("\nSummary of best rows:")
+        goal_indices = [i for i, name in enumerate(header) if name.endswith('-') or name.endswith('+')]
+        for idx in best_indices:
+            goal_vals = {header[i]: rows[idx][i] for i in goal_indices}
+            print(f"Row {idx}: {goal_vals}")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

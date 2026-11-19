@@ -1,0 +1,67 @@
+```python
+import csv
+import step01
+
+def blame(header, rows):
+    """
+    Identifies input columns that correlate with the 'worst' rows.
+    Worst rows are defined as the bottom 10% based on the sum of goal columns.
+    We return the names of the top 3 input columns that have the highest 
+    absolute difference in mean between the 'worst' group and the rest.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    input_indices = [i for i, name in enumerate(header) if i not in goal_indices]
+    
+    # Calculate scores for all rows
+    scored = []
+    for idx, row in enumerate(rows):
+        # Normalize: for '+', higher is better; for '-', lower is better.
+        # Since we want 'worst', we invert '-' goals.
+        score = 0
+        for i in goal_indices:
+            val = row[i]
+            if header[i].endswith('-'):
+                score -= val
+            else:
+                score += val
+        scored.append((score, row))
+    
+    scored.sort(key=lambda x: x[0])
+    
+    # Bottom 10% are the 'worst'
+    limit = max(1, len(rows) // 10)
+    worst = [x[1] for x in scored[:limit]]
+    others = [x[1] for x in scored[limit:]]
+    
+    diffs = []
+    for i in input_indices:
+        # Only consider numeric input columns for correlation
+        if isinstance(rows[0][i], (int, float)):
+            w_mean = sum(r[i] for r in worst) / len(worst)
+            o_mean = sum(r[i] for r in others) / len(others)
+            diffs.append((abs(w_mean - o_mean), header[i]))
+    
+    # Return top 3 columns that differentiate the worst rows
+    diffs.sort(key=lambda x: x[0], reverse=True)
+    return [d[1] for d in diffs[:3]]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    results = blame(header, rows)
+    print("Factors explaining short employee tenure:")
+    for col in results:
+        print(f"- {col}")
+```

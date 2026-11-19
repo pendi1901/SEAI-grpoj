@@ -1,0 +1,64 @@
+```python
+import csv
+from step05 import blame
+
+def fix(header, row, levers):
+    """
+    Identifies the most impactful levers to adjust to improve a 'bad' row.
+    We prioritize changing the columns identified by 'blame' as the primary
+    drivers of poor performance (specifically for 'Idle-').
+    """
+    # Load the full dataset to determine what "good" looks like
+    filename = 'pom3a.n1000.train.csv'
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header_csv = next(reader)
+        rows = [[float(x) for x in r] for r in reader]
+
+    # Identify the columns that cause the most idleness
+    drivers = blame(header_csv, rows)
+    
+    recommendations = {}
+    for driver in drivers:
+        if driver in levers:
+            # For numeric levers, we want to move away from the 'worst' direction.
+            # Since blame() identifies what makes Idle- high, we adjust in the 
+            # opposite direction of the mean difference.
+            low, high = levers[driver]
+            # Simple heuristic: move towards the center or the opposite extreme
+            # to mitigate the negative impact.
+            recommendations[driver] = (low + high) / 2
+            break # Only need to change one lever as per instructions
+            
+    return recommendations
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [[float(x) for x in r] for r in reader]
+        
+        # Define levers based on the problem domain (numeric inputs)
+        # We allow changing Plan and Team Size as they are common project levers.
+        levers = {
+            'Plan': (0.0, 1.0),
+            'Team Size': (0.0, 1.0),
+            'Size': (0.0, 1.0)
+        }
+        
+        # Pick a 'bad' row (e.g., one with high Idle-)
+        idle_idx = header.index('Idle-')
+        bad_row = max(rows, key=lambda r: r[idle_idx])
+        
+        suggestion = fix(header, bad_row, levers)
+        
+        print("To rescue the project from being over budget and idle:")
+        for col, val in suggestion.items():
+            print(f"Adjust '{col}' to {val:.2f}.")
+        exit(0)
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
+```

@@ -1,0 +1,75 @@
+```python
+import ezr
+import random
+
+def choose(header, rows, label):
+    """
+    Find the best row by using the acquire strategy to intelligently
+    sample the search space within a budget of 50 labels.
+    """
+    # Create a table object for the data.
+    # Note: The input 'rows' contains '?' for goals. 
+    # ezr.Tbl will process these as strings/unknowns, which is fine for 
+    # xdist calculations, but we must ensure we don't try to add '?' to 
+    # numeric columns in a way that crashes.
+    data = [header] + rows
+    tbl = ezr.Tbl(data)
+    
+    # We need to track the best row found during the labeling process.
+    best_idx = -1
+    best_dist = float('inf')
+    
+    # We need to map the row objects back to their original indices.
+    # Since the label function expects an index, we use a dictionary.
+    row_to_idx = {id(row): i for i, row in enumerate(rows)}
+    
+    def oracle_wrapper(row):
+        nonlocal best_idx, best_dist
+        idx = row_to_idx[id(row)]
+        true_row = label(idx)
+        
+        # Update the table with the revealed row to improve future acquisition
+        # We replace the '?' with the true values
+        rows[idx] = true_row
+        ezr.addCols(tbl, true_row)
+        
+        # Evaluate quality
+        dist = ezr.ydist(tbl, true_row)
+        if dist < best_dist:
+            best_dist = dist
+            best_idx = idx
+        return true_row
+
+    # Run the acquisition process
+    # We set the budget to 50 as requested.
+    ezr.the.Stop = 50
+    ezr.acquire(tbl, cap=50, label=oracle_wrapper)
+    
+    return best_idx
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    rows_iter = ezr.csv(filename)
+    header = next(rows_iter)
+    all_rows = list(rows_iter)
+    
+    # Create a local copy of rows with hidden goals for the simulation
+    hidden_rows = []
+    for row in all_rows:
+        new_row = list(row)
+        for i, name in enumerate(header):
+            if name[-1] in "+-":
+                new_row[i] = "?"
+        hidden_rows.append(new_row)
+        
+    def label_func(i):
+        return all_rows[i]
+    
+    best_index = choose(header, hidden_rows, label_func)
+    
+    print(f"Optimization complete.")
+    print(f"The best configuration found is at index: {best_index}")
+    print(f"Row data: {all_rows[best_index]}")
+    
+    exit(0)
+```

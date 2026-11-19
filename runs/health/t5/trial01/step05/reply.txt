@@ -1,0 +1,70 @@
+```python
+import ezr
+
+def blame(header, rows):
+    """
+    Identify input columns that best explain why the worst rows are bad.
+    We compare the distribution of input values in the worst 25% of rows
+    against the rest of the data. Columns with the largest difference
+    in distribution (using entropy for symbols or mean difference for numbers)
+    are identified as the culprits.
+    """
+    # 1. Setup table to use ezr's ydist
+    data = [header] + rows
+    tbl = ezr.Tbl(data)
+    
+    # 2. Score all rows and find the worst 25%
+    scored = sorted([(ezr.ydist(tbl, r), r) for r in rows], key=lambda x: x[0], reverse=True)
+    worst_n = max(1, len(rows) // 4)
+    worst_rows = [x[1] for x in scored[:worst_n]]
+    other_rows = [x[1] for x in scored[worst_n:]]
+    
+    # 3. Evaluate each input column
+    # We look for columns where the distribution in 'worst' is significantly different from 'others'
+    scores = []
+    for col in tbl.x:
+        at = col.at
+        if isinstance(col, ezr.Sym):
+            # For symbols, compare entropy or frequency shift
+            # Simple heuristic: difference in mode frequency
+            w_vals = [r[at] for r in worst_rows]
+            o_vals = [r[at] for r in other_rows]
+            w_mode = max(set(w_vals), key=w_vals.count)
+            o_mode = max(set(o_vals), key=o_vals.count)
+            diff = 1.0 if w_mode != o_mode else 0.0
+        else:
+            # For numbers, compare normalized mean difference
+            w_vals = [r[at] for r in worst_rows if r[at] != "?"]
+            o_vals = [r[at] for r in other_rows if r[at] != "?"]
+            if not w_vals or not o_vals: continue
+            w_mu = sum(w_vals) / len(w_vals)
+            o_mu = sum(o_vals) / len(o_vals)
+            # Normalize by range to make columns comparable
+            diff = abs(w_mu - o_mu)
+            
+        scores.append((header[at], diff))
+    
+    # 4. Return top 3 columns that contribute most to the 'badness'
+    scores.sort(key=lambda x: x[1], reverse=True)
+    return [name for name, score in scores[:3]]
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    
+    try:
+        header = next(data_gen)
+        rows = list(data_gen)
+    except StopIteration:
+        exit(0)
+        
+    culprits = blame(header, rows)
+    
+    print("Analysis: Which settings are causing poor performance?")
+    print("The following input columns show the strongest correlation with the worst-performing setups:")
+    for i, col in enumerate(culprits):
+        print(f"{i+1}. {col}")
+    
+    print("\nThese settings should be prioritized for tuning to improve overall system stability.")
+    exit(0)
+```

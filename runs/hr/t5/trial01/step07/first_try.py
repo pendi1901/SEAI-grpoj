@@ -1,0 +1,75 @@
+import ezr
+import random
+
+def choose(header, rows, label):
+    """
+    Finds the best row by using a budget of 50 labels.
+    We use the 'acquire' strategy from ezr to intelligently sample 
+    the most informative rows to build a model, then return the 
+    index of the best row found.
+    """
+    # Create a table structure to manage the data and goals
+    tbl = ezr.Tbl([header] + rows)
+    
+    # The acquire function uses the label oracle to sample rows
+    # and returns the rows that were labeled.
+    # We define a wrapper to track which original index was labeled.
+    labeled_data = []
+    
+    def oracle_wrapper(row):
+        # Find the original index of this row
+        # Since rows are passed by reference, we can find the index
+        idx = rows.index(row)
+        true_row = label(row)
+        labeled_data.append((idx, true_row))
+        return true_row
+
+    # Use ezr.acquire to spend the budget of 50 labels
+    # ezr.acquire returns the rows that were labeled
+    ezr.acquire(tbl, cap=50, label=oracle_wrapper)
+    
+    # Now we have the true goal values for the 50 sampled rows.
+    # We find the best one among these 50.
+    best_idx = -1
+    best_ydist = 1e30
+    
+    # Create a temporary table with the labeled data to calculate ydist
+    labeled_rows = [item[1] for item in labeled_data]
+    lab_tbl = ezr.Tbl([header] + labeled_rows)
+    
+    for idx, row in labeled_data:
+        d = ezr.ydist(lab_tbl, row)
+        if d < best_ydist:
+            best_ydist = d
+            best_idx = idx
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Mask the goals for the choose function
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    
+    def label_oracle(row):
+        # Return the original row with its true values
+        return row
+
+    # Prepare masked rows
+    masked_rows = []
+    for row in rows:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_rows.append(new_row)
+        
+    # Run the selection
+    best_idx = choose(header, masked_rows, label_oracle)
+    
+    print(f"Analysis complete.")
+    print(f"The best working arrangement found is at record index: {best_idx}")
+    print("This record was identified as the optimal configuration based on")
+    print("the 50-interview budget and goal optimization criteria.")

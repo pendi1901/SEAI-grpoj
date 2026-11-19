@@ -1,0 +1,67 @@
+```python
+import csv
+from step02 import guess
+
+def justify(header, rows, row):
+    """
+    Estimates the performance of the given row and compares it against 
+    the existing dataset to justify its quality.
+    """
+    # 1. Estimate the goals for the target row
+    # guess() returns a list of predictions for the first goal (MRE-)
+    # We need to estimate all three goals: MRE-, ACC+, PRED40+
+    # Since step02 only estimates the first, we adapt the logic:
+    
+    def get_score(r):
+        # Handle "?" by using the model prediction
+        # For simplicity in this context, we use the model to predict MRE-
+        # and assume a baseline or relative comparison for others
+        mre = guess(header, rows, [row])[0]
+        # For ACC+ and PRED40+, we use the average of the dataset as a proxy
+        # since we are only asked to justify the row's relative standing
+        acc = sum(r[header.index('ACC+')] for r in rows) / len(rows)
+        pred = sum(r[header.index('PRED40+')] for r in rows) / len(rows)
+        return (1.0 - mre) + acc + pred
+
+    target_score = get_score(row)
+    
+    # 2. Calculate scores for all rows
+    def calculate_row_score(r):
+        mre = r[header.index('MRE-')]
+        acc = r[header.index('ACC+')]
+        pred = r[header.index('PRED40+')]
+        return (1.0 - mre) + acc + pred
+
+    all_scores = [calculate_row_score(r) for r in rows]
+    
+    # 3. Calculate fraction of rows that are worse
+    better_than = [s for s in all_scores if target_score > s]
+    p = len(better_than) / len(all_scores)
+    
+    reason = f"This configuration outperforms {p:.1%} of all known setups based on its predicted aggregate performance metrics."
+    
+    return (p, reason)
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed = []
+            for i, val in enumerate(row):
+                if header[i] in ['MRE-', 'ACC+', 'PRED40+', 'N_estimators', 'Min_sample_leaves', 'Min_impurity_decrease', 'Max_depth']:
+                    processed.append(float(val))
+                else:
+                    processed.append(val)
+            rows.append(processed)
+
+    # Pick a sample row and mask its goals
+    sample_row = list(rows[0])
+    masked_row = ["?" if i < 3 else val for i, val in enumerate(sample_row)]
+    
+    p, reason = justify(header, rows, masked_row)
+    print(f"Score: {p:.4f}")
+    print(f"Reason: {reason}")
+```

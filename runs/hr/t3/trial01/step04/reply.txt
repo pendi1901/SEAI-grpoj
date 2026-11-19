@@ -1,0 +1,65 @@
+```python
+import csv
+
+def flow(header, row, seen):
+    """
+    Decides if the current employee needs a 'what would keep you here' conversation.
+    We target employees who have high potential but might be at risk.
+    Strategy: If the employee has been at the company for a long time (top 10% of seen)
+    but has a low 'JobSatisfaction' (<= 2), we flag them for a conversation.
+    """
+    # Indices for decision making
+    years_idx = header.index('YearsAtCompany+')
+    sat_idx = header.index('JobSatisfaction')
+    
+    # If this is the first row, we can't compare, so let it go
+    if not seen:
+        return False
+    
+    # Get current values
+    current_years = row[years_idx]
+    current_sat = row[sat_idx]
+    
+    # Calculate threshold from seen data (top 10% of years)
+    seen_years = [r[years_idx] for r in seen]
+    seen_years.sort(reverse=True)
+    limit = max(1, int(len(seen_years) * 0.10))
+    threshold = seen_years[limit - 1]
+    
+    # Criteria: High tenure (top 10%) AND low satisfaction (<= 2)
+    # This identifies "stagnant" or "disengaged" long-term employees
+    if current_years >= threshold and current_sat <= 2:
+        return True
+    
+    return False
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    # Simulate the arrival process
+    seen = []
+    flagged_count = 0
+    for row in rows:
+        if flow(header, row, seen):
+            flagged_count += 1
+        seen.append(row)
+        
+    print(f"Analysis complete.")
+    print(f"Total employees processed: {len(rows)}")
+    print(f"Employees flagged for 'what would keep you here' conversation: {flagged_count}")
+    print("Logic: Flagged employees with top 10% tenure but low job satisfaction (<= 2).")
+```

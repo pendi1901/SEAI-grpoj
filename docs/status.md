@@ -8,11 +8,10 @@
 The tooling is complete and tested: it runs treatments 1 to 6 on Gemini,
 registers the hand-written treatment 7, scores every program on one
 held-out test suite, and reports competency, cost and the `same`
-comparison of all seven. Two earlier full runs (Ollama, then Gemini)
-shaped it; their outputs were cleared on Nov 18 to start afresh and are
-kept at the git tag `archive/first-runs`. **Nothing has been run on the
-current set-up yet, and treatment 7 has not been started.** About $0.50
-of API credit has been spent so far.
+comparison of all seven. **The Gemini N = 1 run (prompt v3, Nov 18) is
+in `results/` and `runs/`**: 169 of 180 functions worked, about $0.60,
+about 12 minutes. Earlier runs were deleted. **Treatment 7 has not been
+started.**
 
 ## What is in the repo
 
@@ -21,7 +20,7 @@ of API credit has been spent so far.
 | `docs/` | the spec digest, lecturer notes, assessment sheet, stats, requirements drafts, open questions, talk plan, AI-use log, this file |
 | `rig/` | runner, scorer, report, T7 registration, one config, tests (4 suites, all passing) |
 | `t7/` | instructions and the exact contract for the hand-written skills; no code yet |
-| `docs/archive/` | the first plan and the two earlier runs' write-ups |
+| `docs/archive/` | the first plan (Nov 16) |
 
 ## Every instruction, checked
 

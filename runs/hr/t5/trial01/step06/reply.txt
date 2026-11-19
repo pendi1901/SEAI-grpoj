@@ -1,0 +1,59 @@
+```python
+import ezr
+import random
+
+def justify(header, rows, row):
+    """
+    Returns (p, reason): p is the fraction of rows that 'row' is better than,
+    and reason is a sentence explaining why.
+    """
+    # Create a table to handle goal logic
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Build a model to estimate the goal performance (ydist) of the input row
+    # We use the tree-based ranker to estimate the ydist of the target row
+    ranker = ezr.ranker(tbl)
+    
+    # Estimate the ydist for the target row
+    # Since row's goals are '?', we use the model to predict its performance
+    estimated_ydist = ranker(row)
+    
+    # Calculate ydist for all existing rows
+    all_ydists = [ezr.ydist(tbl, r) for r in rows]
+    
+    # Calculate p: fraction of rows that are worse than our estimated row
+    # (i.e., have a higher ydist)
+    better_than_count = sum(1 for y in all_ydists if y > estimated_ydist)
+    p = better_than_count / len(rows)
+    
+    # Construct a reason based on the tree leaf
+    leaf = ezr.leaf(ezr.tree(tbl, rows), row)
+    reason = (f"This arrangement ranks in the top {int((1-p)*100)}% of all records "
+              f"because it matches patterns found in high-retention environments "
+              f"where the average goal distance is {estimated_ydist:.2f}.")
+    
+    return p, reason
+
+if __name__ == "__main__":
+    # Load the data
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Pick a sample row to justify
+    random.seed(1234567891)
+    test_row = list(random.choice(rows))
+    
+    # Mask the goals in the test row
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    for idx in goal_indices:
+        test_row[idx] = "?"
+        
+    # Get justification
+    p, reason = justify(header, rows, test_row)
+    
+    print(f"Justification Analysis:")
+    print(f"  Rank: {p:.2f} (fraction of records outperformed)")
+    print(f"  Reason: {reason}")
+```

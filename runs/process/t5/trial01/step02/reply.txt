@@ -1,0 +1,73 @@
+```python
+import ezr
+import random
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column (Cost-) for each test row.
+    Uses the tree-based ranker to find the mean of the goal in the leaf
+    where the test row lands.
+    """
+    # Create a table object for the training data
+    data = [header] + train
+    tbl = ezr.Tbl(data)
+    
+    # Grow a tree on the training data
+    node = ezr.tree(tbl, tbl.rows)
+    
+    # The first goal column is the first column in tbl.y
+    goal_col = tbl.y[0]
+    
+    estimates = []
+    for row in test:
+        # Walk the tree to find the leaf for this row
+        leaf_node = ezr.leaf(node, row)
+        
+        # Calculate the mean of the first goal column in this leaf
+        # We need to extract the values of the first goal column from leaf rows
+        vals = [r[goal_col.at] for r in leaf_node.rows if r[goal_col.at] != "?"]
+        
+        if vals:
+            estimates.append(sum(vals) / len(vals))
+        else:
+            # Fallback to global mean if leaf is empty or has no data
+            estimates.append(goal_col.mu)
+            
+    return estimates
+
+if __name__ == "__main__":
+    # Load data
+    filename = "pom3a.n1000.train.csv"
+    rows_iter = ezr.csv(filename)
+    header = next(rows_iter)
+    all_rows = list(rows_iter)
+    
+    # Split data: 80% train, 20% test
+    random.seed(1234567891)
+    random.shuffle(all_rows)
+    n = int(len(all_rows) * 0.8)
+    train = all_rows[:n]
+    test = all_rows[n:]
+    
+    # Mask the goals in the test set
+    # Goals are columns ending in '-' or '+'
+    goal_indices = [i for i, name in enumerate(header) if name[-1] in "+-"]
+    masked_test = []
+    for row in test:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_test.append(new_row)
+    
+    # Get estimates
+    estimates = guess(header, train, masked_test)
+    
+    # Print a summary for the customer
+    print("Estimation Report:")
+    print(f"Processed {len(test)} test configurations.")
+    print(f"Estimated Cost- for the first 5 configurations:")
+    for i in range(min(5, len(estimates))):
+        print(f"  Config {i+1}: {estimates[i]:.4f}")
+    
+    exit(0)
+```

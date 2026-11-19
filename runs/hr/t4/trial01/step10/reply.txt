@@ -1,0 +1,84 @@
+```python
+import csv
+import random
+from step02 import guess
+from step07 import choose
+
+def race(header, rows, label):
+    """
+    Compares three strategies for finding the best row:
+    1. 'random': Picks 50 rows at random.
+    2. 'top_tenure': Picks the 50 rows with the highest 'TotalWorkingYears'.
+    3. 'smart': Uses the choose() logic from step07.
+    """
+    goal_idx = next(i for i, col in enumerate(header) if col.endswith('+') or col.endswith('-'))
+    is_maximize = header[goal_idx].endswith('+')
+    
+    # Budget tracking
+    labeled = {}
+    def get_label(i):
+        if i not in labeled:
+            labeled[i] = label(i)[0]
+        return labeled[i]
+
+    def get_best_row(indices):
+        # Evaluate all indices in the strategy
+        results = {i: get_label(i) for i in indices}
+        if is_maximize:
+            return max(results, key=results.get)
+        return min(results, key=results.get)
+
+    # Strategy 1: Random
+    random_indices = random.sample(range(len(rows)), 50)
+    best_random = get_best_row(random_indices)
+
+    # Strategy 2: Top Tenure (Heuristic)
+    tenure_idx = header.index('TotalWorkingYears')
+    sorted_by_tenure = sorted(range(len(rows)), key=lambda i: rows[i][tenure_idx], reverse=True)
+    best_tenure = get_best_row(sorted_by_tenure[:50])
+
+    # Strategy 3: Smart (using step07 logic)
+    # Note: choose() uses its own labeling logic, we must ensure it respects the budget
+    # We pass a wrapper to choose() to track the budget
+    def smart_label(i):
+        return [get_label(i)]
+    
+    best_smart = choose(header, rows, smart_label)
+
+    # Determine winner
+    strategies = {
+        "random": best_random,
+        "top_tenure": best_tenure,
+        "smart": best_smart
+    }
+    
+    final_vals = {name: get_label(idx) for name, idx in strategies.items()}
+    if is_maximize:
+        winner = max(final_vals, key=final_vals.get)
+    else:
+        winner = min(final_vals, key=final_vals.get)
+
+    return {"winner": winner, "row": strategies[winner], "tried": list(strategies.keys())}
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = [float(val) if header[i][0].isupper() else val for i, val in enumerate(row)]
+            rows.append(processed_row)
+
+    goal_idx = next(i for i, col in enumerate(header) if col.endswith('+') or col.endswith('-'))
+    
+    def label(i):
+        return [rows[i][goal_idx]]
+
+    result = race(header, rows, label)
+    
+    print(f"Race Results:")
+    print(f"Winner: {result['winner']}")
+    print(f"Best row found at index: {result['row']}")
+    print(f"Strategies tried: {', '.join(result['tried'])}")
+```

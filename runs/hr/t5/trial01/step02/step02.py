@@ -1,0 +1,77 @@
+import ezr
+import random
+
+def guess(header, train, test):
+    """
+    Estimates the value of the first goal column for each row in test.
+    We use a tree-based approach: train a tree on the labeled data,
+    then for each test row, walk the tree to find the leaf and return
+    the mean value of the first goal column in that leaf.
+    """
+    # Create table from training data
+    tbl = ezr.Tbl([header] + train)
+    
+    # Build the tree using the training data
+    root = ezr.tree(tbl, tbl.rows)
+    
+    # Identify the index of the first goal column
+    # Goals are columns ending in '+' or '-'
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    first_goal_idx = goal_indices[0]
+    
+    # Pre-calculate the mean of the first goal for each leaf
+    # We store this in the node object for quick lookup
+    def cache_leaf_means(node):
+        if not node.kids:
+            # Calculate mean of the first goal column for this leaf
+            vals = [r[first_goal_idx] for r in node.rows if r[first_goal_idx] != "?"]
+            node.mean_goal = sum(vals) / len(vals) if vals else 0
+        else:
+            for kid in node.kids:
+                cache_leaf_means(kid)
+    
+    cache_leaf_means(root)
+    
+    # For each test row, find its leaf and return the cached mean
+    results = []
+    for row in test:
+        leaf_node = ezr.leaf(root, row)
+        results.append(float(leaf_node.mean_goal))
+        
+    return results
+
+if __name__ == "__main__":
+    # Load the data
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Split into train and test (80/20 split)
+    random.seed(1234567891)
+    random.shuffle(rows)
+    split = int(len(rows) * 0.8)
+    train = rows[:split]
+    test = rows[split:]
+    
+    # Mask the goals in the test set
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    masked_test = []
+    for row in test:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_test.append(new_row)
+        
+    # Get estimates
+    estimates = guess(header, train, masked_test)
+    
+    # Print a summary
+    print(f"Estimated values for the first goal column ('{header[goal_indices[0]]}')")
+    print(f"for {len(estimates)} test records.")
+    print(f"First 5 estimates: {[round(x, 2) for x in estimates[:5]]}")
+    
+    # Calculate average error for validation
+    actuals = [row[goal_indices[0]] for row in test]
+    errors = [abs(e - a) for e, a in zip(estimates, actuals)]
+    print(f"Mean Absolute Error: {sum(errors)/len(errors):.2f}")

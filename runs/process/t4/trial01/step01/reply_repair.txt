@@ -1,0 +1,87 @@
+```python
+import csv
+
+def remember(header, rows):
+    """
+    Identifies rows that perform well across all goal columns.
+    Goals ending in '-' are minimized, goals ending in '+' are maximized.
+    Uses a simple Pareto-dominance heuristic: we look for rows that are 
+    not dominated by others or have high aggregate normalized scores.
+    """
+    # Identify goal columns and their directions
+    goal_indices = []
+    goal_directions = []
+    for i, name in enumerate(header):
+        if name.endswith('-'):
+            goal_indices.append(i)
+            goal_directions.append(-1)  # Minimize
+        elif name.endswith('+'):
+            goal_indices.append(i)
+            goal_directions.append(1)   # Maximize
+
+    # Normalize data to [0, 1]
+    n = len(rows)
+    m = len(goal_indices)
+    
+    # Extract columns for normalization
+    cols = [[float(row[idx]) for row in rows] for idx in goal_indices]
+    mins = [min(c) for c in cols]
+    maxs = [max(c) for c in cols]
+    
+    # Calculate normalized scores
+    # For minimize (-1): (max - val) / (max - min)
+    # For maximize (1): (val - min) / (max - min)
+    normalized = []
+    for r in range(n):
+        row_scores = []
+        for i in range(m):
+            val = float(rows[r][goal_indices[i]])
+            denom = maxs[i] - mins[i]
+            if denom == 0:
+                row_scores.append(0)
+            else:
+                norm = (val - mins[i]) / denom
+                row_scores.append(1 - norm if goal_directions[i] == -1 else norm)
+        normalized.append(row_scores)
+
+    # Calculate aggregate score (min of normalized goals ensures balance)
+    # We want rows that are good on all objectives simultaneously
+    agg_scores = [min(row_scores) for row_scores in normalized]
+    
+    # Select top 5% of rows
+    num_to_select = max(1, n // 20)
+    
+    # Get indices of top scores
+    indexed_scores = list(enumerate(agg_scores))
+    indexed_scores.sort(key=lambda x: x[1], reverse=True)
+    
+    best_indices = [x[0] for x in indexed_scores[:num_to_select]]
+    return sorted(best_indices)
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                # Convert numeric columns to float, keep symbolic as is
+                processed_row = []
+                for i, val in enumerate(row):
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        best_indices = remember(header, rows)
+        
+        print(f"Analysis complete. Found {len(best_indices)} top-performing setups.")
+        print("Indices of best rows (0-based):")
+        print(best_indices)
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

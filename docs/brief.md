@@ -171,7 +171,7 @@ Each trial must face an LLM that remembers nothing:
 - a new chat window is **not** enough if memory or project context is on.
 
 Trials that shared a context are one trial, counted once, and cap
-Methods at 1 mark of 5. See [archive/runs.md](archive/runs.md) for the arithmetic.
+Methods at 1 mark of 5.
 
 ## 8. Statistics
 

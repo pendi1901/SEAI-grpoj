@@ -1,0 +1,53 @@
+```python
+import ezr
+import random
+
+def justify(header, rows, row):
+    """
+    Returns (p, reason): p is the fraction of rows that row is better than;
+    reason is a sentence explaining the ranking.
+    """
+    # Create a table to calculate ydist (distance to ideal goals)
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate ydist for all known rows
+    # Lower ydist is better (closer to ideal)
+    ydists = [ezr.ydist(tbl, r) for r in rows]
+    
+    # Estimate the goal for the input row using a simple tree-based ranker
+    # We use the existing tree logic from ezr
+    node = ezr.tree(tbl, rows)
+    ranker = lambda r: ezr.leaf(node, r).mu
+    
+    # The score of our target row
+    target_score = ranker(row)
+    
+    # Calculate p: fraction of rows that are worse (have higher ydist) than our target
+    # A row is better if its ydist is lower.
+    # We compare the target's estimated ydist to the distribution of existing rows.
+    better_than_count = sum(1 for y in ydists if y > target_score)
+    p = better_than_count / len(rows)
+    
+    reason = (f"This arrangement ranks in the top {int((1-p)*100)}% of all observed "
+              f"retention outcomes based on its predicted performance across key metrics.")
+    
+    return p, reason
+
+if __name__ == "__main__":
+    # Load data
+    data = list(ezr.csv("WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"))
+    header = data[0]
+    rows = data[1:]
+    
+    # Pick a sample row and hide its goals
+    sample_row = list(rows[0])
+    for i, name in enumerate(header):
+        if name.endswith('+') or name.endswith('-'):
+            sample_row[i] = "?"
+            
+    # Run justification
+    p, reason = justify(header, rows, sample_row)
+    
+    print(f"Ranking: {p:.2f}")
+    print(f"Justification: {reason}")
+```

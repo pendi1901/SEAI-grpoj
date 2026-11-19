@@ -1,0 +1,49 @@
+import csv
+from sklearn.ensemble import IsolationForest
+
+def spot(header, rows):
+    """
+    Identifies rows that are outliers using IsolationForest.
+    Returns the indices of the rows, sorted by suspicion (highest anomaly score first).
+    """
+    # Use only numeric columns for anomaly detection
+    numeric_indices = [i for i, val in enumerate(rows[0]) if isinstance(val, (int, float))]
+    X = [[row[i] for i in numeric_indices] for row in rows]
+    
+    # IsolationForest assigns lower scores to anomalies
+    clf = IsolationForest(contamination=0.05, random_state=42)
+    scores = clf.fit_predict(X)
+    anomaly_scores = clf.decision_function(X)
+    
+    # Combine index with score, sort by score (lowest first = most suspicious)
+    indexed_scores = list(enumerate(anomaly_scores))
+    indexed_scores.sort(key=lambda x: x[1])
+    
+    # Return indices of rows identified as anomalies
+    return [idx for idx, score in indexed_scores if score < 0]
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed_row = []
+                for val in row:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        suspicious_indices = spot(header, rows)
+        
+        print(f"Analysis complete. Found {len(suspicious_indices)} potentially mistyped rows.")
+        print("Indices of the most suspicious rows (0-based):")
+        print(suspicious_indices[:10])
+        exit(0)
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

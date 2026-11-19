@@ -1,0 +1,70 @@
+import csv
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import LabelEncoder
+
+def blame(header, rows):
+    """
+    Identifies input columns that best explain short stays (low 'YearsAtCompany+').
+    Uses a Random Forest to rank feature importance for predicting 'YearsAtCompany+'.
+    """
+    goal_col = "YearsAtCompany+"
+    goal_idx = header.index(goal_col)
+    
+    # Filter out goal columns and identify input columns
+    input_indices = [i for i, col in enumerate(header) if not (col.endswith('+') or col.endswith('-'))]
+    input_names = [header[i] for i in input_indices]
+    
+    # Prepare data
+    X = []
+    y = []
+    encoders = {}
+    
+    for row in rows:
+        processed_row = []
+        for i in input_indices:
+            val = row[i]
+            if isinstance(val, str):
+                if i not in encoders:
+                    le = LabelEncoder()
+                    le.fit([r[i] for r in rows])
+                    encoders[i] = le
+                processed_row.append(encoders[i].transform([val])[0])
+            else:
+                processed_row.append(val)
+        X.append(processed_row)
+        y.append(row[goal_idx])
+        
+    # Train model to find feature importance
+    model = RandomForestRegressor(n_estimators=50, random_state=42)
+    model.fit(X, y)
+    
+    # Get feature importances
+    importances = model.feature_importances_
+    
+    # Sort features by importance
+    feature_importance = sorted(zip(input_names, importances), key=lambda x: x[1], reverse=True)
+    
+    # Return the top 3 features that explain the variance in 'YearsAtCompany+'
+    return [f[0] for f in feature_importance[:3]]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    top_factors = blame(header, rows)
+    
+    print("Factors that best explain why employees stay for different durations:")
+    for i, factor in enumerate(top_factors, 1):
+        print(f"{i}. {factor}")
+    print("\nThese columns are the primary drivers of tenure variation in the organization.")

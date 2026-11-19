@@ -1,0 +1,56 @@
+```python
+import ezr
+import random
+
+def flow(header, row, seen):
+    """
+    Decide if the current row is a 'keeper' (needs a retention conversation).
+    We use the 'seen' data to build a model of what 'good' looks like,
+    then decide if the current row is among the best we've seen so far.
+    
+    Since we cannot go back, we use a threshold based on the distribution
+    of ydist scores in the 'seen' data.
+    """
+    if not seen:
+        return True  # Always keep the first one to start the baseline
+    
+    # Create a table from the history to understand the goal space
+    tbl = ezr.Tbl([header] + seen)
+    
+    # Calculate the ydist of the current row
+    # A lower ydist is better (closer to goals)
+    current_ydist = ezr.ydist(tbl, row)
+    
+    # Calculate ydist for all seen rows
+    seen_ydists = [ezr.ydist(tbl, r) for r in seen]
+    
+    # We define 'needing a conversation' as being in the top 10% 
+    # of the quality distribution seen so far.
+    threshold = sorted(seen_ydists)[max(0, int(len(seen_ydists) * 0.1))]
+    
+    return current_ydist <= threshold
+
+if __name__ == "__main__":
+    # Load the data
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Simulate the arrival of rows one by one
+    random.seed(1234567891)
+    random.shuffle(rows)
+    
+    seen = []
+    kept_count = 0
+    
+    print("Processing employee reviews one by one...")
+    for row in rows:
+        if flow(header, row, seen):
+            kept_count += 1
+        seen.append(row)
+        
+    print(f"Total employees reviewed: {len(rows)}")
+    print(f"Employees flagged for 'what would keep you here' conversation: {kept_count}")
+    print("Decision logic: Flagged top 10% of employees based on goal optimization.")
+```

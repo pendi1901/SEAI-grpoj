@@ -1,0 +1,77 @@
+import csv
+from step01 import remember
+
+def choose(header, rows, label):
+    """
+    Selects the best row out of 50 trials.
+    Strategy: 
+    1. Sample 50 rows randomly to get a baseline of the data distribution.
+    2. Label these 50 rows to see their true goal values.
+    3. Return the index of the row that performed best.
+    """
+    # We are allowed 50 labels.
+    # We pick 50 indices spread across the dataset to get a representative sample.
+    n = len(rows)
+    step = max(1, n // 50)
+    indices_to_label = [i for i in range(0, n, step)][:50]
+    
+    best_idx = -1
+    best_score = float('inf')
+    
+    # Identify goal indices and directions
+    goals = [(i, name.endswith('-')) for i, name in enumerate(header) 
+             if name.endswith('-') or name.endswith('+')]
+
+    for idx in indices_to_label:
+        # Get true values from the oracle
+        true_goals = label(idx)
+        
+        # Calculate score for this row
+        total_penalty = 0
+        for i, (col_idx, is_min) in enumerate(goals):
+            val = true_goals[i]
+            if is_min:
+                total_penalty += val
+            else:
+                total_penalty += (1.0 - val)
+        
+        if total_penalty < best_score:
+            best_score = total_penalty
+            best_idx = idx
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            true_data = []
+            for row in reader:
+                processed = [float(val) if val.replace('.', '', 1).isdigit() or (val.startswith('-') and val[1:].replace('.', '', 1).isdigit()) else val for val in row]
+                rows.append(processed)
+                # Keep track of true goals for the label function
+                true_data.append([processed[i] for i, name in enumerate(header) if name.endswith('-') or name.endswith('+')])
+
+        def label(i):
+            return true_data[i]
+
+        # Mask the rows as per instructions
+        masked_rows = []
+        for row in rows:
+            new_row = list(row)
+            for i, name in enumerate(header):
+                if name.endswith('-') or name.endswith('+'):
+                    new_row[i] = "?"
+            masked_rows.append(new_row)
+
+        best_idx = choose(header, masked_rows, label)
+        print(f"Customer Inquiry: I can afford to trial 50 setups. Find me the best one.")
+        print(f"Answer: The best setup found is at index {best_idx}.")
+        print(f"Row data: {rows[best_idx]}")
+
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

@@ -1,0 +1,83 @@
+import csv
+
+def flow(header, row, seen):
+    """
+    Implements a Secretary Problem strategy with a threshold.
+    We observe the first 20% of rows to establish a baseline of 'good' 
+    performance, then accept the first row that exceeds that baseline.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('-') or name.endswith('+')]
+    
+    def get_score(r):
+        # Normalize goals: lower is better for '-' (min), higher for '+' (max)
+        # Since we don't have the full dataset range, we use a simple heuristic
+        # based on the current 'seen' data or assume 0-1 range if empty.
+        score = 0
+        for i in goal_indices:
+            val = r[i]
+            if header[i].endswith('-'):
+                score += (1.0 - val)
+            else:
+                score += val
+        return score / len(goal_indices)
+
+    # If this is the first row, we can't compare
+    if not seen:
+        return False
+    
+    # Strategy: 
+    # 1. Observe the first 20% of the expected 800 rows (160 rows)
+    # 2. Find the best score in that observation period
+    # 3. Accept the first row that beats that best score
+    n_total = 800
+    n_observe = int(n_total * 0.2)
+    
+    if len(seen) < n_observe:
+        return False
+    
+    # Calculate baseline from the observation phase
+    best_seen_score = max(get_score(r) for r in seen[:n_observe])
+    
+    # If current row is better than the best observed, accept it
+    if get_score(row) > best_seen_score:
+        return True
+    
+    # If we reach the end, accept the last one
+    if len(seen) >= n_total - 1:
+        return True
+        
+    return False
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) for val in row])
+        
+        # Simulate the arrival process
+        seen = []
+        chosen = None
+        for i, row in enumerate(rows):
+            if flow(header, row, seen):
+                chosen = (i, row)
+                break
+            seen.append(row)
+            
+        print("Decision Support System: Online Proposal Evaluator")
+        print("-" * 50)
+        if chosen:
+            print(f"Accepted proposal at index: {chosen[0]}")
+            goal_indices = [i for i, name in enumerate(header) if name.endswith('-') or name.endswith('+')]
+            print("Goal values for accepted row:")
+            for idx in goal_indices:
+                print(f"  {header[idx]}: {chosen[1][idx]:.4f}")
+        else:
+            print("No proposal met the threshold criteria.")
+            
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

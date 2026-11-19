@@ -1,0 +1,75 @@
+```python
+import csv
+import math
+from step01 import remember
+
+def certify(xs, ys):
+    """
+    Returns True if xs and ys are statistically similar (same distribution),
+    False if they differ significantly. Uses a simple A12 effect size check.
+    """
+    def a12(lst1, lst2):
+        m, n = len(lst1), len(lst2)
+        lst1 = sorted(lst1)
+        lst2 = sorted(lst2)
+        
+        # Count how many times items in lst1 are greater than items in lst2
+        greater = 0
+        j = 0
+        for i in range(m):
+            while j < n and lst2[j] < lst1[i]:
+                j += 1
+            greater += j
+            
+        # Count ties
+        ties = 0
+        for i in range(m):
+            for j in range(n):
+                if lst1[i] == lst2[j]:
+                    ties += 1
+        
+        return (greater + 0.5 * ties) / (m * n)
+
+    # A12 threshold: 0.56 is a small effect size, 0.64 medium, 0.71 large.
+    # If A12 is close to 0.5, they are likely the same.
+    score = a12(xs, ys)
+    return 0.44 <= score <= 0.56
+
+def analyze_teams(header, rows):
+    # Find indices
+    team_idx = header.index('Team Size')
+    cost_idx = header.index('Cost-')
+    
+    # Split data based on median team size
+    team_sizes = [row[team_idx] for row in rows]
+    median_team = sum(team_sizes) / len(team_sizes)
+    
+    small_team_costs = [row[cost_idx] for row in rows if row[team_idx] < median_team]
+    big_team_costs = [row[cost_idx] for row in rows if row[team_idx] >= median_team]
+    
+    is_same = certify(small_team_costs, big_team_costs)
+    
+    return is_same, small_team_costs, big_team_costs
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) for val in row])
+        
+        is_same, small, big = analyze_teams(header, rows)
+        
+        print("Customer Inquiry: Are small-team setups cheaper than big-team ones?")
+        if is_same:
+            print("Answer: The difference is likely due to noise/luck. No significant difference found.")
+        else:
+            print("Answer: The difference is real. Small teams show a statistically significant cost difference.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

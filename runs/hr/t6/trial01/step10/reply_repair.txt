@@ -1,0 +1,100 @@
+```python
+import ezr
+import random
+
+def race(header, rows, label):
+    """
+    Compare three strategies: random, tree-based, and distance-based (acquire).
+    We must ensure we only calculate ydist on rows that have been labeled.
+    """
+    budget = 50
+    labeled_cache = {}
+
+    def get_label(i):
+        if i not in labeled_cache:
+            if len(labeled_cache) >= budget:
+                raise Exception("Budget exceeded")
+            labeled_cache[i] = label(i)
+            # Update the row in place so ezr functions can see the values
+            for j, col_idx in enumerate(goal_indices):
+                rows[i][col_idx] = labeled_cache[i][j]
+        return labeled_cache[i]
+
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    
+    # Strategy 1: Random
+    def strategy_random():
+        indices = random.sample(range(len(rows)), budget // 3)
+        for i in indices: get_label(i)
+        return min(indices, key=lambda i: ezr.ydist(tbl, rows[i]))
+
+    # Strategy 2: Tree-based
+    def strategy_tree():
+        # Build tree on initial sample
+        indices = random.sample(range(len(rows)), 10)
+        for i in indices: get_label(i)
+        lab_rows = [rows[i] for i in labeled_cache.keys()]
+        lab_tbl = ezr.clone(tbl, lab_rows)
+        ranker = ezr.ranker(lab_tbl)
+        # Pick best remaining
+        candidates = [i for i in range(len(rows)) if i not in labeled_cache]
+        best_i = min(candidates, key=lambda i: ranker(rows[i]))
+        get_label(best_i)
+        return best_i
+
+    # Strategy 3: Acquire
+    def strategy_acquire():
+        def oracle_wrapper(row):
+            for i, r in enumerate(rows):
+                if r is row:
+                    get_label(i)
+                    return row
+            return row
+        
+        # Use a subset of the budget
+        labeled = ezr.acquire(tbl, cap=budget // 3, label=oracle_wrapper)
+        best_row = min(labeled, key=lambda r: ezr.ydist(tbl, r))
+        return rows.index(best_row)
+
+    # Initialize table
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Run race
+    results = {
+        "random": strategy_random(),
+        "tree": strategy_tree(),
+        "acquire": strategy_acquire()
+    }
+    
+    # Determine winner (lowest ydist)
+    winner = min(results, key=lambda name: ezr.ydist(tbl, rows[results[name]]))
+    
+    return {
+        "winner": winner,
+        "row": results[winner],
+        "tried": ["random", "tree", "acquire"]
+    }
+
+if __name__ == "__main__":
+    data = list(ezr.csv("WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"))
+    header = data[0]
+    rows = data[1:]
+    
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    
+    # Keep original values for the label function
+    original_rows = [list(r) for r in rows]
+    
+    def label(i):
+        return [original_rows[i][idx] for idx in goal_indices]
+    
+    # Hide goals in the rows passed to race
+    for row in rows:
+        for idx in goal_indices:
+            row[idx] = "?"
+            
+    result = race(header, rows, label)
+    print(f"Race Results: The winning strategy is '{result['winner']}'.")
+    print(f"Best row found at index {result['row']}.")
+    print(f"Strategies compared: {', '.join(result['tried'])}.")
+```

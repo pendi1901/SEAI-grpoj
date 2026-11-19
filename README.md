@@ -27,7 +27,7 @@ how it meets each instruction, and what is still owed.
 | [docs/open-questions.md](docs/open-questions.md) | what to ask the lecturer, and what only the team knows |
 | [rig/README.md](rig/README.md) | the tooling: one command per stage |
 | [t7/README.md](t7/README.md) | treatment 7: what to write by hand and how it is scored |
-| [docs/archive/](docs/archive/README.md) | earlier plans and the first runs' write-ups |
+| [docs/archive/](docs/archive/README.md) | the first plan (Nov 16) |
 
 Course source: `github.com/txt/seai26f`; data: `github.com/timm/moot`.
 
@@ -40,5 +40,5 @@ Course source: `github.com/txt/seai26f`; data: `github.com/timm/moot`.
     python rig/report.py
 
 The Gemini key goes in `rig/.secrets/gemini_key` (git-ignored) or the
-`GEMINI_API_KEY` environment variable. Earlier run outputs are kept at
-the git tag `archive/first-runs`.
+`GEMINI_API_KEY` environment variable.
+`results/` and `runs/` hold the Gemini N = 1 run (prompt v3, Nov 18).

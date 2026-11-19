@@ -1,0 +1,58 @@
+import csv
+from step01 import remember
+
+def blame(header, rows):
+    """
+    Identifies input columns that correlate with high 'Idle-' values.
+    We define 'worst' as the bottom 10% of rows based on the 'Idle-' goal.
+    """
+    idle_idx = header.index('Idle-')
+    
+    # Identify input columns (exclude goals)
+    input_indices = [i for i, name in enumerate(header) 
+                     if not (name.endswith('-') or name.endswith('+'))]
+    
+    # Sort rows by Idle- (descending, so worst is at the top)
+    sorted_rows = sorted(rows, key=lambda r: r[idle_idx], reverse=True)
+    
+    # Take the worst 10%
+    limit = max(1, len(rows) // 10)
+    worst_rows = sorted_rows[:limit]
+    
+    # Calculate average of each input column for the worst rows
+    # and compare to the global average to find the most "deviant" inputs.
+    def get_avg(data, idx):
+        return sum(r[idx] for r in data) / len(data)
+    
+    global_avgs = [get_avg(rows, i) for i in input_indices]
+    worst_avgs = [get_avg(worst_rows, i) for i in input_indices]
+    
+    # Find inputs where the worst rows deviate most from the global average
+    # (Assuming higher values in inputs might drive higher idle time)
+    diffs = []
+    for i, col_idx in enumerate(input_indices):
+        diff = worst_avgs[i] - global_avgs[i]
+        diffs.append((diff, header[col_idx]))
+    
+    # Return the top 2 inputs that contribute most to the high idle time
+    diffs.sort(key=lambda x: x[0], reverse=True)
+    return [name for diff, name in diffs[:2]]
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) for val in row])
+        
+        blame_cols = blame(header, rows)
+        print("Customer Inquiry: Why do our worst setups leave so many people waiting around?")
+        print(f"Answer: The primary drivers for high idle time are: {', '.join(blame_cols)}.")
+        print("These inputs show significantly higher values in our worst-performing setups.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

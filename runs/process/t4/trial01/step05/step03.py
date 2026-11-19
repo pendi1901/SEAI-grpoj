@@ -1,0 +1,42 @@
+import csv
+from scipy import stats
+
+def certify(xs, ys):
+    """
+    Returns True if the two distributions are statistically similar (null hypothesis 
+    not rejected), False if they differ significantly. Uses a t-test.
+    """
+    # A p-value > 0.05 suggests we cannot reject the null hypothesis (they are the same)
+    t_stat, p_value = stats.ttest_ind(xs, ys, equal_var=False)
+    return p_value > 0.05
+
+def run_analysis():
+    filename = 'pom3a.n1000.train.csv'
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = []
+        for row in reader:
+            rows.append([float(x) for x in row])
+
+    # Identify indices
+    team_size_idx = header.index('Team Size')
+    cost_idx = header.index('Cost-')
+
+    # Define small vs big team (median split)
+    team_sizes = [row[team_size_idx] for row in rows]
+    median_size = sum(team_sizes) / len(team_sizes)
+
+    small_team_costs = [row[cost_idx] for row in rows if row[team_size_idx] <= median_size]
+    big_team_costs = [row[cost_idx] for row in rows if row[team_size_idx] > median_size]
+
+    is_same = certify(small_team_costs, big_team_costs)
+
+    print("Analysis: Comparing Cost- for small vs big teams.")
+    if is_same:
+        print("Result: The difference is not statistically significant. It was likely luck.")
+    else:
+        print("Result: The difference is statistically significant. Small teams are genuinely cheaper.")
+
+if __name__ == "__main__":
+    run_analysis()

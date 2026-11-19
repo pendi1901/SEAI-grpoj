@@ -79,9 +79,9 @@ treatments closer to it.
 
 | version | run | where |
 |---|---|---|
-| 1 | Ollama `ornith:9b`, N = 1 | tag `archive/first-runs`, `runs/` and `results/` |
-| 2 | adds the file's true row count; Gemini N = 1, and a stopped Ollama run | same tag, `runs-gemini/`, `results-gemini/`, `runs-v2/` |
-| 3 | current | `runs/`, `results/` |
+| 1 | Ollama `ornith:9b`, N = 1 | deleted |
+| 2 | adds the file's true row count; Gemini N = 1 | deleted |
+| 3 | current; Gemini N = 1, Nov 18 | `runs/`, `results/` |
 
 Never pool results across prompt versions or models.
 
