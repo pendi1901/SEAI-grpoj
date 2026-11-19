@@ -31,7 +31,7 @@ SKILLS = "remember guess certify flow blame justify choose fix spot race".split(
 # uproj.md says both "supply the code for skills 1..i" in every treatment
 # and "ask for each skill cold". Reading used here: the no-reuse treatments
 # still see the earlier code but are not told to reuse it. Set this False
-# if the lecturer says they should see nothing (open question 6).
+# if they should see nothing.
 SHOW_PRIOR_TO_NO_REUSE = True
 
 LIB_TEXT = {

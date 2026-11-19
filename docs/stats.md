@@ -5,8 +5,7 @@ Sources: `docs/gloss6.md` (week 6, diagrams added Nov 16),
 lines 617-680, `docs/submit/uproj.md`.
 
 There are three layers. Only the first is written into the rubric. The
-second and third come from gloss10; whether they are now mandatory is
-question 1 in [open-questions.md](open-questions.md).
+second and third come from gloss10.
 
 ## Layer 1: `same`, on every comparison (rubric, mandatory)
 
@@ -137,7 +136,7 @@ Reading: for one (domain, skill), pool the Q values from every
 treatment and trial, take mean and sd, and replace each Q with
 (Q - mean) / sd. Then treatments can be compared across skills and
 domains on one axis. The page gives no formula beyond that sentence, so
-the pooling choice is ours to state in Methods (see open question 2).
+the pooling choice is ours to state in Methods.
 
 ## What to log after every run
 

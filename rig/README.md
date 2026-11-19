@@ -44,11 +44,11 @@ Tests, no model and no network: `python rig/test_run.py`,
 
 | setting | value | why |
 |---|---|---|
-| model | `gemini-3.1-flash-lite`, temperature 0.2, a seed per call | cheapest Gemini model the key can use; competent where a local 9B model was not (`docs/archive/`) |
+| model | `gemini-3.1-flash-lite`, temperature 0.2, a seed per call | cheapest Gemini model the key can use; competent where a local 9B model was not |
 | data | 1,000 random rows per domain, split 800 / 200 with seed 1 | lecturer's A23; one test suite for every treatment (Nov 16 notes) |
 | steps | ten per domain, asks 1-10, one per skill | A21: "all ten skills" |
 | reset | one stateless API call per step, in a fresh folder; no history, no CLAUDE.md | uproj.md reset rule |
-| no-reuse treatments | still see the earlier steps' code, but are not told to reuse it | uproj.md: supply "the code for skills 1..i" in every treatment (open question 6) |
+| no-reuse treatments | still see the earlier steps' code, but are not told to reuse it | uproj.md: supply "the code for skills 1..i" in every treatment |
 | prompt version | 3 | below |
 
 ### Prompt version 3: clearer contract, one repair round
