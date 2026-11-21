@@ -24,7 +24,7 @@ every LLM use (what you asked, what you used) for the AI disclosure.
     t7/shared/*.py       code shared by all three domains (the transfer)
     t7/minutes.csv       optional: domain,step,minutes  (time you spent)
 
-Step N answers the ask listed for step N below. A later step may import
+Step N answers the ask listed for step N below. Steps 11-20 repeat the ten skills with a second set of asks and the same contracts, so they can build on steps 1-10. A later step may import
 an earlier one (`from step03 import certify`) and may `import ezr`;
 when the files are registered, each step's folder holds the earlier
 steps, `ezr.py` and the training data, exactly as for the LLMs.
@@ -172,6 +172,16 @@ Rule: The 50-label budget is shared by all strategies together; the 51st differe
 - step08 (fix): ask 8, "This programme is over budget and half idle. What is the smallest change to how we plan and staff it that would rescue it?"
 - step09 (spot): ask 9, "Some of these records look mistyped or made up. Point out the ones that do not fit."
 - step10 (race): ask 10, "Three consultants each swear by their own way of picking a setup. Give each the same 50 trials. Who wins?"
+- step11 (remember): ask 11, "Here is the setup I am about to propose. Show me the past ones most like it, and how they turned out."
+- step12 (guess): ask 12, "Suppose requirements start changing twice as fast halfway through. What happens to cost and idle time?"
+- step13 (certify): ask 13, "In spring we changed how teams decide what to build first. Did results really shift, or are they the same as before?"
+- step14 (flow): ask 14, "Results from running programmes arrive week by week. Warn me the moment one starts to go bad."
+- step15 (blame): ask 15, "Which one or two facts about a project matter most to cost, and which can I safely stop worrying about?"
+- step16 (justify): ask 16, "I liked setup B. You recommended A. Explain why not B."
+- step17 (choose): ask 17, "This time the project is large and a failure would be very damaging. Find me the best setup for that kind of project, trialling very few."
+- step18 (fix): ask 18, "I am not allowed to hire. What else can I change to cut idle time?"
+- step19 (spot): ask 19, "A new team lead proposes a setup unlike anything we have run. Tell me when I am asking you about something you have never seen."
+- step20 (race): ask 20, "Is your way of choosing any better than what we do now, which is to give every programme the biggest teams we can afford?"
 
 **health** (`data/Health-ClosedIssues0000.csv`; levers: N_estimators, criterion, Min_sample_leaves, Min_impurity_decrease, Max_depth)
 
@@ -185,6 +195,16 @@ Rule: The 50-label budget is shared by all strategies together; the 51st differe
 - step08 (fix): ask 8, "The setup we use today forecasts poorly. What is the smallest change to its settings that makes it acceptable, without making it slower?"
 - step09 (spot): ask 9, "Some result rows look like a run that failed and got written down anyway. Find them."
 - step10 (race): ask 10, "Three colleagues have three ways of hunting for a good setup. Give each the same 50 runs. Who wins?"
+- step11 (remember): ask 11, "Here is the setup the team uses today. Show me the tried setups most like it, and how they scored."
+- step12 (guess): ask 12, "If I halve the size of the forecaster to save run time, how much worse do the forecasts get?"
+- step13 (certify): ask 13, "Does the choice between the tool's two built-in rules make any real difference, or can I stop arguing about it?"
+- step14 (flow): ask 14, "Results arrive every night. Tell me when the best so far has stopped improving, so I can stop paying for runs."
+- step15 (blame): ask 15, "Which settings can I leave at the factory default without hurting anything?"
+- step16 (justify): ask 16, "Why not simply use the biggest, deepest setup the machine can hold?"
+- step17 (choose): ask 17, "Find me a setup that forecasts well and is also small enough to run every night."
+- step18 (fix): ask 18, "Fix my setup, but I am only allowed to change one setting."
+- step19 (spot): ask 19, "A colleague suggests settings far outside anything we have tried. Tell me when you are being asked about something you have never seen."
+- step20 (race): ask 20, "The setup you picked for this project: on a different project's results, does it still beat picking at random?"
 
 **hr** (`data/WA_Fn-UseC_-HR-Employee-Attrition.csv`; levers: overTime, businessTravel, TrainingTimesLastYear, PercentSalaryHike, StockOptionLevel)
 
@@ -198,3 +218,13 @@ Rule: The 50-label budget is shared by all strategies together; the 51st differe
 - step08 (fix): ask 8, "Here are 20 kinds of staff who do not stay. What could we actually change for them: travel, overtime, training, pay rise, stock?"
 - step09 (spot): ask 9, "These records are typed in by hand. Find the ones that look wrong."
 - step10 (race): ask 10, "Three advisers have three theories about what keeps people. Give each the same 50 interviews. Who is right?"
+- step11 (remember): ask 11, "Here is one employee. Show me the people most like them, and how long those people stayed."
+- step12 (guess): ask 12, "If we cut overtime across Sales, what happens to how long people stay?"
+- step13 (certify): ask 13, "We added training days last year. Do people with more training really stay longer with their manager?"
+- step14 (flow): ask 14, "Survey results come in month by month. Tell me when a team no longer looks the way it normally does."
+- step15 (blame): ask 15, "Which of the things we record have nothing to do with how long people stay, so we can stop collecting them?"
+- step16 (justify): ask 16, "Why do you not simply recommend paying everyone more?"
+- step17 (choose): ask 17, "Do the same search for our laboratory staff only: the best arrangement for them, interviewing very few."
+- step18 (fix): ask 18, "There is no money for pay this year. What else can we change?"
+- step19 (spot): ask 19, "We are about to hire someone unlike anyone we have employed. Tell me when your estimate for them cannot be trusted."
+- step20 (race): ask 20, "Is your advice any better than our rule of thumb, which is to give the biggest pay rises to the newest staff?"

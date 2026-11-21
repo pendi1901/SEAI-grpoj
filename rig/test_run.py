@@ -306,8 +306,8 @@ finally:
 cfg = run.load_config()
 for dom in cfg["domains"]:
   a = run.asks(cfg, dom)
-  check(f"{dom}: ten asks, one per skill, in ladder order",
-        [s for _, _, s in a] == run.SKILLS)
+  check(f"{dom}: asks follow the skills in ladder order, ten at a time",
+        [s for _, _, s in a] == (run.SKILLS * 2)[:len(a)] and len(a) in (10, 20))
 
 print(f"\nfailures: {fails}")
 sys.exit(fails > 0)
