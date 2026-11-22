@@ -21,26 +21,31 @@ step should shrink while quality holds.
   ([docs/assessment.md](docs/assessment.md)); treatments are compared with
   `same` from ezr ([docs/stats.md](docs/stats.md)).
 
-## First results (one trial)
+## Results (three trials, 20 asks)
 
-169 of 180 programs worked. The whole run cost about $0.60 and took 12 minutes.
+1,080 Gemini programs (3 trials x 3 domains x 6 treatments x 20 steps).
+The whole run cost $4.55. T7 so far covers the process domain only.
 
-| treatment | worked | new lines per step | quality (Z) |
+| treatment | function worked | new lines per step | quality (Z) |
 |---|--:|--:|--:|
-| T1 plain | 30/30 | 56 | 0.56 |
-| T2 plain + reuse | 30/30 | 50 | 0.70 |
-| T3 sklearn | 30/30 | 52 | 0.71 |
-| T4 sklearn + reuse | 28/30 | 46 | 0.16 |
-| T5 ezr | 25/30 | 40 | -0.80 |
-| T6 ezr + reuse | 26/30 | 38 | -0.76 |
+| T1 plain | 178/180 | 57 | 0.18 |
+| T2 plain + reuse | 179/180 | 50 | 0.32 |
+| T3 sklearn | 177/180 | 56 | 0.53 |
+| T4 sklearn + reuse | 158/180 | 49 | 0.38 |
+| T5 ezr | 154/180 | 41 | -0.11 |
+| T6 ezr + reuse | 153/180 | 37 | -0.11 |
+| T7 by hand (process) | 20/20 | 23 | 0.77 |
 
-ezr gives the smallest code but the lowest quality. Most of its losses are
-crashes in the choose and race skills, where the generated code mishandled
-ezr's rows. Telling the model to reuse earlier steps cut code for plain
-Python and scikit-learn. With a single trial these rankings are provisional.
+ezr gives the smallest generated code but the lowest quality; most of its
+losses are crashes in choose and race, where the code mishandles ezr's
+rows. scikit-learn gives the best generated quality. Asking the model to
+reuse earlier steps cut code for every library but did not raise quality.
+T7's 23 lines per step leave out 265 lines of shared helpers, and it took
+about 8 hours of human time. With three trials, `same` has little power,
+so treat the ranks as provisional.
 
 All tables and plots are in [results/report.md](results/report.md).
-The hand-written treatment (T7) is in progress.
+T7 for health and HR is in progress.
 
 ## Running it
 
