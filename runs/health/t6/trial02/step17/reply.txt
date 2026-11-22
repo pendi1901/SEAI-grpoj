@@ -1,0 +1,80 @@
+```python
+import ezr
+import step07
+
+def choose(header, rows, label):
+    """
+    Finds a setup that is both high-performing (low ydist) and small.
+    We define 'small' as having low N_estimators and low Max_depth.
+    We use the acquire logic to explore the space, then rank by a 
+    multi-objective score that balances performance and size.
+    """
+    # Create a table to manage the data
+    tbl = ezr.Tbl([header] + rows)
+    
+    # We need to track labeled rows to stay within the 50-label budget
+    labeled_indices = set()
+    
+    def oracle_wrapper(row):
+        idx = rows.index(row)
+        if idx not in labeled_indices:
+            if len(labeled_indices) >= 50:
+                return row
+            labeled_indices.add(idx)
+            true_values = label(idx)
+            for i, val in enumerate(true_values):
+                row[i] = val
+        return row
+
+    # Use acquire to find promising regions
+    labeled_rows = ezr.acquire(tbl, cap=50, label=oracle_wrapper)
+    
+    # Define a score that balances performance (ydist) and size (N_estimators, Max_depth)
+    # Lower ydist is better. Lower N_estimators and Max_depth is better.
+    # We normalize these to a 0-1 scale.
+    def size_score(row):
+        # Indices for N_estimators (3) and Max_depth (7)
+        n_est = row[3]
+        max_d = row[7]
+        # Normalize roughly based on observed ranges (10-200 for N, 1-20 for depth)
+        norm_n = (n_est - 10) / (200 - 10)
+        norm_d = (max_d - 1) / (20 - 1)
+        return (norm_n + norm_d) / 2
+
+    def combined_score(row):
+        # ydist is already 0-1 normalized by ezr
+        perf = ezr.ydist(tbl, row)
+        size = size_score(row)
+        # Balance: 70% performance, 30% size
+        return 0.7 * perf + 0.3 * size
+
+    # Find the best row among the labeled ones
+    best_row = min(labeled_rows, key=combined_score)
+    
+    return rows.index(best_row)
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    all_data = list(ezr.csv(filename))
+    header = all_data[0]
+    rows = all_data[1:]
+    
+    original_rows = [list(r) for r in rows]
+    
+    # Mask the goals
+    goal_indices = [i for i, h in enumerate(header) if h[-1] in "+-"]
+    for row in rows:
+        for idx in goal_indices:
+            row[idx] = "?"
+            
+    def label(i):
+        return original_rows[i]
+    
+    best_idx = choose(header, rows, label)
+    
+    print(f"Recommended setup for nightly runs: Index {best_idx}")
+    print("This configuration balances high forecast accuracy with low resource usage.")
+    print("Values for the recommended setup:")
+    for h, v in zip(header, original_rows[best_idx]):
+        print(f"  {h:25}: {v}")
+```

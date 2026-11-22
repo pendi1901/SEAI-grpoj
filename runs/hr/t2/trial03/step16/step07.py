@@ -1,0 +1,70 @@
+import csv
+import step01
+import step02
+
+def choose(header, rows, label):
+    """
+    Finds the best working arrangement by sampling 50 rows.
+    We use a simple strategy: sample 50 rows, label them, 
+    and pick the one with the highest 'YearsAtCompany+'.
+    """
+    # Identify goal column
+    goal_col = [h for h in header if h.endswith('+') or h.endswith('-')][0]
+    goal_idx = header.index(goal_col)
+    
+    # We can label up to 50 rows. Let's pick 50 indices spread across the dataset.
+    n = len(rows)
+    step = max(1, n // 50)
+    indices_to_sample = [i for i in range(0, n, step)][:50]
+    
+    best_idx = -1
+    best_val = -float('inf')
+    
+    for i in indices_to_sample:
+        # label(i) returns the true goal values for row i
+        true_goals = label(i)
+        val = true_goals[0] # Assuming single goal for this specific task
+        
+        if val > best_val:
+            best_val = val
+            best_idx = i
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    goal_idx = [i for i, h in enumerate(header) if h.endswith('+') or h.endswith('-')][0]
+    
+    # Store true values to simulate the label function
+    true_data = {i: [rows[i][goal_idx]] for i in range(len(rows))}
+    
+    # Mask the rows
+    for r in rows:
+        r[goal_idx] = "?"
+        
+    def label(i):
+        return true_data[i]
+    
+    best_row_idx = choose(header, rows, label)
+    
+    print(f"Analysis complete.")
+    print(f"The best working arrangement found is at index {best_row_idx}.")
+    print(f"This row has a tenure of {true_data[best_row_idx][0]} years.")

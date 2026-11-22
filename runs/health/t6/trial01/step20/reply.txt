@@ -1,0 +1,104 @@
+```python
+import ezr
+import step07
+import step10
+import random
+
+def race(header, rows, label):
+    """
+    Compares three strategies: random, greedy, and acquire.
+    The total budget of 50 labels is shared across all strategies.
+    """
+    labeled_cache = {}
+    budget_total = 50
+    budget_per_strategy = budget_total // 3
+    
+    def oracle(i):
+        if i not in labeled_cache:
+            if len(labeled_cache) >= budget_total:
+                raise Exception("Budget exceeded")
+            labeled_cache[i] = label(i)
+        return labeled_cache[i]
+
+    # Strategy 1: Random
+    def strategy_random(tbl, budget):
+        indices = random.sample(range(len(rows)), budget)
+        for i in indices: oracle(i)
+        return indices
+
+    # Strategy 2: Greedy (Tree-based)
+    def strategy_greedy(tbl, budget):
+        indices = random.sample(range(len(rows)), min(budget, 5))
+        for i in indices: oracle(i)
+        
+        labeled_rows = [oracle(i) for i in indices]
+        train_tbl = ezr.clone(tbl, labeled_rows)
+        ranker = ezr.ranker(train_tbl)
+        
+        unlabeled = [i for i in range(len(rows)) if i not in labeled_cache]
+        unlabeled.sort(key=lambda i: ranker(rows[i]))
+        for i in unlabeled[:budget - len(indices)]:
+            oracle(i)
+            indices.append(i)
+        return indices
+
+    # Strategy 3: Acquire (Multi-objective)
+    def strategy_acquire(tbl, budget):
+        # We use a subset of rows to simulate the acquire process
+        subset_indices = random.sample(range(len(rows)), min(len(rows), 100))
+        subset_rows = [rows[i] for i in subset_indices]
+        sub_tbl = ezr.Tbl([header] + subset_rows)
+        
+        def wrapped_oracle(row):
+            for i, r in enumerate(rows):
+                if r == row: return oracle(i)
+            return row
+        
+        ezr.the.Stop = budget
+        ezr.the.Start = 4
+        ezr.acquire(sub_tbl, cap=budget, label=wrapped_oracle)
+        return [i for i in range(len(rows)) if i in labeled_cache]
+
+    tbl = ezr.Tbl([header] + rows)
+    strategies = {
+        "random": strategy_random,
+        "greedy": strategy_greedy,
+        "acquire": strategy_acquire
+    }
+    
+    results = {}
+    for name, func in strategies.items():
+        func(tbl, budget_per_strategy)
+        
+    for name in strategies:
+        best_idx = min(labeled_cache.keys(), key=lambda i: ezr.ydist(tbl, oracle(i)))
+        results[name] = (best_idx, ezr.ydist(tbl, oracle(best_idx)))
+
+    winner = min(results, key=lambda n: results[n][1])
+    return {
+        "winner": winner,
+        "row": results[winner][0],
+        "tried": list(strategies.keys())
+    }
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data_iter = ezr.csv(filename)
+    header = next(data_iter)
+    all_rows = list(data_iter)
+    
+    rows = []
+    for row in all_rows:
+        new_row = list(row)
+        for i, name in enumerate(header):
+            if name[-1] in "+-!":
+                new_row[i] = "?"
+        rows.append(new_row)
+        
+    def label(i):
+        return all_rows[i]
+        
+    result = race(header, rows, label)
+    print(f"Race Results: {result}")
+    print(f"The winner is '{result['winner']}' which found the best setup at index {result['row']}.")
+```

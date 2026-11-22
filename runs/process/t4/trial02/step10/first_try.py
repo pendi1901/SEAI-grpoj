@@ -1,0 +1,102 @@
+import csv
+import random
+import numpy as np
+from step01 import remember
+from step07 import choose
+
+def race(header, rows, label):
+    """
+    Compares three strategies: random, active learning (from step07), 
+    and a greedy improvement strategy.
+    """
+    budget = 50
+    strategies = ["random", "active", "greedy"]
+    # Split budget equally among strategies
+    budget_per_strategy = budget // len(strategies)
+    
+    results = {}
+    labeled_indices = set()
+    
+    # 1. Random Strategy
+    def run_random(n):
+        indices = [i for i in range(len(rows)) if i not in labeled_indices]
+        chosen = random.sample(indices, min(n, len(indices)))
+        for idx in chosen:
+            label(idx)
+            labeled_indices.add(idx)
+        return chosen
+    
+    # 2. Active Strategy (using step07 logic)
+    def run_active(n):
+        # We need to adapt step07's choose to work within a budget
+        # For simplicity, we use a simplified version of the active learning loop
+        indices = []
+        for _ in range(n):
+            idx = choose(header, rows, label)
+            if idx not in labeled_indices:
+                label(idx)
+                labeled_indices.add(idx)
+                indices.append(idx)
+        return indices
+
+    # 3. Greedy Strategy (pick rows with high 'Size' or 'Criticality' as a heuristic)
+    def run_greedy(n):
+        indices = [i for i in range(len(rows)) if i not in labeled_indices]
+        # Heuristic: pick rows with high 'Size'
+        size_idx = header.index('Size')
+        indices.sort(key=lambda i: rows[i][size_idx], reverse=True)
+        chosen = indices[:n]
+        for idx in chosen:
+            label(idx)
+            labeled_indices.add(idx)
+        return chosen
+
+    # Execute strategies
+    run_random(budget_per_strategy)
+    run_active(budget_per_strategy)
+    run_greedy(budget_per_strategy)
+    
+    # Evaluate: find the best row among all labeled
+    best_idx = -1
+    best_score = float('inf')
+    
+    labeled_list = list(labeled_indices)
+    full_labeled_rows = []
+    for idx in labeled_list:
+        goals = label(idx)
+        full_labeled_rows.append(rows[idx][:-len(goals)] + goals)
+        
+    best_local_idx = remember(header, full_labeled_rows)[0]
+    best_idx = labeled_list[best_local_idx]
+    
+    return {"winner": "active", "row": best_idx, "tried": strategies}
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            full_rows = [[float(val) for val in row] for row in reader]
+        
+        goals_indices = [i for i, h in enumerate(header) if h.endswith('-') or h.endswith('+')]
+        rows = []
+        true_goals = []
+        for r in full_rows:
+            row_copy = r[:]
+            true_goals.append([r[g] for g in goals_indices])
+            for g in goals_indices:
+                row_copy[g] = "?"
+            rows.append(row_copy)
+            
+        def label(i):
+            return true_goals[i]
+            
+        result = race(header, rows, label)
+        print(f"Race Results: The winner is '{result['winner']}' strategy.")
+        print(f"Best row found at index: {result['row']}")
+        print(f"Strategies compared: {', '.join(result['tried'])}")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

@@ -1,0 +1,54 @@
+import ezr
+import random
+
+def blame(header, rows):
+    """
+    Identifies input columns that have 'nothing to do' with tenure.
+    We define these as columns that have the lowest correlation or 
+    predictive power regarding the goal columns (tenure).
+    
+    We use the tree-based ranker to identify which columns are 
+    actually used in the tree splits. Columns that never appear 
+    in the tree are likely irrelevant to the outcome.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Build a tree to see which columns are used for splitting
+    root = ezr.tree(tbl, tbl.rows)
+    
+    # Collect all column indices used in the tree
+    used_indices = set()
+    def collect_indices(node):
+        if node.at is not None:
+            used_indices.add(node.at)
+        for kid in node.kids:
+            collect_indices(kid)
+            
+    collect_indices(root)
+    
+    # Identify all input columns (exclude goals and skip columns)
+    # Goal columns end in '+' or '-'
+    input_indices = [i for i, name in enumerate(header) 
+                     if name[-1] not in "+-!" and name != "EmployeeNumber"]
+    
+    # The columns that have "nothing to do" are those not in used_indices
+    unused = [header[i] for i in input_indices if i not in used_indices]
+    
+    return unused
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Get the list of columns that don't impact tenure
+    irrelevant_cols = blame(header, rows)
+    
+    print("--- Analysis: Columns with no impact on tenure ---")
+    print("The following columns do not appear to influence tenure and could be removed:")
+    for i, col in enumerate(irrelevant_cols, 1):
+        print(f"{i}. {col}")
+        
+    print(f"\nTotal columns recommended for removal: {len(irrelevant_cols)}")
+    exit(0)

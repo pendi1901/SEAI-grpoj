@@ -1,0 +1,76 @@
+```python
+import csv
+
+def spot(header, rows):
+    """
+    Identifies rows that are 'unlike anyone we have employed' by calculating 
+    the distance of each row to the nearest neighbor in the training set.
+    Rows with a large distance to their nearest neighbor are considered 
+    'untrusted' or 'outliers' because they represent novel, unseen profiles.
+    """
+    # Identify numeric input columns (exclude goals)
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    numeric_indices = [i for i, name in enumerate(header) if name[0].isupper() and i not in goal_indices]
+    
+    # Extract numeric data for distance calculation
+    data = []
+    for row in rows:
+        data.append([row[i] for i in numeric_indices])
+    
+    # Normalize numeric data (Min-Max)
+    mins = [min(col) for col in zip(*data)]
+    maxs = [max(col) for col in zip(*data)]
+    
+    def normalize(row_vals):
+        norm = []
+        for i, val in enumerate(row_vals):
+            denom = (maxs[i] - mins[i]) if (maxs[i] - mins[i]) != 0 else 1
+            norm.append((val - mins[i]) / denom)
+        return norm
+
+    norm_data = [normalize(row) for row in data]
+    
+    # For each row, find the distance to the nearest neighbor
+    # A large distance means the row is 'unlike anyone we have employed'
+    suspicion_scores = []
+    for i in range(len(norm_data)):
+        min_dist = float('inf')
+        for j in range(len(norm_data)):
+            if i == j: continue
+            dist = sum((a - b) ** 2 for a, b in zip(norm_data[i], norm_data[j])) ** 0.5
+            if dist < min_dist:
+                min_dist = dist
+        suspicion_scores.append((min_dist, i))
+    
+    # Sort by distance descending (most suspicious/novel first)
+    suspicion_scores.sort(key=lambda x: x[0], reverse=True)
+    
+    return [idx for _, idx in suspicion_scores]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    suspects = spot(header, rows)
+    
+    print("Customer Analysis: Identifying novel employee profiles.")
+    print("The following rows represent employees who are 'unlike anyone we have employed'.")
+    print("Estimates for these individuals are less reliable due to lack of historical data.")
+    print("Top 5 most novel/untrusted row indices:")
+    for idx in suspects[:5]:
+        print(f"- Row {idx}")
+```

@@ -1,0 +1,69 @@
+import csv
+import pandas as pd
+import numpy as np
+
+def flow(header, row, seen):
+    """
+    Warns the customer if a row is 'going bad'.
+    A row is 'going bad' if its performance is significantly worse than the 
+    average performance of the rows seen so far.
+    """
+    if not seen:
+        return False
+
+    goals = [c for c in header if c.endswith('-') or c.endswith('+')]
+    
+    def get_score(r):
+        score = 0
+        for g in goals:
+            idx = header.index(g)
+            val = float(r[idx])
+            # Normalize relative to the range of seen data
+            seen_vals = [float(s[idx]) for s in seen]
+            min_v, max_v = min(seen_vals), max(seen_vals)
+            norm = (val - min_v) / (max_v - min_v + 1e-9)
+            if g.endswith('+'):
+                norm = 1 - norm
+            score += norm
+        return score
+
+    # Calculate current row score and average of seen scores
+    current_score = get_score(row)
+    seen_scores = [get_score(s) for s in seen]
+    avg_seen_score = np.mean(seen_scores)
+    std_seen_score = np.std(seen_scores) + 1e-9
+
+    # If the current row is more than 2 standard deviations worse than the average,
+    # we flag it as "going bad".
+    if current_score > (avg_seen_score + 2 * std_seen_score):
+        return True
+    
+    return False
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) if val.replace('.', '', 1).isdigit() or 
+                             (val.startswith('-') and val[1:].replace('.', '', 1).isdigit()) 
+                             else val for val in row])
+        
+        bad_count = 0
+        seen = []
+        for row in rows:
+            if flow(header, row, seen):
+                bad_count += 1
+            seen.append(row)
+            
+        print("Customer Inquiry: Warn me the moment a project starts to go bad.")
+        print(f"Analysis: Monitored {len(rows)} incoming project reports.")
+        print(f"Result: Identified {bad_count} instances where project performance degraded significantly.")
+        print("The system is now configured to trigger an alert when performance drops below the established baseline.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

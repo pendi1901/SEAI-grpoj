@@ -1,0 +1,119 @@
+import csv
+import random
+
+def race(header, rows, label):
+    """
+    Compares three strategies to find the best row (highest tenure metrics).
+    Budget: 50 labels total.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    
+    def get_score(row_goals):
+        score = 0
+        for i, val in enumerate(row_goals):
+            name = header[goal_indices[i]]
+            if name.endswith('+'):
+                score += val
+            else:
+                score -= val
+        return score
+
+    # Budget management
+    labeled = {}
+    def get_label(i):
+        if i not in labeled:
+            labeled[i] = label(i)
+        return labeled[i]
+
+    # Strategy 1: Random
+    def strategy_random():
+        indices = random.sample(range(len(rows)), 16)
+        best_idx = -1
+        best_score = -float('inf')
+        for idx in indices:
+            score = get_score(get_label(idx))
+            if score > best_score:
+                best_score, best_idx = score, idx
+        return best_idx
+
+    # Strategy 2: High Tenure (Focus on YearsAtCompany+)
+    def strategy_tenure():
+        # Sample 17 rows, pick the one with highest YearsAtCompany+
+        idx_tenure = header.index('YearsAtCompany+')
+        indices = random.sample(range(len(rows)), 17)
+        best_idx = -1
+        best_val = -float('inf')
+        for idx in indices:
+            val = get_label(idx)[goal_indices.index(idx_tenure)]
+            if val > best_val:
+                best_val, best_idx = val, idx
+        return best_idx
+
+    # Strategy 3: High Job Level (Proxy for seniority)
+    def strategy_seniority():
+        # Sample 17 rows, pick the one with highest JobLevel
+        idx_level = header.index('JobLevel')
+        indices = random.sample(range(len(rows)), 17)
+        best_idx = -1
+        best_val = -float('inf')
+        for idx in indices:
+            val = rows[idx][idx_level]
+            if val > best_val:
+                best_val, best_idx = val, idx
+        return best_idx
+
+    strategies = {
+        "random": strategy_random,
+        "tenure_focus": strategy_tenure,
+        "seniority_focus": strategy_seniority
+    }
+
+    results = {}
+    for name, func in strategies.items():
+        results[name] = func()
+
+    # Determine winner
+    best_overall_idx = -1
+    best_overall_score = -float('inf')
+    winner = None
+    
+    for name, idx in results.items():
+        score = get_score(get_label(idx))
+        if score > best_overall_score:
+            best_overall_score = score
+            best_overall_idx = idx
+            winner = name
+
+    return {"winner": winner, "row": best_overall_idx, "tried": list(strategies.keys())}
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    
+    def label(i):
+        return [float(rows[i][idx]) for idx in goal_indices]
+
+    # Mask
+    for row in rows:
+        for idx in goal_indices:
+            row[idx] = "?"
+
+    result = race(header, rows, label)
+    print(f"Winner: {result['winner']}")
+    print(f"Best Row Found: {result['row']}")
+    print(f"Strategies Tried: {', '.join(result['tried'])}")

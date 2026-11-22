@@ -1,0 +1,59 @@
+import csv
+import step01
+
+def flow(header, row, seen):
+    """
+    Decides whether to approve a row based on whether it is better than
+    any row seen so far. Uses the scoring logic from step01.
+    """
+    # Identify goal indices and directions
+    goal_indices = []
+    for i, name in enumerate(header):
+        if name.endswith('-') or name.endswith('+'):
+            goal_indices.append((i, name[-1]))
+
+    def score_row(r):
+        total = 0.0
+        for idx, op in goal_indices:
+            val = float(r[idx])
+            if op == '-':
+                total += val
+            else:
+                total += (1.0 - val)
+        return total
+
+    current_score = score_row(row)
+    
+    # If this is the first row, we have no baseline, so we keep it
+    if not seen:
+        return True
+    
+    # Compare against the best score seen so far
+    best_seen_score = min(score_row(r) for r in seen)
+    
+    # Approve if it's better (lower score) than anything seen before
+    return current_score < best_seen_score
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', newline='') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) for val in row])
+        
+        approved = []
+        seen = []
+        for row in rows:
+            if flow(header, row, seen):
+                approved.append(row)
+            seen.append(row)
+            
+        print(f"Processed {len(rows)} proposals.")
+        print(f"Approved {len(approved)} proposals based on the 'better than all previous' strategy.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

@@ -1,0 +1,122 @@
+```python
+import csv
+import random
+
+def race(header, rows, label):
+    """
+    Compares three strategies:
+    1. 'random': Picks 16 random rows.
+    2. 'big_teams': Picks 16 rows with the largest 'Team Size'.
+    3. 'greedy': Picks 16 rows with the smallest 'Size' (as a heuristic for efficiency).
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    team_size_idx = header.index('Team Size')
+    size_idx = header.index('Size')
+
+    def get_score(goals):
+        score = 0
+        for i, g_idx in enumerate(goal_indices):
+            val = goals[i]
+            # Normalize: for '-', lower is better; for '+', higher is better
+            # We assume 0-1 range based on the dataset characteristics
+            if header[g_idx].endswith('-'):
+                score += (1.0 - val)
+            else:
+                score += val
+        return score / len(goal_indices)
+
+    # Strategy 1: Random
+    def strategy_random(budget):
+        indices = random.sample(range(len(rows)), budget)
+        best_idx, best_score = -1, -float('inf')
+        for idx in indices:
+            score = get_score(label(idx))
+            if score > best_score:
+                best_score, best_idx = score, idx
+        return best_idx, best_score
+
+    # Strategy 2: Big Teams (Customer's current approach)
+    def strategy_big_teams(budget):
+        # Sort by team size descending and pick the top 'budget'
+        sorted_indices = sorted(range(len(rows)), key=lambda i: rows[i][team_size_idx], reverse=True)
+        indices = sorted_indices[:budget]
+        best_idx, best_score = -1, -float('inf')
+        for idx in indices:
+            score = get_score(label(idx))
+            if score > best_score:
+                best_score, best_idx = score, idx
+        return best_idx, best_score
+
+    # Strategy 3: Greedy (Smallest Size)
+    def strategy_greedy(budget):
+        sorted_indices = sorted(range(len(rows)), key=lambda i: rows[i][size_idx])
+        indices = sorted_indices[:budget]
+        best_idx, best_score = -1, -float('inf')
+        for idx in indices:
+            score = get_score(label(idx))
+            if score > best_score:
+                best_score, best_idx = score, idx
+        return best_idx, best_score
+
+    strategies = {
+        "random": lambda: strategy_random(16),
+        "big_teams": lambda: strategy_big_teams(16),
+        "greedy": lambda: strategy_greedy(16)
+    }
+    
+    results = {}
+    for name, func in strategies.items():
+        results[name] = func()
+        
+    winner = max(results, key=lambda n: results[n][1])
+    
+    return {
+        "winner": winner,
+        "row": results[winner][0],
+        "tried": list(strategies.keys())
+    }
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            true_goals = []
+            for row in reader:
+                processed = []
+                goals = []
+                for i, val in enumerate(row):
+                    if header[i].endswith(('-', '+')):
+                        goals.append(float(val))
+                        processed.append("?")
+                    else:
+                        try:
+                            processed.append(float(val))
+                        except ValueError:
+                            processed.append(val)
+                rows.append(processed)
+                true_goals.append(goals)
+
+        called = set()
+        def label(i):
+            if i not in called:
+                if len(called) >= 50:
+                    raise Exception("Budget exceeded")
+                called.add(i)
+            return true_goals[i]
+
+        result = race(header, rows, label)
+        print("Comparison: Is 'Big Teams' the best strategy?")
+        print("-" * 50)
+        print(f"Winner: {result['winner']}")
+        print(f"Best Row Index Found: {result['row']}")
+        print(f"Strategies Compared: {', '.join(result['tried'])}")
+        print("\nIf 'big_teams' is not the winner, it suggests that simply")
+        print("throwing more resources at a project is less effective than")
+        print("selecting configurations based on data-driven optimization.")
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
+```

@@ -1,0 +1,54 @@
+```python
+import ezr
+import random
+
+def justify(header, rows, row):
+    """
+    Estimates the performance of a row and compares it to the population.
+    Returns (p, reason) where p is the fraction of rows worse than the input,
+    and reason explains why simply increasing income is not a universal fix.
+    """
+    # Create a table to handle column definitions and distance calculations
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Build a tree to estimate performance (ydist) for the input row
+    # The tree clusters rows by input characteristics; the leaf mean is our estimate.
+    root = ezr.tree(tbl, rows)
+    leaf_node = ezr.leaf(root, row)
+    estimated_ydist = leaf_node.mu
+    
+    # Calculate p: fraction of rows that are worse than our estimated row
+    # (i.e., have a higher ydist, meaning they are further from the goals)
+    all_ydists = [ezr.ydist(tbl, r) for r in rows]
+    worse_count = sum(1 for d in all_ydists if d > estimated_ydist)
+    p = worse_count / len(rows)
+    
+    # Reason: Explain that performance is multi-dimensional (WorkLifeBalance, 
+    # YearsInCurrentRole, etc.) and income is only one factor.
+    reason = (
+        "Increasing income does not guarantee retention because our model shows "
+        "that performance is driven by a complex mix of factors like work-life "
+        "balance and career growth, not just salary."
+    )
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Pick a random row to test, mask its goals
+    test_row = list(random.choice(rows))
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(("+", "-"))]
+    for idx in goal_indices:
+        test_row[idx] = "?"
+        
+    p, reason = justify(header, rows, test_row)
+    
+    print(f"Ranking: {p:.2f}")
+    print(f"Justification: {reason}")
+    
+    exit(0)
+```

@@ -1,0 +1,71 @@
+import csv
+from step01 import remember
+
+def blame(header, rows):
+    """
+    Identifies input columns that correlate most strongly with 'bad' performance.
+    'Bad' is defined as the bottom 25% of rows based on the remember() score.
+    We calculate the correlation between each input and the score.
+    """
+    # Identify goal indices
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+    
+    # Calculate scores for all rows to identify the 'bad' ones
+    # remember() returns indices of the top 5%. We want the bottom 25%.
+    # Re-implementing score logic locally for efficiency
+    mres = [r[mre_idx] for r in rows]
+    accs = [r[acc_idx] for r in rows]
+    preds = [r[pred_idx] for r in rows]
+    
+    min_mre, max_mre = min(mres), max(mres)
+    min_acc, max_acc = min(accs), max(accs)
+    min_pred, max_pred = min(preds), max(preds)
+
+    def norm(v, mi, ma): return (v - mi) / (ma - mi) if ma > mi else 0
+    
+    scores = []
+    for r in rows:
+        s = (1 - norm(r[mre_idx], min_mre, max_mre)) + \
+            norm(r[acc_idx], min_acc, max_acc) + \
+            norm(r[pred_idx], min_pred, max_pred)
+        scores.append(s)
+    
+    # Identify input columns
+    input_cols = [i for i, h in enumerate(header) if h not in ['MRE-', 'ACC+', 'PRED40+']]
+    
+    # Find correlation: how much does a feature value deviate from the mean
+    # in the worst 25% of rows?
+    threshold = sorted(scores)[len(scores) // 4]
+    bad_rows = [rows[i] for i, s in enumerate(scores) if s <= threshold]
+    
+    # Simple heuristic: feature importance = abs(mean(bad) - mean(all))
+    impacts = []
+    for i in input_cols:
+        col_vals = [r[i] for r in rows if not isinstance(r[i], str)]
+        if not col_vals: continue
+        
+        bad_vals = [r[i] for r in bad_rows if not isinstance(r[i], str)]
+        if not bad_vals: continue
+        
+        diff = abs((sum(bad_vals)/len(bad_vals)) - (sum(col_vals)/len(col_vals)))
+        impacts.append((diff, header[i]))
+    
+    impacts.sort(reverse=True)
+    return [name for _, name in impacts[:2]]
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = [val if header[i] == 'criterion' else float(val) 
+                             for i, val in enumerate(row)]
+            rows.append(processed_row)
+            
+    bad_settings = blame(header, rows)
+    print("The settings causing the most damage are:", ", ".join(bad_settings))
+    print("These columns show the highest deviation in the worst-performing setups.")

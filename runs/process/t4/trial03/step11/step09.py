@@ -1,0 +1,55 @@
+import csv
+import pandas as pd
+import numpy as np
+from sklearn.ensemble import IsolationForest
+
+def spot(header, rows):
+    """
+    Identifies rows that are outliers (potentially mistyped or made up)
+    using an Isolation Forest model on the input columns.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    
+    # Identify input columns (those not ending in - or +)
+    inputs = [c for c in header if not (c.endswith('-') or c.endswith('+'))]
+    
+    # Use Isolation Forest to detect anomalies
+    # contamination=0.05 assumes roughly 5% of the data might be outliers
+    model = IsolationForest(n_estimators=100, contamination=0.05, random_state=42)
+    
+    # Fit on input data
+    X = df[inputs]
+    preds = model.fit_predict(X)
+    scores = model.decision_function(X)
+    
+    # Isolation Forest returns -1 for outliers, 1 for inliers.
+    # The decision_function returns lower values for more anomalous points.
+    outlier_indices = np.where(preds == -1)[0]
+    
+    # Sort by anomaly score (lower is more anomalous)
+    sorted_outliers = sorted(outlier_indices, key=lambda i: scores[i])
+    
+    return sorted_outliers
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                # Convert numeric columns to float
+                processed_row = [float(val) if val.replace('.','',1).isdigit() or (val.startswith('-') and val[1:].replace('.','',1).isdigit()) else val for val in row]
+                rows.append(processed_row)
+        
+        suspicious_rows = spot(header, rows)
+        
+        print("Customer Inquiry: Identifying potentially mistyped or invalid records.")
+        print(f"Analysis: Found {len(suspicious_rows)} suspicious records.")
+        print("The following row indices are the most likely to be outliers (most suspicious first):")
+        print(suspicious_rows[:10])
+        
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

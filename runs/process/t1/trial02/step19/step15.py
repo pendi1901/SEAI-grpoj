@@ -1,0 +1,61 @@
+import csv
+
+def blame(header, rows):
+    """
+    Identifies the two input columns that correlate most strongly with 
+    the 'Cost-' goal. We define 'worst' as rows where 'Cost-' is in 
+    the top 25% (highest values). We then find input columns that 
+    have the highest correlation with these high 'Cost-' values.
+    """
+    cost_idx = header.index('Cost-')
+    input_indices = [i for i, name in enumerate(header) 
+                     if not (name.endswith('-') or name.endswith('+'))]
+    
+    # Sort rows by Cost- descending to find the "worst"
+    sorted_rows = sorted(rows, key=lambda r: float(r[cost_idx]), reverse=True)
+    worst_rows = sorted_rows[:len(rows) // 4]
+    
+    # Calculate average of each input in the worst rows
+    # and compare to the global average of that input.
+    # A high difference indicates that input contributes to the "worst" state.
+    scores = []
+    for i in input_indices:
+        worst_avg = sum(float(r[i]) for r in worst_rows) / len(worst_rows)
+        global_avg = sum(float(r[i]) for r in rows) / len(rows)
+        
+        # We look for inputs that are significantly higher in the worst rows
+        # (Assuming higher input values correlate with higher Cost- values)
+        diff = worst_avg - global_avg
+        scores.append((diff, header[i]))
+    
+    # Sort by difference descending
+    scores.sort(key=lambda x: x[0], reverse=True)
+    
+    # Return the top 2 inputs that explain the cost
+    return [name for diff, name in scores[:2]]
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [row for row in reader]
+            
+            # Identify all input columns
+            all_inputs = [name for name in header if not (name.endswith('-') or name.endswith('+'))]
+            
+            # Get the top 2 factors
+            important = blame(header, rows)
+            
+            # Determine what can be ignored (the rest)
+            ignored = [name for name in all_inputs if name not in important]
+            
+            print("Customer Inquiry: Which project facts matter most to cost?")
+            print(f"Analysis: The most critical factors affecting cost are: {', '.join(important)}.")
+            print(f"You can likely stop worrying about: {', '.join(ignored)}.")
+            print("These factors show the strongest correlation with high-cost outcomes.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

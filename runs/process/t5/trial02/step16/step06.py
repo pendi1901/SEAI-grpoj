@@ -1,0 +1,49 @@
+import ezr
+import random
+
+def justify(header, rows, row):
+    """
+    Returns (p, reason): p is the fraction of rows that 'row' is better than,
+    and a sentence explaining the justification.
+    """
+    # Create a table to handle normalization and ydist calculations
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Build a tree to estimate the performance of the provided row
+    # The tree ranker uses the leaf's mean ydist to estimate performance
+    ranker = ezr.ranker(tbl)
+    estimated_ydist = ranker(row)
+    
+    # Calculate ydist for all known rows to compare against
+    all_ydists = [ezr.ydist(tbl, r) for r in rows]
+    
+    # Count how many rows are worse (have a higher ydist) than our estimate
+    # A lower ydist is better, so we are better than rows with higher ydist
+    better_than_count = sum(1 for y in all_ydists if y > estimated_ydist)
+    p = better_than_count / len(rows)
+    
+    # Construct the reason string
+    reason = (f"This setup is estimated to be in the top {int((1-p)*100)}% "
+              f"of all possible configurations based on its input characteristics.")
+    
+    return p, reason
+
+if __name__ == "__main__":
+    # Load data
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Pick a sample row to justify (e.g., the 10th row)
+    # Mask its goal columns to simulate the "unknown" scenario
+    sample_row = list(rows[10])
+    goal_indices = [i for i, name in enumerate(header) if name[-1] in "+-"]
+    for idx in goal_indices:
+        sample_row[idx] = "?"
+        
+    p, reason = justify(header, rows, sample_row)
+    
+    print(f"Justification for the provided setup:")
+    print(f"Performance percentile: {p:.4f}")
+    print(f"Reason: {reason}")

@@ -1,0 +1,76 @@
+```python
+import ezr
+import random
+
+def guess(header, train, test):
+    """
+    Estimates the value of the first goal column for test rows.
+    Uses a tree-based approach to predict the outcome based on training data.
+    """
+    # Create a table from the training data
+    # ezr.Tbl expects the header as the first row of the input
+    train_tbl = ezr.Tbl([header] + train)
+    
+    # Build a tree on the training data to learn patterns
+    # The tree nodes contain the mean ydist, but we need to predict 
+    # the specific value of the first goal column.
+    # We can use the tree to find the 'leaf' for each test row,
+    # then return the average of the first goal column in that leaf.
+    
+    # Identify the first goal column index
+    # Goals are columns ending in '+' or '-'
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(("+", "-"))]
+    first_goal_idx = goal_indices[0]
+    
+    # Build the tree
+    root = ezr.tree(train_tbl, train_tbl.rows)
+    
+    # Helper to get the average of the first goal in a leaf
+    def get_leaf_prediction(node):
+        vals = [r[first_goal_idx] for r in node.rows if isinstance(r[first_goal_idx], (int, float))]
+        return sum(vals) / len(vals) if vals else 0.0
+
+    # Map leaves to their average goal value
+    leaf_map = {id(leaf): get_leaf_prediction(leaf) for leaf in ezr.leafs(root)}
+    
+    # Predict for each test row
+    predictions = []
+    for row in test:
+        leaf = ezr.leaf(root, row)
+        predictions.append(leaf_map[id(leaf)])
+        
+    return predictions
+
+if __name__ == "__main__":
+    # Load data
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Split into train and test
+    # Using a simple split for demonstration
+    random.seed(1234567891)
+    random.shuffle(rows)
+    split = int(len(rows) * 0.8)
+    train = rows[:split]
+    test = rows[split:]
+    
+    # Mask the goals in the test set
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(("+", "-"))]
+    masked_test = []
+    for row in test:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_test.append(new_row)
+        
+    # Get predictions
+    predictions = guess(header, train, masked_test)
+    
+    # Print a summary
+    print(f"Estimated values for the first goal column ('{header[goal_indices[0]]}') for {len(predictions)} test records.")
+    print(f"First 5 predictions: {[round(p, 2) for p in predictions[:5]]}")
+    
+    exit(0)
+```

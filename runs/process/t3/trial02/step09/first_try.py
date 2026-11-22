@@ -1,0 +1,56 @@
+import csv
+import pandas as pd
+import numpy as np
+from sklearn.ensemble import IsolationForest
+
+def spot(header, rows):
+    """
+    Identifies rows that are outliers in the dataset using Isolation Forest.
+    Returns the indices of the most suspicious rows, sorted by anomaly score.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    
+    # We only consider numeric columns for anomaly detection as per the prompt
+    # The prompt states: "Column names starting in upper case are numeric"
+    numeric_cols = [c for c in header if c[0].isupper()]
+    data = df[numeric_cols].values
+    
+    # Isolation Forest is effective for detecting anomalies in high-dimensional data
+    # contamination='auto' lets the model decide the threshold
+    clf = IsolationForest(n_estimators=100, contamination=0.05, random_state=42)
+    
+    # decision_function returns the anomaly score (lower is more anomalous)
+    scores = clf.decision_function(data)
+    
+    # Get indices sorted by score (ascending, so most anomalous first)
+    suspicious_indices = np.argsort(scores)
+    
+    return suspicious_indices.tolist()
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed_row = []
+                for val in row:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        suspicious = spot(header, rows)
+        
+        print("Customer Inquiry: Which records look mistyped or made up?")
+        print(f"Analysis: Identified {len(suspicious)} potentially anomalous records.")
+        print("The 5 most suspicious row indices are:")
+        for i in range(min(5, len(suspicious))):
+            print(f"- Row {suspicious[i]}")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

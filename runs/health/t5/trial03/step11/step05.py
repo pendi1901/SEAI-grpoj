@@ -1,0 +1,74 @@
+import ezr
+
+def blame(header, rows):
+    """
+    Identify input columns that best explain why the worst rows are bad.
+    We compare the distribution of input values in the worst 25% of rows
+    against the rest, looking for columns where the distribution is 
+    significantly different.
+    """
+    # Create a table to use ezr's ydist and column logic
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Score all rows by ydist (lower is better)
+    scored = []
+    for row in rows:
+        scored.append((ezr.ydist(tbl, row), row))
+    
+    # Sort by ydist and pick the worst 25%
+    scored.sort(key=lambda x: x[0], reverse=True)
+    n_worst = len(rows) // 4
+    worst = [x[1] for x in scored[:n_worst]]
+    rest = [x[1] for x in scored[n_worst:]]
+    
+    # Identify input columns (those not ending in +, -, or !)
+    input_indices = [
+        i for i, name in enumerate(header) 
+        if not (name.endswith('+') or name.endswith('-') or name.endswith('!'))
+    ]
+    
+    # For each input column, check if the distribution in 'worst' is 
+    # significantly different from 'rest' using stats
+    suspects = []
+    for i in input_indices:
+        col = tbl.cols[i]
+        if isinstance(col, ezr.Num):
+            # For numeric, compare distributions
+            xs = [r[i] for r in worst if r[i] != "?"]
+            ys = [r[i] for r in rest if r[i] != "?"]
+            if len(xs) > 5 and len(ys) > 5:
+                if not ezr.same(sorted(xs), sorted(ys)):
+                    suspects.append(header[i])
+        else:
+            # For symbolic, check if the most common value in 'worst' 
+            # is different from the most common in 'rest'
+            w_counts = {}
+            for r in worst:
+                v = r[i]
+                w_counts[v] = w_counts.get(v, 0) + 1
+            r_counts = {}
+            for r in rest:
+                v = r[i]
+                r_counts[v] = r_counts.get(v, 0) + 1
+            
+            w_top = max(w_counts, key=w_counts.get) if w_counts else None
+            r_top = max(r_counts, key=r_counts.get) if r_counts else None
+            
+            if w_top != r_top:
+                suspects.append(header[i])
+                
+    return suspects
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    suspects = blame(header, rows)
+    
+    print("Analysis: Which settings are causing the worst performance?")
+    if suspects:
+        print(f"The following settings significantly correlate with poor outcomes: {', '.join(suspects)}")
+    else:
+        print("No single setting clearly explains the poor performance.")

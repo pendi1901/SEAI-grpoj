@@ -1,0 +1,47 @@
+import ezr
+import random
+
+def remember(header, rows):
+    """
+    Identifies the top 5% of rows based on multi-objective optimization.
+    Uses the ydist metric from ezr to find rows closest to the ideal goals.
+    """
+    # Create a table object to leverage ezr's column and distance logic
+    # We prepend the header to the rows to match the Tbl constructor expectation
+    data = [header] + rows
+    tbl = ezr.Tbl(data)
+    
+    # Calculate ydist for all rows
+    # ydist measures how far a row's goals are from the best possible values
+    scored_rows = []
+    for i, row in enumerate(rows):
+        d = ezr.ydist(tbl, row)
+        scored_rows.append((d, i))
+    
+    # Sort by distance (ascending: smaller distance is better)
+    scored_rows.sort(key=lambda x: x[0])
+    
+    # Return the top 5% of indices
+    limit = max(1, len(rows) // 20)
+    return [idx for _, idx in scored_rows[:limit]]
+
+if __name__ == "__main__":
+    # Load data
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    all_data = list(ezr.csv(filename))
+    header = all_data[0]
+    rows = all_data[1:]
+    
+    # Get best indices
+    best_indices = remember(header, rows)
+    
+    # Print results
+    print(f"Found {len(best_indices)} top-performing setups out of {len(rows)}.")
+    print("Indices of the most trustworthy setups (0-based):")
+    print(best_indices)
+    
+    # Show a summary of the first best row found
+    best_row = rows[best_indices[0]]
+    print("\nExample of a top-performing setup:")
+    for h, v in zip(header, best_row):
+        print(f"  {h:25}: {v}")

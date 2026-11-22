@@ -1,0 +1,53 @@
+```python
+import ezr
+import step05
+
+def blame(header, rows):
+    """
+    Identify input columns that have the least impact on retention.
+    We define 'least impact' as columns that are rarely used in the 
+    decision tree splits that isolate the worst-performing rows.
+    """
+    # Create a table to handle the data
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Build a tree to see what splits separate the data
+    node = ezr.tree(tbl, rows)
+    
+    # Count how often each input column is used in the entire tree
+    counts = {col.txt: 0 for col in tbl.x}
+    
+    def count_splits(n):
+        if n.at is not None:
+            col_name = header[n.at]
+            if col_name in counts:
+                counts[col_name] += 1
+            for kid in n.kids:
+                count_splits(kid)
+                
+    count_splits(node)
+    
+    # Columns with the lowest counts are the ones that have little to do
+    # with the decision logic for retention.
+    sorted_cols = sorted(counts.items(), key=lambda x: x[1])
+    
+    # Return the names of columns that were never used or rarely used
+    return [name for name, count in sorted_cols if count <= 1]
+
+if __name__ == "__main__":
+    # Load data
+    data = list(ezr.csv("WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"))
+    header = data[0]
+    rows = data[1:]
+    
+    # Get the columns that have little to do with retention
+    unimportant_factors = blame(header, rows)
+    
+    print("Analysis: Which columns have little impact on retention?")
+    print("The following input columns are rarely or never used in decision trees")
+    print("to explain retention outcomes and may be candidates for removal:")
+    print(", ".join(unimportant_factors[:10]) + "...")
+    print("\nLogic: Columns with low usage in decision tree splits are considered")
+    print("to have minimal influence on the model's ability to distinguish")
+    print("between high and low retention outcomes.")
+```

@@ -1,0 +1,60 @@
+import csv
+import pandas as pd
+import numpy as np
+from sklearn.neighbors import NearestNeighbors
+from step01 import remember as step01_remember
+
+def find_similar(header, rows, target_row, n=5):
+    """
+    Finds the n rows most similar to the target_row based on input columns.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    inputs = [c for c in header if not (c.endswith('-') or c.endswith('+'))]
+    
+    # Extract inputs for training and target
+    X = df[inputs]
+    target_x = pd.DataFrame([target_row], columns=header)[inputs]
+    
+    # Use NearestNeighbors to find similarity
+    nn = NearestNeighbors(n_neighbors=n)
+    nn.fit(X)
+    distances, indices = nn.kneighbors(target_x)
+    
+    return indices[0].tolist()
+
+def remember(header, rows):
+    """
+    Returns the top 5% of rows based on goal performance.
+    """
+    return step01_remember(header, rows)
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) for val in row])
+        
+        # Example: Customer provides a setup (using the first row as a sample)
+        target_row = rows[0]
+        
+        # Find similar past setups
+        similar_indices = find_similar(header, rows, target_row, n=3)
+        
+        print("Customer Inquiry: Show me the past ones most like my proposed setup.")
+        print("Analysis: Here are the most similar historical configurations:")
+        
+        goals = [c for c in header if c.endswith('-') or c.endswith('+')]
+        for idx in similar_indices:
+            row_data = dict(zip(header, rows[idx]))
+            goal_vals = {g: row_data[g] for g in goals}
+            print(f"- Row {idx}: Goals {goal_vals}")
+            
+        print("\nNote: These setups were identified based on input parameter similarity.")
+        
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

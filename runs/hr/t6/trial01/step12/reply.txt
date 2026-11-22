@@ -1,0 +1,63 @@
+```python
+import ezr
+import step02
+import random
+
+def guess(header, train, test):
+    """
+    Estimate the first goal column ('YearsAtCompany+') for test rows.
+    We simulate the impact of cutting overtime by setting 'overTime' to 'No'
+    for all test rows that are in the 'Sales' department, then using the 
+    tree-based estimation logic from step02.
+    """
+    # Identify indices
+    ot_idx = header.index('overTime')
+    dept_idx = header.index('department')
+    
+    # Modify test rows: If department is Sales, set overTime to No
+    modified_test = []
+    for row in test:
+        new_row = list(row)
+        if new_row[dept_idx] == 'Sales':
+            new_row[ot_idx] = 'No'
+        modified_test.append(new_row)
+        
+    # Reuse the estimation logic from step02
+    return step02.guess(header, train, modified_test)
+
+if __name__ == "__main__":
+    # Load data
+    data = list(ezr.csv("WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"))
+    header = data[0]
+    rows = data[1:]
+    
+    # Split data: 80% train, 20% test
+    random.seed(1234567891)
+    random.shuffle(rows)
+    n = int(len(rows) * 0.8)
+    train = rows[:n]
+    test = rows[n:]
+    
+    # Identify the first goal column index
+    goal_idx = -1
+    for i, name in enumerate(header):
+        if name.endswith('+') or name.endswith('-'):
+            goal_idx = i
+            break
+            
+    # Hide goal in test rows
+    test_hidden = []
+    for row in test:
+        new_row = list(row)
+        new_row[goal_idx] = "?"
+        test_hidden.append(new_row)
+        
+    # Get estimates
+    estimates = guess(header, train, test_hidden)
+    
+    # Print summary
+    print("Analysis: Impact of cutting overtime in Sales on 'YearsAtCompany+'.")
+    print(f"Average estimated tenure after policy change: {sum(estimates)/len(estimates):.2f} years.")
+    print("Logic: We simulated a policy where all Sales employees work 'No' overtime,")
+    print("then used a decision tree trained on the original data to predict outcomes.")
+```

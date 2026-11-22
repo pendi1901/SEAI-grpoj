@@ -1,0 +1,84 @@
+import csv
+
+def blame(header, rows):
+    """
+    Identifies input columns that have 'nothing to do' with tenure.
+    We define 'nothing to do' as columns where the distribution of values 
+    in the 'worst' 20% of employees (by tenure) is statistically 
+    indistinguishable from the distribution in the 'best' 20%.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    input_indices = [i for i, name in enumerate(header) if not (name.endswith('+') or name.endswith('-'))]
+    
+    # Calculate tenure score for each row
+    def get_score(row):
+        score = 0
+        for i in goal_indices:
+            val = float(row[i])
+            if header[i].endswith('+'):
+                score += val
+            else:
+                score -= val
+        return score
+
+    # Sort rows by tenure score
+    sorted_rows = sorted(rows, key=get_score)
+    worst = sorted_rows[:int(len(rows) * 0.2)]
+    best = sorted_rows[-int(len(rows) * 0.2):]
+    
+    useless_cols = []
+    
+    for i in input_indices:
+        col_name = header[i]
+        vals_worst = [r[i] for r in worst]
+        vals_best = [r[i] for r in best]
+        
+        # Check if distributions are similar (noise)
+        if isinstance(vals_worst[0], float):
+            mu_w = sum(vals_worst) / len(vals_worst)
+            mu_b = sum(vals_best) / len(vals_best)
+            var_w = sum((x - mu_w)**2 for x in vals_worst) / len(vals_worst)
+            var_b = sum((x - mu_b)**2 for x in vals_best) / len(vals_best)
+            pooled_std = ((var_w + var_b) / 2) ** 0.5
+            
+            if pooled_std == 0:
+                if mu_w == mu_b: useless_cols.append(col_name)
+            else:
+                d = abs(mu_w - mu_b) / pooled_std
+                if d < 0.2: # Very small effect size
+                    useless_cols.append(col_name)
+        else:
+            # Symbolic: check if frequency distributions are similar
+            freq_w = {v: vals_worst.count(v) / len(vals_worst) for v in set(vals_worst)}
+            freq_b = {v: vals_best.count(v) / len(vals_best) for v in set(vals_best)}
+            diff = sum(abs(freq_w.get(k, 0) - freq_b.get(k, 0)) for k in set(freq_w) | set(freq_b))
+            if diff < 0.2:
+                useless_cols.append(col_name)
+                
+    return useless_cols
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    useless = blame(header, rows)
+    
+    print("Columns that have little to no correlation with tenure (candidates for removal):")
+    for col in useless:
+        print(f"- {col}")

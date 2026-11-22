@@ -1,0 +1,65 @@
+import csv
+from step05 import blame as step05_blame
+
+def blame(header, rows):
+    """
+    Identifies the most impactful input columns (levers) that correlate with 
+    poor performance in the 'Cost-' goal.
+    """
+    # Identify the goal column to minimize
+    goal_idx = header.index('Cost-')
+    
+    # Identify input columns (non-goal columns)
+    input_indices = [i for i, name in enumerate(header) if not (name.endswith('-') or name.endswith('+'))]
+    
+    # Sort rows by Cost- (ascending: best to worst)
+    # Since Cost- is a goal to minimize, higher values are worse.
+    sorted_rows = sorted(rows, key=lambda r: r[goal_idx], reverse=True)
+    
+    n = len(sorted_rows)
+    quarter = n // 4
+    best_rows = sorted_rows[-quarter:]  # Lowest cost
+    worst_rows = sorted_rows[:quarter]  # Highest cost
+    
+    # Calculate the difference in means for each input column
+    diffs = []
+    for i in input_indices:
+        best_avg = sum(r[i] for r in best_rows) / quarter
+        worst_avg = sum(r[i] for r in worst_rows) / quarter
+        # We want to know what makes Cost- high (worst).
+        # A large positive difference means high values of this input 
+        # correlate with high cost.
+        diffs.append((header[i], worst_avg - best_avg))
+    
+    # Sort by the absolute magnitude of the difference to find what matters most
+    # and what matters least.
+    diffs.sort(key=lambda x: abs(x[1]), reverse=True)
+    
+    # Return the top 2 most impactful inputs
+    return [d[0] for d in diffs[:2]]
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(x) for x in row])
+        
+        # Get the most impactful inputs
+        impactful = blame(header, rows)
+        
+        # Identify the least impactful (the last ones in the sorted list)
+        input_indices = [i for i, name in enumerate(header) if not (name.endswith('-') or name.endswith('+'))]
+        all_inputs = [header[i] for i in input_indices]
+        least_impactful = [name for name in all_inputs if name not in impactful]
+        
+        print("Analysis: What matters most to 'Cost-'?")
+        print(f"The two most important factors are: {', '.join(impactful)}.")
+        print(f"You can likely stop worrying about: {', '.join(least_impactful[:2])} (and others).")
+        exit(0)
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

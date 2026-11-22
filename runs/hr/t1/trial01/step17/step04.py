@@ -1,0 +1,64 @@
+import csv
+
+def flow(header, row, seen):
+    """
+    Decides if the current employee needs a 'what would keep you here' conversation.
+    We prioritize employees with high tenure potential (YearsAtCompany+) 
+    who are currently at risk of attrition.
+    
+    Strategy: If the current employee's tenure metrics are in the top 20% 
+    of what we have seen so far, and they are currently 'No' for attrition 
+    (meaning they are still with us), we flag them for a retention conversation.
+    """
+    # Identify indices
+    tenure_idx = header.index('YearsAtCompany+')
+    attrition_idx = header.index('attrition')
+    
+    # If we haven't seen enough, keep looking
+    if len(seen) < 10:
+        return False
+    
+    # Extract current tenure
+    current_tenure = row[tenure_idx]
+    
+    # Calculate threshold from seen data
+    seen_tenures = [r[tenure_idx] for r in seen]
+    threshold = sorted(seen_tenures, reverse=True)[int(len(seen_tenures) * 0.2)]
+    
+    # If this person is a high-tenure asset and hasn't left yet, 
+    # they are a prime candidate for a retention conversation.
+    if current_tenure >= threshold and row[attrition_idx] == 'No':
+        return True
+    
+    return False
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    seen = []
+    selected_count = 0
+    for row in rows:
+        if flow(header, row, seen):
+            selected_count += 1
+        seen.append(row)
+        
+    print(f"Retention Analysis Complete.")
+    print(f"Total employees processed: {len(rows)}")
+    print(f"Employees flagged for 'what would keep you here' conversation: {selected_count}")
+    print("Strategy: Flagging high-tenure employees currently at risk of attrition.")

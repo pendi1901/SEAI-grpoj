@@ -1,0 +1,86 @@
+```python
+import ezr
+
+def choose(header, rows, label):
+    """
+    Find the best row using a budget of 50 labels.
+    We use ezr's acquire function to intelligently sample the space.
+    """
+    # The error occurred because ezr.ydist tries to normalize '?' values.
+    # We must provide a TBL that has valid goal values for the logic to work.
+    # Since we can only label 50 rows, we build a TBL using only the 
+    # rows we have already labeled.
+    
+    # We need a way to track which rows are labeled.
+    # We will use a dictionary to store the full rows once labeled.
+    labeled_cache = {}
+
+    def oracle_wrapper(row):
+        # Find index by object identity or by searching
+        idx = rows.index(row)
+        if idx not in labeled_cache:
+            full_row = label(idx)
+            labeled_cache[idx] = full_row
+            # Update the row in place
+            for i in range(len(row)):
+                row[i] = full_row[i]
+        return row
+
+    # Initialize with a small sample to build the initial TBL structure
+    # We must ensure the TBL is initialized with at least some valid data
+    # so that norm() doesn't fail on '?'
+    ezr.the.Stop = 50
+    ezr.the.Start = 4
+    
+    # Create a TBL using the rows. We must ensure the TBL knows these are goals.
+    # We use the provided rows (which have '?' in goals).
+    # To prevent the TypeError, we ensure we only call ydist on rows 
+    # that have been fully labeled.
+    data = [header] + rows
+    tbl = ezr.Tbl(data)
+    
+    # The acquire function expects the TBL to have valid Y values.
+    # We override the oracle to ensure the TBL is updated.
+    def smart_label(row):
+        full = oracle_wrapper(row)
+        # Update the TBL's internal column stats with the new real values
+        ezr.addCols(tbl, full)
+        return full
+
+    # Perform the search
+    labeled_rows = ezr.acquire(tbl, cap=50, label=smart_label)
+    
+    # Find the best row among the labeled ones
+    best_row = min(labeled_rows, key=lambda r: ezr.ydist(tbl, r))
+    
+    return rows.index(best_row)
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    
+    try:
+        header = next(data_gen)
+        all_rows = list(data_gen)
+    except StopIteration:
+        exit(1)
+        
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    masked_rows = []
+    for row in all_rows:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_rows.append(new_row)
+        
+    def label_func(idx):
+        return all_rows[idx]
+        
+    best_idx = choose(header, masked_rows, label_func)
+    
+    print(f"Optimization complete.")
+    print(f"Best row found at index: {best_idx}")
+    print(f"Goal values for best row: {[all_rows[best_idx][i] for i in goal_indices]}")
+    
+    exit(0)
+```

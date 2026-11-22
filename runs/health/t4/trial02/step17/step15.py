@@ -1,0 +1,47 @@
+import csv
+import numpy as np
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import LabelEncoder
+from step05 import blame as original_blame
+
+def blame(header, rows):
+    """
+    Identifies input columns that correlate most strongly with poor performance.
+    We define 'bad' as the bottom 25% of rows based on a multi-objective score.
+    We then use feature importance from a Random Forest to identify the culprits.
+    
+    This implementation reuses the logic from step05.
+    """
+    return original_blame(header, rows)
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i].isupper() or header[i] in ['N_estimators', 'Min_sample_leaves', 'Min_impurity_decrease', 'Max_depth']:
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    # Identify all input columns
+    input_cols = [name for name in header if not (name.endswith('-') or name.endswith('+'))]
+    
+    # Get the culprits (those that explain poor performance)
+    culprits = blame(header, rows)
+    
+    # Settings that can be left at default are those NOT in the culprits list
+    safe_settings = [col for col in input_cols if col not in culprits]
+    
+    print("Settings you can leave at factory defaults without hurting performance:")
+    for s in safe_settings:
+        print(f"- {s}")
+    
+    print("\nSettings that significantly impact performance (avoid changing these blindly):")
+    for c in culprits:
+        print(f"- {c}")

@@ -1,0 +1,70 @@
+```python
+import csv
+
+def spot(header, rows):
+    """
+    Identifies rows that contain input values far outside the observed range 
+    of the training data. These are flagged as 'suspicious' because they 
+    represent settings we have never seen before.
+    """
+    # Identify input columns (those not ending in - or +)
+    input_indices = [i for i, name in enumerate(header) 
+                     if not (name.endswith('-') or name.endswith('+'))]
+    
+    # Calculate min and max for each numeric input column
+    ranges = {}
+    for i in input_indices:
+        col_vals = [r[i] for r in rows if isinstance(r[i], (int, float))]
+        if col_vals:
+            ranges[i] = (min(col_vals), max(col_vals))
+
+    suspicion = []
+    for row_idx, row in enumerate(rows):
+        out_of_bounds_count = 0
+        for i in input_indices:
+            val = row[i]
+            if i in ranges and isinstance(val, (int, float)):
+                mn, mx = ranges[i]
+                # If value is outside the observed range, it's suspicious
+                if val < mn or val > mx:
+                    out_of_bounds_count += 1
+        
+        if out_of_bounds_count > 0:
+            # Rows with more out-of-bounds values are more suspicious
+            suspicion.append((out_of_bounds_count, row_idx))
+    
+    # Sort by number of out-of-bounds values descending
+    suspicion.sort(key=lambda x: x[0], reverse=True)
+    
+    return [item[1] for item in suspicion]
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            for row in reader:
+                processed_row = []
+                for i, val in enumerate(row):
+                    if header[i] in ['N_estimators', 'Min_sample_leaves', 
+                                     'Min_impurity_decrease', 'Max_depth']:
+                        processed_row.append(float(val))
+                    else:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        suspicious_indices = spot(header, rows)
+        
+        if suspicious_indices:
+            print(f"Analysis complete. Found {len(suspicious_indices)} rows with settings outside observed ranges.")
+            print("The most suspicious row indices are:", suspicious_indices[:5])
+            print("These rows contain values that have never been seen in our training data.")
+        else:
+            print("Analysis complete. No rows found with settings outside observed ranges.")
+        exit(0)
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

@@ -1,0 +1,72 @@
+import csv
+import pandas as pd
+import numpy as np
+
+def flow(header, row, seen):
+    """
+    Warns the customer if the incoming row is significantly worse than 
+    the historical performance baseline.
+    
+    Strategy:
+    1. Calculate a performance score for all 'seen' rows.
+    2. If the current row's performance is significantly lower (e.g., 2 standard 
+       deviations below the mean of seen rows), return True to flag it as "bad".
+    """
+    if not seen:
+        return False
+    
+    goals = [c for c in header if c.endswith('-') or c.endswith('+')]
+    if not goals:
+        return False
+    
+    # Helper to score a row
+    def get_score(r):
+        scores = []
+        for col in goals:
+            idx = header.index(col)
+            val = float(r[idx])
+            # For this logic, we assume normalized data [0,1] as per problem description
+            # '-' minimized (1-val), '+' maximized (val)
+            if col.endswith('-'):
+                scores.append(1.0 - val)
+            else:
+                scores.append(val)
+        return np.mean(scores)
+
+    seen_scores = [get_score(r) for r in seen]
+    current_score = get_score(row)
+    
+    # If the current row is more than 2 standard deviations below the mean,
+    # it is considered "going bad".
+    if len(seen_scores) > 5:
+        mean = np.mean(seen_scores)
+        std = np.std(seen_scores)
+        if current_score < (mean - 2 * std):
+            return True
+            
+    return False
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) for val in row])
+        
+        bad_count = 0
+        seen = []
+        for row in rows:
+            if flow(header, row, seen):
+                bad_count += 1
+            seen.append(row)
+            
+        print("Customer Inquiry: Monitoring programme performance.")
+        print(f"Analysis: During the run, {bad_count} programmes were flagged as 'going bad'.")
+        print("A programme is flagged if its performance drops significantly below the historical average.")
+        
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

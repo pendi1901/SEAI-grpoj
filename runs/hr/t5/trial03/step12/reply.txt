@@ -1,0 +1,76 @@
+```python
+import ezr
+import random
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column for test rows by comparing the 
+    impact of 'overTime' status within the 'Sales' department.
+    """
+    # Identify indices
+    goal_idx = [i for i, name in enumerate(header) if name.endswith(("+", "-"))][0]
+    ot_idx = header.index('overTime')
+    dept_idx = header.index('department')
+    
+    # Filter training data to Sales department
+    sales_train = [r for r in train if r[dept_idx] == 'Sales']
+    
+    # Calculate average goal for Sales employees with and without Overtime
+    ot_yes = [r[goal_idx] for r in sales_train if r[ot_idx] == 'Yes' and r[goal_idx] != '?']
+    ot_no = [r[goal_idx] for r in sales_train if r[ot_idx] == 'No' and r[goal_idx] != '?']
+    
+    mu_yes = sum(ot_yes) / len(ot_yes) if ot_yes else 0
+    mu_no = sum(ot_no) / len(ot_no) if ot_no else 0
+    
+    # For each test row, if it is in Sales, predict based on its Overtime status.
+    # If not in Sales, or if Overtime is unknown, use the global Sales average.
+    results = []
+    for row in test:
+        if row[dept_idx] == 'Sales':
+            if row[ot_idx] == 'Yes':
+                results.append(float(mu_yes))
+            elif row[ot_idx] == 'No':
+                results.append(float(mu_no))
+            else:
+                results.append(float((mu_yes + mu_no) / 2))
+        else:
+            # Fallback for non-Sales: use average of all training data
+            all_vals = [r[goal_idx] for r in train if r[goal_idx] != '?']
+            results.append(float(sum(all_vals) / len(all_vals)))
+            
+    return results
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Split data
+    random.seed(1234567891)
+    random.shuffle(rows)
+    split = int(len(rows) * 0.8)
+    train, test = rows[:split], rows[split:]
+    
+    # Mask goals in test
+    goal_idx = [i for i, name in enumerate(header) if name.endswith(("+", "-"))][0]
+    masked_test = []
+    for r in test:
+        new_r = list(r)
+        new_r[goal_idx] = "?"
+        masked_test.append(new_r)
+        
+    preds = guess(header, train, masked_test)
+    
+    print("--- Impact of Cutting Overtime in Sales ---")
+    print(f"Estimated average {header[goal_idx]} for Sales staff if overtime is cut:")
+    
+    # Calculate specifically for Sales staff in test set
+    sales_preds = [p for i, p in enumerate(preds) if test[i][header.index('department')] == 'Sales']
+    if sales_preds:
+        print(f"{sum(sales_preds)/len(sales_preds):.2f}")
+    else:
+        print("No Sales staff found in test set.")
+    
+    exit(0)
+```

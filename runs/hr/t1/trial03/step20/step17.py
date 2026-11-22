@@ -1,0 +1,96 @@
+import csv
+import random
+
+def get_goal_indices(header):
+    return [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+
+def get_score(header, row_goals, goal_indices, min_vals, max_vals):
+    """Calculates a normalized score [0, 1] for a row based on goal columns."""
+    scores = []
+    for i, idx in enumerate(goal_indices):
+        rng = max_vals[idx] - min_vals[idx]
+        rng = rng if rng != 0 else 1
+        norm = (row_goals[i] - min_vals[idx]) / rng
+        if header[idx].endswith('-'):
+            norm = 1 - norm
+        scores.append(norm)
+    return sum(scores) / len(scores)
+
+def choose(header, rows, label):
+    """
+    Finds the best working arrangement for 'Laboratory Technician' staff 
+    by sampling up to 50 rows.
+    """
+    job_role_idx = header.index('jobRole')
+    goal_indices = get_goal_indices(header)
+    
+    # Filter rows to only include Laboratory Technicians
+    lab_indices = [i for i, row in enumerate(rows) if row[job_role_idx] == 'Laboratory Technician']
+    
+    if not lab_indices:
+        return 0
+    
+    # Sample up to 50
+    sample_size = min(50, len(lab_indices))
+    sampled_indices = random.sample(lab_indices, sample_size)
+    
+    # Label the sampled rows
+    sampled_data = {i: label(i) for i in sampled_indices}
+    
+    # Determine global min/max for normalization based on the sample
+    all_goals = [sampled_data[i] for i in sampled_indices]
+    min_vals = {idx: min(g[j] for g in all_goals) for j, idx in enumerate(goal_indices)}
+    max_vals = {idx: max(g[j] for g in all_goals) for j, idx in enumerate(goal_indices)}
+    
+    # Find the best row among the samples
+    best_idx = sampled_indices[0]
+    best_score = -1.0
+    
+    for i in sampled_indices:
+        score = get_score(header, sampled_data[i], goal_indices, min_vals, max_vals)
+        if score > best_score:
+            best_score = score
+            best_idx = i
+            
+    return best_idx
+
+def load_data(filename):
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    return header, rows
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    header, rows = load_data(filename)
+    
+    goal_indices = get_goal_indices(header)
+    
+    def label(i):
+        return [rows[i][idx] for idx in goal_indices]
+    
+    # Mask the goals for the choose function
+    masked_rows = []
+    for row in rows:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_rows.append(new_row)
+        
+    best_idx = choose(header, masked_rows, label)
+    
+    print(f"The best arrangement for Laboratory Technicians was found at row index {best_idx}.")
+    print("Strategy: We filtered the dataset for 'Laboratory Technician' roles, sampled up to 50 candidates, "
+          "and identified the one with the highest composite score across all tenure-related goal metrics.")

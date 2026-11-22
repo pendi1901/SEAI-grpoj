@@ -1,0 +1,110 @@
+import ezr
+import random
+
+def race(header, rows, label):
+    """
+    Compare three strategies for finding the best setup within a 50-label budget.
+    Strategies:
+    1. random: Randomly samples rows.
+    2. acquire: Uses ezr's smart sampling (exploration/exploitation).
+    3. greedy: Picks the next row based on the best-performing leaf in a tree.
+    """
+    budget = 50
+    labeled_indices = set()
+    
+    # We need a reference table that has the full data to calculate ydist correctly
+    # The harness passes rows with '?' in goal columns. We must label them to evaluate.
+    # We create a local cache for labeled rows to avoid re-labelling.
+    cache = {}
+
+    def oracle_wrapper(idx):
+        if idx not in labeled_indices:
+            if len(labeled_indices) >= budget:
+                raise Exception("Budget exceeded")
+            labeled_indices.add(idx)
+            cache[idx] = label(idx)
+        return cache[idx]
+
+    # Create a base table for distance calculations
+    # We use the provided rows, but we must ensure the table knows the goals
+    # are numeric for ydist to work.
+    tbl = ezr.Tbl([header] + [r for r in rows if "?" not in r])
+    
+    # 1. Random Strategy
+    def strategy_random():
+        indices = random.sample(range(len(rows)), budget)
+        for i in indices:
+            oracle_wrapper(i)
+        return min(indices, key=lambda i: ezr.ydist(tbl, cache[i]))
+
+    # 2. Acquire Strategy
+    def strategy_acquire():
+        # Acquire needs a TBL with data. We use a subset of the budget to start.
+        # We create a temporary table for the acquire logic.
+        work_tbl = ezr.Tbl([header] + [rows[i] for i in random.sample(range(len(rows)), ezr.the.Start)])
+        for i in work_tbl.rows:
+            idx = rows.index(i)
+            oracle_wrapper(idx)
+            
+        def wrapper(row):
+            idx = rows.index(row)
+            return oracle_wrapper(idx)
+        
+        best_rows = ezr.acquire(work_tbl, cap=budget, label=wrapper)
+        return min(range(len(rows)), key=lambda i: ezr.ydist(tbl, cache.get(i, rows[i])))
+
+    # 3. Greedy Strategy
+    def strategy_greedy():
+        start_indices = random.sample(range(len(rows)), ezr.the.Start)
+        for i in start_indices: oracle_wrapper(i)
+        
+        while len(labeled_indices) < budget:
+            labeled_rows = [cache[i] for i in labeled_indices]
+            lab_tbl = ezr.Tbl([header] + labeled_rows)
+            rank = ezr.ranker(lab_tbl)
+            
+            unlabeled = [i for i in range(len(rows)) if i not in labeled_indices]
+            best_idx = min(unlabeled, key=lambda i: rank(rows[i]))
+            oracle_wrapper(best_idx)
+            
+        return min(labeled_indices, key=lambda i: ezr.ydist(tbl, cache[i]))
+
+    results = {}
+    for name, func in [("random", strategy_random), 
+                       ("acquire", strategy_acquire), 
+                       ("greedy", strategy_greedy)]:
+        labeled_indices.clear()
+        cache.clear()
+        results[name] = func()
+
+    winner = min(results, key=lambda n: ezr.ydist(tbl, cache[results[n]]))
+    
+    return {
+        "winner": winner,
+        "row": results[winner],
+        "tried": ["random", "acquire", "greedy"]
+    }
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    try:
+        header = next(data_gen)
+        all_rows = list(data_gen)
+    except StopIteration:
+        exit(0)
+
+    masked_rows = []
+    for row in all_rows:
+        new_row = list(row)
+        for i, name in enumerate(header):
+            if name[-1] in "+-":
+                new_row[i] = "?"
+        masked_rows.append(new_row)
+
+    def label(i):
+        return all_rows[i]
+
+    result = race(header, masked_rows, label)
+    print(f"Winner: {result['winner']}, Best row: {result['row']}, Tried: {result['tried']}")
+    exit(0)

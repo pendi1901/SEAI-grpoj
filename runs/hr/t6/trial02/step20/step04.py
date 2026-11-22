@@ -1,0 +1,49 @@
+import ezr
+import step01
+
+def flow(header, row, seen):
+    """
+    Decide if the current row is a 'retention risk' candidate.
+    We compare the current row's ydist (distance from ideal goals) 
+    against the distribution of ydist values seen so far.
+    If the current row is in the top 5% of 'best' (lowest ydist) 
+    seen so far, we flag it for a conversation.
+    """
+    if not seen:
+        return False
+    
+    # Create table structure to use ezr's ydist
+    tbl = ezr.Tbl([header] + seen)
+    
+    # Calculate ydist for all seen rows
+    seen_ydists = [ezr.ydist(tbl, r) for r in seen]
+    
+    # Calculate ydist for current row
+    current_ydist = ezr.ydist(tbl, row)
+    
+    # Threshold: top 5% of seen rows
+    # We want to flag if this row is better than 95% of what we've seen
+    threshold = sorted(seen_ydists)[int(len(seen_ydists) * 0.05)]
+    
+    return current_ydist <= threshold
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    seen = []
+    flags = 0
+    
+    # Simulate arrival of rows one by one
+    for row in rows:
+        if flow(header, row, seen):
+            flags += 1
+        seen.append(row)
+        
+    print(f"Processed {len(rows)} employee records.")
+    print(f"Flagged {flags} employees for 'what would keep you here' conversations.")
+    print("Decision logic: Flagged employees are in the top 5% of retention metrics relative to history.")
+    
+    exit(0)

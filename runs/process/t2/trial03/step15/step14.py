@@ -1,0 +1,61 @@
+import csv
+import step04
+
+def flow(header, row, seen):
+    """
+    Warns the customer by returning True if the current row is 'bad' 
+    (i.e., significantly worse than the baseline of previous rows).
+    
+    We define 'bad' as having a score worse than the average score of 
+    all previously seen rows.
+    """
+    goal_indices = []
+    for i, name in enumerate(header):
+        if name.endswith('-') or name.endswith('+'):
+            goal_indices.append((i, name[-1]))
+
+    def score_row(r):
+        total = 0.0
+        for idx, op in goal_indices:
+            val = float(r[idx])
+            if op == '-':
+                total += val
+            else:
+                total += (1.0 - val)
+        return total
+
+    if not seen:
+        return False
+
+    # Calculate average score of all previously seen rows
+    avg_score = sum(score_row(r) for r in seen) / len(seen)
+    current_score = score_row(row)
+
+    # If the current row is worse (higher score) than the average, 
+    # we return True to flag it as "going bad".
+    return current_score > avg_score
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', newline='') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) for val in row])
+        
+        seen = []
+        warnings = 0
+        for row in rows:
+            if flow(header, row, seen):
+                warnings += 1
+            seen.append(row)
+            
+        print(f"Monitoring complete. Processed {len(rows)} weekly reports.")
+        print(f"Detected {warnings} instances where performance started to degrade.")
+        print("The system is configured to flag any report that performs worse than the historical average.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

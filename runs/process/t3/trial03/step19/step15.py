@@ -1,0 +1,62 @@
+import csv
+import pandas as pd
+import numpy as np
+from sklearn.ensemble import RandomForestRegressor
+
+def blame(header, rows):
+    """
+    Identifies the input columns that matter most to the 'Cost-' goal.
+    Returns the top 2 most important features and the bottom 2 least important features.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    
+    # Identify goal columns and input columns
+    goals = [c for c in header if c.endswith('-') or c.endswith('+')]
+    inputs = [c for c in header if c not in goals]
+    
+    # Target is 'Cost-'
+    target = 'Cost-'
+    
+    # Use Random Forest to determine feature importance
+    X = df[inputs]
+    y = df[target]
+    
+    model = RandomForestRegressor(n_estimators=100, random_state=42)
+    model.fit(X, y)
+    
+    # Get feature importances
+    importances = model.feature_importances_
+    feat_imp = sorted(zip(inputs, importances), key=lambda x: x[1], reverse=True)
+    
+    # Return top 2 (matter most) and bottom 2 (safely stop worrying about)
+    # The prompt asks for "one or two facts", so we return the top 2 and bottom 2.
+    top_two = [feat[0] for feat in feat_imp[:2]]
+    bottom_two = [feat[0] for feat in feat_imp[-2:]]
+    
+    return top_two + bottom_two
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed_row = []
+                for val in row:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        results = blame(header, rows)
+        
+        print("Analysis of project cost drivers:")
+        print(f"1. Factors that matter most (Focus here): {results[0]}, {results[1]}")
+        print(f"2. Factors you can safely stop worrying about: {results[2]}, {results[3]}")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

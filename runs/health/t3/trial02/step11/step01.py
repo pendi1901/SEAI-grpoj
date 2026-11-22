@@ -1,0 +1,62 @@
+import csv
+
+def remember(header, rows):
+    """
+    Identifies rows that are 'unusually trustworthy' by finding the Pareto frontier
+    or high-performing candidates based on the goals.
+    Goals: MRE- (minimize), ACC+ (maximize), PRED40+ (maximize).
+    """
+    # Identify indices of goal columns
+    goals = []
+    for i, name in enumerate(header):
+        if name.endswith('-'):
+            goals.append((i, -1))  # -1 for minimization
+        elif name.endswith('+'):
+            goals.append((i, 1))   # 1 for maximization
+
+    # Calculate a normalized score for each row
+    # We normalize each goal column to [0, 1] range
+    scores = []
+    for i in range(len(goals)):
+        col_idx, direction = goals[i]
+        values = [row[col_idx] for row in rows]
+        min_v, max_v = min(values), max(values)
+        rng = max_v - min_v if max_v != min_v else 1.0
+        
+        for r_idx, row in enumerate(rows):
+            val = (row[col_idx] - min_v) / rng
+            if direction == -1:
+                val = 1.0 - val
+            if len(scores) <= r_idx:
+                scores.append(val)
+            else:
+                scores[r_idx] += val
+
+    # Get indices of top 5% (or at least 1)
+    num_to_return = max(1, len(rows) // 20)
+    indexed_scores = list(enumerate(scores))
+    indexed_scores.sort(key=lambda x: x[1], reverse=True)
+    
+    return [x[0] for x in indexed_scores[:num_to_return]]
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            # Convert numeric columns to floats
+            processed_row = []
+            for i, val in enumerate(row):
+                try:
+                    processed_row.append(float(val))
+                except ValueError:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    best_indices = remember(header, rows)
+    
+    print(f"Analysis complete. Found {len(best_indices)} highly trustworthy setups.")
+    print("Top performing row indices:", best_indices)
+    print("Example of top row data:", rows[best_indices[0]])

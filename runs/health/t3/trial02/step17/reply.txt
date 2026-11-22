@@ -1,0 +1,86 @@
+```python
+import csv
+import random
+
+def choose(header, rows, label):
+    """
+    Finds a setup that is both high-performing (based on goals) 
+    and 'small' (low N_estimators and low Max_depth).
+    We use a weighted score to balance performance and resource usage.
+    """
+    goal_indices = [i for i, h in enumerate(header) if h.endswith('-') or h.endswith('+')]
+    n_est_idx = header.index('N_estimators')
+    depth_idx = header.index('Max_depth')
+
+    # Normalize goals for the 50 sampled rows
+    sampled_indices = random.sample(range(len(rows)), min(50, len(rows)))
+    
+    # Get true goals for the sample
+    samples = {idx: label(idx) for idx in sampled_indices}
+    
+    # Calculate min/max for normalization
+    all_goals = [samples[idx] for idx in sampled_indices]
+    goal_mins = [min(g[i] for g in all_goals) for i in range(len(goal_indices))]
+    goal_maxs = [max(g[i] for g in all_goals) for i in range(len(goal_indices))]
+    
+    # Normalize inputs for resource usage
+    n_ests = [rows[idx][n_est_idx] for idx in sampled_indices]
+    depths = [rows[idx][depth_idx] for idx in sampled_indices]
+    n_est_max, n_est_min = max(n_ests), min(n_ests)
+    depth_max, depth_min = max(depths), min(depths)
+
+    best_idx = -1
+    best_score = float('-inf')
+
+    for idx in sampled_indices:
+        goals = samples[idx]
+        
+        # Performance score (0 to 1)
+        perf = 0
+        for i, g_idx in enumerate(goal_indices):
+            rng = goal_maxs[i] - goal_mins[i] if goal_maxs[i] != goal_mins[i] else 1.0
+            norm = (goals[i] - goal_mins[i]) / rng
+            if header[g_idx].endswith('-'):
+                norm = 1.0 - norm
+            perf += norm
+        perf /= len(goal_indices)
+        
+        # Resource score (lower is better, so 1 - norm)
+        n_est_norm = (rows[idx][n_est_idx] - n_est_min) / (n_est_max - n_est_min + 1e-9)
+        depth_norm = (rows[idx][depth_idx] - depth_min) / (depth_max - depth_min + 1e-9)
+        resource_score = 1.0 - ((n_est_norm + depth_norm) / 2)
+        
+        # Combined score: prioritize performance but penalize heavy resources
+        total_score = (0.7 * perf) + (0.3 * resource_score)
+        
+        if total_score > best_score:
+            best_score = total_score
+            best_idx = idx
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                try:
+                    processed_row.append(float(val))
+                except ValueError:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    true_goals = {i: [row[j] for j, h in enumerate(header) if h.endswith(('-', '+'))] 
+                  for i, row in enumerate(rows)}
+    
+    def label(i):
+        return true_goals[i]
+
+    best_idx = choose(header, rows, label)
+    print(f"Recommended setup found at index {best_idx}.")
+    print(f"This configuration balances high forecast accuracy with low resource requirements.")
+```

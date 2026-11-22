@@ -1,0 +1,60 @@
+```python
+import csv
+from scipy import stats
+
+def certify(xs, ys):
+    """
+    Performs a Welch's t-test to determine if two samples have significantly 
+    different means. Returns True if the difference is not statistically 
+    significant (p > 0.05), False otherwise.
+    """
+    if len(xs) < 2 or len(ys) < 2:
+        return True
+    
+    t_stat, p_value = stats.ttest_ind(xs, ys, equal_var=False)
+    
+    # If p > 0.05, we fail to reject the null hypothesis (they are the same apart from noise)
+    return p_value > 0.05
+
+def analyze_training_impact(header, rows):
+    """
+    Compares 'YearsWithCurrManager+' for employees with high training vs low training.
+    """
+    train_idx = header.index('TrainingTimesLastYear')
+    years_idx = header.index('YearsWithCurrManager+')
+    
+    # Split into two groups: High training (>= 3 days) vs Low training (< 3 days)
+    high_train = [row[years_idx] for row in rows if row[train_idx] >= 3]
+    low_train = [row[years_idx] for row in rows if row[train_idx] < 3]
+    
+    is_noise = certify(high_train, low_train)
+    
+    avg_high = sum(high_train) / len(high_train) if high_train else 0
+    avg_low = sum(low_train) / len(low_train) if low_train else 0
+    
+    print("Customer Analysis: Do people with more training stay longer with their manager?")
+    print(f"Average years with manager (>= 3 training days): {avg_high:.2f}")
+    print(f"Average years with manager (< 3 training days): {avg_low:.2f}")
+    
+    if is_noise:
+        print("Conclusion: The difference is not statistically significant; training frequency does not clearly correlate with tenure under a manager.")
+    else:
+        print("Conclusion: There is a statistically significant difference in tenure based on training frequency.")
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    analyze_training_impact(header, rows)
+```

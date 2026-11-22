@@ -1,0 +1,66 @@
+import csv
+import step01
+
+def blame(header, rows):
+    """
+    Identifies input columns that correlate with short tenure (low YearsAtCompany+).
+    We define 'worst' as the bottom 25% of employees by tenure.
+    We then compare the average values of input columns for these 'worst' 
+    employees against the population average to find the strongest drivers.
+    """
+    years_idx = header.index('YearsAtCompany+')
+    
+    # Filter out goal columns and identify input columns
+    input_indices = [
+        i for i, h in enumerate(header) 
+        if not (h.endswith('+') or h.endswith('-'))
+    ]
+    
+    # Sort rows by tenure to find the bottom 25%
+    sorted_rows = sorted(rows, key=lambda r: r[years_idx])
+    worst_rows = sorted_rows[:len(rows) // 4]
+    
+    # Calculate average of input columns for the worst group
+    # We use a simple heuristic: columns where the worst group deviates 
+    # most from the population mean are likely explanatory.
+    scores = []
+    for i in input_indices:
+        col_data = [r[i] for r in rows if isinstance(r[i], (int, float))]
+        if not col_data:
+            continue
+            
+        pop_mean = sum(col_data) / len(col_data)
+        worst_mean = sum(r[i] for r in worst_rows if isinstance(r[i], (int, float))) / len(worst_rows)
+        
+        # Score based on absolute difference from population mean
+        if pop_mean != 0:
+            diff = abs(worst_mean - pop_mean) / pop_mean
+            scores.append((diff, header[i]))
+            
+    # Return top 3 columns that explain the short stays
+    scores.sort(key=lambda x: x[0], reverse=True)
+    return [s[1] for s in scores[:3]]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    drivers = blame(header, rows)
+    
+    print("Analysis: What factors correlate with short employee tenure?")
+    print(f"The primary input columns influencing short stays are: {', '.join(drivers)}.")
+    print("These factors show the highest deviation in the bottom 25% of tenure.")

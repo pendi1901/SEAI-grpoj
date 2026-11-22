@@ -1,0 +1,67 @@
+import csv
+
+def spot(header, rows):
+    """
+    Identifies rows that look like 'failed runs'.
+    A failed run is defined here as a row where the input parameters are 
+    outliers (e.g., extreme values) compared to the rest of the dataset, 
+    or where the goal values are inconsistent with the input configuration.
+    """
+    # Identify indices
+    input_indices = [i for i, name in enumerate(header) if not (name.endswith('-') or name.endswith('+'))]
+    
+    # Calculate statistics for numeric inputs to find outliers
+    stats = {}
+    for i in input_indices:
+        if header[i] == 'criterion':
+            continue
+        vals = [r[i] for r in rows if isinstance(r[i], (int, float))]
+        if not vals: continue
+        mean = sum(vals) / len(vals)
+        std = (sum((x - mean)**2 for x in vals) / len(vals))**0.5
+        stats[i] = (mean, std)
+
+    suspicious = []
+    for idx, row in enumerate(rows):
+        score = 0
+        # Heuristic: count how many standard deviations away from mean the inputs are
+        for i in input_indices:
+            if i in stats:
+                mean, std = stats[i]
+                if std > 0:
+                    z_score = abs(row[i] - mean) / std
+                    if z_score > 3:  # Statistical outlier
+                        score += z_score
+        
+        if score > 0:
+            suspicious.append((score, idx))
+            
+    # Sort by score descending (most suspicious first)
+    suspicious.sort(key=lambda x: x[0], reverse=True)
+    return [item[1] for item in suspicious]
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    try:
+        rows = []
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            for row in reader:
+                processed_row = []
+                for i, val in enumerate(row):
+                    if header[i] == 'criterion':
+                        processed_row.append(val)
+                    else:
+                        processed_row.append(float(val))
+                rows.append(processed_row)
+        
+        indices = spot(header, rows)
+        
+        print(f"Analysis complete. Identified {len(indices)} potentially failed runs.")
+        print("Top 5 most suspicious row indices:")
+        print(indices[:5])
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

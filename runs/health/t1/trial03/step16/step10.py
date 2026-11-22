@@ -1,0 +1,105 @@
+import csv
+import random
+
+def race(header, rows, label):
+    """
+    Compares three strategies: random, greedy, and local search.
+    Budget: 50 labels total.
+    """
+    goal_indices = [i for i, h in enumerate(header) if h.endswith(('-', '+'))]
+    
+    # Shared cache for labels to respect the 50-label budget
+    labeled = {}
+    def get_label(i):
+        if i not in labeled:
+            if len(labeled) >= 50:
+                raise Exception("Budget exceeded")
+            labeled[i] = label(i)
+        return labeled[i]
+
+    def score_row(i):
+        goals = get_label(i)
+        # MRE- (min), ACC+ (max), PRED40+ (max)
+        # Normalize: (val - min) / (max - min) is hard without full data,
+        # so we use raw values scaled by direction.
+        return -goals[0] + goals[1] + goals[2]
+
+    # Strategy 1: Random (1 label)
+    def strategy_random():
+        idx = random.choice(range(len(rows)))
+        get_label(idx)
+        return idx
+
+    # Strategy 2: Greedy (24 labels)
+    def strategy_greedy():
+        candidates = random.sample(range(len(rows)), 24)
+        best_idx = candidates[0]
+        best_score = score_row(best_idx)
+        for i in candidates[1:]:
+            s = score_row(i)
+            if s > best_score:
+                best_score = s
+                best_idx = i
+        return best_idx
+
+    # Strategy 3: Local Search (25 labels)
+    def strategy_local():
+        curr = random.choice(range(len(rows)))
+        score_row(curr)
+        for _ in range(24):
+            # Look at 5 random neighbors
+            neighbors = random.sample(range(len(rows)), 5)
+            best_n = curr
+            best_val = score_row(curr)
+            for n in neighbors:
+                s = score_row(n)
+                if s > best_val:
+                    best_val = s
+                    best_n = n
+            curr = best_n
+        return curr
+
+    # Execute strategies
+    results = {
+        "random": strategy_random(),
+        "greedy": strategy_greedy(),
+        "local": strategy_local()
+    }
+
+    # Determine winner
+    best_overall = -float('inf')
+    winner = ""
+    best_row = -1
+    for name, idx in results.items():
+        s = score_row(idx)
+        if s > best_overall:
+            best_overall = s
+            winner = name
+            best_row = idx
+
+    return {"winner": winner, "row": best_row, "tried": ["random", "greedy", "local"]}
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            rows.append([val if header[i] == 'criterion' else float(val) for i, val in enumerate(row)])
+
+    true_goals = [[r[i] for i, h in enumerate(header) if h.endswith(('-', '+'))] for r in rows]
+    
+    # Hide goals
+    for r in rows:
+        for i, h in enumerate(header):
+            if h.endswith(('-', '+')):
+                r[i] = "?"
+
+    def label(i):
+        return true_goals[i]
+
+    result = race(header, rows, label)
+    print(f"The winner is: {result['winner']}")
+    print(f"Best row found at index: {result['row']}")
+    print(f"Strategies tried: {', '.join(result['tried'])}")

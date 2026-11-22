@@ -1,0 +1,58 @@
+import csv
+from scipy import stats
+
+def certify(xs, ys):
+    """
+    Determines if two distributions are statistically different using the 
+    Mann-Whitney U test. Returns True if they are the same (p > 0.05), 
+    False if they differ significantly.
+    """
+    stat, p_value = stats.mannwhitneyu(xs, ys, alternative='two-sided')
+    return p_value > 0.05
+
+def compare_rules(header, rows):
+    """
+    Compares two hypothetical rules (e.g., based on criterion type) 
+    to see if they result in statistically different performance.
+    """
+    # We use 'criterion' as the basis for the two rules
+    # Rule 1: absolute_error, Rule 2: squared_error
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+    crit_idx = header.index('criterion')
+
+    def get_utility(r):
+        return -r[mre_idx] + r[acc_idx] + r[pred_idx]
+
+    utilities_abs = [get_utility(r) for r in rows if r[crit_idx] == 'absolute_error']
+    utilities_sq = [get_utility(r) for r in rows if r[crit_idx] == 'squared_error']
+
+    is_same = certify(utilities_abs, utilities_sq)
+    
+    return is_same, utilities_abs, utilities_sq
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i] == 'criterion':
+                    processed_row.append(val)
+                else:
+                    processed_row.append(float(val))
+            rows.append(processed_row)
+
+    same, u1, u2 = compare_rules(header, rows)
+    
+    print("Customer Inquiry: Does the choice between rules make a real difference?")
+    if same:
+        print("Answer: No, the difference between the rules is statistically insignificant.")
+        print("You can stop arguing about it; the performance outcomes are effectively the same.")
+    else:
+        print("Answer: Yes, there is a statistically significant difference between the rules.")
+        print("The choice of rule does impact your performance outcomes.")

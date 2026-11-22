@@ -1,0 +1,73 @@
+import csv
+
+def spot(header, rows):
+    """
+    Identifies rows that contain input values far outside the observed range
+    (outliers). We use the Interquartile Range (IQR) method on numeric inputs
+    to detect values that are statistically anomalous.
+    """
+    # Identify numeric input columns (exclude goals and symbolic columns)
+    input_indices = [
+        i for i, name in enumerate(header) 
+        if name not in ['criterion', 'MRE-', 'ACC+', 'PRED40+']
+    ]
+    
+    # Track suspicion score for each row
+    suspicion_scores = [0] * len(rows)
+    
+    for i in input_indices:
+        # Extract valid numeric values (ignoring "?" if present)
+        col_values = [row[i] for row in rows if isinstance(row[i], (int, float))]
+        if not col_values:
+            continue
+            
+        sorted_vals = sorted(col_values)
+        q1 = sorted_vals[int(0.25 * len(sorted_vals))]
+        q3 = sorted_vals[int(0.75 * len(sorted_vals))]
+        iqr = q3 - q1
+        
+        # Define bounds for outliers (1.5 * IQR rule)
+        lower_bound = q1 - 1.5 * iqr
+        upper_bound = q3 + 1.5 * iqr
+        
+        # Increment suspicion score for rows outside bounds
+        for r_idx, row in enumerate(rows):
+            val = row[i]
+            if isinstance(val, (int, float)):
+                if val < lower_bound or val > upper_bound:
+                    suspicion_scores[r_idx] += 1
+                
+    # Create list of (index, score) and sort by score descending
+    indexed_scores = list(enumerate(suspicion_scores))
+    indexed_scores.sort(key=lambda x: x[1], reverse=True)
+    
+    # Return indices of rows with at least one outlier, most suspicious first
+    return [idx for idx, score in indexed_scores if score > 0]
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i] == 'criterion':
+                    processed_row.append(val)
+                else:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+            rows.append(processed_row)
+            
+    suspicious_indices = spot(header, rows)
+    
+    print("Customer Inquiry: Are there settings far outside what we have tried?")
+    if not suspicious_indices:
+        print("Answer: No, all current configurations fall within the expected range of our data.")
+    else:
+        print(f"Answer: Yes, we identified {len(suspicious_indices)} configurations that contain values far outside our observed norms.")
+        print("The most suspicious row indices are:")
+        print(suspicious_indices[:10])

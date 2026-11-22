@@ -1,0 +1,86 @@
+```python
+import csv
+import pandas as pd
+import numpy as np
+from sklearn.ensemble import RandomForestRegressor
+from step01 import remember
+
+def fix(header, row, levers):
+    """
+    Finds the smallest change to levers that improves the row's performance.
+    We use a Random Forest to predict the impact of changing levers on the goals.
+    """
+    # Load data to train a surrogate model
+    filename = 'pom3a.n1000.train.csv'
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header_csv = next(reader)
+        rows = [[float(val) for val in row] for row in reader]
+    
+    df = pd.DataFrame(rows, columns=header_csv)
+    goals = [c for c in header if c.endswith('-') or c.endswith('+')]
+    inputs = [c for c in header if c not in goals]
+    
+    # Train models for each goal
+    models = {}
+    for goal in goals:
+        rf = RandomForestRegressor(n_estimators=20, random_state=42)
+        rf.fit(df[inputs], df[goal])
+        models[goal] = rf
+        
+    def predict_score(r):
+        # Predict goals and calculate aggregate score (lower is better)
+        scores = []
+        for goal in goals:
+            pred = models[goal].predict([r])[0]
+            # Normalize based on global min/max
+            col = df[goal]
+            norm = (pred - col.min()) / (col.max() - col.min()) if goal.endswith('-') else (col.max() - pred) / (col.max() - col.min())
+            scores.append(norm)
+        return sum(scores)
+
+    # Current row inputs
+    current_inputs = [row[header.index(i)] for i in inputs]
+    best_score = predict_score(current_inputs)
+    best_change = {}
+    
+    # Try changing each lever
+    for col, bounds in levers.items():
+        idx = inputs.index(col)
+        # Try a few points in the range
+        for val in np.linspace(bounds[0], bounds[1], 5):
+            test_inputs = list(current_inputs)
+            test_inputs[idx] = val
+            new_score = predict_score(test_inputs)
+            if new_score < best_score:
+                best_score = new_score
+                best_change = {col: val}
+                
+    return best_change
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = [[float(val) for val in row] for row in reader]
+    
+    # Define levers (numeric ranges based on data distribution)
+    levers = {
+        'Culture': (0, 1),
+        'Criticality': (0, 1),
+        'Size': (0, 1),
+        'Plan': (0, 1),
+        'Team Size': (0, 1)
+    }
+    
+    # Pick a "bad" row (e.g., one with high cost)
+    df = pd.DataFrame(rows, columns=header)
+    bad_row = df.nlargest(1, 'Cost-').iloc[0].tolist()
+    
+    recommendation = fix(header, bad_row, levers)
+    
+    print("Customer Inquiry: How to rescue an over-budget, idle programme?")
+    print(f"Recommendation: {recommendation}")
+    print("By adjusting these levers, the surrogate model predicts a reduction in aggregate cost/idle metrics.")
+```

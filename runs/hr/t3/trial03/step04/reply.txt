@@ -1,0 +1,69 @@
+```python
+import csv
+
+def flow(header, row, seen):
+    """
+    Decides if the current employee needs a 'what would keep you here' conversation.
+    We target employees who are high-performers or have high tenure but might be 
+    at risk of attrition. We use a simple threshold-based strategy: if the 
+    employee's 'YearsAtCompany+' is in the top 10% of what we have seen so far, 
+    or if they have high 'JobSatisfaction' (>= 3) but are 'Single' (often 
+    higher turnover risk), we flag them.
+    """
+    # Identify indices
+    try:
+        idx_years = header.index('YearsAtCompany+')
+        idx_sat = header.index('JobSatisfaction')
+        idx_status = header.index('maritalStatus')
+    except ValueError:
+        return False
+
+    current_years = row[idx_years]
+    current_sat = row[idx_sat]
+    current_status = row[idx_status]
+
+    # Strategy:
+    # 1. If they have been here longer than 90% of the people seen so far, 
+    #    they are a valuable asset worth retaining.
+    # 2. If they are 'Single' and have high satisfaction, they are high-value 
+    #    targets for retention before they decide to move on.
+    
+    if not seen:
+        return True
+    
+    seen_years = [r[idx_years] for r in seen]
+    threshold = sorted(seen_years, reverse=True)[max(0, len(seen_years) // 10)]
+    
+    if current_years >= threshold:
+        return True
+    
+    if current_status == 'Single' and current_sat >= 3:
+        return True
+        
+    return False
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    seen = []
+    count = 0
+    for row in rows:
+        if flow(header, row, seen):
+            count += 1
+        seen.append(row)
+        
+    print(f"Processed {len(rows)} employees.")
+    print(f"Recommended 'what would keep you here' conversations: {count}")
+```

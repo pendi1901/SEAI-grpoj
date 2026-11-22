@@ -1,0 +1,56 @@
+import csv
+from step01 import remember
+
+def flow(header, row, seen):
+    """
+    Decides whether to accept a row based on whether it is better than 
+    the current best seen so far.
+    """
+    # Identify goal indices
+    goal_indices = [(i, name[-1]) for i, name in enumerate(header) 
+                    if name.endswith('-') or name.endswith('+')]
+    
+    def get_score(r):
+        # Calculate score: lower is better for '-', higher is better for '+'
+        # We negate '+' values so that minimizing the sum always works.
+        s = 0
+        for idx, op in goal_indices:
+            val = float(r[idx])
+            s += val if op == '-' else -val
+        return s
+
+    # If this is the first row, accept it
+    if not seen:
+        return True
+    
+    # Calculate score of current row
+    current_score = get_score(row)
+    
+    # Calculate scores of all previously seen rows
+    seen_scores = [get_score(r) for r in seen]
+    
+    # Accept if current row is better than the best seen so far
+    # (i.e., lower score than the minimum score seen)
+    return current_score < min(seen_scores)
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [row for row in reader]
+            
+        accepted_count = 0
+        seen = []
+        for row in rows:
+            if flow(header, row, seen):
+                accepted_count += 1
+            seen.append(row)
+            
+        print(f"Processed {len(rows)} proposals.")
+        print(f"Accepted {accepted_count} proposals based on improvement criteria.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

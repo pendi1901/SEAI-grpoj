@@ -1,0 +1,70 @@
+```python
+import csv
+import step06
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column (YearsAtCompany+) for test rows
+    by calculating the average of that column for rows in the training set
+    that match the 'Sales' department and 'No' overtime criteria.
+    """
+    # Find the index of the first goal column ending in '+'
+    goal_idx = -1
+    for i, name in enumerate(header):
+        if name.endswith('+'):
+            goal_idx = i
+            break
+            
+    dept_idx = header.index('department')
+    ot_idx = header.index('overTime')
+    
+    # Filter training data for Sales department and No Overtime
+    relevant_train = [
+        row[goal_idx] for row in train 
+        if row[dept_idx] == 'Sales' and row[ot_idx] == 'No'
+    ]
+    
+    # Fallback to global average if no specific matches found
+    if not relevant_train:
+        relevant_train = [row[goal_idx] for row in train]
+        
+    avg_val = sum(relevant_train) / len(relevant_train)
+    
+    # Return the average for every test row
+    return [avg_val] * len(test)
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    # Define test scenario: Sales department employees with Overtime = 'No'
+    test_data = [r for r in rows if r[header.index('department')] == 'Sales']
+    
+    # Mask the goal columns in test data
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    masked_test = []
+    for row in test_data:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_test.append(new_row)
+    
+    predictions = guess(header, rows, masked_test)
+    
+    first_goal = [name for name in header if name.endswith('+') or name.endswith('-')][0]
+    
+    print(f"Impact Analysis: Cutting overtime in Sales.")
+    print(f"Estimated average '{first_goal}' for Sales staff without overtime: {predictions[0]:.2f} years.")
+    print("This estimate is derived from historical records of Sales employees who already work no overtime.")
+```

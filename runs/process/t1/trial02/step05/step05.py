@@ -1,0 +1,53 @@
+import csv
+
+def blame(header, rows):
+    """
+    Identifies input columns that correlate most strongly with the 'Idle-' goal.
+    We define 'worst' as rows where 'Idle-' is in the top 25% (highest values).
+    We then find input columns that have the highest correlation with these
+    high 'Idle-' values.
+    """
+    idle_idx = header.index('Idle-')
+    input_indices = [i for i, name in enumerate(header) 
+                     if not (name.endswith('-') or name.endswith('+'))]
+    
+    # Sort rows by Idle- descending to find the "worst"
+    sorted_rows = sorted(rows, key=lambda r: float(r[idle_idx]), reverse=True)
+    worst_rows = sorted_rows[:len(rows) // 4]
+    
+    # Calculate average of each input in the worst rows
+    # and compare to the global average of that input.
+    # A high difference indicates that input contributes to the "worst" state.
+    scores = []
+    for i in input_indices:
+        worst_avg = sum(float(r[i]) for r in worst_rows) / len(worst_rows)
+        global_avg = sum(float(r[i]) for r in rows) / len(rows)
+        
+        # We look for inputs that are significantly higher in the worst rows
+        # (Assuming higher input values correlate with higher Idle- values)
+        diff = worst_avg - global_avg
+        scores.append((diff, header[i]))
+    
+    # Sort by difference descending
+    scores.sort(key=lambda x: x[0], reverse=True)
+    
+    # Return the top 2 inputs that explain the idleness
+    return [name for diff, name in scores[:2]]
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [row for row in reader]
+            
+            reasons = blame(header, rows)
+            
+            print("Customer Inquiry: Why do our worst setups leave so many people waiting around?")
+            print(f"Analysis: The primary factors contributing to high idle time are: {', '.join(reasons)}.")
+            print("These inputs are significantly higher in setups with poor idle performance.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

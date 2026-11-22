@@ -1,0 +1,63 @@
+import ezr
+import random
+
+def certify(xs, ys):
+    """
+    Returns True if the two distributions are statistically indistinguishable,
+    False if they are significantly different.
+    """
+    # Using the same logic as the stats layer in ezr.py
+    # same() checks cliffs delta and KS test, which are robust for this purpose.
+    return ezr.same(xs, ys)
+
+def compare_rules(header, rows):
+    """
+    Compares two rules for selecting the 'best' setup:
+    Rule 1: Minimize MRE- (the first goal column)
+    Rule 2: Maximize ACC+ (the second goal column)
+    """
+    # Identify goal indices
+    # MRE- is index 0, ACC+ is index 1
+    mre_idx = 0
+    acc_idx = 1
+    
+    # We evaluate the performance of the top 10% of rows selected by each rule
+    # Rule 1: Sort by MRE- (ascending)
+    rows_by_mre = sorted(rows, key=lambda r: r[mre_idx])
+    # Rule 2: Sort by ACC+ (descending)
+    rows_by_acc = sorted(rows, key=lambda r: r[acc_idx], reverse=True)
+    
+    top_n = len(rows) // 10
+    
+    # We compare the ydist (overall multi-objective performance) of these two sets
+    tbl = ezr.Tbl([header] + rows)
+    
+    xs = [ezr.ydist(tbl, r) for r in rows_by_mre[:top_n]]
+    ys = [ezr.ydist(tbl, r) for r in rows_by_acc[:top_n]]
+    
+    return certify(xs, ys), xs, ys
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    
+    try:
+        header = next(data_gen)
+        rows = list(data_gen)
+    except StopIteration:
+        exit(0)
+        
+    is_same, xs, ys = compare_rules(header, rows)
+    
+    print("Analysis: Does the choice of optimization rule (MRE- vs ACC+) matter?")
+    if is_same:
+        print("Result: The difference in performance is statistically insignificant.")
+        print("Conclusion: You can stop arguing; the rules yield equivalent results.")
+    else:
+        print("Result: There is a statistically significant difference in performance.")
+        print("Conclusion: The choice of rule matters.")
+        
+    print(f"\nMean ydist (MRE- rule): {sum(xs)/len(xs):.4f}")
+    print(f"Mean ydist (ACC+ rule): {sum(ys)/len(ys):.4f}")
+    
+    exit(0)

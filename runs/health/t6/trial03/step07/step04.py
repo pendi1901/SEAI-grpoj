@@ -1,0 +1,48 @@
+import ezr
+import step01
+
+def flow(header, row, seen):
+    """
+    Decide whether to accept the current row based on its ydist.
+    We accept if the row is in the top 5% of the potential distribution
+    of the data seen so far.
+    """
+    if not seen:
+        return False
+    
+    # Combine seen rows with the current row to evaluate relative quality
+    data = [header] + seen + [row]
+    tbl = ezr.Tbl(data)
+    
+    # Calculate ydist for the current row
+    current_ydist = ezr.ydist(tbl, row)
+    
+    # Calculate ydist for all seen rows
+    seen_ydists = [ezr.ydist(tbl, r) for r in seen]
+    
+    # A row is "good enough" if it is better than 95% of the seen data
+    # (i.e., its ydist is in the bottom 5% of all seen ydist values)
+    threshold = sorted(seen_ydists)[max(0, int(len(seen_ydists) * 0.05))]
+    
+    return current_ydist <= threshold
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    seen = []
+    found = False
+    for i, row in enumerate(rows):
+        if flow(header, row, seen):
+            print(f"Decision: Ship setup at index {i} (row {i+1}).")
+            print(f"This configuration meets the quality threshold.")
+            found = True
+            break
+        seen.append(row)
+    
+    if not found:
+        print("No configuration met the quality threshold.")
+    
+    exit(0)

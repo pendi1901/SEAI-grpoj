@@ -1,0 +1,75 @@
+```python
+import ezr
+
+def choose(header, rows, label):
+    """
+    Finds the best setup for a large project (Size > 0.5).
+    We filter for 'large' projects and use the acquire logic to find 
+    the best among them within the 50-label budget.
+    """
+    size_idx = header.index("Size")
+    
+    # Filter rows for 'large' projects
+    large_indices = [i for i, row in enumerate(rows) if row[size_idx] > 0.5]
+    
+    # If no large projects, fall back to all rows
+    candidates = large_indices if large_indices else range(len(rows))
+    
+    # We need to map the oracle to the original indices
+    labeled_cache = {}
+    
+    def oracle_wrapper(row):
+        # Find original index by matching content
+        # We search for the row in the original list to get the index
+        idx = rows.index(row)
+        if idx not in labeled_cache:
+            labeled_cache[idx] = label(idx)
+        return labeled_cache[idx]
+
+    # Create a table for the subset of large projects
+    # We must ensure the rows passed to Tbl match the header length
+    subset_rows = [rows[i] for i in candidates]
+    tbl = ezr.Tbl([header] + subset_rows)
+    
+    # Use ezr.acquire to find the best within the budget
+    # acquire returns the rows that were labeled
+    ezr.acquire(tbl, cap=50, label=oracle_wrapper)
+    
+    # Find the best row among those we labeled
+    best_idx = -1
+    best_ydist = 1e30
+    
+    for idx, true_row in labeled_cache.items():
+        # Re-calculate ydist using the table context
+        # We need to ensure the true_row is used for ydist calculation
+        d = ezr.ydist(tbl, true_row)
+        if d < best_ydist:
+            best_ydist = d
+            best_idx = idx
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    full_data = [list(r) for r in data[1:]]
+    
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    masked_rows = []
+    for r in full_data:
+        new_row = list(r)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_rows.append(new_row)
+    
+    def label(i):
+        return full_data[i]
+    
+    best_idx = choose(header, masked_rows, label)
+    
+    print(f"Optimization complete for large-scale projects.")
+    print(f"The best row found is at index: {best_idx}")
+    goals = [full_data[best_idx][i] for i in goal_indices]
+    print(f"Goal values for this row: {goals}")
+```

@@ -1,0 +1,47 @@
+import csv
+from scipy.stats import pearsonr
+
+def certify(xs, ys):
+    """
+    Returns True if the correlation between xs and ys is statistically significant
+    (p-value < 0.05), suggesting the relationship is real rather than noise.
+    """
+    if len(xs) < 2 or len(ys) < 2:
+        return False
+    
+    corr, p_value = pearsonr(xs, ys)
+    
+    # If p_value is small, we reject the null hypothesis (that there is no correlation)
+    # Thus, the relationship is likely real.
+    return p_value < 0.05
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                try:
+                    processed_row.append(float(val))
+                except ValueError:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # "Big setups" are defined by N_estimators (index 3)
+    # "Accuracy" is defined by ACC+ (index 1)
+    n_estimators_idx = 3
+    acc_idx = 1
+    
+    xs = [row[n_estimators_idx] for row in rows]
+    ys = [row[acc_idx] for row in rows]
+    
+    is_real = certify(xs, ys)
+    
+    print("Analysis: Is the relationship between setup size and accuracy real?")
+    if is_real:
+        print("Yes, the correlation is statistically significant. The trend is real.")
+    else:
+        print("No, the observed relationship is likely noise.")

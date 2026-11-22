@@ -1,0 +1,69 @@
+```python
+import csv
+import math
+
+def spot(header, rows):
+    """
+    Identifies suspicious rows by calculating the Mahalanobis distance 
+    of numeric features. Rows with high distance are likely outliers 
+    or contain data entry errors.
+    """
+    # Identify numeric columns (excluding goals)
+    numeric_indices = [
+        i for i, col in enumerate(header) 
+        if col[0].isupper() and not (col.endswith('+') or col.endswith('-'))
+    ]
+    
+    # Extract numeric data
+    data = []
+    for row in rows:
+        data.append([row[i] for i in numeric_indices])
+    
+    # Calculate mean and standard deviation for each column
+    n = len(data)
+    m = len(numeric_indices)
+    means = [sum(col) / n for col in zip(*data)]
+    stds = [math.sqrt(sum((x - means[i])**2 for x in col) / n) for i, col in enumerate(zip(*data))]
+    
+    # Calculate "suspicion score" (sum of squared z-scores)
+    scores = []
+    for idx, row in enumerate(data):
+        score = 0
+        for i in range(m):
+            if stds[i] > 0:
+                z = (row[i] - means[i]) / stds[i]
+                score += z**2
+        scores.append((idx, score))
+    
+    # Sort by score descending
+    scores.sort(key=lambda x: x[1], reverse=True)
+    
+    # Return the top 10 most suspicious indices
+    return [s[0] for s in scores[:10]]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    suspicious = spot(header, rows)
+    
+    print("Suspicious records identified (potential data entry errors):")
+    for idx in suspicious[:5]:
+        print(f"Row {idx} is highly suspicious based on numeric feature distribution.")
+    
+    exit(0)
+```

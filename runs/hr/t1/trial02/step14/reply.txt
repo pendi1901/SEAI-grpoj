@@ -1,0 +1,67 @@
+```python
+import csv
+
+def flow(header, row, seen):
+    """
+    Detects if a team's composition has drifted significantly from the 
+    historical baseline ('seen'). We monitor the distribution of 
+    'JobSatisfaction' and 'TotalWorkingYears'. If the current row's 
+    metrics deviate by more than 2 standard deviations from the 
+    historical mean, we flag the team as 'no longer looking normal'.
+    """
+    if len(seen) < 30:
+        return False
+
+    # Identify indices
+    try:
+        sat_idx = header.index('JobSatisfaction')
+        twy_idx = header.index('TotalWorkingYears')
+    except ValueError:
+        return False
+
+    # Calculate historical stats
+    seen_sat = [r[sat_idx] for r in seen]
+    seen_twy = [r[twy_idx] for r in seen]
+    
+    def get_stats(data):
+        mean = sum(data) / len(data)
+        var = sum((x - mean) ** 2 for x in data) / len(data)
+        return mean, var ** 0.5
+
+    m_sat, sd_sat = get_stats(seen_sat)
+    m_twy, sd_twy = get_stats(seen_twy)
+
+    # Check for anomaly (Z-score > 2)
+    # We flag if the new arrival is significantly different from the norm
+    z_sat = abs(row[sat_idx] - m_sat) / (sd_sat + 1e-9)
+    z_twy = abs(row[twy_idx] - m_twy) / (sd_twy + 1e-9)
+
+    return z_sat > 2.0 or z_twy > 2.0
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    seen = []
+    anomalies = 0
+    for row in rows:
+        if flow(header, row, seen):
+            anomalies += 1
+        seen.append(row)
+
+    print("Team Composition Analysis:")
+    print(f"Processed {len(rows)} employee records.")
+    print(f"Detected {anomalies} instances where the team composition deviated significantly")
+    print("from the historical norm (based on Job Satisfaction and Total Working Years).")
+```

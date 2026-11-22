@@ -1,0 +1,79 @@
+```python
+import csv
+
+def flow(header, row, seen):
+    """
+    Warns the customer if a project is starting to go bad.
+    A project is 'going bad' if it is dominated by previous, better-performing rows.
+    We return False if the current row is dominated by any previously seen row,
+    signaling that it is not a good candidate to continue with.
+    """
+    goal_indices = []
+    for i, name in enumerate(header):
+        if name.endswith('-') or name.endswith('+'):
+            goal_indices.append((i, name[-1]))
+
+    def get_scores(r):
+        scores = []
+        for idx, op in goal_indices:
+            val = float(r[idx])
+            scores.append(val if op == '-' else -val)
+        return scores
+
+    # If this is the first row, we accept it as the baseline
+    if not seen:
+        return True
+
+    current_scores = get_scores(row)
+
+    # Check if any previously seen row dominates the current row.
+    # A row is dominated if there exists a previous row that is 
+    # better or equal in all goals and strictly better in at least one.
+    for prev_row in seen:
+        prev_scores = get_scores(prev_row)
+        
+        is_dominated = True
+        has_strictly_better = False
+        
+        for c, p in zip(current_scores, prev_scores):
+            if c < p: # Current is worse than previous
+                is_dominated = False
+                break
+            if c > p: # Current is better than previous
+                has_strictly_better = True
+        
+        # If current is worse than or equal to previous in all goals,
+        # and we found at least one goal where previous was better,
+        # then the current row is 'going bad' (dominated).
+        if is_dominated and has_strictly_better:
+            return False
+            
+    return True
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(x) for x in row])
+        
+        seen = []
+        bad_count = 0
+        for row in rows:
+            if not flow(header, row, seen):
+                bad_count += 1
+            else:
+                seen.append(row)
+        
+        print("Analysis: Monitoring project performance.")
+        print(f"Processed {len(rows)} weekly updates.")
+        print(f"Detected {bad_count} instances where a project setup was performing worse than previous benchmarks.")
+        print("Recommendation: Review the flagged setups to prevent resource waste.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

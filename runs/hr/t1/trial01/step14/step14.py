@@ -1,0 +1,72 @@
+import csv
+
+def flow(header, row, seen):
+    """
+    Detects if a new row represents a 'drift' from the established team norm.
+    We define the norm by the mean of numeric input columns in 'seen'.
+    If the new row's distance from the mean exceeds a threshold (2 standard deviations),
+    we flag it as a change in team composition.
+    """
+    if len(seen) < 20:
+        return False
+
+    # Identify numeric input columns (excluding goals)
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    input_indices = [i for i, name in enumerate(header) if name[0].isupper() and i not in goal_indices]
+
+    # Calculate mean and std for each numeric input in 'seen'
+    stats = {}
+    for i in input_indices:
+        vals = [r[i] for r in seen if isinstance(r[i], (int, float))]
+        if len(vals) > 0:
+            mu = sum(vals) / len(vals)
+            sigma = (sum((x - mu) ** 2 for x in vals) / len(vals)) ** 0.5
+            stats[i] = (mu, sigma)
+
+    # Calculate Z-score distance of the current row from the team norm
+    total_z = 0
+    count = 0
+    for i in input_indices:
+        if i in stats and stats[i][1] > 0:
+            mu, sigma = stats[i]
+            val = row[i] if isinstance(row[i], (int, float)) else 0
+            total_z += abs(val - mu) / sigma
+            count += 1
+
+    if count == 0:
+        return False
+
+    # If the average deviation is high (e.g., > 2.0), the team composition has shifted
+    return (total_z / count) > 2.0
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    seen = []
+    drift_count = 0
+    for row in rows:
+        if flow(header, row, seen):
+            drift_count += 1
+        seen.append(row)
+
+    print(f"Team Drift Analysis:")
+    print(f"Total employees processed: {len(rows)}")
+    print(f"Number of times the team composition significantly deviated from the norm: {drift_count}")
+    print("Conclusion: When this count is high, the team's profile is shifting away from historical norms.")

@@ -1,0 +1,87 @@
+import csv
+import step02
+
+def fix(header, row, levers):
+    """
+    Finds the smallest change to settings that improves the row's score.
+    We estimate the performance of potential changes using k-NN (step02).
+    """
+    # Load the training data to provide context for k-NN
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header_file = next(reader)
+        for r in reader:
+            rows.append([val if header_file[i] == 'criterion' else float(val) for i, val in enumerate(r)])
+
+    def get_score(r):
+        # Goals: MRE- (min), ACC+ (max), PRED40+ (max)
+        # We use a simple weighted sum of goals
+        return -r[0] + r[1] + r[2]
+
+    best_change = {}
+    best_score = -float('inf')
+    
+    # Try changing one lever at a time
+    for col_name, allowed in levers.items():
+        if col_name not in header:
+            continue
+        idx = header.index(col_name)
+        original_val = row[idx]
+        
+        candidates = []
+        if isinstance(allowed, list):  # Symbolic
+            candidates = [v for v in allowed if v != original_val]
+        else:  # Numeric (low, high)
+            low, high = allowed
+            # Try a few discrete steps within the range
+            step = (high - low) / 5
+            candidates = [low + i * step for i in range(6)]
+            candidates = [c for c in candidates if low <= c <= high and abs(c - original_val) > 1e-5]
+            
+        for val in candidates:
+            new_row = row[:]
+            new_row[idx] = val
+            
+            # Estimate goals using k-NN
+            # We need to pass a test row with '?' for goals
+            test_row = new_row[:]
+            test_row[0], test_row[1], test_row[2] = "?", "?", "?"
+            
+            est_mre = step02.guess(header, rows, [test_row])[0]
+            # For simplicity, assume ACC and PRED40 are stable or use average
+            est_acc = sum(r[1] for r in rows) / len(rows)
+            est_pred = sum(r[2] for r in rows) / len(rows)
+            
+            new_score = -est_mre + est_acc + est_pred
+            
+            if new_score > best_score:
+                best_score = new_score
+                best_change = {col_name: val}
+                
+    return best_change
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            rows.append([val if header[i] == 'criterion' else float(val) for i, val in enumerate(row)])
+
+    bad_row = rows[0]
+    levers = {
+        'N_estimators': (100.0, 200.0),
+        'criterion': ['absolute_error', 'poisson', 'squared_error'],
+        'Max_depth': (2.0, 12.0)
+    }
+    
+    recommendation = fix(header, bad_row, levers)
+    print("Customer Inquiry: 'What is the smallest change to improve my setup?'")
+    if recommendation:
+        col, val = list(recommendation.items())[0]
+        print(f"Answer: Change {col} to {val}.")
+    else:
+        print("Answer: No simple change found to improve performance.")

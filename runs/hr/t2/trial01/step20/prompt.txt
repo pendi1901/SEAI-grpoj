@@ -1,0 +1,1308 @@
+You are writing one Python file, step20.py.
+
+The data is the csv file WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv in the current directory. Column names starting in upper case are numeric, lower case are symbolic. A name ending in - is a goal to minimise, in + a goal to maximise; all other columns are inputs. It has 800 data rows after the header. Any count the customer quotes describes their full records, not this file: never hard-code a row count, read the file to the end. Its first lines:
+
+Age,attrition,businessTravel,DailyRate,department,DistanceFromHome,Education,educationField,EmployeeCount,EmployeeNumber,EnvironmentSatisfaction,gender,HourlyRate,JobInvolvement,JobLevel,jobRole,JobSatisfaction,maritalStatus,MonthlyIncome,MonthlyRate,NumCompaniesWorked,over18,overTime,PercentSalaryHike,PerformanceRating,RelationshipSatisfaction,StandardHours,StockOptionLevel,TotalWorkingYears,TrainingTimesLastYear,WorkLifeBalance,YearsAtCompany+,YearsInCurrentRole+,YearsSinceLastPromotion,YearsWithCurrManager+
+32,No,Travel_Rarely,548,Research & Development,1,3,Life Sciences,1,96,2,Male,66,3,2,Research Scientist,2,Married,6220,7346,1,Y,No,17,3,2,80,2,10,3,3,10,4,0,9
+34,No,Travel_Frequently,560,Research & Development,1,4,Other,1,1431,4,Male,91,3,1,Research Scientist,1,Divorced,2996,20284,5,Y,No,14,3,3,80,2,10,2,3,4,3,1,3
+36,No,Travel_Rarely,917,Research & Development,6,4,Life Sciences,1,1221,3,Male,60,1,1,Laboratory Technician,3,Divorced,2741,6865,1,Y,No,14,3,3,80,1,7,4,3,7,7,1,7
+
+Your function receives rows already parsed. The header and the first two rows look like this in Python:
+
+header = ['Age', 'attrition', 'businessTravel', 'DailyRate', 'department', 'DistanceFromHome', 'Education', 'educationField', 'EmployeeCount', 'EmployeeNumber', 'EnvironmentSatisfaction', 'gender', 'HourlyRate', 'JobInvolvement', 'JobLevel', 'jobRole', 'JobSatisfaction', 'maritalStatus', 'MonthlyIncome', 'MonthlyRate', 'NumCompaniesWorked', 'over18', 'overTime', 'PercentSalaryHike', 'PerformanceRating', 'RelationshipSatisfaction', 'StandardHours', 'StockOptionLevel', 'TotalWorkingYears', 'TrainingTimesLastYear', 'WorkLifeBalance', 'YearsAtCompany+', 'YearsInCurrentRole+', 'YearsSinceLastPromotion', 'YearsWithCurrManager+']
+row = [32.0, 'No', 'Travel_Rarely', 548.0, 'Research & Development', 1.0, 3.0, 'Life Sciences', 1.0, 96.0, 2.0, 'Male', 66.0, 3.0, 2.0, 'Research Scientist', 2.0, 'Married', 6220.0, 7346.0, 1.0, 'Y', 'No', 17.0, 3.0, 2.0, 80.0, 2.0, 10.0, 3.0, 3.0, 10.0, 4.0, 0.0, 9.0]
+row = [34.0, 'No', 'Travel_Frequently', 560.0, 'Research & Development', 1.0, 4.0, 'Other', 1.0, 1431.0, 4.0, 'Male', 91.0, 3.0, 1.0, 'Research Scientist', 1.0, 'Divorced', 2996.0, 20284.0, 5.0, 'Y', 'No', 14.0, 3.0, 3.0, 80.0, 2.0, 10.0, 2.0, 3.0, 4.0, 3.0, 1.0, 3.0]
+
+These columns hold text, not numbers: attrition (No, Yes); businessTravel (Non-Travel, Travel_Frequently, Travel_Rarely); department (Human Resources, Research & Development, Sales); educationField (Human Resources, Life Sciences, Marketing, Medical, Other, Technical Degree); gender (Female, Male); jobRole (Healthcare Representative, Human Resources, Laboratory Technician, Manager, Manufacturing Director, Research Director, Research Scientist, Sales Executive, ...); maritalStatus (Divorced, Married, Single); over18 (Y); overTime (No, Yes).
+
+Use only the Python standard library.
+
+These files, written earlier, are in the same directory:
+
+--- step01.py ---
+import csv
+
+def remember(header, rows):
+    """
+    Identifies staff who stay 'unusually long'.
+    We define 'staying long' by the goal columns ending in '+':
+    'YearsAtCompany+', 'YearsInCurrentRole+', 'YearsWithCurrManager+'
+    We calculate a score based on the sum of these values and return 
+    the indices of the top 5% (max 40 rows for 800 records).
+    """
+    # Identify indices for goal columns ending in '+'
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+')]
+    
+    scored_rows = []
+    for idx, row in enumerate(rows):
+        # Calculate score: sum of values in goal columns
+        score = sum(row[i] for i in goal_indices)
+        scored_rows.append((score, idx))
+    
+    # Sort by score descending
+    scored_rows.sort(key=lambda x: x[0], reverse=True)
+    
+    # Return top 5% (0.05 * 800 = 40)
+    limit = max(1, int(len(rows) * 0.05))
+    return [item[1] for item in scored_rows[:limit]]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                # Convert numeric columns (starting with uppercase) to float
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    best_indices = remember(header, rows)
+    
+    print("Staff with unusually long tenure (Top 5%):")
+    print(f"{'Index':<10} | {'YearsAtCompany':<15} | {'YearsInCurrentRole':<20} | {'YearsWithManager':<15}")
+    print("-" * 70)
+    
+    # Indices for display
+    yac = header.index('YearsAtCompany+')
+    yicr = header.index('YearsInCurrentRole+')
+    ywcm = header.index('YearsWithCurrManager+')
+    
+    for idx in best_indices:
+        r = rows[idx]
+        print(f"{idx:<10} | {r[yac]:<15.0f} | {r[yicr]:<20.0f} | {r[ywcm]:<15.0f}")
+
+
+--- step02.py ---
+import csv
+import step01
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column (YearsAtCompany+) for test rows
+    by finding the average value of that column from the training set.
+    """
+    # Find the index of the first goal column ending in '+'
+    goal_idx = -1
+    for i, name in enumerate(header):
+        if name.endswith('+'):
+            goal_idx = i
+            break
+    
+    if goal_idx == -1:
+        return [0.0] * len(test)
+    
+    # Calculate the average of the goal column from training data
+    total = sum(row[goal_idx] for row in train)
+    avg_val = total / len(train)
+    
+    # Return the average for every test row
+    return [avg_val] * len(test)
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    # Split data: use first 700 for training, next 100 for testing
+    train_data = rows[:700]
+    test_data = rows[700:]
+    
+    # Mask the goal columns in test data as per instructions
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    masked_test = []
+    for row in test_data:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_test.append(new_row)
+    
+    predictions = guess(header, train_data, masked_test)
+    
+    # Find the first goal column name
+    first_goal = [name for name in header if name.endswith('+') or name.endswith('-')][0]
+    
+    print(f"Estimation for '{first_goal}' based on training average:")
+    print(f"Average predicted tenure: {predictions[0]:.2f} years")
+    print(f"Estimated for {len(predictions)} test cases.")
+
+
+--- step03.py ---
+import csv
+import math
+
+def certify(xs, ys):
+    """
+    Returns True if the two lists of numbers are statistically similar 
+    (i.e., they do not differ significantly), False otherwise.
+    Uses a simple t-test approach for independent samples.
+    """
+    n1, n2 = len(xs), len(ys)
+    if n1 < 2 or n2 < 2:
+        return True
+    
+    m1, m2 = sum(xs) / n1, sum(ys) / n2
+    v1 = sum((x - m1) ** 2 for x in xs) / (n1 - 1)
+    v2 = sum((y - m2) ** 2 for y in ys) / (n2 - 1)
+    
+    # Pooled standard error
+    se = math.sqrt((v1 / n1) + (v2 / n2))
+    if se == 0:
+        return m1 == m2
+    
+    # t-statistic
+    t_stat = abs(m1 - m2) / se
+    
+    # For a 95% confidence level, t-critical is approx 1.96
+    return t_stat < 1.96
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Identify columns
+    ot_idx = header.index('overTime')
+    yicr_idx = header.index('YearsInCurrentRole+')
+    
+    # Split data based on overtime
+    yes_ot = [r[yicr_idx] for r in rows if r[ot_idx] == 'Yes']
+    no_ot = [r[yicr_idx] for r in rows if r[ot_idx] == 'No']
+    
+    # Analyze
+    is_noise = certify(yes_ot, no_ot)
+    
+    print("Analysis: Does working overtime affect tenure (YearsInCurrentRole)?")
+    if is_noise:
+        print("Result: The difference is statistically insignificant (noise).")
+    else:
+        print("Result: There is a statistically significant difference.")
+    print(f"Average tenure (Overtime): {sum(yes_ot)/len(yes_ot):.2f} years")
+    print(f"Average tenure (No Overtime): {sum(no_ot)/len(no_ot):.2f} years")
+
+
+--- step04.py ---
+import csv
+import step01
+
+def flow(header, row, seen):
+    """
+    Decides if the current row is a candidate for a 'what would keep you here' 
+    conversation. We define this as being in the top 5% of tenure (using 
+    the logic from step01) compared to the history of 'seen' rows.
+    """
+    if not seen:
+        return False
+    
+    # Combine seen rows with current row to evaluate relative standing
+    all_rows = seen + [row]
+    
+    # Use step01 logic to find top 5% indices
+    best_indices = step01.remember(header, all_rows)
+    
+    # If the current row (the last one) is in the top 5%, trigger conversation
+    return (len(all_rows) - 1) in best_indices
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    # Simulate the arrival process
+    seen = []
+    triggered_count = 0
+    for row in rows:
+        if flow(header, row, seen):
+            triggered_count += 1
+        seen.append(row)
+    
+    print("Retention Conversation Analysis:")
+    print(f"Total employees processed: {len(rows)}")
+    print(f"Conversations recommended: {triggered_count}")
+    print("Logic: Triggered for employees in the top 5% of tenure (YearsAtCompany+, YearsInCurrentRole+, YearsWithCurrManager+).")
+
+
+--- step05.py ---
+import csv
+import step01
+
+def blame(header, rows):
+    """
+    Identifies input columns that correlate with the 'worst' rows.
+    Worst rows are defined as the bottom 10% based on the sum of goal columns.
+    We return the names of the top 3 input columns that have the highest 
+    absolute difference in mean between the 'worst' group and the rest.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    input_indices = [i for i, name in enumerate(header) if i not in goal_indices]
+    
+    # Calculate scores for all rows
+    scored = []
+    for idx, row in enumerate(rows):
+        # Normalize: for '+', higher is better; for '-', lower is better.
+        # Since we want 'worst', we invert '-' goals.
+        score = 0
+        for i in goal_indices:
+            val = row[i]
+            if header[i].endswith('-'):
+                score -= val
+            else:
+                score += val
+        scored.append((score, row))
+    
+    scored.sort(key=lambda x: x[0])
+    
+    # Bottom 10% are the 'worst'
+    limit = max(1, len(rows) // 10)
+    worst = [x[1] for x in scored[:limit]]
+    others = [x[1] for x in scored[limit:]]
+    
+    diffs = []
+    for i in input_indices:
+        # Only consider numeric input columns for correlation
+        if isinstance(rows[0][i], (int, float)):
+            w_mean = sum(r[i] for r in worst) / len(worst)
+            o_mean = sum(r[i] for r in others) / len(others)
+            diffs.append((abs(w_mean - o_mean), header[i]))
+    
+    # Return top 3 columns that differentiate the worst rows
+    diffs.sort(key=lambda x: x[0], reverse=True)
+    return [d[1] for d in diffs[:3]]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    results = blame(header, rows)
+    print("Factors explaining short employee tenure:")
+    for col in results:
+        print(f"- {col}")
+
+
+--- step06.py ---
+import csv
+import step01
+
+def get_score(header, row):
+    """Calculates a score where higher is better."""
+    score = 0
+    for i, name in enumerate(header):
+        if name.endswith('+'):
+            score += row[i]
+        elif name.endswith('-'):
+            score -= row[i]
+    return score
+
+def justify(header, rows, row):
+    """
+    Estimates the score of the target row by averaging the scores of rows
+    with matching symbolic input values, then compares it to all rows.
+    """
+    # Identify input columns (non-goal, non-numeric)
+    symbolic_indices = [i for i, name in enumerate(header) 
+                        if not name.endswith('+') and not name.endswith('-') 
+                        and not header[i][0].isupper()]
+    
+    # Find rows that match the symbolic inputs of the target row
+    matches = []
+    for r in rows:
+        if all(r[i] == row[i] for i in symbolic_indices):
+            matches.append(get_score(header, r))
+    
+    # Estimate score: use average of matches, or global average if no matches
+    if matches:
+        est_score = sum(matches) / len(matches)
+    else:
+        all_scores = [get_score(header, r) for r in rows]
+        est_score = sum(all_scores) / len(all_scores)
+    
+    # Compare estimated score against all rows
+    all_scores = [get_score(header, r) for r in rows]
+    better_than = [s for s in all_scores if est_score > s]
+    p = len(better_than) / len(all_scores)
+    
+    reason = f"This arrangement ranks in the top {int((1-p)*100)}% of all teams because its estimated tenure score of {est_score:.1f} outperforms {int(p*100)}% of the historical records."
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    # Test with the first row, masking its goal columns
+    test_row = list(rows[0])
+    for i, name in enumerate(header):
+        if name.endswith('+') or name.endswith('-'):
+            test_row[i] = "?"
+            
+    p, reason = justify(header, rows, test_row)
+    print(reason)
+
+
+--- step07.py ---
+import csv
+import random
+import step01
+
+def choose(header, rows, label):
+    """
+    Finds the best row by sampling 50 rows, labeling them, 
+    and returning the index of the one with the highest score.
+    """
+    # Identify goal indices
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    
+    # Randomly sample 50 indices
+    sample_size = min(50, len(rows))
+    indices = random.sample(range(len(rows)), sample_size)
+    
+    best_idx = -1
+    best_score = float('-inf')
+    
+    for idx in indices:
+        # Get true values via label()
+        true_goals = label(idx)
+        
+        # Calculate score: sum of '+' goals minus sum of '-' goals
+        score = 0
+        goal_ptr = 0
+        for i, name in enumerate(header):
+            if name.endswith('+'):
+                score += true_goals[goal_ptr]
+                goal_ptr += 1
+            elif name.endswith('-'):
+                score -= true_goals[goal_ptr]
+                goal_ptr += 1
+        
+        if score > best_score:
+            best_score = score
+            best_idx = idx
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    # Prepare the label function for the harness
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    
+    def label(i):
+        return [rows[i][idx] for idx in goal_indices]
+    
+    best_index = choose(header, rows, label)
+    
+    print(f"Analysis complete. The best working arrangement found is at row index {best_index}.")
+    print("This selection was determined by sampling 50 records to maximize tenure goals.")
+
+
+--- step08.py ---
+import csv
+import step01
+import step06
+
+def fix(header, row, levers):
+    """
+    Recommends changes to a 'bad' row to improve its tenure score.
+    Iterates through each lever, tests the impact of changing the value,
+    and returns the change that results in the highest score improvement.
+    """
+    best_change = {}
+    best_score_gain = -1.0
+    
+    current_score = step06.get_score(header, row)
+    
+    for col_name, allowed in levers.items():
+        idx = header.index(col_name)
+        original_val = row[idx]
+        
+        # Test variations
+        variations = []
+        if isinstance(allowed, tuple):  # Numeric range (low, high)
+            # Test mid-point or boundaries
+            variations = [allowed[0], allowed[1], (allowed[0] + allowed[1]) / 2]
+        else:  # Symbolic list
+            variations = allowed
+            
+        for val in variations:
+            if val == original_val:
+                continue
+            
+            # Create a copy and apply change
+            new_row = list(row)
+            new_row[idx] = val
+            
+            new_score = step06.get_score(header, new_row)
+            gain = new_score - current_score
+            
+            if gain > best_score_gain:
+                best_score_gain = gain
+                best_change = {col_name: val}
+                
+    return best_change
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Define levers based on customer request
+    levers = {
+        'businessTravel': ['Non-Travel', 'Travel_Frequently', 'Travel_Rarely'],
+        'overTime': ['No', 'Yes'],
+        'TrainingTimesLastYear': (0.0, 6.0),
+        'PercentSalaryHike': (11.0, 25.0),
+        'StockOptionLevel': (0.0, 3.0)
+    }
+
+    # Identify a 'bad' row (e.g., one with low tenure score)
+    scores = [(step06.get_score(header, r), i) for i, r in enumerate(rows)]
+    scores.sort()
+    bad_row_idx = scores[0][1]
+    bad_row = rows[bad_row_idx]
+
+    recommendation = fix(header, bad_row, levers)
+    
+    print("Retention Strategy Recommendation:")
+    print(f"For employee at index {bad_row_idx}, we recommend the following change:")
+    for col, val in recommendation.items():
+        print(f"  - Adjust '{col}' to: {val}")
+    print("This change is designed to improve the employee's tenure score based on historical data.")
+
+
+--- step09.py ---
+import csv
+import step06
+
+def spot(header, rows):
+    """
+    Identifies suspicious rows by checking for outliers in numeric input columns.
+    A row is considered suspicious if its values in numeric input columns are 
+    statistically extreme (e.g., > 3 standard deviations from the mean).
+    """
+    numeric_input_indices = [
+        i for i, name in enumerate(header) 
+        if header[i][0].isupper() and not name.endswith('+') and not name.endswith('-')
+    ]
+    
+    suspicion_scores = []
+    
+    for row_idx, row in enumerate(rows):
+        score = 0
+        for i in numeric_input_indices:
+            col_data = [r[i] for r in rows]
+            mean = sum(col_data) / len(col_data)
+            std = (sum((x - mean) ** 2 for x in col_data) / len(col_data)) ** 0.5
+            
+            if std > 0:
+                z_score = abs(row[i] - mean) / std
+                # If a value is more than 3 standard deviations away, it's suspicious
+                if z_score > 3:
+                    score += z_score
+        
+        if score > 0:
+            suspicion_scores.append((score, row_idx))
+            
+    # Sort by suspicion score descending
+    suspicion_scores.sort(key=lambda x: x[0], reverse=True)
+    return [item[1] for item in suspicion_scores]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    suspicious_indices = spot(header, rows)
+    
+    print("Data Integrity Analysis: Suspicious Rows Found")
+    if not suspicious_indices:
+        print("No obviously erroneous entries detected.")
+    else:
+        print(f"Detected {len(suspicious_indices)} potentially incorrect records.")
+        print("Top 5 most suspicious row indices:")
+        for idx in suspicious_indices[:5]:
+            print(f" - Row {idx}")
+
+
+--- step10.py ---
+import csv
+import random
+import step01
+import step06
+import step07
+
+def race(header, rows, label):
+    """
+    Compares three strategies for finding the best employee row.
+    Budget: 50 labels total.
+    """
+    budget = 50
+    used_indices = {}
+
+    def get_true_goals(idx):
+        if idx not in used_indices:
+            used_indices[idx] = label(idx)
+        return used_indices[idx]
+
+    def get_score(idx):
+        goals = get_true_goals(idx)
+        score = 0
+        goal_ptr = 0
+        for name in header:
+            if name.endswith('+'):
+                score += goals[goal_ptr]
+                goal_ptr += 1
+            elif name.endswith('-'):
+                score -= goals[goal_ptr]
+                goal_ptr += 1
+        return score
+
+    # Strategy 1: Random
+    def strategy_random():
+        indices = random.sample(range(len(rows)), budget // 3)
+        best_idx = -1
+        best_score = float('-inf')
+        for idx in indices:
+            s = get_score(idx)
+            if s > best_score:
+                best_score, best_idx = s, idx
+        return best_idx, best_score
+
+    # Strategy 2: High Salary (Greedy on MonthlyIncome)
+    def strategy_salary():
+        income_idx = header.index('MonthlyIncome')
+        # Sort by income descending
+        sorted_rows = sorted(range(len(rows)), key=lambda i: rows[i][income_idx], reverse=True)
+        best_idx = -1
+        best_score = float('-inf')
+        for idx in sorted_rows[:budget // 3]:
+            s = get_score(idx)
+            if s > best_score:
+                best_score, best_idx = s, idx
+        return best_idx, best_score
+
+    # Strategy 3: High Tenure (Greedy on TotalWorkingYears)
+    def strategy_tenure():
+        tenure_idx = header.index('TotalWorkingYears')
+        sorted_rows = sorted(range(len(rows)), key=lambda i: rows[i][tenure_idx], reverse=True)
+        best_idx = -1
+        best_score = float('-inf')
+        for idx in sorted_rows[:budget // 3]:
+            s = get_score(idx)
+            if s > best_score:
+                best_score, best_idx = s, idx
+        return best_idx, best_score
+
+    strategies = {
+        "random": strategy_random,
+        "salary": strategy_salary,
+        "tenure": strategy_tenure
+    }
+
+    results = {}
+    for name, func in strategies.items():
+        idx, score = func()
+        results[name] = (idx, score)
+
+    winner = max(results, key=lambda n: results[n][1])
+    
+    return {
+        "winner": winner,
+        "row": results[winner][0],
+        "tried": list(strategies.keys())
+    }
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    def label(i):
+        return [rows[i][idx] for idx in goal_indices]
+
+    result = race(header, rows, label)
+    print(f"The winning strategy is: {result['winner']}")
+    print(f"Best row found at index: {result['row']}")
+    print(f"Strategies compared: {', '.join(result['tried'])}")
+
+
+--- step11.py ---
+import csv
+import step01
+import step06
+
+def find_similar(header, rows, target_row, n=5):
+    """
+    Finds the top n rows most similar to target_row based on symbolic inputs.
+    Similarity is defined by the number of matching symbolic column values.
+    """
+    symbolic_indices = [
+        i for i, name in enumerate(header)
+        if not name.endswith('+') and not name.endswith('-') and not header[i][0].isupper()
+    ]
+    
+    scored_rows = []
+    for idx, row in enumerate(rows):
+        # Skip if it's the target row itself
+        if row == target_row:
+            continue
+            
+        # Calculate similarity score (number of matching symbolic fields)
+        match_count = sum(1 for i in symbolic_indices if row[i] == target_row[i])
+        scored_rows.append((match_count, idx))
+    
+    # Sort by match count descending
+    scored_rows.sort(key=lambda x: x[0], reverse=True)
+    
+    # Return indices of top n matches
+    return [item[1] for item in scored_rows[:n]]
+
+def remember(header, rows):
+    """
+    Returns the indices of the rows most similar to the first row in the dataset.
+    """
+    if not rows:
+        return []
+    
+    target = rows[0]
+    # Limit to 5% of 800 = 40 rows
+    limit = max(1, int(len(rows) * 0.05))
+    return find_similar(header, rows, target, n=limit)
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    target_idx = 0
+    similar_indices = remember(header, rows)
+    
+    print(f"Employees most similar to row {target_idx}:")
+    print(f"{'Index':<10} | {'Tenure Score':<15}")
+    print("-" * 30)
+    
+    for idx in similar_indices:
+        score = step06.get_score(header, rows[idx])
+        print(f"{idx:<10} | {score:<15.1f}")
+
+
+--- step12.py ---
+import csv
+import step06
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column (YearsAtCompany+) for test rows
+    by calculating the average of that column for rows in the training set
+    that match the 'Sales' department and 'No' overtime criteria.
+    """
+    # Find the index of the first goal column ending in '+'
+    goal_idx = -1
+    for i, name in enumerate(header):
+        if name.endswith('+'):
+            goal_idx = i
+            break
+            
+    dept_idx = header.index('department')
+    ot_idx = header.index('overTime')
+    
+    # Filter training data for Sales department and No Overtime
+    relevant_train = [
+        row[goal_idx] for row in train 
+        if row[dept_idx] == 'Sales' and row[ot_idx] == 'No'
+    ]
+    
+    # Fallback to global average if no specific matches found
+    if not relevant_train:
+        relevant_train = [row[goal_idx] for row in train]
+        
+    avg_val = sum(relevant_train) / len(relevant_train)
+    
+    # Return the average for every test row
+    return [avg_val] * len(test)
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    # Define test scenario: Sales department employees with Overtime = 'No'
+    test_data = [r for r in rows if r[header.index('department')] == 'Sales']
+    
+    # Mask the goal columns in test data
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    masked_test = []
+    for row in test_data:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_test.append(new_row)
+    
+    predictions = guess(header, rows, masked_test)
+    
+    first_goal = [name for name in header if name.endswith('+') or name.endswith('-')][0]
+    
+    print(f"Impact Analysis: Cutting overtime in Sales.")
+    print(f"Estimated average '{first_goal}' for Sales staff without overtime: {predictions[0]:.2f} years.")
+    print("This estimate is derived from historical records of Sales employees who already work no overtime.")
+
+
+--- step13.py ---
+import csv
+import step03
+
+def certify(xs, ys):
+    """
+    Returns True if the two lists of numbers are statistically similar 
+    (i.e., they do not differ significantly), False otherwise.
+    Reuses the logic from step03.
+    """
+    return step03.certify(xs, ys)
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Identify columns
+    train_idx = header.index('TrainingTimesLastYear')
+    ywcm_idx = header.index('YearsWithCurrManager+')
+    
+    # Split data based on median training days
+    all_train_days = [r[train_idx] for r in rows]
+    median_train = sum(all_train_days) / len(all_train_days)
+    
+    more_training = [r[ywcm_idx] for r in rows if r[train_idx] >= median_train]
+    less_training = [r[ywcm_idx] for r in rows if r[train_idx] < median_train]
+    
+    # Analyze
+    is_noise = certify(more_training, less_training)
+    
+    print("Analysis: Does more training lead to longer tenure with the manager?")
+    if is_noise:
+        print("Result: The difference is statistically insignificant (noise).")
+    else:
+        print("Result: There is a statistically significant difference.")
+    
+    print(f"Average tenure (More training): {sum(more_training)/len(more_training):.2f} years")
+    print(f"Average tenure (Less training): {sum(less_training)/len(less_training):.2f} years")
+
+
+--- step14.py ---
+import csv
+import step06
+
+def flow(header, row, seen):
+    """
+    Detects if a team's composition has shifted significantly.
+    We compare the current row's tenure score to the distribution of 
+    tenure scores in the 'seen' history. If the current row is an 
+    outlier (e.g., > 2 standard deviations from the mean of seen rows),
+    we flag it as a shift in team composition.
+    """
+    if len(seen) < 30:
+        return False
+    
+    # Calculate scores for all seen rows
+    seen_scores = [step06.get_score(header, r) for r in seen]
+    
+    # Calculate mean and standard deviation of seen scores
+    mean = sum(seen_scores) / len(seen_scores)
+    variance = sum((s - mean) ** 2 for s in seen_scores) / len(seen_scores)
+    std = variance ** 0.5
+    
+    # Current row score
+    current_score = step06.get_score(header, row)
+    
+    # If std is 0, we can't detect a shift
+    if std == 0:
+        return False
+    
+    # Flag if the current row is more than 2 standard deviations away
+    z_score = abs(current_score - mean) / std
+    return z_score > 2.0
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    seen = []
+    shifts = 0
+    for row in rows:
+        if flow(header, row, seen):
+            shifts += 1
+        seen.append(row)
+    
+    print("Team Composition Analysis:")
+    print(f"Total records processed: {len(rows)}")
+    print(f"Significant shifts detected: {shifts}")
+    print("Logic: A shift is flagged when a new employee's tenure score deviates")
+    print("by more than 2 standard deviations from the historical team average.")
+
+
+--- step15.py ---
+import csv
+import step05
+
+def blame(header, rows):
+    """
+    Identifies input columns that have the least impact on tenure.
+    We reuse the logic from step05 to find the most explanatory factors,
+    then return the inverse: the input columns that were NOT in the top 
+    factors explaining the 'worst' rows.
+    """
+    # Get the top factors that explain the worst rows
+    important_factors = step05.blame(header, rows)
+    
+    # Identify all input columns (non-goal, non-numeric or numeric)
+    # The rule is: input columns are those not ending in '+' or '-'
+    input_columns = [
+        name for name in header 
+        if not name.endswith('+') and not name.endswith('-')
+    ]
+    
+    # Return columns that are NOT in the important_factors list
+    # These are the ones that have little to do with tenure
+    unimportant = [col for col in input_columns if col not in important_factors]
+    
+    return unimportant
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    unimportant_cols = blame(header, rows)
+    
+    print("Data Collection Audit:")
+    print("The following columns have the least correlation with employee tenure")
+    print("and may be candidates for removal from future data collection:")
+    for col in unimportant_cols[:10]:  # Print first 10 for brevity
+        print(f" - {col}")
+    if len(unimportant_cols) > 10:
+        print(f" ... and {len(unimportant_cols) - 10} others.")
+
+
+--- step16.py ---
+import csv
+import step06
+
+def justify(header, rows, row):
+    """
+    Estimates the score of the target row by checking if increasing 
+    MonthlyIncome improves the score, then compares it to all rows.
+    """
+    # Identify goal indices
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    income_idx = header.index('MonthlyIncome')
+    
+    # Estimate the score of the provided row (with "?" goals)
+    # We use the average score of rows with the same department/role as a baseline
+    dept_idx = header.index('department')
+    role_idx = header.index('jobRole')
+    
+    matches = [step06.get_score(header, r) for r in rows 
+               if r[dept_idx] == row[dept_idx] and r[role_idx] == row[role_idx]]
+    
+    if not matches:
+        matches = [step06.get_score(header, r) for r in rows]
+    
+    base_score = sum(matches) / len(matches)
+    
+    # Test if increasing income significantly changes the score
+    # We look at the correlation between MonthlyIncome and score in the dataset
+    incomes = [r[income_idx] for r in rows]
+    scores = [step06.get_score(header, r) for r in rows]
+    
+    # Simple correlation check: if income is not a strong driver, paying more won't help
+    # We calculate the average score gain per unit of income
+    avg_income = sum(incomes) / len(incomes)
+    high_income_rows = [s for i, s in zip(incomes, scores) if i > avg_income]
+    low_income_rows = [s for i, s in zip(incomes, scores) if i <= avg_income]
+    
+    gain = (sum(high_income_rows)/len(high_income_rows)) - (sum(low_income_rows)/len(low_income_rows))
+    
+    # If the gain is negligible (e.g., < 1% of total score range), money isn't the primary lever
+    all_scores = [step06.get_score(header, r) for r in rows]
+    score_range = max(all_scores) - min(all_scores)
+    
+    if gain < (0.01 * score_range):
+        reason = "Increasing pay has a negligible impact on tenure scores compared to other organizational factors."
+    else:
+        reason = "Increasing pay shows a positive correlation with tenure, but is not the sole driver of retention."
+        
+    # Calculate p: fraction of rows this row is better than
+    better_than = [s for s in all_scores if base_score > s]
+    p = len(better_than) / len(all_scores)
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    # Test with the first row, masking its goal columns
+    test_row = list(rows[0])
+    for i, name in enumerate(header):
+        if name.endswith('+') or name.endswith('-'):
+            test_row[i] = "?"
+            
+    p, reason = justify(header, rows, test_row)
+    print(f"Analysis: {reason}")
+    print(f"Performance percentile: {p:.2f}")
+
+
+--- step17.py ---
+import csv
+import random
+import step07
+
+def choose(header, rows, label):
+    """
+    Finds the best row for 'Laboratory Technician' staff by sampling 
+    up to 50 rows, labeling them, and returning the index of the 
+    one with the highest score.
+    """
+    # Identify laboratory staff
+    job_role_idx = header.index('jobRole')
+    lab_indices = [i for i, row in enumerate(rows) if row[job_role_idx] == 'Laboratory Technician']
+    
+    # If no lab staff, fallback to all rows
+    search_pool = lab_indices if lab_indices else range(len(rows))
+    
+    # Sample up to 50 indices
+    sample_size = min(50, len(search_pool))
+    indices = random.sample(search_pool, sample_size)
+    
+    best_idx = -1
+    best_score = float('-inf')
+    
+    for idx in indices:
+        # Get true values via label()
+        true_goals = label(idx)
+        
+        # Calculate score: sum of '+' goals minus sum of '-' goals
+        score = 0
+        goal_ptr = 0
+        for i, name in enumerate(header):
+            if name.endswith('+'):
+                score += true_goals[goal_ptr]
+                goal_ptr += 1
+            elif name.endswith('-'):
+                score -= true_goals[goal_ptr]
+                goal_ptr += 1
+        
+        if score > best_score:
+            best_score = score
+            best_idx = idx
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    # Prepare the label function for the harness
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    
+    def label(i):
+        return [rows[i][idx] for idx in goal_indices]
+    
+    best_index = choose(header, rows, label)
+    
+    print(f"Analysis complete for Laboratory staff.")
+    print(f"The best working arrangement found is at row index {best_index}.")
+    print("This selection was determined by sampling up to 50 laboratory records to maximize tenure goals.")
+
+
+--- step18.py ---
+import csv
+import step06
+import step08
+
+def fix(header, row, levers):
+    """
+    Recommends changes to a 'bad' row to improve its tenure score,
+    excluding 'MonthlyIncome' as per the customer's constraint.
+    """
+    # Filter out MonthlyIncome from the levers if it exists
+    if 'MonthlyIncome' in levers:
+        levers = {k: v for k, v in levers.items() if k != 'MonthlyIncome'}
+    
+    # Reuse the logic from step08 to find the best lever adjustment
+    return step08.fix(header, row, levers)
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Define levers excluding MonthlyIncome
+    levers = {
+        'businessTravel': ['Non-Travel', 'Travel_Frequently', 'Travel_Rarely'],
+        'overTime': ['No', 'Yes'],
+        'TrainingTimesLastYear': (0.0, 6.0),
+        'PercentSalaryHike': (11.0, 25.0),
+        'StockOptionLevel': (0.0, 3.0)
+    }
+
+    # Identify a 'bad' row (e.g., one with low tenure score)
+    scores = [(step06.get_score(header, r), i) for i, r in enumerate(rows)]
+    scores.sort()
+    bad_row_idx = scores[0][1]
+    bad_row = rows[bad_row_idx]
+
+    recommendation = fix(header, bad_row, levers)
+    
+    print("Retention Strategy Recommendation (No Budget for Pay Increases):")
+    print(f"For employee at index {bad_row_idx}, we recommend the following non-monetary change:")
+    for col, val in recommendation.items():
+        print(f"  - Adjust '{col}' to: {val}")
+    print("This change is designed to improve the employee's tenure score using available organizational levers.")
+
+
+--- step19.py ---
+import csv
+import step09
+
+def spot(header, rows):
+    """
+    Identifies rows that are 'unlike anyone we have employed'.
+    We define this as rows that have input values significantly different
+    from the historical distribution (outliers).
+    
+    We reuse the logic from step09, which calculates z-scores for numeric
+    input columns and flags rows with extreme values.
+    """
+    return step09.spot(header, rows)
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    suspicious_indices = spot(header, rows)
+    
+    print("Trust Analysis: Identifying 'Unusual' Hires")
+    if not suspicious_indices:
+        print("All records appear consistent with historical data.")
+    else:
+        print(f"Detected {len(suspicious_indices)} records that are statistically 'unlike' our history.")
+        print("Our estimates for these specific employees may be less reliable.")
+        print("Top 5 most unusual row indices:")
+        for idx in suspicious_indices[:5]:
+            print(f" - Row {idx}")
+
+
+Reuse the earlier files wherever you can: import from them rather than rewriting. Write as little new code as possible. Do not edit the earlier files.
+
+The customer asks:
+
+  Is your advice any better than our rule of thumb, which is to give the biggest pay rises to the newest staff?
+
+Write step20.py to answer that ask on this data.
+
+A test harness will import your file and call this function, so you must define it exactly:
+
+def race(header, rows, label)
+  Returns a dict.   Every goal cell in `rows` is "?". label(i) returns the true goal values of rows[i]; at most 50 different rows may be labelled in total, across all strategies. Compare at least three ways of searching for the best row; one of them must pick rows at random and be named "random". Return {"winner": name of the best strategy, "row": position of the best row that strategy found, "tried": list of all strategy names}.
+
+Rules the harness enforces: The 50-label budget is shared by all strategies together; the 51st different row raises an error. `tried` must contain the exact name "random", and fewer than three strategies scores zero.
+
+Conventions: `header` is the list of column names. `rows` is a list of rows; each row is a list of cells in header order, floats for numeric columns and strings for symbolic ones. A cell shown as "?" is hidden from you. A row is better when its goals are closer to their best (low for names ending in -, high for names ending in +).
+
+Keep everything that prints or reads the csv file under `if __name__ == "__main__":` so that importing the file prints nothing. Plain built-in types are all you need: do not import anything from `typing`.
+
+Running `python step20.py` must load the csv, call your function, print a short answer a customer could read, and exit with status 0. Reply with the complete file in one ```python fenced block and nothing else.

@@ -1,0 +1,59 @@
+```python
+import csv
+import step01
+import step02
+
+def remember(header, rows):
+    """
+    Finds the 5 most similar setups to the current team setup (the last row)
+    and returns their indices.
+    """
+    # The team's current setup is assumed to be the last row
+    team_setup = rows[-1]
+    others = rows[:-1]
+    
+    # Identify input columns (those not ending in - or +)
+    input_indices = [
+        i for i, name in enumerate(header) 
+        if not (name.endswith('-') or name.endswith('+'))
+    ]
+    
+    # Calculate distance to the team setup
+    distances = []
+    for i, row in enumerate(others):
+        dist = 0
+        for idx in input_indices:
+            if isinstance(team_setup[idx], str):
+                if team_setup[idx] != row[idx]:
+                    dist += 1
+            else:
+                # Normalize numeric distance
+                dist += abs(team_setup[idx] - row[idx])
+        distances.append((dist, i))
+    
+    # Sort by distance (ascending) and return the top 5 indices
+    distances.sort(key=lambda x: x[0])
+    return [item[1] for item in distances[:5]]
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = [val if header[i] == 'criterion' else float(val) 
+                             for i, val in enumerate(row)]
+            rows.append(processed_row)
+
+    # Get the indices of the 5 most similar setups
+    similar_indices = remember(header, rows)
+    
+    print("Customer Inquiry: 'Here is the setup the team uses today. Show me the tried setups most like it, and how they scored.'")
+    print("Answer: The 5 most similar setups found in historical data are:")
+    
+    for idx in similar_indices:
+        row = rows[idx]
+        mre, acc, pred = row[0], row[1], row[2]
+        print(f"Row {idx}: MRE={mre:.4f}, ACC={acc:.4f}, PRED40={pred:.4f}")
+```

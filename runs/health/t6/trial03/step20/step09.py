@@ -1,0 +1,59 @@
+import ezr
+import step01
+
+def spot(header, rows):
+    """
+    Identify rows that look like failed runs.
+    A failed run is defined as an outlier in the input space (x-columns)
+    that results in poor performance (high ydist).
+    """
+    # Create a table to handle column roles and distance metrics
+    data = [header] + rows
+    tbl = ezr.Tbl(data)
+    
+    # Calculate ydist for all rows to identify poor performers
+    # A high ydist indicates a poor outcome
+    scored = []
+    for i, row in enumerate(rows):
+        scored.append((ezr.ydist(tbl, row), i, row))
+    
+    # Sort by ydist descending (worst first)
+    scored.sort(key=lambda x: x[0], reverse=True)
+    
+    # Calculate the centroid of the 'good' rows (the bottom 50% of ydist)
+    # to define the 'normal' input space
+    mid_idx = len(scored) // 2
+    good_rows = [x[2] for x in scored[mid_idx:]]
+    
+    # Create a temporary table of good rows to get their x-column centroids
+    good_tbl = ezr.clone(tbl, good_rows)
+    good_mids = ezr.mids(good_tbl)
+    
+    # Score rows by their distance from the 'good' centroid in the input space
+    # Rows that are both poor performers and far from the 'good' centroid are suspicious
+    suspects = []
+    for ydist_val, i, row in scored:
+        # xdist measures distance in input space
+        dist_from_good = ezr.xdist(tbl, row, good_mids)
+        # Suspicion score: high ydist (bad) * high xdist (unusual input)
+        suspicion = ydist_val * dist_from_good
+        suspects.append((suspicion, i))
+    
+    # Return indices sorted by suspicion score descending
+    suspects.sort(key=lambda x: x[0], reverse=True)
+    return [i for _, i in suspects]
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    suspects = spot(header, rows)
+    
+    print("Analysis of potentially failed runs:")
+    print(f"Identified {len(suspects)} suspicious configurations.")
+    print(f"Top 5 most suspicious row indices: {suspects[:5]}")
+    print("These rows exhibit unusual input combinations coupled with poor performance.")
+    
+    exit(0)

@@ -1,0 +1,69 @@
+import csv
+
+def spot(header, rows):
+    """
+    Identifies rows that are outliers based on the Mahalanobis-like distance
+    of their input values from the column means.
+    """
+    input_indices = [i for i, name in enumerate(header) 
+                     if not (name.endswith('-') or name.endswith('+'))]
+    
+    # Calculate means and standard deviations for each input column
+    n = len(rows)
+    means = []
+    stds = []
+    for i in input_indices:
+        col_vals = [row[i] for row in rows]
+        mean = sum(col_vals) / n
+        means.append(mean)
+        variance = sum((x - mean) ** 2 for x in col_vals) / n
+        stds.append((variance ** 0.5) or 1.0)  # Avoid division by zero
+
+    # Calculate an anomaly score for each row
+    # The score is the average Z-score magnitude across all input columns
+    scores = []
+    for row_idx, row in enumerate(rows):
+        z_scores = []
+        for i, col_idx in enumerate(input_indices):
+            z = abs(row[col_idx] - means[i]) / stds[i]
+            z_scores.append(z)
+        # Use the maximum Z-score as the indicator of "mistyped" data
+        scores.append((max(z_scores), row_idx))
+    
+    # Sort by score descending (most suspicious first)
+    scores.sort(key=lambda x: x[0], reverse=True)
+    
+    # Return only those that are significantly far from the mean (e.g., > 3 std devs)
+    return [idx for score, idx in scores if score > 3.0]
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    rows = []
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            for row in reader:
+                # Convert numeric columns to float
+                processed_row = []
+                for val in row:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        suspicious_indices = spot(header, rows)
+        
+        print("Customer Inquiry: Data Quality Audit")
+        print(f"Analysis: Identified {len(suspicious_indices)} rows that appear to be outliers.")
+        if suspicious_indices:
+            print("The following row indices are most suspicious (most anomalous first):")
+            print(suspicious_indices[:10])
+            print("Recommendation: Review these records for potential data entry errors.")
+        else:
+            print("No highly suspicious records were found.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

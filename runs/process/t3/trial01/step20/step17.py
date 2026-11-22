@@ -1,0 +1,96 @@
+import csv
+import random
+
+def choose(header, rows, label):
+    """
+    Finds the best setup for a large, high-stakes project.
+    Strategy:
+    1. Identify 'large' projects: Filter rows where 'Size' is in the top 25%.
+    2. Sample from these candidates to find the best one within a 50-label budget.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    size_idx = header.index('Size')
+    
+    # Identify large projects (Size > 75th percentile)
+    sizes = [row[size_idx] for row in rows]
+    threshold = sorted(sizes)[int(len(sizes) * 0.75)]
+    large_project_indices = [i for i, row in enumerate(rows) if row[size_idx] >= threshold]
+    
+    # We have a budget of 50 labels.
+    # Sample up to 50 large projects.
+    sample_size = min(50, len(large_project_indices))
+    candidates = random.sample(large_project_indices, sample_size)
+    
+    best_idx = -1
+    best_score = -float('inf')
+    
+    # Evaluate candidates
+    for idx in candidates:
+        goals = label(idx)
+        
+        # Calculate score: normalize goals (0 to 1)
+        # For '-', lower is better; for '+', higher is better.
+        # Since we don't have global range, we use a simple heuristic
+        score = 0
+        for i, g_idx in enumerate(goal_indices):
+            val = goals[i]
+            if header[g_idx].endswith('-'):
+                score += (1.0 - val)
+            else:
+                score += val
+        
+        score /= len(goal_indices)
+        
+        if score > best_score:
+            best_score = score
+            best_idx = idx
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    
+    def load_data(fname):
+        with open(fname, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            true_goals = []
+            for row in reader:
+                processed = []
+                goals = []
+                for i, val in enumerate(row):
+                    if header[i].endswith(('-', '+')):
+                        goals.append(float(val))
+                        processed.append("?")
+                    else:
+                        try:
+                            processed.append(float(val))
+                        except ValueError:
+                            processed.append(val)
+                rows.append(processed)
+                true_goals.append(goals)
+            return header, rows, true_goals
+
+    try:
+        header, rows, true_goals = load_data(filename)
+        
+        called_indices = set()
+        def label(i):
+            if i not in called_indices:
+                if len(called_indices) >= 50:
+                    raise Exception("Budget exceeded")
+                called_indices.add(i)
+            return true_goals[i]
+            
+        best_idx = choose(header, rows, label)
+        
+        print("High-Stakes Project Optimization:")
+        print("-" * 40)
+        print(f"Best configuration found at index: {best_idx}")
+        print("This setup was selected from the largest projects in the dataset.")
+        print("It provides the best balance of cost and performance for high-stakes work.")
+        
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

@@ -1,0 +1,73 @@
+```python
+import csv
+
+def remember(header, rows):
+    """
+    Identifies the best rows based on multi-objective optimization.
+    Goals:
+    - MRE-: Minimize
+    - ACC+: Maximize
+    - PRED40+: Maximize
+    
+    We use a simple Pareto-based approach or a weighted scoring mechanism.
+    Given the requirement to return at most 5% (40 rows for 800 rows),
+    we calculate a normalized score for each row.
+    """
+    # Identify indices
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+
+    # Normalize values to [0, 1] to compare different scales
+    mre_vals = [r[mre_idx] for r in rows]
+    acc_vals = [r[acc_idx] for r in rows]
+    pred_vals = [r[pred_idx] for r in rows]
+
+    min_mre, max_mre = min(mre_vals), max(mre_vals)
+    min_acc, max_acc = min(acc_vals), max(acc_vals)
+    min_pred, max_pred = min(pred_vals), max(pred_vals)
+
+    def get_score(row):
+        # Normalize: (val - min) / (max - min)
+        # For MRE-, we want low, so we invert: (max - val) / (max - min)
+        n_mre = (max_mre - row[mre_idx]) / (max_mre - min_mre) if max_mre != min_mre else 0
+        n_acc = (row[acc_idx] - min_acc) / (max_acc - min_acc) if max_acc != min_acc else 0
+        n_pred = (row[pred_idx] - min_pred) / (max_pred - min_pred) if max_pred != min_pred else 0
+        return n_mre + n_acc + n_pred
+
+    # Calculate scores and keep indices
+    scored = []
+    for i, row in enumerate(rows):
+        scored.append((get_score(row), i))
+
+    # Sort by score descending
+    scored.sort(key=lambda x: x[0], reverse=True)
+
+    # Return top 5% (40 rows)
+    limit = max(1, int(len(rows) * 0.05))
+    return [item[1] for item in scored[:limit]]
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            # Convert numeric columns to float, keep symbolic as is
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i] in ['criterion']:
+                    processed_row.append(val)
+                else:
+                    processed_row.append(float(val))
+            rows.append(processed_row)
+            
+    best_indices = remember(header, rows)
+    
+    print(f"Found {len(best_indices)} unusually trustworthy setups.")
+    print("Indices of the best performing rows:")
+    print(best_indices)
+```

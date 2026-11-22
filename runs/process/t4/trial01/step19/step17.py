@@ -1,0 +1,82 @@
+import csv
+import random
+from step01 import remember
+
+def choose(header, rows, label):
+    """
+    Finds the best setup for a large, high-stakes project.
+    We prioritize rows where 'Size' is high (large project) and then
+    use the Pareto-dominance heuristic (remember) on a small sample
+    to find the best configuration within the 50-label budget.
+    """
+    # Identify index for 'Size'
+    size_idx = header.index('Size')
+    
+    # Filter for large projects (Size > 0.75)
+    large_project_indices = [i for i, row in enumerate(rows) if row[size_idx] > 0.75]
+    
+    # If not enough large projects, fall back to all rows
+    if len(large_project_indices) < 50:
+        candidates = list(range(len(rows)))
+    else:
+        candidates = large_project_indices
+        
+    # Sample up to 50 candidates
+    sample_indices = random.sample(candidates, min(len(candidates), 50))
+    
+    evaluated_data = []
+    for idx in sample_indices:
+        # Get true goals using the provided label function
+        true_goals = label(idx)
+        
+        # Create a full row representation
+        full_row = list(rows[idx])
+        goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+        for i, g_idx in enumerate(goal_indices):
+            full_row[g_idx] = true_goals[i]
+            
+        evaluated_data.append((idx, full_row))
+    
+    # Use remember logic to find the best among the evaluated
+    best_rows_data = [d[1] for d in evaluated_data]
+    best_local_indices = remember(header, best_rows_data)
+    
+    # Return the original index of the best one found
+    return evaluated_data[best_local_indices[0]][0]
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) for val in row])
+        
+        goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+        
+        # Mask goals
+        masked_rows = []
+        for row in rows:
+            new_row = list(row)
+            for idx in goal_indices:
+                new_row[idx] = "?"
+            masked_rows.append(new_row)
+            
+        state = {'labeled_count': 0}
+        
+        def label(i):
+            state['labeled_count'] += 1
+            if state['labeled_count'] > 50:
+                raise Exception("Budget exceeded")
+            return [rows[i][idx] for idx in goal_indices]
+            
+        best_idx = choose(header, masked_rows, label)
+        
+        print(f"Analysis complete. Evaluated {state['labeled_count']} setups for large projects.")
+        print(f"The best row found for a high-stakes project is at index: {best_idx}")
+        exit(0)
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

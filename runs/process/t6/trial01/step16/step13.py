@@ -1,0 +1,53 @@
+import ezr
+import step03
+
+def certify(xs, ys):
+    """
+    Returns True if the distributions are statistically indistinguishable,
+    False if they are significantly different.
+    """
+    return ezr.same(xs, ys)
+
+def compare_eras(header, rows):
+    """
+    Compares the performance of the first half of the data (pre-change)
+    vs the second half (post-change).
+    """
+    # Split data into two halves
+    mid = len(rows) // 2
+    pre_change = rows[:mid]
+    post_change = rows[mid:]
+    
+    # Create a table to calculate ydist (goal distance)
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate ydist for both sets
+    # Lower ydist is better
+    pre_scores = [ezr.ydist(tbl, r) for r in pre_change]
+    post_scores = [ezr.ydist(tbl, r) for r in post_change]
+    
+    is_same = certify(pre_scores, post_scores)
+    return pre_scores, post_scores, is_same
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    
+    try:
+        header = next(data_gen)
+        rows = list(data_gen)
+    except StopIteration:
+        exit(1)
+        
+    pre, post, is_same = compare_eras(header, rows)
+    
+    print("Analysis: Did the team's decision process change results?")
+    print(f"Pre-change  (n={len(pre)}): avg goal distance {sum(pre)/len(pre):.4f}")
+    print(f"Post-change (n={len(post)}): avg goal distance {sum(post)/len(post):.4f}")
+    
+    if is_same:
+        print("Result: The difference is statistically insignificant; the results are the same.")
+    else:
+        print("Result: The difference is statistically significant; the results have shifted.")
+        
+    exit(0)

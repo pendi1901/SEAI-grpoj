@@ -1,0 +1,63 @@
+import csv
+from sklearn.ensemble import IsolationForest
+from sklearn.preprocessing import LabelEncoder
+
+def flow(header, row, seen):
+    """
+    Returns True if the current row is an anomaly relative to the history of 'seen' rows.
+    Uses an Isolation Forest to detect if the new row deviates from the distribution 
+    of the previously seen data.
+    """
+    if len(seen) < 20:
+        return False
+
+    # Combine seen rows and current row to fit the model
+    all_data = seen + [row]
+    
+    # Prepare data for Isolation Forest
+    X = []
+    encoders = {}
+    for i in range(len(header)):
+        col_data = [r[i] for r in all_data]
+        if isinstance(col_data[0], str):
+            le = LabelEncoder()
+            le.fit(col_data)
+            encoders[i] = le
+            X.append(le.transform(col_data))
+        else:
+            X.append(col_data)
+    
+    # Transpose to (n_samples, n_features)
+    X = list(zip(*X))
+    
+    # Train Isolation Forest on history
+    # We use a small contamination factor to flag only significant deviations
+    clf = IsolationForest(n_estimators=50, contamination=0.05, random_state=42)
+    clf.fit(X[:-1])
+    
+    # Predict for the new row
+    is_anomaly = clf.predict([X[-1]])[0] == -1
+    
+    return is_anomaly
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = [float(val) if header[i][0].isupper() else val for i, val in enumerate(row)]
+            rows.append(processed_row)
+            
+    seen = []
+    anomalies = 0
+    for row in rows:
+        if flow(header, row, seen):
+            anomalies += 1
+        seen.append(row)
+        
+    print(f"Analysis complete.")
+    print(f"Total records processed: {len(rows)}")
+    print(f"Number of times the team composition deviated from the norm: {anomalies}")
+    print("Logic: A team is flagged when a new record is identified as an anomaly by an Isolation Forest.")

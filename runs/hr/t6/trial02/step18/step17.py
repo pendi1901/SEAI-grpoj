@@ -1,0 +1,79 @@
+import ezr
+import step07
+
+def choose(header, rows, label):
+    """
+    Finds the best working arrangement for 'Laboratory Technician' staff
+    using the acquire function with a budget of 50 labels.
+    """
+    # Filter rows for Laboratory Technician
+    job_idx = header.index("jobRole")
+    
+    # Identify indices of lab staff
+    lab_indices = [i for i, r in enumerate(rows) if r[job_idx] == "Laboratory Technician"]
+    
+    # If no lab staff found, return 0
+    if not lab_indices:
+        return 0
+        
+    # Create a table for the subset
+    # We must pass the full header and the rows (with goals masked as ?)
+    lab_rows = [rows[i] for i in lab_indices]
+    tbl = ezr.Tbl([header] + lab_rows)
+    
+    # Oracle wrapper: maps the row passed by acquire back to the original index
+    def oracle_wrapper(row):
+        # Find which index in lab_indices this row corresponds to
+        # We compare by content since rows are lists
+        for idx_in_lab, original_idx in enumerate(lab_indices):
+            # Check if this row matches the row at original_idx
+            # We ignore the goal columns (which are '?' in the input)
+            match = True
+            for col_idx, val in enumerate(row):
+                if not (header[col_idx].endswith(('+', '-')) or row[col_idx] == rows[original_idx][col_idx]):
+                    match = False
+                    break
+            if match:
+                return label(original_idx)
+        return row
+
+    # Perform the acquisition on the table
+    # acquire() returns the rows that were labeled
+    labeled_rows = ezr.acquire(tbl, cap=50, label=oracle_wrapper)
+    
+    # Find the best row among the labeled ones (lowest ydist)
+    best_row = min(labeled_rows, key=lambda r: ezr.ydist(tbl, r))
+    
+    # Return the original index of the best row
+    for idx_in_lab, original_idx in enumerate(lab_indices):
+        if lab_rows[idx_in_lab] == best_row:
+            return original_idx
+            
+    return lab_indices[0]
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Mask the goals
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('+', '-'))]
+    masked_rows = []
+    for row in rows:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_rows.append(new_row)
+        
+    # Define the oracle
+    def oracle(i):
+        return rows[i]
+
+    best_idx = choose(header, masked_rows, oracle)
+    
+    print(f"Analysis complete for Laboratory Technician staff.")
+    print(f"The best working arrangement found is at record index: {best_idx}")
+    print(f"This was identified using a budget of 50 interviews.")
+    
+    exit(0)

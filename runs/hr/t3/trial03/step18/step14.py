@@ -1,0 +1,66 @@
+import csv
+
+def flow(header, row, seen):
+    """
+    Detects if a team's composition has drifted significantly from the norm.
+    We monitor the distribution of 'JobSatisfaction' and 'MonthlyIncome'.
+    If the current row's values for these features are significantly different 
+    (e.g., > 2 standard deviations) from the historical mean of 'seen' rows,
+    we flag the team as having changed.
+    """
+    if len(seen) < 30:
+        return False
+
+    # Identify indices
+    try:
+        idx_sat = header.index('JobSatisfaction')
+        idx_inc = header.index('MonthlyIncome')
+    except ValueError:
+        return False
+
+    # Calculate stats for seen rows
+    sat_vals = [r[idx_sat] for r in seen]
+    inc_vals = [r[idx_inc] for r in seen]
+
+    def get_z_score(val, vals):
+        mean = sum(vals) / len(vals)
+        std = (sum((x - mean) ** 2 for x in vals) / len(vals)) ** 0.5
+        if std == 0: return 0
+        return abs(val - mean) / std
+
+    z_sat = get_z_score(row[idx_sat], sat_vals)
+    z_inc = get_z_score(row[idx_inc], inc_vals)
+
+    # If the new data point is an outlier in multiple dimensions, 
+    # the team composition has likely shifted.
+    if (z_sat + z_inc) > 4.0:
+        return True
+    
+    return False
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    seen = []
+    drift_count = 0
+    for row in rows:
+        if flow(header, row, seen):
+            drift_count += 1
+        seen.append(row)
+
+    print("Team Drift Analysis:")
+    print(f"Processed {len(rows)} employee records.")
+    print(f"Detected {drift_count} instances where the team composition deviated significantly from the norm.")
+    print("Conclusion: A high number of drift detections suggests the team's profile is evolving over time.")

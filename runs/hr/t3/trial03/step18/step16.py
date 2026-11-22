@@ -1,0 +1,97 @@
+import csv
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import LabelEncoder
+
+def justify(header, rows, row):
+    """
+    Estimates the performance of a given row relative to the population.
+    To answer the 'pay everyone more' question, we compare the predicted 
+    tenure of the current row against the same row with 'MonthlyIncome' 
+    increased by 20%.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    feature_indices = [i for i in range(len(header)) if i not in goal_indices]
+    
+    # Encode data
+    encoders = {}
+    def encode(data):
+        encoded = []
+        for r in data:
+            new_row = []
+            for i in feature_indices:
+                val = r[i]
+                if isinstance(val, str):
+                    if i not in encoders:
+                        encoders[i] = LabelEncoder().fit([row_i[i] for row_i in rows])
+                    new_row.append(float(encoders[i].transform([val])[0]))
+                else:
+                    new_row.append(float(val))
+            encoded.append(new_row)
+        return encoded
+
+    X_train = encode(rows)
+    
+    # Predict goals for the provided row
+    X_test = [encode([row])[0]]
+    predictions = []
+    for g_idx in goal_indices:
+        y_train = [r[g_idx] for r in rows]
+        model = RandomForestRegressor(n_estimators=50, random_state=42)
+        model.fit(X_train, y_train)
+        predictions.append(model.predict(X_test)[0])
+    
+    # Calculate percentile
+    better_count = 0
+    for r in rows:
+        is_better = True
+        for i, g_idx in enumerate(goal_indices):
+            val_r = r[g_idx]
+            val_p = predictions[i]
+            if header[g_idx].endswith('+'):
+                if not (val_p >= val_r): is_better = False
+            else:
+                if not (val_p <= val_r): is_better = False
+        if is_better:
+            better_count += 1
+            
+    p = better_count / len(rows)
+    
+    # Answer the customer's question:
+    # We check if increasing income significantly changes the predicted tenure.
+    inc_idx = header.index('MonthlyIncome')
+    row_boosted = list(row)
+    row_boosted[inc_idx] = row[inc_idx] * 1.2
+    
+    X_boosted = [encode([row_boosted])[0]]
+    boosted_pred = model.predict(X_boosted)[0]
+    
+    diff = boosted_pred - predictions[0]
+    if abs(diff) < 0.5:
+        reason = "Increasing pay has a negligible impact on predicted tenure, suggesting that retention is driven by factors beyond just salary."
+    else:
+        reason = f"Increasing pay by 20% is estimated to change tenure by {diff:.2f} years, which may not be cost-effective compared to other retention strategies."
+        
+    return p, reason
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    test_row = list(rows[0])
+    goal_idx = next(i for i, name in enumerate(header) if name.endswith('+'))
+    test_row[goal_idx] = "?"
+    
+    p, reason = justify(header, rows, test_row)
+    print(f"Percentile: {p:.4f}")
+    print(f"Reason: {reason}")

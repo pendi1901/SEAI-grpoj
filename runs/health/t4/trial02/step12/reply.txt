@@ -1,0 +1,71 @@
+```python
+import csv
+import numpy as np
+from step02 import guess as original_guess
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column (MRE-) for test rows using a 
+    RandomForestRegressor, but with the 'N_estimators' halved.
+    """
+    # The 'N_estimators' column is at index 3 in the provided data structure
+    n_est_idx = 3
+    
+    # Create a modified training set where N_estimators is halved
+    modified_train = []
+    for row in train:
+        new_row = list(row)
+        new_row[n_est_idx] = new_row[n_est_idx] / 2.0
+        modified_train.append(new_row)
+        
+    # Create a modified test set where N_estimators is halved
+    modified_test = []
+    for row in test:
+        new_row = list(row)
+        new_row[n_est_idx] = new_row[n_est_idx] / 2.0
+        modified_test.append(new_row)
+        
+    return original_guess(header, modified_train, modified_test)
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i].isupper() or header[i] in ['N_estimators', 'Min_sample_leaves', 'Min_impurity_decrease', 'Max_depth']:
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Split data: use 80% for training, 20% for testing
+    split = int(len(rows) * 0.8)
+    train_data = rows[:split]
+    test_data = rows[split:]
+    
+    # Mask goals in test data
+    masked_test = [['?'] * 3 + row[3:] for row in test_data]
+    
+    # Get baseline predictions (original size)
+    baseline_preds = original_guess(header, train_data, masked_test)
+    avg_baseline = sum(baseline_preds) / len(baseline_preds)
+    
+    # Get experimental predictions (halved size)
+    halved_preds = guess(header, train_data, masked_test)
+    avg_halved = sum(halved_preds) / len(halved_preds)
+    
+    diff = avg_halved - avg_baseline
+    
+    print(f"Impact of halving the forecaster size (N_estimators):")
+    print(f"Original average MRE: {avg_baseline:.4f}")
+    print(f"Halved size average MRE: {avg_halved:.4f}")
+    print(f"The forecast error (MRE) changes by {diff:.4f}.")
+    if diff > 0:
+        print("Conclusion: The forecast quality degrades slightly when halving the size.")
+    else:
+        print("Conclusion: The forecast quality remains stable or improves slightly.")
+```

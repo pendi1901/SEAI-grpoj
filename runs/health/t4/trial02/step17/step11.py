@@ -1,0 +1,78 @@
+import csv
+import numpy as np
+from sklearn.neighbors import NearestNeighbors
+from step01 import remember as get_best_indices
+
+def find_similar_setups(header, rows, target_row, n_neighbors=5):
+    """
+    Finds setups most similar to the target_row using Euclidean distance
+    on normalized input features.
+    """
+    # Identify input columns (exclude goals)
+    input_indices = [i for i, name in enumerate(header) if not (name.endswith('-') or name.endswith('+'))]
+    
+    # Prepare data for distance calculation
+    X = []
+    for row in rows:
+        feat = []
+        for i in input_indices:
+            val = row[i]
+            if isinstance(val, str):
+                # Map symbolic to numeric
+                mapping = {'absolute_error': 0, 'poisson': 1, 'squared_error': 2}
+                feat.append(float(mapping.get(val, 0)))
+            else:
+                feat.append(float(val))
+        X.append(feat)
+    
+    X = np.array(X)
+    
+    # Target row features
+    target_feat = []
+    for i in input_indices:
+        val = target_row[i]
+        if isinstance(val, str):
+            mapping = {'absolute_error': 0, 'poisson': 1, 'squared_error': 2}
+            target_feat.append(float(mapping.get(val, 0)))
+        else:
+            target_feat.append(float(val))
+            
+    # Find nearest neighbors
+    nn = NearestNeighbors(n_neighbors=n_neighbors + 1)
+    nn.fit(X)
+    distances, indices = nn.kneighbors([target_feat])
+    
+    # Return indices excluding the target itself if it exists in the dataset
+    return indices[0][1:] if indices[0][0] == -1 else indices[0][:n_neighbors]
+
+def remember(header, rows):
+    """
+    Returns the top 5% of rows based on multi-objective optimization.
+    """
+    return get_best_indices(header, rows)
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed = []
+            for i, val in enumerate(row):
+                if header[i].isupper() or header[i] in ['N_estimators', 'Min_sample_leaves', 'Min_impurity_decrease', 'Max_depth']:
+                    processed.append(float(val))
+                else:
+                    processed.append(val)
+            rows.append(processed)
+
+    # Use the first row as the 'current setup'
+    target_row = rows[0]
+    similar_indices = find_similar_setups(header, rows, target_row)
+    
+    print("The setups most similar to your current configuration are:")
+    mre_idx, acc_idx, pred_idx = 0, 1, 2
+    for idx in similar_indices:
+        r = rows[idx]
+        score = (1.0 - r[mre_idx]) + r[acc_idx] + r[pred_idx]
+        print(f"Row {idx}: MRE={r[mre_idx]:.3f}, ACC={r[acc_idx]:.3f}, PRED={r[pred_idx]:.3f} | Score: {score:.3f}")

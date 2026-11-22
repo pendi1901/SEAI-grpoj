@@ -1,0 +1,55 @@
+import ezr
+import random
+
+def spot(header, rows):
+    """
+    Identify rows containing input values that are 'suspicious' because they
+    are far from the observed distributions in the training data.
+    We use the xdist (input distance) to find rows that are outliers in the 
+    input space, as these represent settings the model has never seen.
+    """
+    # Create a table to handle column roles and distance metrics
+    data = [header] + rows
+    tbl = ezr.Tbl(data)
+    
+    # Calculate the centroid (mids) of the input space
+    # The mids function caches the median/mean of each column
+    centroid = ezr.mids(tbl)
+    
+    # Calculate the distance of each row from the centroid
+    # A high xdist indicates the row has unusual input settings
+    scores = []
+    for i, row in enumerate(rows):
+        # Calculate distance from the centroid of the input space
+        d = ezr.xdist(tbl, row, centroid)
+        scores.append((d, i))
+    
+    # Sort by distance descending (most suspicious/unseen first)
+    scores.sort(key=lambda x: x[0], reverse=True)
+    
+    # Return the indices of the top 5% most suspicious rows
+    limit = max(1, len(rows) // 20)
+    return [item[1] for item in scores[:limit]]
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    
+    try:
+        header = next(data_gen)
+        rows = list(data_gen)
+    except StopIteration:
+        exit(0)
+        
+    suspicious_indices = spot(header, rows)
+    
+    print("Analysis: Identifying configurations that are far from historical norms.")
+    print(f"Found {len(suspicious_indices)} rows with settings that appear 'unseen' or anomalous.")
+    print("Indices of the most suspicious rows (most suspicious first):")
+    print(suspicious_indices)
+    
+    print("\nDetails of the top 3 most suspicious rows:")
+    for idx in suspicious_indices[:3]:
+        print(f"Row {idx}: {rows[idx]}")
+    
+    exit(0)

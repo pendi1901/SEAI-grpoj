@@ -1,0 +1,59 @@
+import ezr
+import random
+
+def flow(header, row, seen):
+    """
+    Warn the customer if a row is 'bad'. We define 'bad' as being in the 
+    worst 10% of the distribution of rows seen so far.
+    """
+    if len(seen) < 20:
+        return False
+    
+    # Create a table from the seen rows to establish a baseline
+    data = [header] + seen
+    tbl = ezr.Tbl(data)
+    
+    # Calculate the distance of the current row to the ideal
+    # ydist measures how far a row's goals are from the best possible
+    current_dist = ezr.ydist(tbl, row)
+    
+    # Calculate distances for all seen rows
+    seen_dists = [ezr.ydist(tbl, r) for r in seen]
+    
+    # We define "bad" as being in the worst 10% of seen rows.
+    # Since lower ydist is better, the worst rows have the highest ydist.
+    seen_dists.sort()
+    threshold_idx = int(len(seen_dists) * 0.9)
+    threshold = seen_dists[threshold_idx]
+    
+    # Return True if the current row is significantly worse than the norm
+    return current_dist > threshold
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    rows_iter = ezr.csv(filename)
+    header = next(rows_iter)
+    all_rows = list(rows_iter)
+    
+    # Simulate arrival of rows one by one
+    random.seed(1234567891)
+    random.shuffle(all_rows)
+    
+    seen = []
+    warnings = 0
+    
+    for row in all_rows:
+        if flow(header, row, seen):
+            warnings += 1
+            print(f"Warning: Performance degradation detected at row {len(seen) + 1}!")
+            if warnings >= 3:
+                print("Too many warnings. Stopping analysis.")
+                break
+        seen.append(row)
+        
+    if warnings == 0:
+        print("No significant performance degradation detected.")
+    else:
+        print(f"Analysis complete. Total warnings issued: {warnings}")
+    
+    exit(0)

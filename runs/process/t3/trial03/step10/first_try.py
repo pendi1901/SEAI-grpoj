@@ -1,0 +1,101 @@
+import csv
+import numpy as np
+import pandas as pd
+from sklearn.ensemble import RandomForestRegressor
+
+def get_score(header, row_goals, df_full):
+    """Calculates normalized aggregate score for a row."""
+    goals = [c for c in header if c.endswith('-') or c.endswith('+')]
+    scores = []
+    for i, col in enumerate(goals):
+        vals = df_full[col]
+        norm = (row_goals[i] - vals.min()) / (vals.max() - vals.min() + 1e-9)
+        scores.append(1 - norm if col.endswith('-') else norm)
+    return np.mean(scores)
+
+def race(header, rows, label):
+    """
+    Compares three strategies: random, greedy, and uncertainty-based.
+    Total budget: 50 labels.
+    """
+    goal_cols = [c for c in header if c.endswith('-') or c.endswith('+')]
+    input_cols = [c for c in header if c not in goal_cols]
+    df_full = pd.DataFrame(rows, columns=header)
+    
+    # We need to know the true range for normalization
+    # Since we can't see all goals, we use the first 10 random samples to estimate
+    initial_indices = np.random.choice(len(rows), 10, replace=False).tolist()
+    labeled = {}
+    for idx in initial_indices:
+        labeled[idx] = label(idx)
+    
+    budget = 50 - len(labeled)
+    
+    def run_strategy(name, n_trials):
+        nonlocal budget
+        best_idx = -1
+        best_score = -1
+        
+        # Local copy of labeled data for this strategy
+        strat_labeled = labeled.copy()
+        
+        for _ in range(n_trials):
+            if budget <= 0: break
+            
+            if name == "random":
+                idx = np.random.choice(len(rows))
+            elif name == "greedy":
+                # Train on current knowledge, pick best predicted
+                df_l = pd.DataFrame([rows[i] for i in strat_labeled], columns=header)
+                for i, col in enumerate(goal_cols):
+                    df_l[col] = [g[i] for g in strat_labeled.values()]
+                
+                model = RandomForestRegressor(n_estimators=20).fit(df_l[input_cols], df_l[goal_cols[0]])
+                preds = model.predict(df_full[input_cols])
+                idx = np.argmax(preds)
+            else: # uncertainty (random forest variance)
+                df_l = pd.DataFrame([rows[i] for i in strat_labeled], columns=header)
+                for i, col in enumerate(goal_cols):
+                    df_l[col] = [g[i] for g in strat_labeled.values()]
+                
+                rf = RandomForestRegressor(n_estimators=20).fit(df_l[input_cols], df_l[goal_cols[0]])
+                preds = [tree.predict(df_full[input_cols]) for tree in rf.estimators_]
+                idx = np.argmax(np.std(preds, axis=0))
+            
+            if idx not in strat_labeled:
+                strat_labeled[idx] = label(idx)
+                budget -= 1
+        
+        # Evaluate
+        for idx, g in strat_labeled.items():
+            s = get_score(header, g, df_full)
+            if s > best_score:
+                best_score = s
+                best_idx = idx
+        return best_idx, best_score
+
+    # Split budget: 16, 17, 17
+    s1_idx, s1_score = run_strategy("random", 16)
+    s2_idx, s2_score = run_strategy("greedy", 17)
+    s3_idx, s3_score = run_strategy("uncertainty", 17)
+    
+    results = {"random": s1_score, "greedy": s2_score, "uncertainty": s3_score}
+    winner = max(results, key=results.get)
+    winner_idx = {"random": s1_idx, "greedy": s2_idx, "uncertainty": s3_idx}[winner]
+    
+    return {"winner": winner, "row": winner_idx, "tried": ["random", "greedy", "uncertainty"]}
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    df = pd.read_csv(filename)
+    header = df.columns.tolist()
+    rows = df.values.tolist()
+    
+    def label(i):
+        goals = [c for c in header if c.endswith('-') or c.endswith('+')]
+        return [df.iloc[i][c] for c in goals]
+    
+    result = race(header, rows, label)
+    print(f"The winner is: {result['winner']}")
+    print(f"Best row found at index: {result['row']}")
+    print(f"Strategies compared: {', '.join(result['tried'])}")

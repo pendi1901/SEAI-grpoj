@@ -1,0 +1,67 @@
+import csv
+
+def remember(header, rows):
+    """
+    Finds the 5% of employees most similar to the first employee in the dataset.
+    Similarity is calculated using a simple Euclidean distance on normalized 
+    numeric inputs.
+    """
+    # Identify numeric input columns (excluding goals)
+    numeric_indices = [
+        i for i, col in enumerate(header) 
+        if col[0].isupper() and not (col.endswith('+') or col.endswith('-'))
+    ]
+    
+    # Normalize numeric columns to [0, 1] for distance calculation
+    normalized_rows = []
+    for row in rows:
+        norm_row = []
+        for i in numeric_indices:
+            # Find min/max for this column across all rows
+            col_vals = [r[i] for r in rows]
+            min_v, max_v = min(col_vals), max(col_vals)
+            if max_v == min_v:
+                norm_row.append(0.0)
+            else:
+                norm_row.append((row[i] - min_v) / (max_v - min_v))
+        normalized_rows.append(norm_row)
+    
+    # Target is the first employee
+    target = normalized_rows[0]
+    
+    # Calculate distances
+    distances = []
+    for i, row in enumerate(normalized_rows):
+        dist = sum((row[j] - target[j])**2 for j in range(len(target)))**0.5
+        distances.append((i, dist))
+    
+    # Sort by distance (closest first), skip the target itself (index 0)
+    distances.sort(key=lambda x: x[1])
+    
+    # Return top 5% (excluding the target itself)
+    limit = max(1, int(len(rows) * 0.05))
+    return [d[0] for d in distances[1:limit+1]]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    indices = remember(header, rows)
+    
+    tenure_idx = header.index('YearsAtCompany+')
+    print(f"Employees most similar to the first record (Index 0):")
+    print(f"{'Index':<10} | {'YearsAtCompany+'}")
+    print("-" * 30)
+    for idx in indices:
+        print(f"{idx:<10} | {rows[idx][tenure_idx]:.1f}")

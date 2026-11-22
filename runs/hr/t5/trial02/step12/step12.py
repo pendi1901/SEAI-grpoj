@@ -1,0 +1,69 @@
+import ezr
+import random
+
+def guess(header, train, test):
+    """
+    Estimates the value of the first goal column for test rows.
+    Uses a tree-based approach to predict the outcome based on training data.
+    """
+    # Create a table from the training data
+    train_tbl = ezr.Tbl([header] + train)
+    
+    # Identify the first goal column index
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(("+", "-"))]
+    first_goal_idx = goal_indices[0]
+    
+    # Build the tree
+    root = ezr.tree(train_tbl, train_tbl.rows)
+    
+    # Helper to get the average of the first goal in a leaf
+    def get_leaf_prediction(node):
+        vals = [r[first_goal_idx] for r in node.rows if isinstance(r[first_goal_idx], (int, float))]
+        return sum(vals) / len(vals) if vals else 0.0
+
+    # Map leaves to their average goal value
+    leaf_map = {id(leaf): get_leaf_prediction(leaf) for leaf in ezr.leafs(root)}
+    
+    # Predict for each test row
+    predictions = []
+    for row in test:
+        leaf = ezr.leaf(root, row)
+        predictions.append(leaf_map.get(id(leaf), 0.0))
+        
+    return predictions
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Identify indices
+    dept_idx = header.index('department')
+    ot_idx = header.index('overTime')
+    goal_idx = [i for i, name in enumerate(header) if name.endswith(("+", "-"))][0]
+    
+    # Filter for Sales department
+    sales_rows = [r for r in rows if r[dept_idx] == 'Sales']
+    
+    # Create two scenarios: Current (Overtime=Yes) vs Cut (Overtime=No)
+    # We use the existing Sales data to train the model
+    test_rows = []
+    for r in sales_rows:
+        new_r = list(r)
+        new_r[ot_idx] = 'No' # Simulate cutting overtime
+        new_r[goal_idx] = '?'
+        test_rows.append(new_r)
+        
+    # Predict outcomes
+    predictions = guess(header, sales_rows, test_rows)
+    
+    avg_prediction = sum(predictions) / len(predictions)
+    
+    print("Analysis: If we cut overtime across Sales, what happens to how long people stay?")
+    print(f"Based on the model, the estimated average for '{header[goal_idx]}' ")
+    print(f"if overtime is removed for all Sales employees is: {avg_prediction:.2f}")
+    print("\nMethodology: We trained a decision tree on existing Sales data and predicted")
+    print("the goal outcome for the same employees with 'overTime' set to 'No'.")
+    
+    exit(0)

@@ -1,0 +1,66 @@
+```python
+import csv
+import pandas as pd
+from scipy import stats
+from step03 import certify
+
+def analyze_shift(header, rows):
+    """
+    The customer asks if results shifted after a change in team decision-making.
+    Assuming the data is ordered chronologically, we compare the first half 
+    (pre-change) with the second half (post-change).
+    """
+    df = pd.DataFrame(rows, columns=header)
+    
+    # Identify goal columns
+    goals = [c for c in header if c.endswith('-') or c.endswith('+')]
+    
+    # Split data chronologically
+    mid = len(df) // 2
+    pre_change = df.iloc[:mid]
+    post_change = df.iloc[mid:]
+    
+    # We evaluate the shift based on the aggregate performance score
+    # (using the logic from step01)
+    def get_aggregate_scores(data):
+        scores = pd.Series(0.0, index=data.index)
+        for goal in goals:
+            col = data[goal].astype(float)
+            if goal.endswith('-'):
+                norm = (col - col.min()) / (col.max() - col.min())
+            else:
+                norm = (col.max() - col) / (col.max() - col.min())
+            scores += norm
+        return scores.tolist()
+
+    xs = get_aggregate_scores(pre_change)
+    ys = get_aggregate_scores(post_change)
+    
+    # Use the certify function from step03 to check if the difference is significant
+    is_same = certify(xs, ys)
+    
+    return is_same, sum(xs)/len(xs), sum(ys)/len(ys)
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [[float(val) for val in row] for row in reader]
+        
+        is_same, mean_pre, mean_post = analyze_shift(header, rows)
+        
+        print("Customer Inquiry: Did results shift after the team changed their decision process?")
+        print(f"Average Performance Score (Pre-change): {mean_pre:.4f}")
+        print(f"Average Performance Score (Post-change): {mean_post:.4f}")
+        
+        if is_same:
+            print("Conclusion: No, the results are statistically the same. The observed shift is likely just noise.")
+        else:
+            print("Conclusion: Yes, there is a statistically significant shift in performance results.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

@@ -1,0 +1,73 @@
+import csv
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import LabelEncoder
+
+def blame(header, rows):
+    """
+    Identifies input columns that best explain the performance of the worst rows.
+    We use a Random Forest to predict the 'badness' (inverse of the score)
+    and extract feature importances.
+    """
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+    
+    # Calculate a score for each row (higher is better)
+    mre_vals = [r[mre_idx] for r in rows]
+    acc_vals = [r[acc_idx] for r in rows]
+    pred_vals = [r[pred_idx] for r in rows]
+    
+    min_mre, max_mre = min(mre_vals), max(mre_vals)
+    min_acc, max_acc = min(acc_vals), max(acc_vals)
+    min_pred, max_pred = min(pred_vals), max(pred_vals)
+
+    def get_score(row):
+        n_mre = (max_mre - row[mre_idx]) / (max_mre - min_mre) if max_mre > min_mre else 0
+        n_acc = (row[acc_idx] - min_acc) / (max_acc - min_acc) if max_acc > min_acc else 0
+        n_pred = (row[pred_idx] - min_pred) / (max_pred - min_pred) if max_pred > min_pred else 0
+        return n_mre + n_acc + n_pred
+
+    # Target: 1 - score (so high value = bad performance)
+    scores = [1.0 - get_score(r) for r in rows]
+    
+    # Prepare inputs
+    input_indices = [i for i, h in enumerate(header) if h not in ['MRE-', 'ACC+', 'PRED40+']]
+    input_names = [header[i] for i in input_indices]
+    
+    X = []
+    for row in rows:
+        x_row = []
+        for i in input_indices:
+            val = row[i]
+            if isinstance(val, str):
+                # Simple encoding for symbolic
+                x_row.append(hash(val))
+            else:
+                x_row.append(float(val))
+        X.append(x_row)
+        
+    # Train a regressor to find what drives the "badness"
+    rf = RandomForestRegressor(n_estimators=50, random_state=42)
+    rf.fit(X, scores)
+    
+    # Get feature importances
+    importances = rf.feature_importances_
+    # Sort indices by importance descending
+    sorted_idx = sorted(range(len(importances)), key=lambda i: importances[i], reverse=True)
+    
+    return [input_names[i] for i in sorted_idx[:3]]
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = [val if header[i] == 'criterion' else float(val) for i, val in enumerate(row)]
+            rows.append(processed_row)
+            
+    top_blame = blame(header, rows)
+    print("The settings most responsible for poor performance are:")
+    for name in top_blame:
+        print(f"- {name}")

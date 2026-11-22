@@ -1,0 +1,62 @@
+import csv
+
+def remember(header, rows):
+    """
+    Finds the 5% of employees most similar to the first employee (index 0).
+    Similarity is calculated using Euclidean distance on normalized numeric inputs.
+    """
+    # Identify goal columns and input columns
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    input_indices = [i for i, name in enumerate(header) 
+                     if name[0].isupper() and i not in goal_indices]
+    
+    # Normalize numeric inputs
+    mins = [min(row[i] for row in rows) for i in input_indices]
+    maxs = [max(row[i] for row in rows) for i in input_indices]
+    ranges = [(maxs[j] - mins[j]) if (maxs[j] - mins[j]) != 0 else 1 
+              for j in range(len(input_indices))]
+
+    def dist(r1, r2):
+        d = 0
+        for idx, i in enumerate(input_indices):
+            d += ((r1[i] - r2[i]) / ranges[idx]) ** 2
+        return d ** 0.5
+
+    # Compare all rows to the first row (index 0)
+    target = rows[0]
+    distances = []
+    for i in range(1, len(rows)):
+        distances.append((dist(target, rows[i]), i))
+    
+    # Sort by distance ascending (closest first)
+    distances.sort(key=lambda x: x[0])
+    
+    # Return top 5% (800 rows * 0.05 = 40 rows)
+    limit = max(1, int(len(rows) * 0.05))
+    return [item[1] for item in distances[:limit]]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    best_indices = remember(header, rows)
+    
+    yac_idx = header.index('YearsAtCompany+')
+    print(f"Analysis: Found {len(best_indices)} employees most similar to the first record.")
+    print("Average tenure (YearsAtCompany+) of these similar employees:")
+    
+    avg_tenure = sum(rows[i][yac_idx] for i in best_indices) / len(best_indices)
+    print(f"{avg_tenure:.2f} years")

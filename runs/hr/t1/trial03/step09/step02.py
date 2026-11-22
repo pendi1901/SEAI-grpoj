@@ -1,0 +1,88 @@
+import csv
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column ('YearsAtCompany+') for test rows.
+    Uses a simple K-Nearest Neighbors approach based on numeric input columns.
+    """
+    # Identify goal column (first one ending in + or -)
+    goal_idx = -1
+    for i, name in enumerate(header):
+        if name.endswith('+') or name.endswith('-'):
+            goal_idx = i
+            break
+    
+    if goal_idx == -1:
+        return [0.0] * len(test)
+
+    # Identify numeric input columns (excluding the goal column)
+    input_indices = [
+        i for i, name in enumerate(header) 
+        if name[0].isupper() and i != goal_idx
+    ]
+
+    # Normalize training data for distance calculation
+    # Using simple mean/std normalization
+    train_inputs = [[row[i] for i in input_indices] for row in train]
+    goals = [row[goal_idx] for row in train]
+    
+    # Calculate simple average as a baseline
+    avg_goal = sum(goals) / len(goals)
+    
+    results = []
+    for t_row in test:
+        # Find nearest neighbor in training set based on Euclidean distance
+        best_dist = float('inf')
+        best_val = avg_goal
+        
+        for i, train_row in enumerate(train_inputs):
+            dist = 0
+            for j, idx in enumerate(input_indices):
+                # Handle missing values in test row by skipping or using 0
+                val = t_row[idx] if t_row[idx] != '?' else 0.0
+                dist += (val - train_row[j])**2
+            
+            if dist < best_dist:
+                best_dist = dist
+                best_val = goals[i]
+        
+        results.append(float(best_val))
+        
+    return results
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Split: use first 700 for training, next 100 for testing
+    train = rows[:700]
+    test = rows[700:800]
+    
+    # Mask the goal column in test data
+    goal_idx = next(i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-'))
+    masked_test = []
+    for row in test:
+        new_row = list(row)
+        new_row[goal_idx] = '?'
+        masked_test.append(new_row)
+        
+    predictions = guess(header, train, masked_test)
+    
+    print("Estimation for 'YearsAtCompany+' (first 5 test rows):")
+    for i in range(min(5, len(predictions))):
+        print(f"Row {700+i}: Estimated {predictions[i]:.2f} years")

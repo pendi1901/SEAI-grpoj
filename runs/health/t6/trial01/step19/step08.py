@@ -1,0 +1,72 @@
+import ezr
+import random
+
+def fix(header, row, levers):
+    """
+    Finds the best single lever change to improve ydist.
+    Ensures the change is within the provided constraints.
+    """
+    # Load data to build a reference table for normalization
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data_iter = ezr.csv(filename)
+    header_data = next(data_iter)
+    all_rows = list(data_iter)
+    tbl = ezr.Tbl([header_data] + all_rows)
+    
+    best_change = {}
+    best_ydist = ezr.ydist(tbl, row)
+    
+    # Try changing each lever
+    for col_name, allowed in levers.items():
+        if col_name not in header:
+            continue
+        idx = header.index(col_name)
+        
+        candidates = []
+        if isinstance(allowed, (list, tuple)) and not isinstance(allowed[0], (int, float)):
+            # Symbolic: list of strings
+            candidates = [v for v in allowed if v != row[idx]]
+        else:
+            # Numeric: (low, high)
+            low, high = allowed
+            # Test boundaries and midpoint
+            candidates = [low, (low + high) / 2.0, high]
+            
+        for val in candidates:
+            new_row = list(row)
+            new_row[idx] = val
+            new_ydist = ezr.ydist(tbl, new_row)
+            
+            if new_ydist < best_ydist:
+                best_ydist = new_ydist
+                best_change = {col_name: val}
+                
+    return best_change
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data_iter = ezr.csv(filename)
+    header = next(data_iter)
+    rows = list(data_iter)
+    
+    tbl = ezr.Tbl([header] + rows)
+    # Pick a bad row (high ydist)
+    scored = sorted([(ezr.ydist(tbl, r), r) for r in rows], key=lambda x: x[0], reverse=True)
+    bad_row = scored[0][1]
+    
+    # Define levers based on the dataset structure
+    levers = {
+        "N_estimators": (10.0, 200.0),
+        "criterion": ["absolute_error", "poisson", "squared_error"],
+        "Min_sample_leaves": (1.0, 20.0),
+        "Min_impurity_decrease": (0.0, 10.0),
+        "Max_depth": (1.0, 20.0)
+    }
+    
+    recommendation = fix(header, bad_row, levers)
+    
+    if recommendation:
+        col, val = list(recommendation.items())[0]
+        print(f"To improve performance, change '{col}' to {val}.")
+    else:
+        print("No improvement found within the given lever constraints.")

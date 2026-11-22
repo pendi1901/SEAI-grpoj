@@ -1,0 +1,1454 @@
+You are writing one Python file, step16.py.
+
+The data is the csv file Health-ClosedIssues0000.n1000.train.csv in the current directory. Column names starting in upper case are numeric, lower case are symbolic. A name ending in - is a goal to minimise, in + a goal to maximise; all other columns are inputs. It has 800 data rows after the header. Any count the customer quotes describes their full records, not this file: never hard-code a row count, read the file to the end. Its first lines:
+
+MRE-,ACC+,PRED40+,N_estimators,criterion,Min_sample_leaves,Min_impurity_decrease,Max_depth
+0.883063328,0.40756167894905476,0,180,absolute_error,11,9.75,11
+0.26612665684830633,0.681512336,0.5714285714285714,110,squared_error,2,2,2
+0.23902798232695144,0.6843960269144505,0.8571428571428571,120,squared_error,2,7.75,7
+
+Your function receives rows already parsed. The header and the first two rows look like this in Python:
+
+header = ['MRE-', 'ACC+', 'PRED40+', 'N_estimators', 'criterion', 'Min_sample_leaves', 'Min_impurity_decrease', 'Max_depth']
+row = [0.883063328, 0.40756167894905476, 0.0, 180.0, 'absolute_error', 11.0, 9.75, 11.0]
+row = [0.26612665684830633, 0.681512336, 0.5714285714285714, 110.0, 'squared_error', 2.0, 2.0, 2.0]
+
+These columns hold text, not numbers: criterion (absolute_error, poisson, squared_error).
+
+The file ezr.py is in this directory. Its source is shown below. Build on it: `import ezr`.
+
+--- ezr.py ---
+#!/usr/bin/env python3 -B
+"""
+ezr.py: multi-objective XAI using minimal labels.   
+Faster, simpler AI. Better maps, not bigger boots.    
+(c) 2026 Tim Menzies <timm@ieee.org> MIT license.    
+
+Options:    
+      -Start=4         acquire: initial random labels   
+      -Stop=50         acquire: total labelling budget   
+      -Few=128         holdout: max training rows   
+      -Cuts=8          tree: splits to try, per num   
+      -Leaf=4          tree: min rows in any leaf  
+      -Check=5         holdout: top picks to label  
+      -Repeats=20      holdout: how many train/test splits  
+      -Seed=1234567891 random number seed  
+      -File=~/gits/moot/optimize/misc/auto93.csv   
+
+One file, five layers.  Each calls the layers above it and
+knows nothing of the ones below.  Cut on the banners to get
+five files back:    
+
+      core     columns, tables, distance.  Calls nothing.    
+      acquire  spend a label budget.    
+      tree     recursive splits, and a way to read them.    
+      rig      wins, holdout.  Takes its ranker as an argument,    
+               so the tree is its default, not its requirement.    
+      stats    cliffs, ks, cohen.  A leaf: nothing calls it.    
+
+"""
+# pylint: disable=bad-indentation,multiple-statements  
+# pylint: disable=invalid-name,ungrouped-imports   
+# pylint: disable=attribute-defined-outside-init   
+# pylint: disable=protected-access,broad-exception-caught  
+from typing import Any
+import os, re, sys, random, traceback # pylint: disable=C0410
+from math import exp, log2, sqrt
+from collections.abc import Callable, Iterable, Iterator
+
+#-- types --------------------------------------------------
+type QTY    = int | float             # any number
+type ATOM   = QTY | str               # one cell; "?" = unknown
+type ROW    = list[ATOM]
+type MIDS   = dict[int, ATOM]         # a centroid
+type ROWS   = list[ROW]
+type NUMS   = list[QTY]
+type NUM    = Num                     # classes, defined below
+type SYM    = Sym
+type COL    = NUM | SYM               # sumamry of a column
+type TBL    = o                       # rows and columns
+type NODE   = o                       # one node of a tree
+type GO     = Callable[[ROW], bool]   # which way does a row go?
+type ORACLE = Callable[[ROW], ROW]    # labels one row
+type PICKER = Callable[[TBL, int, ORACLE], ROWS]
+type RANKER = Callable[[TBL], Callable[[ROW], float]]
+                                      # ranks unlabelled rows
+
+#-- misc ---------------------------------------------------
+def say(x: Any, p: int = 2) -> str:
+  "Floats get P decimals; dicts list their keys."
+  if isinstance(x,float): x= f"{x:.{p}f}".rstrip("0").rstrip(".")
+  if isinstance(x, dict):
+    x= "{"+", ".join(f"{k}: {say(v,p)}" for k,v in x.items())+"}"
+  return str(x)
+
+class o(dict):
+  "A dict you can poke with a dot."
+  __getattr__, __setattr__ = dict.__getitem__, dict.__setitem__
+  __repr__ = say
+
+def atom(s: str) -> ATOM:
+  "'22' -> 22. '3.1' -> 3.1. 'True' -> True. 'x' -> 'x'."
+  for fn in (int, float):
+    try: return fn(s)
+    except ValueError: pass
+  s = s.strip()
+  return {"True": True, "False": False}.get(s, s)
+
+def csv(file: str) -> Iterator[ROW]:
+  "ROWS of FILE, each cell coerced."
+  with open(os.path.expanduser(file),  # -sig drops any BOM
+           encoding="utf-8-sig") as f:
+    for line in f:
+      if line.strip(): yield [atom(s) for s in line.split(",")]
+
+#-- columns ------------------------------------------------
+def Col(txt: str = " ", at: int = 0) -> COL:
+  "Factory that returns NUM or SYM."
+  return Num(txt,at) if txt[0].isupper() else Sym(txt,at)
+
+class Num:
+  "Place to summarize stream of numbers."
+  __slots__ = ("at", "txt", "n", "mu", "m2", "sd", "goal")
+  def __init__(self, txt: str = " ", at: int = 0) -> None:
+    self.at, self.txt, self.n = at, txt, 0
+    self.mu = self.m2 = self.sd = 0
+    self.goal = 0 if txt[-1] == "-" else 1
+  __repr__ = lambda self: say({k: getattr(self,k)
+                               for k in self.__slots__})
+
+class Sym:
+  "Place to summarize stream of Symbols.  The class is the tag."
+  __slots__ = ("at", "txt", "n", "has")
+  def __init__(self, txt: str = " ", at: int = 0) -> None:
+    self.at, self.txt, self.n, self.has = at, txt, 0, {}
+  __repr__ = lambda self: say({k: getattr(self,k)
+                               for k in self.__slots__})
+
+def add(col: COL, v: ATOM, inc: int = 1) -> None:
+  "Show V to COL.  INC=-1 takes it away.  `?` changes nothing."
+  if v != "?":
+    col.n += inc
+    if type(col) is Sym:
+      col.has[v] = col.has.get(v, 0) + inc
+    else:
+      d = v - col.mu                      # Welford, for `div`
+      col.mu += inc * d / max(1, col.n)
+      col.m2  = max(0, col.m2 + inc * d * (v - col.mu))
+      col.sd  = 0 if col.n < 2 else (col.m2/(col.n-1))**.5
+
+def mid(col: COL) -> ATOM:
+  "Middle: the mean, or the most common symbol; ? if none."
+  return (max(col.has, key=col.has.get) if col.has else "?"
+          ) if type(col) is Sym else col.mu
+
+def mids(tbl: TBL) -> MIDS:
+  "Every column's middle, cached until the next addCols."
+  tbl.mids = tbl.mids or {at: mid(c) for at,c in tbl.cols.items()}
+  return tbl.mids
+
+def div(col: COL) -> float:
+  "Spread: entropy, or standard deviation."
+  return (-sum(v/col.n*log2(v/col.n) for v in col.has.values())
+          if type(col) is Sym else col.sd)  # sd kept by `add`
+
+def norm(col: COL, v: ATOM) -> ATOM:
+  "To 0..1, by the logistic curve.  Symbols do not scale."
+  if type(col) is Sym: return v
+  z = max(-3, min(3, (v - col.mu) / (1e-32 + div(col))))
+  return 1 / (1 + exp(-1.7 * z))
+
+#-- tables -------------------------------------------------
+def Tbl(src: Iterable[ROW]) -> TBL:
+  "Header names the columns: X skip, +- goal, ! klass."
+  src = iter(src)
+  tbl = Cols(o(rows=[], cols={}, x=[], y=[], mids=None,
+               names=next(src)))
+  for row in src: addRow(tbl, row)
+  return tbl
+
+def Cols(tbl: TBL) -> TBL:
+  "Create column roles."
+  for at, s in enumerate(tbl.names):
+    if s[-1] == "X": continue            # skip me entirely
+    tbl.cols[at] = Col(s,at)
+    (tbl.y if s[-1] in "+-!" else tbl.x).append(tbl.cols[at])
+  return tbl
+
+def addRow(tbl: TBL, row: ROW) -> ROW:
+  "Keep ROW, and show it to my columns."
+  tbl.rows += [row]
+  return addCols(tbl, row)
+
+def addCols(tbl: TBL, row: ROW, inc: int = 1) -> ROW:
+  "Show ROW to my columns, without keeping it."
+  tbl.mids = None                 # a new row moves the middles
+  for at, col in tbl.cols.items(): add(col, row[at], inc)
+  return row
+
+def clone(tbl: TBL, rows: ROWS = None) -> TBL:
+  "An empty copy of TBL, plus ROWS."
+  return Tbl([tbl.names] + (rows or []))
+
+#-- distance -----------------------------------------------
+def dist(vs: Iterable[QTY], n: int) -> float:
+  "Root mean square of N gaps."
+  return sqrt(sum(v*v for v in vs) / n)
+
+def ydist(tbl: TBL, row: ROW) -> float:
+  "How far ROW's goals are from the best they could be."
+  return dist((abs(norm(c, row[c.at]) - c.goal)
+                    for c in tbl.y), len(tbl.y))
+
+def gap(col: COL, a: ATOM, b: ATOM) -> QTY:
+  "Distance between two values of one column."
+  if a == "?" or b == "?": return 1    # unknown = far
+  return a!=b if type(col) is Sym else abs(norm(col,a)-norm(col,b))
+
+def xdist(tbl: TBL, r1: ROW, r2: ROW | MIDS) -> float:
+  "How far apart two rows are, over the x columns."
+  return dist((gap(c, r1[c.at], r2[c.at])
+                    for c in tbl.x), len(tbl.x))
+
+#-- acquire ------------------------------------------------
+
+def oracle(row: ROW) -> ROW:
+  """Labeller. Rows here arrive with ys, so nothing to do.
+  Real oracles fill in any missing y cells (and can close
+  over a TBL to know which cells those are)."""
+  return row
+
+def acquire(tbl: TBL, cap: int | None = None,
+            label: ORACLE = oracle) -> ROWS:
+  "Label near the best rows, far from the rest."
+  cap  = cap or the.Stop
+  todo = random.sample(tbl.rows, len(tbl.rows))[:the.Few]
+  both = clone(tbl, [label(todo.pop())
+                     for _ in range(the.Start)])
+  both.rows.sort(key=lambda r: ydist(both, r))
+  n    = int(sqrt(the.Start))
+  best,rest = clone(tbl,both.rows[:n]), clone(tbl,both.rows[n:])
+  while todo and len(both.rows) < cap:
+    cb, cr = mids(best), mids(rest)    # two centroids
+    todo.sort(key=lambda z: xdist(tbl,z,cr) - xdist(tbl,z,cb))
+    addRow(best, addRow(both, label(todo.pop())))
+    best.rows.sort(key=lambda z: ydist(both, z))  # no y leak
+    if len(best.rows) > sqrt(len(both.rows)): # best stays small
+      addRow(rest, addCols(best, best.rows.pop(), -1))
+  return both.rows
+
+def grabs(tbl: TBL, cap: int | None = None,
+          label: ORACLE = oracle) -> ROWS:
+  "The straw man: same budget, taken at random."
+  cap = cap or the.Stop
+  return [label(r) for r in
+          random.sample(tbl.rows, min(cap, len(tbl.rows)))]
+
+#-- tree ---------------------------------------------------
+# Calls core.  Nothing above this line calls down here.
+# NODE = o(rows, at, v, go, kids, mu).
+def cut(tbl: TBL, rows: ROWS) -> tuple[int,ATOM,GO]|None:
+  "The (at, v, go) whose two sides have the tightest ys."
+  ys = [ydist(tbl, r) for r in rows]
+  out, least = None, 1e30
+  for col in tbl.x:
+    for v, go in candidates(col, rows):
+      a, b = Num(), Num()   # one pass, so one `go` per row
+      for r,y in zip(rows,ys): add(a if go(r) else b, y)
+      if a.n >= the.Leaf and b.n >= the.Leaf:
+        score = (div(a)*a.n + div(b)*b.n) / (a.n + b.n)
+        if score < least: out, least = (col.at, v, go), score
+  return out
+
+def candidates(col: COL, rows: ROWS) -> Iterator[tuple[ATOM,GO]]:
+  "What splits to try: one per symbol, or CUTS per num."
+  at = col.at
+  if type(col) is Sym:
+    for v in sorted({r[at] for r in rows if r[at] != "?"}):
+      yield v, lambda r,v=v,at=at: r[at] == v
+  else:                # by rank, not value: THESE rows are dense
+    xs = sorted(r[at] for r in rows if r[at] != "?")
+    k  = max(1, len(xs)//the.Cuts)     # cuts, spaced by rank
+    for v in xs[k-1:-1:k]:
+      yield v, (lambda r,v=v,at=at: r[at] != "?" and r[at] <= v)
+
+def tree(tbl: TBL, rows: ROWS) -> NODE:
+  "Split while a split keeps both sides big enough."
+  node = o(rows=rows, at=None, v=None, go=None, kids=[],
+           mu=sum(ydist(tbl,r) for r in rows)/len(rows))
+  if len(rows) > the.Leaf and (found := cut(tbl, rows)):
+    at, v, go = found
+    yes, no = [], []
+    for r in rows: (yes if go(r) else no).append(r)
+    node.at, node.v, node.go = at, v, go # cut kepts sides big
+    node.kids = [tree(tbl, yes), tree(tbl, no)]
+  return node
+
+def leaf(node: NODE, row: ROW) -> NODE:
+  "Walk ROW down to its leaf."
+  while node.kids: node = node.kids[0 if node.go(row) else 1]
+  return node
+
+def leafs(node: NODE) -> list[NODE]:
+  "Return leaves of this tree."
+  return [x for k in node.kids for x in leafs(k)] or [node]
+
+def show(tbl: TBL, node: NODE, pre: str | None = None,
+         edge: str = "") -> None:
+  "Tree on the left; ydist and n on the right."
+  ls = sorted(leafs(node), key=lambda z: z.mu)
+  def walk(z: NODE, pre: str | None, edge: str) -> None:
+    m = "+" if z is ls[0] else "-" if z is ls[-1] else " "
+    print(f"{m} {round(100*z.mu):>4} {len(z.rows):>5}   "
+          f"{(pre or '')+edge}".rstrip())
+    op = "=" if type(tbl.cols[z.at or 0]) is Sym else "<="
+    no = "!=" if op == "=" else ">"
+    for kid, oper in zip(z.kids, [op, no]):
+      walk(kid, "" if pre is None else pre + "|  ",
+           f"{tbl.names[z.at]} {oper} {say(z.v)}")
+  print(" ydist     n")
+  walk(node, pre, edge)
+
+
+
+#-- rig ----------------------------------------------------
+# Calls core, acquire, and one RANKER -- tree's, by default.
+def ranker(lab: TBL) -> Callable[[ROW], float]:
+  "Grow a tree on LAB; score any row by its leaf's mean ydist."
+  node = tree(lab, lab.rows)
+  return lambda r: leaf(node, r).mu
+
+def wins(tbl: TBL) -> Callable[[ROW], float]:
+  "100 at the best row, 0 at an average one."
+  ys = sorted(ydist(tbl, r) for r in tbl.rows)
+  lo, avg = ys[0], sum(ys)/len(ys)
+  return lambda r: max(-100, min(100, 100*(1 - (ydist(tbl,r)-lo)
+                                            / (avg-lo+1e-32))))
+
+def holdout(tbl: TBL, pick: PICKER = acquire,
+            rank: RANKER = ranker,
+            label: ORACLE = oracle) -> ROW:
+  "Train on half; of CHECK guesses on the rest, pick best."
+  rows  = random.sample(tbl.rows, len(tbl.rows))
+  n     = len(rows)//2
+  tr    = clone(tbl, rows[:n][:the.Few])
+  lab   = clone(tbl, pick(tr, the.Stop - the.Check, label))
+  top   = sorted(rows[n:], key=rank(lab))
+  return min(top[:the.Check], key=lambda r: ydist(lab, label(r)))
+
+
+#-- stats --------------------------------------------------
+# A leaf: it calls core, and nothing here calls it.
+def adds(vs: Iterable[ATOM], col: COL | None = None) -> COL:
+  "Every item of VS into COL."
+  col = Num() if col is None else col
+  for v in vs: add(col, v)
+  return col
+
+def cohen(xs: NUMS, ys: NUMS, d: float = 0.35,
+          eps: float = 0) -> bool:
+  "Are the means within D pooled standard deviations?"
+  a, b = adds(xs), adds(ys)
+  pool = ((a.n-1)*div(a)**2 + (b.n-1)*div(b)**2)/(a.n+b.n-2)
+  return abs(a.mu - b.mu) <= max(eps, d * sqrt(pool))
+
+def cliffs(xs: NUMS, ys: NUMS, d: float = 0.197) -> bool:
+  "Sorted in.  Is the rank imbalance small enough?"
+  gt = lt = j = k = 0
+  for x in xs:
+    while j < len(ys) and ys[j] <  x: j += 1; k = j
+    while k < len(ys) and ys[k] <= x: k += 1
+    gt += j; lt += len(ys) - k
+  return abs(gt - lt) / (len(xs) * len(ys)) <= d
+
+def ks(xs: NUMS, ys: NUMS, a: float = 1.36) -> bool:
+  "Sorted in.  95% Kolmogorov-Smirnov."
+  n, m, i, j, d = len(xs), len(ys), 0, 0, 0
+  while i < n and j < m:
+    v = min(xs[i], ys[j])
+    while i < n and xs[i] <= v: i += 1
+    while j < m and ys[j] <= v: j += 1
+    d = max(d, abs(i/n - j/m))
+  return d <= a * sqrt((n + m) / (n * m))
+
+def same(xs: NUMS, ys: NUMS, eps: float = 0) -> bool:
+  """Indistinguishable.  Always cliffs and ks; EPS adds cohen, and
+  doubles as its effect size (eps=0 skips that third test)."""
+  xs, ys = sorted(xs), sorted(ys)
+  return (cliffs(xs,ys) and ks(xs,ys)
+          and (not eps or cohen(xs,ys,d=eps)))
+
+#-- start --------------------------------------------------
+the = o(_defaults=o())
+for _k, _v in re.findall(r"(\w+)=(\S+)", __doc__ or ""):
+  the[_k] = the._defaults[_k] = atom(_v)
+
+def run(f: Callable) -> int:
+  "Run F. Demos may poke `the`, so always put it back."
+  random.seed(the.Seed)
+  try:                   f()
+  except Exception as e: traceback.print_exception(e); return 1
+  finally:               the.update(the._defaults)
+  return 0
+
+def main(args: list[str], funcs: dict) -> None:
+  "Dispatch --x to FUNCS' eg_x; -key val updates `the`."
+  while args:
+    s = args.pop(0)
+    if   s[:2] == "--":
+      run(funcs.get("eg_" + s[2:], funcs["eg_h"]))
+    elif s[1:] in the : the[s[1:]] = atom(args.pop(0))
+    else: print(f"unknown arg: {s}")
+
+
+These files, written earlier, are in the same directory:
+
+--- step01.py ---
+import ezr
+import random
+
+def remember(header, rows):
+    """
+    Identify the top 5% of rows based on multi-objective optimization.
+    Uses ydist to measure distance to the ideal goal values.
+    """
+    # Create a table object using the ezr library
+    # We prepend the header to the rows to match the expected Tbl input
+    data = [header] + rows
+    tbl = ezr.Tbl(data)
+    
+    # Calculate ydist for all rows
+    # ydist measures how far a row's goals are from the best possible
+    scored = []
+    for i, row in enumerate(rows):
+        d = ezr.ydist(tbl, row)
+        scored.append((d, i))
+    
+    # Sort by distance (ascending, as lower ydist is better)
+    scored.sort()
+    
+    # Return the top 5% of rows (800 rows * 0.05 = 40)
+    limit = max(1, int(len(rows) * 0.05))
+    return [item[1] for item in scored[:limit]]
+
+if __name__ == "__main__":
+    # Load the data
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data_iter = ezr.csv(filename)
+    
+    # Extract header and rows
+    header = next(data_iter)
+    rows = list(data_iter)
+    
+    # Get the best indices
+    best_indices = remember(header, rows)
+    
+    # Print results for the customer
+    print(f"Analysis complete. Found {len(best_indices)} highly trustworthy setups.")
+    print("Top row indices (0-based):")
+    print(best_indices)
+    
+    # Show a summary of the first best row found
+    best_row = rows[best_indices[0]]
+    print("\nExample of a top-performing setup:")
+    for h, v in zip(header, best_row):
+        print(f"  {h}: {v}")
+
+
+--- step02.py ---
+import ezr
+import random
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column for each test row.
+    Uses a tree-based approach: train a tree on the labeled data,
+    then for each test row, find its leaf and return the mean of the
+    first goal column in that leaf.
+    """
+    # Create the training table
+    train_tbl = ezr.Tbl([header] + train)
+    
+    # Build a tree on the training data
+    # We use the tree function from ezr
+    root = ezr.tree(train_tbl, train_tbl.rows)
+    
+    # Identify the index of the first goal column
+    # The first goal column is the first one in the 'y' list
+    first_goal_col = train_tbl.y[0]
+    goal_idx = first_goal_col.at
+    
+    results = []
+    for row in test:
+        # Find the leaf node for the test row
+        node = ezr.leaf(root, row)
+        
+        # Calculate the mean of the first goal column in this leaf
+        # We use the values from the rows that ended up in this leaf
+        vals = [r[goal_idx] for r in node.rows if r[goal_idx] != "?"]
+        if vals:
+            estimate = sum(vals) / len(vals)
+        else:
+            # Fallback to the global mean if the leaf is empty or has no data
+            all_vals = [r[goal_idx] for r in train_tbl.rows]
+            estimate = sum(all_vals) / len(all_vals)
+        results.append(estimate)
+        
+    return results
+
+if __name__ == "__main__":
+    # Load the data
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Split into train and test
+    # Use a fixed seed for reproducibility
+    random.seed(1234567891)
+    random.shuffle(rows)
+    split = int(len(rows) * 0.8)
+    train = rows[:split]
+    test_full = rows[split:]
+    
+    # Mask the goals in the test set to simulate the "unknown" scenario
+    test = []
+    for row in test_full:
+        new_row = list(row)
+        for col in ezr.Tbl([header]).y:
+            new_row[col.at] = "?"
+        test.append(new_row)
+        
+    # Get estimates
+    estimates = guess(header, train, test)
+    
+    # Print a summary for the customer
+    print("Forecast estimation complete.")
+    print(f"Estimated {len(estimates)} rows.")
+    print(f"First 5 estimates: {[round(x, 3) for x in estimates[:5]]}")
+    
+    # Calculate simple error metric (Mean Absolute Error)
+    actuals = [r[ezr.Tbl([header]).y[0].at] for r in test_full]
+    mae = sum(abs(e - a) for e, a in zip(estimates, actuals)) / len(actuals)
+    print(f"Estimated Mean Absolute Error on test set: {mae:.4f}")
+
+
+--- step03.py ---
+import ezr
+import random
+
+def certify(xs, ys):
+    """
+    Returns True if the distributions of xs and ys are statistically 
+    indistinguishable (same apart from noise), False otherwise.
+    Uses the statistical tests provided in ezr.stats.
+    """
+    # Sort the lists as required by the statistical tests in ezr
+    xs_sorted = sorted(xs)
+    ys_sorted = sorted(ys)
+    
+    # Use the same function from ezr.stats
+    # It checks cliffs, ks, and cohen's d
+    return ezr.same(xs_sorted, ys_sorted)
+
+if __name__ == "__main__":
+    # Load the data
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Create a table to identify goals and calculate ydist
+    tbl = ezr.Tbl(data)
+    
+    # Define "big" vs "small" based on N_estimators (index 3)
+    # We split by the median value of N_estimators
+    n_est_idx = 3
+    n_ests = [r[n_est_idx] for r in rows]
+    median_n = sorted(n_ests)[len(n_ests) // 2]
+    
+    small_set = []
+    big_set = []
+    
+    for row in rows:
+        yd = ezr.ydist(tbl, row)
+        if row[n_est_idx] <= median_n:
+            small_set.append(yd)
+        else:
+            big_set.append(yd)
+            
+    # Certify if the difference in performance (ydist) is real
+    is_same = certify(small_set, big_set)
+    
+    print("Statistical analysis of setup size vs performance:")
+    if is_same:
+        print("The difference between big and small setups is statistically insignificant.")
+        print("Conclusion: The observed difference is likely just noise.")
+    else:
+        print("The difference between big and small setups is statistically significant.")
+        print("Conclusion: The performance difference is real.")
+
+
+--- step04.py ---
+import ezr
+import random
+
+def flow(header, row, seen):
+    """
+    Decide if the current row is 'good enough' to stop searching.
+    We define 'good enough' as being in the top 5% of the expected 
+    performance distribution based on the data seen so far.
+    """
+    # Create a table to handle column roles and ydist calculations
+    # We use the header to define the structure
+    tbl = ezr.Tbl([header] + (seen if seen else [row]))
+    
+    # Calculate the ydist of the current row
+    current_ydist = ezr.ydist(tbl, row)
+    
+    # If this is the first row, we can't compare it yet
+    if not seen:
+        return False
+    
+    # Calculate ydist for all previously seen rows
+    seen_ydists = [ezr.ydist(tbl, r) for r in seen]
+    
+    # We define 'good enough' as being better than 95% of what we've seen
+    # or better than a reasonable threshold if we have enough data.
+    # Here, we check if the current row is in the top 5% of the seen distribution.
+    threshold = sorted(seen_ydists)[max(0, int(len(seen_ydists) * 0.05))]
+    
+    return current_ydist <= threshold
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Shuffle to simulate random arrival order
+    random.seed(1234567891)
+    random.shuffle(rows)
+    
+    seen = []
+    found = False
+    for i, row in enumerate(rows):
+        if flow(header, row, seen):
+            print(f"Stopped at row {i+1}. Found a high-quality setup.")
+            print("Setup details:")
+            for h, v in zip(header, row):
+                print(f"  {h}: {v}")
+            found = True
+            break
+        seen.append(row)
+    
+    if not found:
+        print("Reached the end of the data without finding a 'good enough' setup.")
+
+
+--- step05.py ---
+import ezr
+
+def blame(header, rows):
+    """
+    Identify input columns that best explain why the worst rows are bad.
+    We compare the distribution of input values in the worst 25% of rows
+    against the rest of the data. Columns where the distributions differ
+    significantly (using a simple rank-based heuristic) are identified as
+    the 'blame' columns.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate ydist for all rows to identify the worst performers
+    scored = []
+    for row in rows:
+        scored.append((ezr.ydist(tbl, row), row))
+    
+    # Sort by ydist descending (worst first)
+    scored.sort(key=lambda x: x[0], reverse=True)
+    
+    # Split into worst 25% and the rest
+    n_worst = max(1, len(rows) // 4)
+    worst = [x[1] for x in scored[:n_worst]]
+    rest = [x[1] for x in scored[n_worst:]]
+    
+    # Identify input columns (skip goals)
+    input_cols = [c for c in tbl.x]
+    
+    blame_scores = []
+    for col in input_cols:
+        # Compare distributions using a simple distance metric
+        # For numeric: difference in means of normalized values
+        # For symbolic: difference in frequency of the most common symbol
+        if isinstance(tbl.cols[col.at], ezr.Num):
+            mu_w = sum(r[col.at] for r in worst if r[col.at] != "?") / max(1, len(worst))
+            mu_r = sum(r[col.at] for r in rest if r[col.at] != "?") / max(1, len(rest))
+            score = abs(mu_w - mu_r)
+        else:
+            # Symbolic: check if the most common value in 'worst' is over-represented
+            w_counts = {}
+            for r in worst:
+                v = r[col.at]
+                if v != "?": w_counts[v] = w_counts.get(v, 0) + 1
+            r_counts = {}
+            for r in rest:
+                v = r[col.at]
+                if v != "?": r_counts.get(v, 0) + 1
+            
+            top_w = max(w_counts, key=w_counts.get) if w_counts else None
+            if top_w:
+                score = (w_counts[top_w] / len(worst)) - (r_counts.get(top_w, 0) / len(rest))
+            else:
+                score = 0
+        
+        blame_scores.append((score, header[col.at]))
+    
+    # Return the top 3 columns that contribute most to the difference
+    blame_scores.sort(key=lambda x: x[0], reverse=True)
+    return [name for score, name in blame_scores[:3]]
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    results = blame(header, rows)
+    
+    print("Analysis of poor performance:")
+    print("The following settings are most strongly associated with the worst-performing setups:")
+    for i, name in enumerate(results, 1):
+        print(f"{i}. {name}")
+
+
+--- step06.py ---
+import ezr
+import random
+
+def justify(header, rows, row):
+    """
+    Returns (p, reason): p is the fraction of rows that 'row' is better than,
+    and reason is a human-readable explanation of why this setup is good.
+    """
+    # Create table to handle column roles and ydist calculations
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Estimate the goals for the target row using a tree-based ranker
+    # We train on all available data to get the best possible estimate
+    ranker = ezr.ranker(tbl)
+    
+    # The ranker returns the mean ydist of the leaf the row falls into.
+    # This acts as our estimate for the row's performance.
+    estimated_ydist = ranker(row)
+    
+    # Calculate ydist for all known rows
+    all_ydists = [ezr.ydist(tbl, r) for r in rows]
+    
+    # Calculate p: fraction of rows that have a worse (higher) ydist
+    # A row is better if its ydist is lower.
+    better_than_count = sum(1 for yd in all_ydists if yd > estimated_ydist)
+    p = better_than_count / len(all_ydists)
+    
+    # Generate a reason based on the tree structure
+    # We find the leaf the row belongs to and identify the split criteria
+    node = ezr.leaf(ezr.tree(tbl, rows), row)
+    
+    reason = (
+        f"This setup is in the top {int((1-p)*100)}% of all configurations "
+        f"because it falls into a leaf node with an average performance "
+        f"distance of {estimated_ydist:.3f}."
+    )
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Pick a sample row to justify (e.g., the 10th row)
+    # Mask its goals to simulate the "unknown" scenario
+    target_row = list(rows[10])
+    for col in ezr.Tbl([header]).y:
+        target_row[col.at] = "?"
+        
+    p, reason = justify(header, rows, target_row)
+    
+    print(f"Justification for the selected setup:")
+    print(f"Performance percentile: {p:.2f}")
+    print(f"Reason: {reason}")
+
+
+--- step07.py ---
+import ezr
+import random
+
+def choose(header, rows, label):
+    """
+    Find the best setup by using the acquire strategy from ezr.
+    We have a budget of 50 labels.
+    """
+    # Create a table structure
+    # We need to handle the fact that rows have '?' for goals.
+    # We will use the provided label function to reveal them.
+    
+    # We need to keep track of which rows we have already labeled
+    # to ensure we don't exceed the budget of 50.
+    labeled_rows = []
+    
+    # We use the acquire logic from ezr. 
+    # The acquire function takes a TBL and an oracle.
+    # We need to wrap the label function to work with the TBL.
+    
+    # First, create a dummy table to define the structure
+    # We use the first row to define the columns, but we will fill it
+    # with the rows we label.
+    tbl = ezr.Tbl([header])
+    
+    # The acquire function in ezr expects a TBL with rows already in it.
+    # We will manually manage the acquisition process to respect the 50 limit.
+    # We use the logic: sample, label, sort, and pick.
+    
+    # Set the budget
+    ezr.the.Stop = 50
+    
+    # We need to pass a function that labels a row by index
+    # The label function provided to choose() takes an index.
+    def oracle(row):
+        # Find the index of this row in the original list
+        # Since we need to return the row with goals filled,
+        # we find the index and call label(index)
+        for i, r in enumerate(rows):
+            if r is row:
+                goals = label(i)
+                # Update the row with the true goals
+                for col in tbl.y:
+                    row[col.at] = goals[col.at]
+                return row
+        return row
+
+    # Use the acquire function from ezr
+    # We need to make sure the table has the rows to start with
+    # We provide the full list of rows to the table so it knows the distribution
+    tbl = ezr.Tbl([header] + rows)
+    
+    # The acquire function returns the rows it labeled
+    labeled = ezr.acquire(tbl, cap=50, label=oracle)
+    
+    # Find the best row among the labeled ones
+    best_row = min(labeled, key=lambda r: ezr.ydist(tbl, r))
+    
+    # Return the index of the best row
+    for i, r in enumerate(rows):
+        if r is best_row:
+            return i
+    return 0
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Keep a copy of original rows to compare
+    # The label function returns the true goals
+    def label(i):
+        return data[i+1]
+
+    # Mask the goals in the rows for the choose function
+    masked_rows = []
+    for row in rows:
+        new_row = list(row)
+        for col in ezr.Tbl([header]).y:
+            new_row[col.at] = "?"
+        masked_rows.append(new_row)
+        
+    best_idx = choose(header, masked_rows, label)
+    
+    print(f"Best setup found at index: {best_idx}")
+    print("Setup details:")
+    for h, v in zip(header, rows[best_idx]):
+        print(f"  {h}: {v}")
+
+
+--- step08.py ---
+import ezr
+import random
+
+def fix(header, row, levers):
+    """
+    Finds the smallest change to a bad row that improves its ydist.
+    'Smallest' is defined as the distance in the input space (xdist).
+    """
+    # Create a table to handle column roles and ydist calculations
+    # We need the full dataset to calculate accurate ydist
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    tbl = ezr.Tbl(data)
+    
+    best_change = {}
+    min_dist = float('inf')
+    
+    # Current performance
+    current_ydist = ezr.ydist(tbl, row)
+    
+    # Try changing each lever one by one
+    for col_name, allowed in levers.items():
+        if col_name not in header:
+            continue
+        col_idx = header.index(col_name)
+        col = tbl.cols[col_idx]
+        
+        # Generate candidate values
+        candidates = []
+        if isinstance(col, ezr.Num):
+            low, high = allowed
+            # Try a few points in the range to ensure we find a valid improvement
+            candidates = [low, (low + high) / 2, high]
+        else:
+            candidates = allowed
+            
+        for val in candidates:
+            if val == row[col_idx]:
+                continue
+                
+            # Create a modified row
+            new_row = list(row)
+            new_row[col_idx] = val
+            
+            # Calculate distance from original (input space)
+            d_input = ezr.xdist(tbl, row, new_row)
+            
+            # Calculate performance improvement
+            d_goal = ezr.ydist(tbl, new_row)
+            
+            # We want to minimize input change while improving ydist
+            if d_goal < current_ydist:
+                if d_input < min_dist:
+                    min_dist = d_input
+                    best_change = {col_name: val}
+                    
+    return best_change
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Define levers based on the data structure
+    levers = {
+        "N_estimators": (10, 200),
+        "Min_sample_leaves": (1, 20),
+        "Max_depth": (1, 20),
+        "criterion": ["absolute_error", "poisson", "squared_error"]
+    }
+    
+    # Pick a "bad" row (one with high ydist)
+    tbl = ezr.Tbl(data)
+    scored = sorted([(ezr.ydist(tbl, r), r) for r in rows], key=lambda x: x[0], reverse=True)
+    bad_row = scored[0][1]
+    
+    recommendation = fix(header, bad_row, levers)
+    
+    print("Optimization recommendation for the current setup:")
+    if recommendation:
+        for col, val in recommendation.items():
+            print(f"Change {col} to {val}")
+    else:
+        print("No simple improvement found.")
+
+
+--- step09.py ---
+import ezr
+import random
+
+def spot(header, rows):
+    """
+    Identify rows that are 'suspicious' (outliers in the input space).
+    Rows that are very far from the rest of the data in the input space
+    are likely to be failed runs or data entry errors.
+    """
+    # Create a table to handle column roles and distance calculations
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate the centroid of the input space
+    # We use the cached mids from the table
+    mids = ezr.mids(tbl)
+    
+    # Calculate xdist for every row from the centroid
+    # Rows with high xdist are outliers
+    scores = []
+    for i, row in enumerate(rows):
+        d = ezr.xdist(tbl, row, mids)
+        scores.append((d, i))
+    
+    # Sort by distance descending (most suspicious first)
+    scores.sort(key=lambda x: x[0], reverse=True)
+    
+    # Return the indices of the top 5% most suspicious rows
+    limit = max(1, int(len(rows) * 0.05))
+    return [item[1] for item in scores[:limit]]
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    suspicious_indices = spot(header, rows)
+    
+    print(f"Analysis complete. Identified {len(suspicious_indices)} suspicious rows.")
+    print("Most suspicious row indices (0-based):")
+    print(suspicious_indices[:10])
+    
+    if suspicious_indices:
+        print("\nDetails of the most suspicious row:")
+        idx = suspicious_indices[0]
+        for h, v in zip(header, rows[idx]):
+            print(f"  {h}: {v}")
+
+
+--- step10.py ---
+import ezr
+import random
+
+def race(header, rows, label):
+    """
+    Compares three strategies: random, greedy (based on current best), 
+    and the ezr.acquire strategy. Total budget is 50 labels.
+    """
+    budget = 50
+    labeled_indices = set()
+    
+    # Create a base table for structure
+    tbl = ezr.Tbl([header] + [r for r in rows if "?" not in r])
+    
+    def get_label(i):
+        if i not in labeled_indices:
+            if len(labeled_indices) >= budget:
+                return rows[i]
+            labeled_indices.add(i)
+            goals = label(i)
+            for col in tbl.y:
+                rows[i][col.at] = goals[col.at]
+            # Update table stats with the newly revealed row
+            ezr.addCols(tbl, rows[i])
+        return rows[i]
+
+    # Strategy 1: Random
+    def strategy_random():
+        indices = random.sample(range(len(rows)), 16)
+        for i in indices: get_label(i)
+        return min(labeled_indices, key=lambda i: ezr.ydist(tbl, rows[i]))
+
+    # Strategy 2: Greedy (pick closest to current best)
+    def strategy_greedy():
+        idx = random.choice(range(len(rows)))
+        get_label(idx)
+        for _ in range(16):
+            best_idx = min(list(labeled_indices), key=lambda i: ezr.ydist(tbl, rows[i]))
+            unlabeled = [i for i in range(len(rows)) if i not in labeled_indices]
+            if not unlabeled: break
+            next_idx = min(unlabeled, key=lambda i: ezr.xdist(tbl, rows[i], rows[best_idx]))
+            get_label(next_idx)
+        return min(list(labeled_indices), key=lambda i: ezr.ydist(tbl, rows[i]))
+
+    # Strategy 3: Acquire (ezr's built-in)
+    def strategy_acquire():
+        remaining = budget - len(labeled_indices)
+        if remaining <= 0: return min(list(labeled_indices), key=lambda i: ezr.ydist(tbl, rows[i]))
+        
+        # We need a local copy of the table for acquire to work on
+        local_tbl = ezr.Tbl([header] + [rows[i] for i in labeled_indices])
+        
+        def oracle(r):
+            for i, row in enumerate(rows):
+                if r is row: return get_label(i)
+            return r
+            
+        ezr.the.Stop = remaining
+        labeled = ezr.acquire(local_tbl, cap=remaining, label=oracle)
+        return min(list(labeled_indices), key=lambda i: ezr.ydist(tbl, rows[i]))
+
+    # Run the race
+    results = {
+        "random": strategy_random(),
+        "greedy": strategy_greedy(),
+        "acquire": strategy_acquire()
+    }
+    
+    # Find winner (lowest ydist)
+    winner = min(results, key=lambda name: ezr.ydist(tbl, rows[results[name]]))
+    
+    return {
+        "winner": winner,
+        "row": results[winner],
+        "tried": ["random", "greedy", "acquire"]
+    }
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Mask goals
+    masked_rows = []
+    for row in rows:
+        new_row = list(row)
+        for col in ezr.Tbl([header]).y:
+            new_row[col.at] = "?"
+        masked_rows.append(new_row)
+        
+    def label(i):
+        return data[i+1]
+        
+    result = race(header, masked_rows, label)
+    
+    print(f"Race results:")
+    print(f"Winner: {result['winner']}")
+    print(f"Best row index found: {result['row']}")
+    print(f"Strategies compared: {', '.join(result['tried'])}")
+
+
+--- step11.py ---
+import ezr
+import random
+
+def remember(header, rows):
+    """
+    Find the top 5% of rows that are most similar to the current 'best' 
+    performing setup in the dataset.
+    """
+    # Create a table to handle column roles and ydist calculations
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Identify the best performing row in the entire dataset
+    # We use ydist to measure how close a row is to the ideal goals
+    scored = []
+    for i, row in enumerate(rows):
+        scored.append((ezr.ydist(tbl, row), i))
+    
+    # Sort by ydist (ascending, as lower is better)
+    scored.sort()
+    
+    # The 'best' setup is the one with the lowest ydist
+    best_row_idx = scored[0][1]
+    best_row = rows[best_row_idx]
+    
+    # Now find the rows most similar to this best_row in the input space (xdist)
+    # We calculate xdist between the best_row and every other row
+    similarities = []
+    for i, row in enumerate(rows):
+        if i == best_row_idx:
+            continue
+        d = ezr.xdist(tbl, row, best_row)
+        similarities.append((d, i))
+    
+    # Sort by xdist (ascending, as lower distance means more similar)
+    similarities.sort()
+    
+    # Return the top 5% of rows (800 rows * 0.05 = 40)
+    limit = max(1, int(len(rows) * 0.05))
+    return [item[1] for item in similarities[:limit]]
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Get the indices of the most similar setups
+    similar_indices = remember(header, rows)
+    
+    # Calculate performance for these similar setups
+    tbl = ezr.Tbl([header] + rows)
+    
+    print(f"Analysis complete. Found {len(similar_indices)} setups similar to the best performer.")
+    print("Top 5 most similar setups and their performance (ydist):")
+    
+    for idx in similar_indices[:5]:
+        yd = ezr.ydist(tbl, rows[idx])
+        print(f"  Row {idx}: ydist = {yd:.4f}")
+        
+    print("\nExample of a similar setup:")
+    example_idx = similar_indices[0]
+    for h, v in zip(header, rows[example_idx]):
+        print(f"  {h}: {v}")
+
+
+--- step12.py ---
+import ezr
+import random
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column for each test row.
+    Uses a tree-based approach. To simulate 'halving the size of the forecaster',
+    we limit the training data to half its original size.
+    """
+    # Halve the training data to simulate a smaller forecaster
+    # We use a fixed seed to ensure the subset is consistent
+    random.seed(1234567891)
+    subset_size = len(train) // 2
+    small_train = random.sample(train, subset_size)
+    
+    # Create the training table
+    train_tbl = ezr.Tbl([header] + small_train)
+    
+    # Build a tree on the training data
+    root = ezr.tree(train_tbl, train_tbl.rows)
+    
+    # Identify the index of the first goal column
+    first_goal_col = train_tbl.y[0]
+    goal_idx = first_goal_col.at
+    
+    results = []
+    for row in test:
+        # Find the leaf node for the test row
+        node = ezr.leaf(root, row)
+        
+        # Calculate the mean of the first goal column in this leaf
+        vals = [r[goal_idx] for r in node.rows if r[goal_idx] != "?"]
+        if vals:
+            estimate = sum(vals) / len(vals)
+        else:
+            # Fallback to the global mean if the leaf is empty
+            all_vals = [r[goal_idx] for r in train_tbl.rows]
+            estimate = sum(all_vals) / len(all_vals)
+        results.append(estimate)
+        
+    return results
+
+if __name__ == "__main__":
+    # Load the data
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Split into train and test
+    random.seed(1234567891)
+    random.shuffle(rows)
+    split = int(len(rows) * 0.8)
+    train = rows[:split]
+    test_full = rows[split:]
+    
+    # Mask the goals in the test set
+    test = []
+    for row in test_full:
+        new_row = list(row)
+        for col in ezr.Tbl([header]).y:
+            new_row[col.at] = "?"
+        test.append(new_row)
+        
+    # Get estimates
+    estimates = guess(header, train, test)
+    
+    # Calculate Mean Absolute Error
+    actuals = [r[ezr.Tbl([header]).y[0].at] for r in test_full]
+    mae = sum(abs(e - a) for e, a in zip(estimates, actuals)) / len(actuals)
+    
+    print("Impact of halving the forecaster size:")
+    print(f"Mean Absolute Error (MAE) with 50% training data: {mae:.4f}")
+    print("Conclusion: Reducing the training data size increases the forecast error.")
+
+
+--- step13.py ---
+import ezr
+import random
+
+def certify(xs, ys):
+    """
+    Returns True if the distributions of xs and ys are statistically 
+    indistinguishable (same apart from noise), False otherwise.
+    Uses the statistical tests provided in ezr.stats.
+    """
+    # Sort the lists as required by the statistical tests in ezr
+    xs_sorted = sorted(xs)
+    ys_sorted = sorted(ys)
+    
+    # Use the same function from ezr.stats
+    # It checks cliffs, ks, and cohen's d
+    return ezr.same(xs_sorted, ys_sorted)
+
+if __name__ == "__main__":
+    # Load the data
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # The two built-in rules in ezr.acquire are:
+    # 1. The 'acquire' strategy (smart sampling)
+    # 2. The 'grabs' strategy (random sampling)
+    
+    # We compare the performance (ydist) of rows found by these two strategies
+    # given the same labeling budget.
+    
+    tbl = ezr.Tbl(data)
+    budget = 50
+    
+    # Strategy 1: Acquire
+    ezr.the.Stop = budget
+    acquired_rows = ezr.acquire(tbl, cap=budget)
+    acquired_ydists = [ezr.ydist(tbl, r) for r in acquired_rows]
+    
+    # Strategy 2: Grabs (Random)
+    random.seed(ezr.the.Seed)
+    grabbed_rows = ezr.grabs(tbl, cap=budget)
+    grabbed_ydists = [ezr.ydist(tbl, r) for r in grabbed_rows]
+    
+    # Statistical comparison
+    is_same = certify(acquired_ydists, grabbed_ydists)
+    
+    print("Statistical analysis of acquisition strategies (Acquire vs Random):")
+    if is_same:
+        print("The difference between the two strategies is statistically insignificant.")
+        print("Conclusion: You can stop arguing; the choice of strategy does not make a real difference here.")
+    else:
+        print("The difference between the two strategies is statistically significant.")
+        print("Conclusion: The choice of strategy matters; one is demonstrably better.")
+
+
+--- step14.py ---
+import ezr
+import random
+
+def flow(header, row, seen):
+    """
+    Decide if the current row is 'good enough' to stop searching.
+    We stop if the current row is significantly better than the 
+    best row seen so far, or if we have seen enough data to 
+    conclude that further improvements are unlikely.
+    """
+    if not seen:
+        return False
+    
+    # Create a table to handle column roles and ydist calculations
+    # We use the header to define the structure
+    tbl = ezr.Tbl([header] + seen)
+    
+    # Calculate the ydist of the current row and all seen rows
+    current_ydist = ezr.ydist(tbl, row)
+    seen_ydists = [ezr.ydist(tbl, r) for r in seen]
+    
+    # Find the best performance seen so far
+    best_so_far = min(seen_ydists)
+    
+    # Stop if we have seen at least 50 rows and the current row is 
+    # not significantly better than the best we've already found.
+    # This acts as an early stopping criterion.
+    if len(seen) >= 50:
+        # If the current row is worse than the best, and we have 
+        # a decent sample size, we stop to save costs.
+        if current_ydist >= best_so_far:
+            return True
+            
+    return False
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Shuffle to simulate random arrival order
+    random.seed(1234567891)
+    random.shuffle(rows)
+    
+    seen = []
+    found = False
+    for i, row in enumerate(rows):
+        if flow(header, row, seen):
+            print(f"Stopped at row {i+1}. The best setup has stopped improving.")
+            print("Final selected setup details:")
+            for h, v in zip(header, row):
+                print(f"  {h}: {v}")
+            found = True
+            break
+        seen.append(row)
+    
+    if not found:
+        print("Reached the end of the data without finding a stopping point.")
+
+
+--- step15.py ---
+import ezr
+import random
+
+def blame(header, rows):
+    """
+    Identify input columns that have the least impact on performance.
+    We compare the distribution of input values in the worst 25% of rows
+    against the rest of the data. Columns where the distributions are
+    statistically indistinguishable (using the 'same' test) are the
+    ones that can be left at factory defaults.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate ydist for all rows to identify the worst performers
+    scored = []
+    for row in rows:
+        scored.append((ezr.ydist(tbl, row), row))
+    
+    # Sort by ydist descending (worst first)
+    scored.sort(key=lambda x: x[0], reverse=True)
+    
+    # Split into worst 25% and the rest
+    n_worst = max(1, len(rows) // 4)
+    worst = [x[1] for x in scored[:n_worst]]
+    rest = [x[1] for x in scored[n_worst:]]
+    
+    # Identify input columns (skip goals)
+    input_cols = [c for c in tbl.x]
+    
+    safe_cols = []
+    for col in input_cols:
+        # Extract values for this column from worst and rest
+        vals_w = [r[col.at] for r in worst if r[col.at] != "?"]
+        vals_r = [r[col.at] for r in rest if r[col.at] != "?"]
+        
+        # If the distributions are the same, the column doesn't 'blame' the bad performance
+        if ezr.same(vals_w, vals_r):
+            safe_cols.append(header[col.at])
+            
+    return safe_cols
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    safe_settings = blame(header, rows)
+    
+    print("Analysis of settings that can be left at factory defaults:")
+    if safe_settings:
+        print("The following settings do not significantly impact performance and can be left at defaults:")
+        for name in safe_settings:
+            print(f"- {name}")
+    else:
+        print("All settings appear to have a significant impact on performance.")
+
+
+The customer asks:
+
+  Why not simply use the biggest, deepest setup the machine can hold?
+
+Write step16.py to answer that ask on this data.
+
+A test harness will import your file and call this function, so you must define it exactly:
+
+def justify(header, rows, row)
+  Returns a pair (number, string).   `rows` are complete. In `row` the goal cells are "?". Return (p, reason): p is the fraction, 0 to 1, of `rows` that `row` is better than; reason is one sentence a customer could read.
+
+Rules the harness enforces: p must be a number from 0 to 1, not a percentage. The goal cells of `row` are "?": estimate from its input columns.
+
+Conventions: `header` is the list of column names. `rows` is a list of rows; each row is a list of cells in header order, floats for numeric columns and strings for symbolic ones. A cell shown as "?" is hidden from you. A row is better when its goals are closer to their best (low for names ending in -, high for names ending in +).
+
+Keep everything that prints or reads the csv file under `if __name__ == "__main__":` so that importing the file prints nothing. Plain built-in types are all you need: do not import anything from `typing`.
+
+Running `python step16.py` must load the csv, call your function, print a short answer a customer could read, and exit with status 0. Reply with the complete file in one ```python fenced block and nothing else.

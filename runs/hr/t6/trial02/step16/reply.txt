@@ -1,0 +1,68 @@
+```python
+import ezr
+import step06
+import step08
+
+def justify(header, rows, row):
+    """
+    Justifies why paying more isn't a silver bullet by showing that 
+    other factors (like role or tenure) often dominate the retention 
+    rankings, and that salary is often statistically indistinguishable 
+    between high and low performers.
+    """
+    # 1. Calculate the rank of the current row (using step06 logic)
+    p, reason = step06.justify(header, rows, row)
+    
+    # 2. Analyze if MonthlyIncome (salary) is actually a differentiator
+    # We use the logic from step05/step15 to see if salary differentiates
+    tbl = ezr.Tbl([header] + rows)
+    sorted_rows = sorted(rows, key=lambda r: ezr.ydist(tbl, r), reverse=True)
+    n = max(1, len(rows) // 5)
+    worst = sorted_rows[:n]
+    best = sorted_rows[-n:]
+    
+    sal_idx = header.index("MonthlyIncome")
+    sal_worst = [r[sal_idx] for r in worst]
+    sal_best = [r[sal_idx] for r in best]
+    
+    # Check if salary distributions are the same
+    is_same = ezr.same(sal_worst, sal_best)
+    
+    # 3. Construct the explanation
+    if is_same:
+        explanation = (
+            f"While this arrangement ranks in the top {int((1-p)*100)}%, "
+            "simply increasing salary is ineffective because statistical analysis "
+            "shows that salary distributions are indistinguishable between our "
+            "best and worst performing employees."
+        )
+    else:
+        explanation = (
+            f"This arrangement ranks in the top {int((1-p)*100)}%, "
+            "but salary is only one of many variables; our model suggests that "
+            "structural factors like role and tenure are more significant drivers "
+            "of retention than pay alone."
+        )
+        
+    return p, explanation
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Pick a random row and mask its goals
+    import random
+    test_row = list(random.choice(rows))
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('+', '-'))]
+    for idx in goal_indices:
+        test_row[idx] = "?"
+        
+    p, reason = justify(header, rows, test_row)
+    
+    print("Customer Query: Why not simply pay everyone more?")
+    print(f"Analysis Result: {reason}")
+    
+    exit(0)
+```

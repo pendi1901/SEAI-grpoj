@@ -1,0 +1,52 @@
+```python
+import ezr
+import step02
+import step06
+
+def justify(header, rows, row):
+    """
+    Compares a target row against the dataset.
+    Returns (p, reason): p is the fraction of rows that 'row' is better than,
+    and reason is a sentence explaining why 'row' might be inferior to a 
+    preferred alternative (like setup B).
+    """
+    # 1. Estimate the ydist for the target row using the tree-based ranker
+    tbl = ezr.Tbl([header] + rows)
+    ranker_func = step02.ezr.ranker(tbl)
+    target_ydist = ranker_func(row)
+    
+    # 2. Calculate ydist for all existing rows
+    all_ydists = [ezr.ydist(tbl, r) for r in rows]
+    
+    # 3. Calculate p: fraction of rows that are worse (have higher ydist) than target
+    # A lower ydist is better.
+    better_than_count = sum(1 for d in all_ydists if d > target_ydist)
+    p = better_than_count / len(rows)
+    
+    # 4. Construct the reason
+    # We explain that while this setup is better than p% of the data, 
+    # it does not reach the performance threshold of the top-tier setups.
+    reason = (f"This setup is better than {p:.2f} of all scenarios, "
+              f"but it fails to match the performance of the top-tier configurations "
+              f"because its input parameters lead to higher goal distances.")
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Pick a sample row (e.g., the 50th) to justify
+    target_row = list(rows[50])
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    for idx in goal_indices:
+        target_row[idx] = "?"
+        
+    p, reason = justify(header, rows, target_row)
+    
+    print(f"Justification for why this setup was not recommended:")
+    print(f"Performance Rank: {p:.4f}")
+    print(f"Reason: {reason}")
+```

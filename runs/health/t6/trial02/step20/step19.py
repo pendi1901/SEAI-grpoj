@@ -1,0 +1,33 @@
+import ezr
+import step09
+
+def spot(header, rows):
+    """
+    Identifies rows that are suspicious because they contain input values
+    that are extreme outliers compared to the rest of the population.
+    We use the distance from the population centroid (mids) as a proxy
+    for 'never seen before' or 'wrongly entered' data.
+    """
+    # Reuse the logic from step09 which calculates distance from the centroid
+    # of the input (x) space. Rows with high x-distance are the most suspicious.
+    return step09.spot(header, rows)
+
+if __name__ == "__main__":
+    # Load data
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    all_data = list(ezr.csv(filename))
+    header = all_data[0]
+    rows = all_data[1:]
+    
+    # Get suspicious indices
+    indices = spot(header, rows)
+    
+    # Print the top 5 most suspicious rows
+    print("Top 5 most suspicious rows (potential data entry errors or unseen settings):")
+    for i in range(min(5, len(indices))):
+        idx = indices[i]
+        print(f"  Row {idx}: {rows[idx]}")
+    
+    print(f"\nTotal rows analyzed: {len(rows)}")
+    print("These rows were flagged because their input settings are significantly")
+    print("different from the rest of the population (high x-distance).")

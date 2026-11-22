@@ -1,0 +1,65 @@
+```python
+import csv
+import numpy as np
+
+def flow(header, row, seen):
+    """
+    Decides whether to accept a row based on whether it is better than 
+    the best seen so far. Uses a simple threshold strategy: accept if 
+    the current row is in the top 5% of the observed distribution.
+    """
+    # Identify goal columns
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('-') or name.endswith('+')]
+    
+    def get_score(r):
+        # Normalize goals: 1 - val for '-', val for '+' (assuming [0,1] range)
+        scores = []
+        for i in goal_indices:
+            val = r[i]
+            if header[i].endswith('-'):
+                scores.append(1.0 - val)
+            else:
+                scores.append(val)
+        return sum(scores) / len(scores)
+
+    # If this is the first row, accept it
+    if not seen:
+        return True
+    
+    # Calculate score for current row
+    current_score = get_score(row)
+    
+    # Calculate scores for all seen rows
+    seen_scores = [get_score(r) for r in seen]
+    
+    # Threshold: Accept if current row is better than 95% of what we've seen
+    # or if it's the best we've seen so far.
+    threshold = np.percentile(seen_scores, 95)
+    
+    return current_score >= threshold
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) for val in row])
+        
+        accepted_count = 0
+        seen = []
+        for row in rows:
+            if flow(header, row, seen):
+                accepted_count += 1
+            seen.append(row)
+            
+        print(f"Processed {len(rows)} proposals.")
+        print(f"Total accepted: {accepted_count}")
+        print("Strategy: Accepting proposals that rank in the top 5% of observed data.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

@@ -1,0 +1,72 @@
+import csv
+
+def flow(header, row, seen):
+    """
+    Decides if the current row is 'good enough' to stop searching.
+    We define 'good enough' as being in the top 5% of the best possible 
+    performance observed so far across all goal columns.
+    """
+    goals = []
+    for i, name in enumerate(header):
+        if name.endswith('-'):
+            goals.append((i, -1))
+        elif name.endswith('+'):
+            goals.append((i, 1))
+
+    def get_score(r):
+        score = 0
+        for i, (col_idx, direction) in enumerate(goals):
+            val = r[col_idx]
+            # Normalize based on the range of the current 'seen' set
+            # If it's the first row, we treat it as a baseline
+            if not seen:
+                return 1.0
+            
+            all_vals = [s[col_idx] for s in seen]
+            min_v, max_v = min(all_vals), max(all_vals)
+            rng = max_v - min_v if max_v != min_v else 1.0
+            
+            norm = (val - min_v) / rng
+            if direction == -1:
+                norm = 1.0 - norm
+            score += norm
+        return score / len(goals)
+
+    # If we haven't seen enough, keep looking
+    if len(seen) < 20:
+        return False
+
+    current_score = get_score(row)
+    seen_scores = [get_score(s) for s in seen]
+    
+    # Stop if this row is better than 95% of what we have seen
+    threshold = sorted(seen_scores)[int(len(seen_scores) * 0.95)]
+    return current_score >= threshold
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                try:
+                    processed_row.append(float(val))
+                except ValueError:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    seen = []
+    found = False
+    for i, row in enumerate(rows):
+        if flow(header, row, seen):
+            print(f"Stopped at row {i}: Found a setup good enough to ship.")
+            print(f"Row data: {row}")
+            found = True
+            break
+        seen.append(row)
+    
+    if not found:
+        print("Reached the end of the data without finding a 'good enough' setup.")

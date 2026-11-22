@@ -1,0 +1,88 @@
+import csv
+
+def fix(header, row, levers):
+    """
+    Finds the single best change to a 'bad' row to improve its performance.
+    'Best' is defined as the change that results in the highest multi-objective score.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    
+    def get_score(r):
+        # Calculate a simple multi-objective score.
+        # Since we don't have global context, we use raw values.
+        # MRE- (minimize), ACC+ (maximize), PRED40+ (maximize)
+        score = 0
+        for i in goal_indices:
+            val = r[i]
+            if header[i].endswith('-'):
+                score -= val
+            else:
+                score += val
+        return score
+
+    best_change = {}
+    best_score = -float('inf')
+
+    # Try changing exactly one lever
+    for col_name, allowed in levers.items():
+        idx = header.index(col_name)
+        original_val = row[idx]
+        
+        candidates = []
+        if isinstance(allowed, list):  # Symbolic
+            candidates = [v for v in allowed if v != original_val]
+        else:  # Numeric (low, high)
+            low, high = allowed
+            # Try a few steps within the range to find an improvement
+            step = (high - low) / 4
+            candidates = [low + i * step for i in range(5)]
+            candidates = [c for c in candidates if abs(c - original_val) > 1e-5]
+
+        for val in candidates:
+            new_row = list(row)
+            new_row[idx] = val
+            score = get_score(new_row)
+            if score > best_score:
+                best_score = score
+                best_change = {col_name: val}
+                
+    return best_change
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    try:
+        rows = []
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            for row in reader:
+                processed = [float(val) if header[i] not in ['criterion'] else val 
+                             for i, val in enumerate(row)]
+                rows.append(processed)
+
+        levers = {
+            'N_estimators': (50, 200),
+            'criterion': ['absolute_error', 'poisson', 'squared_error'],
+            'Min_sample_leaves': (1, 20),
+            'Min_impurity_decrease': (0, 10),
+            'Max_depth': (1, 20)
+        }
+
+        # Pick a 'bad' row (e.g., the one with the worst score)
+        def score_row(r):
+            s = 0
+            for i, name in enumerate(header):
+                if name.endswith('-'): s -= r[i]
+                elif name.endswith('+'): s += r[i]
+            return s
+
+        bad_row = min(rows, key=score_row)
+        recommendation = fix(header, bad_row, levers)
+
+        print("Recommendation for improvement (changing one setting):")
+        for col, val in recommendation.items():
+            print(f"Change '{col}' to {val}")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

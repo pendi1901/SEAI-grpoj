@@ -1,0 +1,79 @@
+```python
+import csv
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import LabelEncoder
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column (MRE-) for test rows.
+    This implementation uses a RandomForestRegressor.
+    """
+    goal_idx = 0
+    
+    # Identify input columns (those not ending in '-' or '+')
+    input_indices = [i for i, h in enumerate(header) if not (h.endswith('-') or h.endswith('+'))]
+    
+    # Encode symbolic columns
+    encoders = {}
+    for i in input_indices:
+        if isinstance(train[0][i], str):
+            le = LabelEncoder()
+            # Fit on all available data to handle potential unseen labels
+            all_vals = [row[i] for row in train] + [row[i] for row in test if row[i] != "?"]
+            le.fit(all_vals)
+            encoders[i] = le
+
+    def transform(data):
+        X = []
+        for row in data:
+            features = []
+            for i in input_indices:
+                val = row[i]
+                if i in encoders:
+                    features.append(encoders[i].transform([val])[0])
+                else:
+                    features.append(val)
+            X.append(features)
+        return X
+
+    X_train = transform(train)
+    y_train = [row[goal_idx] for row in train]
+    X_test = transform(test)
+    
+    # Train model
+    model = RandomForestRegressor(n_estimators=100, random_state=42)
+    model.fit(X_train, y_train)
+    
+    return model.predict(X_test).tolist()
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = [float(val) if val.replace('.', '', 1).isdigit() or (val.startswith('-') and val[1:].replace('.', '', 1).isdigit()) else val for val in row]
+            rows.append(processed_row)
+
+    # Split data
+    train_data = rows[:-100]
+    test_data = [[val if not (header[i].endswith('-') or header[i].endswith('+')) else "?" for i, val in enumerate(row)] for row in rows[-100:]]
+    true_values = [row[0] for row in rows[-100:]]
+
+    # Full size forecast
+    preds_full = guess(header, train_data, test_data)
+    
+    # Halved size forecast (using half the training data)
+    train_half = train_data[::2]
+    preds_half = guess(header, train_half, test_data)
+    
+    # Calculate Mean Absolute Error for both
+    mae_full = sum(abs(p - t) for p, t in zip(preds_full, true_values)) / len(true_values)
+    mae_half = sum(abs(p - t) for p, t in zip(preds_half, true_values)) / len(true_values)
+    
+    print("Impact of halving the training data size on MRE- forecast accuracy:")
+    print(f"MAE with full training set: {mae_full:.4f}")
+    print(f"MAE with half training set: {mae_half:.4f}")
+    print(f"Performance degradation: {((mae_half - mae_full) / mae_full) * 100:.2f}% increase in error.")
+```

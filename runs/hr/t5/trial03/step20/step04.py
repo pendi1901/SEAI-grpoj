@@ -1,0 +1,69 @@
+import ezr
+import random
+
+def flow(header, row, seen):
+    """
+    Decide whether to stop and select the current row.
+    We use the 'acquire' logic: we want to pick rows that are 
+    'interesting' (far from the current centroid of the 'rest' 
+    and near the centroid of the 'best').
+    """
+    # If this is the first row, we have no context, so we keep looking.
+    if not seen:
+        return False
+    
+    # Create a table from the seen data to calculate centroids
+    tbl = ezr.Tbl([header] + seen)
+    
+    # We need to estimate the goals for the current row if they are missing.
+    # Since we cannot go back, we use the current 'seen' data to build a 
+    # simple model (a tree) to rank the current row.
+    # If the row is 'good' (low ydist), we stop.
+    
+    # Build a model from seen data
+    # We use the tree-based ranker to estimate the quality of the current row
+    ranker = ezr.ranker(tbl)
+    score = ranker(row)
+    
+    # We stop if the row is in the top 5% of expected quality
+    # or if we have seen enough rows to make a confident decision.
+    # Given the constraint of "one at a time", we use a threshold 
+    # based on the distribution of seen rows.
+    
+    # Simple heuristic: stop if the row is better than the average of seen rows
+    # and we have seen at least 10 rows.
+    if len(seen) > 10:
+        all_scores = [ranker(r) for r in seen]
+        avg_score = sum(all_scores) / len(all_scores)
+        if score < avg_score * 0.8:  # Significantly better than average
+            return True
+            
+    return False
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Simulate the arrival process
+    random.seed(1234567891)
+    random.shuffle(rows)
+    
+    seen = []
+    selected = None
+    
+    for row in rows:
+        if flow(header, row, seen):
+            selected = row
+            break
+        seen.append(row)
+        
+    if selected:
+        print("Decision: Selected an employee for a 'what would keep you here' conversation.")
+        # Print a few details about the selected row
+        print(f"Selected Row Index: {rows.index(selected)}")
+        print(f"Monthly Income: {selected[header.index('MonthlyIncome')]}")
+        print(f"Years at Company: {selected[header.index('YearsAtCompany+')]}")
+    else:
+        print("Decision: No suitable employee found in the stream.")

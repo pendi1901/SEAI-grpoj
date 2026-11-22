@@ -1,0 +1,86 @@
+```python
+import csv
+import random
+
+def choose(header, rows, label):
+    """
+    Finds the best working arrangement for 'Laboratory Technician' staff 
+    by sampling up to 50 rows, labeling them to find true goal values, 
+    and returning the index of the row with the best performance.
+    """
+    # Identify goal columns
+    goal_indices = [i for i, h in enumerate(header) if h.endswith('+') or h.endswith('-')]
+    role_idx = header.index('jobRole')
+    
+    # Filter rows for Laboratory Technicians
+    lab_indices = [i for i, row in enumerate(rows) if row[role_idx] == 'Laboratory Technician']
+    
+    # If no lab staff, fallback to all rows
+    search_pool = lab_indices if lab_indices else range(len(rows))
+    
+    # We can label at most 50 rows.
+    num_to_sample = min(len(search_pool), 50)
+    indices_to_sample = random.sample(search_pool, num_to_sample)
+    
+    best_idx = -1
+    best_score = float('-inf')
+    
+    for idx in indices_to_sample:
+        # Get true goal values
+        goals = label(idx)
+        
+        # Calculate a normalized score for this row
+        # We maximize '+' and minimize '-'
+        score = 0.0
+        for i, g_idx in enumerate(goal_indices):
+            val = goals[i]
+            if header[g_idx].endswith('-'):
+                score -= val
+            else:
+                score += val
+            
+        if score > best_score:
+            best_score = score
+            best_idx = idx
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Store original goal values to simulate the label function
+    goal_indices = [i for i, h in enumerate(header) if h.endswith('+') or h.endswith('-')]
+    true_goals = [[row[i] for i in goal_indices] for row in rows]
+    
+    # Mask goals in the rows passed to the function
+    for row in rows:
+        for i in goal_indices:
+            row[i] = "?"
+
+    labeled_count = 0
+    def label(i):
+        global labeled_count
+        labeled_count += 1
+        if labeled_count > 50:
+            raise Exception("Label budget exceeded")
+        return true_goals[i]
+
+    best_idx = choose(header, rows, label)
+    
+    print("Analysis complete for Laboratory Technician staff.")
+    print(f"Best row index found: {best_idx}")
+    print(f"Goal values for best row: {true_goals[best_idx]}")
+    print("Strategy: Sampled up to 50 Laboratory Technician records to identify the best performing arrangement.")
+```

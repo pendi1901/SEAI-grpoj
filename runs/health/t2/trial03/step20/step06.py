@@ -1,0 +1,73 @@
+import csv
+from step01 import remember
+from step02 import guess
+
+def justify(header, rows, row):
+    """
+    Estimates the performance of the given row and compares it to the existing dataset.
+    Returns (p, reason) where p is the percentile rank and reason is a summary.
+    """
+    # 1. Estimate the goals for the target row
+    # Use guess() logic: find neighbors to estimate MRE-, ACC+, PRED40+
+    # Since guess() only estimates MRE-, we extend the logic for all goals
+    input_indices = [i for i, name in enumerate(header) if name not in ['MRE-', 'ACC+', 'PRED40+']]
+    
+    def get_dist(r1, r2):
+        d = 0
+        for i in input_indices:
+            if isinstance(r1[i], str):
+                d += 0 if r1[i] == r2[i] else 1
+            else:
+                d += ((r1[i] - r2[i]) / 100.0)**2 # Simplified normalization
+        return d**0.5
+
+    # Find 5 nearest neighbors to estimate all 3 goals
+    neighbors = sorted(rows, key=lambda x: get_dist(x, row))[:5]
+    est_mre = sum(n[0] for n in neighbors) / 5
+    est_acc = sum(n[1] for n in neighbors) / 5
+    est_pred = sum(n[2] for n in neighbors) / 5
+    
+    # 2. Calculate score for the target row
+    # Re-using normalization logic from step01
+    mres = [r[0] for r in rows]
+    accs = [r[1] for r in rows]
+    preds = [r[2] for r in rows]
+    
+    def norm(v, mi, ma): return (v - mi) / (ma - mi) if ma > mi else 0
+    
+    target_score = (1 - norm(est_mre, min(mres), max(mres))) + \
+                   norm(est_acc, min(accs), max(accs)) + \
+                   norm(est_pred, min(preds), max(preds))
+    
+    # 3. Compare against all rows
+    scores = []
+    for r in rows:
+        s = (1 - norm(r[0], min(mres), max(mres))) + \
+            norm(r[1], min(accs), max(accs)) + \
+            norm(r[2], min(preds), max(preds))
+        scores.append(s)
+    
+    better_than = [s for s in scores if s < target_score]
+    p = len(better_than) / len(rows)
+    
+    reason = f"This setup is estimated to outperform {p:.1%} of all known configurations based on its predicted multi-objective score."
+    return p, reason
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = [val if header[i] == 'criterion' else float(val) 
+                             for i, val in enumerate(row)]
+            rows.append(processed_row)
+    
+    # Test with the last row as a sample
+    test_row = rows[-1][:]
+    test_row[0] = test_row[1] = test_row[2] = "?"
+    
+    p, reason = justify(header, rows, test_row)
+    print(f"Percentile: {p:.4f}")
+    print(f"Reason: {reason}")

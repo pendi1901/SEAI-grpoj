@@ -1,0 +1,57 @@
+import ezr
+import step01
+
+def certify(xs, ys):
+    """
+    Returns True if the distributions are statistically indistinguishable,
+    False if they are significantly different.
+    """
+    # Using ezr's statistical tests: same() checks both cliffs and ks
+    # and optionally cohen's d.
+    return ezr.same(xs, ys)
+
+def analyze_teams(header, rows):
+    """
+    Splits data into small teams (Team Size < 0.5) and big teams (>= 0.5)
+    and compares their Cost- values.
+    """
+    # Team Size is at index 8
+    # Cost- is at index 9
+    small_costs = []
+    big_costs = []
+    
+    for row in rows:
+        team_size = row[8]
+        cost = row[9]
+        if isinstance(team_size, (int, float)) and isinstance(cost, (int, float)):
+            if team_size < 0.5:
+                small_costs.append(cost)
+            else:
+                big_costs.append(cost)
+                
+    is_same = certify(small_costs, big_costs)
+    return small_costs, big_costs, is_same
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    
+    try:
+        header = next(data_gen)
+        rows = list(data_gen)
+    except StopIteration:
+        print("Error: File is empty or missing.")
+        exit(1)
+        
+    small, big, is_same = analyze_teams(header, rows)
+    
+    print("Analysis: Are small-team setups cheaper than big-team ones?")
+    print(f"Small teams (n={len(small)}): avg cost {sum(small)/len(small):.4f}")
+    print(f"Big teams   (n={len(big)}): avg cost {sum(big)/len(big):.4f}")
+    
+    if is_same:
+        print("Result: The difference is statistically insignificant (it was likely luck).")
+    else:
+        print("Result: The difference is statistically significant (it is real).")
+        
+    exit(0)

@@ -1,0 +1,74 @@
+```python
+import csv
+
+def spot(header, rows):
+    """
+    Identifies rows that are 'unlike anyone we have employed' by measuring
+    the distance of each row from the centroid of the existing data.
+    Rows with a high distance (outliers) are considered 'untrusted' because
+    the model has no historical precedent for such an employee.
+    """
+    # Identify numeric input columns (excluding goals)
+    numeric_indices = [
+        i for i, col in enumerate(header) 
+        if col[0].isupper() and not (col.endswith('+') or col.endswith('-'))
+    ]
+    
+    # Calculate mean and std for each numeric column to normalize
+    stats = {}
+    for i in numeric_indices:
+        vals = [row[i] for row in rows if isinstance(row[i], (int, float))]
+        if not vals:
+            continue
+        mean = sum(vals) / len(vals)
+        std = (sum((x - mean) ** 2 for x in vals) / len(vals)) ** 0.5
+        stats[i] = (mean, std)
+
+    # Score rows based on their Mahalanobis-like distance (Euclidean in normalized space)
+    # A higher score means the row is further from the "average" employee
+    suspicious_scores = {}
+    for row_idx, row in enumerate(rows):
+        score = 0
+        for i in numeric_indices:
+            if i in stats:
+                mean, std = stats[i]
+                if std > 0:
+                    # Z-score squared contribution
+                    z_score = (row[i] - mean) / std
+                    score += z_score ** 2
+        
+        # We only care about rows that are significantly different
+        if score > 0:
+            suspicious_scores[row_idx] = score
+
+    # Return indices sorted by suspicion score descending
+    return sorted(suspicious_scores, key=suspicious_scores.get, reverse=True)
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    suspects = spot(header, rows)
+    
+    print("Analysis: Identifying hires that are 'unlike anyone we have employed'.")
+    print("These rows represent outliers where our predictive estimates are least reliable.")
+    print(f"Found {len(suspects)} rows that deviate from historical norms.")
+    print("Top 5 most suspicious (untrusted) row indices:")
+    for idx in suspects[:5]:
+        print(f" - Row {idx}")
+    
+    print("\nStrategy: Rows were flagged based on their distance from the historical ")
+    print("centroid of numeric inputs. High-distance rows indicate 'novel' profiles ")
+    print("where our model's estimates cannot be trusted.")
+```

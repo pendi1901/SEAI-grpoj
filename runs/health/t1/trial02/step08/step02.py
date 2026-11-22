@@ -1,0 +1,83 @@
+import csv
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column (MRE-) for test rows using a 
+    k-Nearest Neighbors approach based on Euclidean distance of 
+    numeric input features.
+    """
+    # Identify indices
+    goal_idx = 0  # MRE-
+    # Inputs are columns that are not goals (don't end in - or +)
+    input_indices = [
+        i for i, name in enumerate(header) 
+        if not (name.endswith('-') or name.endswith('+'))
+    ]
+
+    # Normalize numeric inputs for distance calculation
+    # Only consider numeric inputs for distance
+    numeric_inputs = [i for i in input_indices if i != header.index('criterion')]
+    
+    def get_dist(row1, row2):
+        d = 0
+        for i in numeric_inputs:
+            # Simple distance: assume range is roughly similar or normalized
+            d += (row1[i] - row2[i])**2
+        # Symbolic distance: 1 if different, 0 if same
+        crit_idx = header.index('criterion')
+        if row1[crit_idx] != row2[crit_idx]:
+            d += 1.0
+        return d**0.5
+
+    predictions = []
+    for t_row in test:
+        # Find k nearest neighbors (k=5)
+        distances = []
+        for train_row in train:
+            distances.append((get_dist(t_row, train_row), train_row[goal_idx]))
+        
+        distances.sort(key=lambda x: x[0])
+        
+        # Average the goal value of the 5 nearest neighbors
+        k = 5
+        neighbors = distances[:k]
+        avg_mre = sum(n[1] for n in neighbors) / k
+        predictions.append(avg_mre)
+        
+    return predictions
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    rows = []
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            for row in reader:
+                processed_row = []
+                for i, val in enumerate(row):
+                    if header[i] == 'criterion':
+                        processed_row.append(val)
+                    else:
+                        processed_row.append(float(val))
+                rows.append(processed_row)
+        
+        # Split: use first 700 for train, next 100 for test
+        train_data = rows[:700]
+        test_data = []
+        for r in rows[700:]:
+            # Mask the goals
+            new_row = list(r)
+            for i, name in enumerate(header):
+                if name.endswith('-') or name.endswith('+'):
+                    new_row[i] = "?"
+            test_data.append(new_row)
+            
+        results = guess(header, train_data, test_data)
+        
+        print("Forecast estimation complete.")
+        print(f"Estimated MRE for the first 5 test cases: {[round(x, 4) for x in results[:5]]}")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

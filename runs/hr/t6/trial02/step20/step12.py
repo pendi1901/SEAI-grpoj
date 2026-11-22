@@ -1,0 +1,49 @@
+import ezr
+import step02
+import random
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column (YearsAtCompany+) for test rows
+    by building a tree on the training data and predicting the mean
+    of the leaf node where the test row lands.
+    """
+    return step02.guess(header, train, test)
+
+def analyze_overtime_in_sales(header, rows):
+    """
+    Filters for 'Sales' department, then compares tenure for Overtime=Yes vs No.
+    """
+    dept_idx = header.index("department")
+    ot_idx = header.index("overTime")
+    tenure_idx = header.index("YearsAtCompany+")
+    
+    sales_rows = [r for r in rows if r[dept_idx] == "Sales"]
+    
+    yes_ot = [r[tenure_idx] for r in sales_rows if r[ot_idx] == "Yes"]
+    no_ot = [r[tenure_idx] for r in sales_rows if r[ot_idx] == "No"]
+    
+    avg_yes = sum(yes_ot) / len(yes_ot) if yes_ot else 0
+    avg_no = sum(no_ot) / len(no_ot) if no_ot else 0
+    
+    return avg_yes, avg_no
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    avg_yes, avg_no = analyze_overtime_in_sales(header, rows)
+    
+    print("Analysis: Impact of cutting overtime in the Sales department on tenure (YearsAtCompany+).")
+    print(f"Average tenure (Overtime=Yes): {avg_yes:.2f} years")
+    print(f"Average tenure (Overtime=No):  {avg_no:.2f} years")
+    
+    diff = avg_no - avg_yes
+    if diff > 0:
+        print(f"Conclusion: Cutting overtime in Sales is associated with an increase in tenure of {diff:.2f} years.")
+    else:
+        print("Conclusion: Cutting overtime in Sales does not show a positive correlation with increased tenure in this dataset.")
+    
+    exit(0)

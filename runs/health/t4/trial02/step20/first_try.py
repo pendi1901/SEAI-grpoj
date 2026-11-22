@@ -1,0 +1,91 @@
+import csv
+import random
+import numpy as np
+from step02 import guess
+
+def race(header, rows, label):
+    """
+    Compares three strategies: random, greedy (surrogate), and local search.
+    The budget of 50 labels is shared across all strategies.
+    """
+    mre_idx, acc_idx, pred_idx = 0, 1, 2
+
+    def get_score(goals):
+        # MRE- (minimize), ACC+ (maximize), PRED40+ (maximize)
+        # Normalize: (1 - MRE) + ACC + PRED
+        return (1.0 - goals[0]) + goals[1] + goals[2]
+
+    budget = 50
+    labeled = {}
+
+    def get_label(i):
+        if i not in labeled:
+            if len(labeled) >= budget:
+                raise Exception("Too many labels!")
+            labeled[i] = label(i)
+        return labeled[i]
+
+    def strategy_random():
+        unlabeled = [i for i in range(len(rows)) if i not in labeled]
+        if not unlabeled: return None
+        idx = random.choice(unlabeled)
+        return idx, get_label(idx)
+
+    def strategy_greedy():
+        if len(labeled) < 5: return strategy_random()
+        unlabeled = [i for i in range(len(rows)) if i not in labeled]
+        # Prepare training data from labeled
+        train_data = [list(labeled[i]) + rows[i][3:] for i in labeled]
+        # Prepare test data (masking goals)
+        test_data = [['?'] * 3 + rows[i][3:] for i in unlabeled]
+        # Predict MRE- (index 0)
+        preds = guess(header, train_data, test_data)
+        idx = unlabeled[np.argmin(preds)]
+        return idx, get_label(idx)
+
+    def strategy_local():
+        if len(labeled) < 5: return strategy_random()
+        # Pick the best known row and return it (exploitation)
+        best_idx = max(labeled.keys(), key=lambda k: get_score(labeled[k]))
+        return best_idx, labeled[best_idx]
+
+    strategies = {"random": strategy_random, "greedy": strategy_greedy, "local": strategy_local}
+    results = {name: {"best_idx": -1, "best_score": -float('inf')} for name in strategies}
+
+    # Run strategies in a round-robin fashion until budget is exhausted
+    while len(labeled) < budget:
+        for name, func in strategies.items():
+            if len(labeled) >= budget: break
+            res = func()
+            if res:
+                idx, goals = res
+                score = get_score(goals)
+                if score > results[name]["best_score"]:
+                    results[name]["best_score"] = score
+                    results[name]["best_idx"] = idx
+
+    winner = max(results, key=lambda n: results[n]["best_score"])
+    return {"winner": winner, "row": results[winner]["best_idx"], "tried": list(strategies.keys())}
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed = []
+            for i, val in enumerate(row):
+                if header[i].isupper() or header[i] in ['N_estimators', 'Min_sample_leaves', 'Min_impurity_decrease', 'Max_depth']:
+                    processed.append(float(val))
+                else:
+                    processed.append(val)
+            rows.append(processed)
+
+    def label(i):
+        return [rows[i][0], rows[i][1], rows[i][2]]
+
+    outcome = race(header, rows, label)
+    print(f"Winner: {outcome['winner']}")
+    print(f"Best row index found: {outcome['row']}")
+    print(f"Strategies tried: {', '.join(outcome['tried'])}")

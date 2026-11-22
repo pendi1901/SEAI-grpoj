@@ -1,0 +1,56 @@
+import ezr
+import random
+
+def remember(header, rows):
+    """
+    Finds the 5% of rows most similar to the 'best' performing employees.
+    We define 'best' as those with the lowest ydist (closest to goals).
+    We then find the 5% of rows that are most similar (lowest xdist) 
+    to the centroid of those top-performing rows.
+    """
+    # Create a table to handle goal and distance logic
+    tbl = ezr.Tbl([header] + rows)
+    
+    # 1. Identify the top 10% of performers based on ydist
+    scored = sorted([(ezr.ydist(tbl, r), i) for i, r in enumerate(rows)])
+    top_n = max(1, len(rows) // 10)
+    top_performers = [rows[x[1]] for x in scored[:top_n]]
+    
+    # 2. Create a mini-table of top performers to find their centroid
+    # We use a temporary table to calculate the centroid of the 'best'
+    best_tbl = ezr.Tbl([header] + top_performers)
+    centroid = ezr.mids(best_tbl)
+    
+    # 3. Find the 5% of all rows most similar to this centroid
+    # Similarity is measured by xdist (input column distance)
+    all_scored = []
+    for i, row in enumerate(rows):
+        d = ezr.xdist(tbl, row, centroid)
+        all_scored.append((d, i))
+    
+    all_scored.sort(key=lambda x: x[0])
+    
+    # Return the top 5% of indices
+    limit = max(1, int(len(rows) * 0.05))
+    return [x[1] for x in all_scored[:limit]]
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Get the indices of the most similar high-performers
+    indices = remember(header, rows)
+    
+    print(f"Analysis: Found {len(indices)} employees most similar to top performers.")
+    print("Indices of these employees:", indices)
+    
+    # Identify goal columns to show how long they stayed
+    # YearsAtCompany+ is a goal column
+    yac_idx = header.index("YearsAtCompany+")
+    
+    print("\nSummary of 'YearsAtCompany+' for these similar employees:")
+    stays = [rows[i][yac_idx] for i in indices]
+    print(f"  Average years at company: {sum(stays)/len(stays):.2f}")
+    print(f"  Individual values: {stays}")

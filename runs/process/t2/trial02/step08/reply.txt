@@ -1,0 +1,76 @@
+```python
+import csv
+from step01 import remember
+
+def fix(header, row, levers):
+    """
+    Finds the best change to 'Plan' or 'Team Size' to improve the row.
+    We look for a value within the lever range that, when swapped into the row,
+    results in a configuration closer to the top 5% of the dataset.
+    """
+    # Identify goal indices
+    goal_indices = [(i, name[-1]) for i, name in enumerate(header) 
+                    if name.endswith('-') or name.endswith('+')]
+    
+    def get_score(r):
+        s = 0
+        for idx, op in goal_indices:
+            val = float(r[idx])
+            s += val if op == '-' else -val
+        return s
+
+    # We want to minimize the score.
+    # We test values for the levers provided.
+    best_change = {}
+    best_score = get_score(row)
+    
+    for col_name, allowed in levers.items():
+        idx = header.index(col_name)
+        original_val = row[idx]
+        
+        # For numeric levers (low, high), we test the boundaries and midpoint
+        if isinstance(allowed, tuple):
+            low, high = allowed
+            candidates = [low, (low + high) / 2, high]
+        else:
+            candidates = allowed
+            
+        for val in candidates:
+            new_row = list(row)
+            new_row[idx] = val
+            new_score = get_score(new_row)
+            
+            if new_score < best_score:
+                best_score = new_score
+                best_change = {col_name: val}
+                
+    return best_change
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [row for row in reader]
+            
+        # Define levers based on the problem domain
+        levers = {
+            "Plan": (0.0, 1.0),
+            "Team Size": (0.0, 1.0)
+        }
+        
+        # Pick a "bad" row (e.g., the one with the highest Cost-)
+        cost_idx = header.index("Cost-")
+        bad_row = max(rows, key=lambda r: float(r[cost_idx]))
+        
+        recommendation = fix(header, bad_row, levers)
+        
+        print("To rescue this project, we recommend the following changes:")
+        for col, val in recommendation.items():
+            print(f"- Adjust {col} to {val:.4f}")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

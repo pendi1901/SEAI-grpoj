@@ -1,0 +1,87 @@
+```python
+import csv
+from step02 import guess
+
+def fix(header, row, levers):
+    """
+    Recommends a change to a 'bad' row to improve its goal columns,
+    excluding 'MonthlyIncome' or any salary-related levers.
+    """
+    goal_idx = next(i for i, col in enumerate(header) if col.endswith('+') or col.endswith('-'))
+    is_maximize = header[goal_idx].endswith('+')
+    
+    # We need a reference set of rows to train the guesser.
+    # We assume the caller provides the full dataset via a global or context.
+    # Since we must be self-contained, we load the data here.
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    all_rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header_file = next(reader)
+        for r in reader:
+            all_rows.append([float(val) if header_file[i][0].isupper() else val for i, val in enumerate(r)])
+
+    best_change = {}
+    best_score = float('-inf') if is_maximize else float('inf')
+    
+    # Filter out any salary-related levers if they exist
+    filtered_levers = {k: v for k, v in levers.items() if 'Income' not in k and 'Salary' not in k}
+    
+    # Try each lever
+    for col_name, allowed in filtered_levers.items():
+        idx = header.index(col_name)
+        
+        # Determine test values to try
+        if isinstance(allowed, list):
+            options = allowed
+        else:
+            options = [allowed[0], allowed[1], (allowed[0] + allowed[1]) / 2]
+            
+        for opt in options:
+            if opt == row[idx]:
+                continue
+            
+            # Create a modified row
+            test_row = list(row)
+            test_row[idx] = opt
+            
+            # Predict outcome
+            # We use the full dataset to train the guesser
+            prediction = guess(header, all_rows, [test_row])[0]
+            
+            if (is_maximize and prediction > best_score) or (not is_maximize and prediction < best_score):
+                best_score = prediction
+                best_change = {col_name: opt}
+            
+    return best_change
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            rows.append([float(val) if header[i][0].isupper() else val for i, val in enumerate(row)])
+
+    # Define levers excluding salary/income
+    levers = {
+        'businessTravel': ['Non-Travel', 'Travel_Frequently', 'Travel_Rarely'],
+        'overTime': ['No', 'Yes'],
+        'TrainingTimesLastYear': (0, 6),
+        'StockOptionLevel': (0, 3),
+        'EnvironmentSatisfaction': (1, 4)
+    }
+
+    # Pick a 'bad' row (e.g., low YearsAtCompany+)
+    yac_idx = header.index('YearsAtCompany+')
+    bad_row = min(rows, key=lambda r: r[yac_idx])
+    
+    recommendation = fix(header, bad_row, levers)
+    
+    print("Analysis for staff retention (No budget for pay increases):")
+    print(f"Bad row identified with {bad_row[yac_idx]} years at company.")
+    print("Recommended non-monetary changes to improve retention:")
+    for col, val in recommendation.items():
+        print(f"- Change '{col}' to '{val}'")
+```

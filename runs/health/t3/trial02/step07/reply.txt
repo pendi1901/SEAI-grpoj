@@ -1,0 +1,71 @@
+```python
+import csv
+import random
+
+def choose(header, rows, label):
+    """
+    Finds the best row by sampling 50 configurations.
+    Uses a simple random search strategy to explore the space,
+    labels them, and returns the index of the best performing one.
+    """
+    goal_indices = [i for i, h in enumerate(header) if h.endswith('-') or h.endswith('+')]
+    
+    def get_score(row_goals):
+        score = 0
+        for i, g_idx in enumerate(goal_indices):
+            # Since we don't have the full dataset distribution for normalization 
+            # inside the function, we use the provided row_goals directly.
+            # We assume the goal values are already comparable or normalized.
+            val = row_goals[i]
+            if header[g_idx].endswith('-'):
+                score -= val
+            else:
+                score += val
+        return score
+
+    # We have 50 tries. We pick 50 random indices.
+    num_rows = len(rows)
+    tries = min(50, num_rows)
+    indices = random.sample(range(num_rows), tries)
+    
+    best_idx = -1
+    best_score = float('-inf')
+    
+    for idx in indices:
+        goals = label(idx)
+        score = get_score(goals)
+        if score > best_score:
+            best_score = score
+            best_idx = idx
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                try:
+                    processed_row.append(float(val))
+                except ValueError:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Store true goals to simulate the label function
+    true_goals = {i: [row[j] for j, h in enumerate(header) if h.endswith('-') or h.endswith('+')] 
+                  for i, row in enumerate(rows)}
+    
+    def label(i):
+        return true_goals[i]
+
+    best_row_idx = choose(header, rows, label)
+    
+    print(f"Analysis complete. After evaluating 50 setups, the best configuration found is at index {best_row_idx}.")
+    print(f"Row data: {rows[best_row_idx]}")
+```

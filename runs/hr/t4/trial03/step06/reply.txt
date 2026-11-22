@@ -1,0 +1,64 @@
+```python
+import csv
+import numpy as np
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import LabelEncoder
+from step02 import guess
+
+def justify(header, rows, row):
+    """
+    Estimates the goal column for the provided row and calculates its percentile
+    rank against the existing rows. Returns (p, reason).
+    """
+    # Identify goal column
+    goal_idx = next(i for i, col in enumerate(header) if col.endswith('+') or col.endswith('-'))
+    is_maximize = header[goal_idx].endswith('+')
+    
+    # Prepare training data (excluding the row itself if it exists in rows)
+    # We use the guess logic from step02 to estimate the goal
+    # We need to handle the '?' in the input row
+    test_row = [row]
+    
+    # Estimate the goal value for the test row
+    prediction = guess(header, rows, test_row)[0]
+    
+    # Compare prediction against all rows
+    all_goals = [r[goal_idx] for r in rows]
+    
+    if is_maximize:
+        better_count = sum(1 for val in all_goals if prediction > val)
+    else:
+        better_count = sum(1 for val in all_goals if prediction < val)
+        
+    p = better_count / len(all_goals)
+    
+    reason = (f"This team's arrangement ranks in the {int(p * 100)}th percentile "
+              f"of performance, as the estimated goal value of {prediction:.2f} "
+              f"outperforms {int(p * 100)}% of the existing staff records.")
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    # Create a dummy test row based on the first row, masking the goal
+    test_row = rows[0][:]
+    goal_idx = next(i for i, col in enumerate(header) if col.endswith('+'))
+    test_row[goal_idx] = "?"
+    
+    p, reason = justify(header, rows, test_row)
+    print(f"Rank: {p:.4f}")
+    print(f"Reason: {reason}")
+```

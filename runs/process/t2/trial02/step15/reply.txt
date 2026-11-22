@@ -1,0 +1,64 @@
+```python
+import csv
+from step05 import blame as step05_blame
+
+def blame(header, rows):
+    """
+    Identifies the input columns that correlate most strongly with high costs.
+    We reuse the logic from step05, which identifies inputs that drive 
+    undesirable outcomes (high values in goal columns).
+    """
+    # The customer wants to know what matters most to 'Cost-'.
+    # We adapt the blame logic to specifically target 'Cost-' instead of 'Idle-'.
+    
+    # Temporarily swap 'Idle-' with 'Cost-' to reuse the step05 logic
+    # or simply implement the logic directly using the same approach.
+    cost_idx = header.index('Cost-')
+    
+    # Sort rows by Cost- (descending, so worst are at the top)
+    sorted_rows = sorted(rows, key=lambda r: float(r[cost_idx]), reverse=True)
+    worst_rows = sorted_rows[:len(rows) // 10]
+    
+    # Calculate average of each input column for the worst rows
+    input_indices = [i for i, name in enumerate(header) 
+                     if not (name.endswith('-') or name.endswith('+'))]
+    
+    def get_avg(data, idx):
+        vals = [float(r[idx]) for r in data]
+        return sum(vals) / len(vals)
+    
+    # We look for inputs where the worst rows have significantly higher values
+    # than the global average.
+    diffs = []
+    for i in input_indices:
+        worst_avg = get_avg(worst_rows, i)
+        global_avg = get_avg(rows, i)
+        diffs.append((header[i], worst_avg - global_avg))
+    
+    # Sort by the largest positive difference (these inputs drive high cost)
+    diffs.sort(key=lambda x: x[1], reverse=True)
+    
+    # Return the top 2 inputs that correlate most with high cost
+    return [d[0] for d in diffs[:2]]
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [row for row in reader]
+            
+        results = blame(header, rows)
+        
+        print("To minimize project cost, focus on these factors:")
+        for name in results:
+            print(f"- {name}")
+            
+        print("\nFactors not listed here have less impact on cost and can be "
+              "considered lower priority for management attention.")
+              
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

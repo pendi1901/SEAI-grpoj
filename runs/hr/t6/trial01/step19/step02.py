@@ -1,0 +1,71 @@
+import ezr
+import random
+
+def guess(header, train, test):
+    """
+    Estimate the first goal column ('YearsAtCompany+') for test rows.
+    Uses a tree-based approach to find the mean of the goal in the leaf
+    where the test row lands.
+    """
+    # Create a table object from the training data
+    # ezr.Tbl expects the header as the first row of the input
+    tbl = ezr.Tbl([header] + train)
+    
+    # Build a tree on the training data
+    node = ezr.tree(tbl, tbl.rows)
+    
+    # Identify the index of the first goal column
+    # The first goal column is the first one in tbl.y
+    goal_col = tbl.y[0]
+    goal_idx = goal_col.at
+    
+    results = []
+    for row in test:
+        # Walk the tree to find the leaf for this test row
+        leaf_node = ezr.leaf(node, row)
+        
+        # Calculate the mean of the goal column in this leaf
+        # We use the 'mu' of the goal column for rows in this leaf
+        vals = [r[goal_idx] for r in leaf_node.rows if r[goal_idx] != "?"]
+        if not vals:
+            # Fallback to global mean if leaf is empty or has no data
+            results.append(goal_col.mu)
+        else:
+            results.append(sum(vals) / len(vals))
+            
+    return results
+
+if __name__ == "__main__":
+    # Load data
+    data = list(ezr.csv("WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"))
+    header = data[0]
+    rows = data[1:]
+    
+    # Split data: 80% train, 20% test
+    random.seed(1234567891)
+    random.shuffle(rows)
+    n = int(len(rows) * 0.8)
+    train = rows[:n]
+    test = rows[n:]
+    
+    # Prepare test rows by hiding the goal column
+    # The first goal column is 'YearsAtCompany+'
+    goal_idx = -1
+    for i, name in enumerate(header):
+        if name.endswith('+') or name.endswith('-'):
+            goal_idx = i
+            break
+            
+    test_hidden = []
+    for row in test:
+        new_row = list(row)
+        new_row[goal_idx] = "?"
+        test_hidden.append(new_row)
+        
+    # Get estimates
+    estimates = guess(header, train, test_hidden)
+    
+    # Print summary
+    print("Estimation of 'YearsAtCompany+' for new hires:")
+    print(f"Sample estimate for first test row: {estimates[0]:.2f} years.")
+    print(f"Average estimate across {len(estimates)} test cases: {sum(estimates)/len(estimates):.2f} years.")

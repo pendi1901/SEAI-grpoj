@@ -1,0 +1,57 @@
+import csv
+import numpy as np
+from scipy import stats
+from step01 import remember
+
+def certify(xs, ys):
+    """
+    Returns True if the difference between two distributions is likely noise,
+    False if they are statistically significantly different.
+    Uses a two-sample t-test (assuming normal distribution of performance metrics).
+    """
+    t_stat, p_value = stats.ttest_ind(xs, ys, equal_var=False)
+    # If p_value > 0.05, we fail to reject the null hypothesis (they are the same)
+    return p_value > 0.05
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = [val if header[i] == 'criterion' else float(val) for i, val in enumerate(row)]
+            rows.append(processed_row)
+
+    # Define "big" vs "small" based on N_estimators (median split)
+    n_est_idx = header.index('N_estimators')
+    n_ests = [r[n_est_idx] for r in rows]
+    median_n = np.median(n_ests)
+
+    # Use the scoring logic from step01 to define "accuracy"
+    # We calculate the score for every row
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+
+    def get_row_score(row):
+        # Using the same normalization logic as step01
+        mre_vals = [r[mre_idx] for r in rows]
+        acc_vals = [r[acc_idx] for r in rows]
+        pred_vals = [r[pred_idx] for r in rows]
+        
+        n_mre = (max(mre_vals) - row[mre_idx]) / (max(mre_vals) - min(mre_vals))
+        n_acc = (row[acc_idx] - min(acc_vals)) / (max(acc_vals) - min(acc_vals))
+        n_pred = (row[pred_idx] - min(pred_vals)) / (max(pred_vals) - min(pred_vals))
+        return n_mre + n_acc + n_pred
+
+    big_setups = [get_row_score(r) for r in rows if r[n_est_idx] > median_n]
+    small_setups = [get_row_score(r) for r in rows if r[n_est_idx] <= median_n]
+
+    is_noise = certify(big_setups, small_setups)
+
+    print(f"Analysis of setup size vs performance:")
+    if is_noise:
+        print("The observed difference in performance between big and small setups is likely just noise.")
+    else:
+        print("There is a statistically significant difference in performance between big and small setups.")

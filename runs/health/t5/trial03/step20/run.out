@@ -1,0 +1,23 @@
+
+--- stderr ---
+Traceback (most recent call last):
+  File "<repo>\runs\health\t5\trial03\step20\step20.py", line 96, in <module>
+    outcome = race(header, masked_rows, label_func)
+  File "<repo>\runs\health\t5\trial03\step20\step20.py", line 72, in race
+    winner = min(results, key=lambda s: ezr.ydist(tbl, get_label(results[s])))
+  File "<repo>\runs\health\t5\trial03\step20\step20.py", line 72, in <lambda>
+    winner = min(results, key=lambda s: ezr.ydist(tbl, get_label(results[s])))
+                                        ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<repo>\runs\health\t5\trial03\step20\ezr.py", line 180, in ydist
+    return dist((abs(norm(c, row[c.at]) - c.goal)
+                      for c in tbl.y), len(tbl.y))
+  File "<repo>\runs\health\t5\trial03\step20\ezr.py", line 176, in dist
+    return sqrt(sum(v*v for v in vs) / n)
+                ~~~^^^^^^^^^^^^^^^^^
+  File "<repo>\runs\health\t5\trial03\step20\ezr.py", line 176, in <genexpr>
+    return sqrt(sum(v*v for v in vs) / n)
+                                 ^^
+  File "<repo>\runs\health\t5\trial03\step20\ezr.py", line 180, in <genexpr>
+    return dist((abs(norm(c, row[c.at]) - c.goal)
+                             ~~~^^^^^^
+TypeError: 'NoneType' object is not subscriptable

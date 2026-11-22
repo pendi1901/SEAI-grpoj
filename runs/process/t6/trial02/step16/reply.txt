@@ -1,0 +1,69 @@
+```python
+import ezr
+import step02
+import step06
+
+def justify(header, rows, row):
+    """
+    Compares a proposed 'row' against the dataset.
+    Estimates goals for 'row' using the tree-based ranker,
+    calculates its performance (ydist), and determines its rank
+    relative to the existing rows.
+    """
+    # Create a table to handle normalization and distance calculations
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Estimate goals for the input row using the tree-based ranker
+    # We use the training data (all rows) to build the model
+    # We use the logic from step06 to estimate all goal columns
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    
+    # Build a tree to find the leaf for the input row
+    node = ezr.tree(tbl, tbl.rows)
+    leaf = ezr.leaf(node, row)
+    
+    # Create a copy and fill in the estimated goals from the leaf mean
+    estimated_row = list(row)
+    for i in goal_indices:
+        vals = [r[i] for r in leaf.rows if r[i] != "?"]
+        estimated_row[i] = sum(vals) / len(vals) if vals else tbl.cols[i].mu
+        
+    # Calculate ydist for the estimated row
+    est_ydist = ezr.ydist(tbl, estimated_row)
+    
+    # Compare against all rows
+    all_ydists = [ezr.ydist(tbl, r) for r in rows]
+    better_count = sum(1 for d in all_ydists if d > est_ydist)
+    p = better_count / len(rows)
+    
+    reason = (f"This setup is better than {int(p*100)}% of known configurations "
+              f"because its predicted performance metrics are closer to the ideal "
+              f"than most other options in our database.")
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    
+    try:
+        header = next(data_gen)
+        rows = list(data_gen)
+    except StopIteration:
+        exit(1)
+        
+    # Example: Compare a specific setup (e.g., row 100)
+    # Mask its goals to simulate the customer's request
+    test_row = list(rows[100])
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    for idx in goal_indices:
+        test_row[idx] = "?"
+        
+    p, reason = justify(header, rows, test_row)
+    
+    print(f"Justification for setup B:")
+    print(f"Rank: {p:.4f}")
+    print(f"Reason: {reason}")
+    
+    exit(0)
+```

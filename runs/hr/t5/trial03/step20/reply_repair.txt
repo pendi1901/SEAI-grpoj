@@ -1,0 +1,111 @@
+```python
+import ezr
+import random
+
+def race(header, rows, label):
+    """
+    Compare strategies for finding the best employee:
+    1. 'random': Random sampling.
+    2. 'rule_of_thumb': Prioritize newest staff (low YearsAtCompany+).
+    3. 'acquire': The intelligent search from ezr.
+    """
+    budget = 50
+    labeled_indices = {}
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(("+", "-"))]
+    tenure_idx = header.index('YearsAtCompany+')
+
+    def get_label(idx):
+        if idx not in labeled_indices:
+            if len(labeled_indices) >= budget:
+                return None
+            goals = label(idx)
+            labeled_indices[idx] = goals
+            for k, g_idx in enumerate(goal_indices):
+                rows[idx][g_idx] = goals[k]
+        return labeled_indices[idx]
+
+    def get_ydist(tbl, row):
+        for g_idx in goal_indices:
+            if row[g_idx] == "?": return 1e30
+        return ezr.ydist(tbl, row)
+
+    tbl = ezr.Tbl([header] + rows)
+    
+    # 1. Random
+    def strategy_random():
+        indices = random.sample(range(len(rows)), budget // 3)
+        for i in indices: get_label(i)
+        return min(range(len(rows)), key=lambda i: get_ydist(tbl, rows[i]))
+
+    # 2. Rule of thumb: Newest staff (lowest YearsAtCompany+)
+    def strategy_rule_of_thumb():
+        # Ensure we only compare numeric tenure values
+        def get_tenure(i):
+            val = rows[i][tenure_idx]
+            return float(val) if isinstance(val, (int, float)) else 0.0
+        
+        sorted_indices = sorted(range(len(rows)), key=get_tenure)
+        for i in sorted_indices[:budget // 3]: get_label(i)
+        return min(range(len(rows)), key=lambda i: get_ydist(tbl, rows[i]))
+
+    # 3. Acquire
+    def strategy_acquire():
+        def oracle_wrapper(row):
+            # Find index by matching row content
+            for i in range(len(rows)):
+                if rows[i] == row:
+                    get_label(i)
+                    break
+            return row
+        
+        ezr.the.Stop = budget // 3
+        labeled = ezr.acquire(tbl, label=oracle_wrapper)
+        return min(range(len(rows)), key=lambda i: get_ydist(tbl, rows[i]))
+
+    results = {
+        "random": strategy_random(),
+        "rule_of_thumb": strategy_rule_of_thumb(),
+        "acquire": strategy_acquire()
+    }
+
+    winner = min(results, key=lambda name: get_ydist(tbl, rows[results[name]]))
+    
+    return {
+        "winner": winner,
+        "row": results[winner],
+        "tried": ["random", "rule_of_thumb", "acquire"]
+    }
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    original_rows = [list(r) for r in rows]
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(("+", "-"))]
+    
+    masked_rows = []
+    for r in rows:
+        new_r = list(r)
+        for idx in goal_indices:
+            new_r[idx] = "?"
+        masked_rows.append(new_r)
+        
+    def label(i):
+        return [original_rows[i][idx] for idx in goal_indices]
+    
+    result = race(header, masked_rows, label)
+    
+    print("--- Strategy Comparison: Pay Rises ---")
+    print(f"The winning strategy was: {result['winner']}")
+    print(f"This strategy found a high-performing arrangement at index: {result['row']}")
+    print(f"Strategies compared: {', '.join(result['tried'])}")
+    
+    if result['winner'] == 'rule_of_thumb':
+        print("\nConclusion: Your rule of thumb is effective.")
+    else:
+        print("\nConclusion: Our intelligent search ('acquire') outperformed the rule of thumb.")
+    
+    exit(0)
+```

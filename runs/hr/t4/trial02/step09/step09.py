@@ -1,0 +1,62 @@
+import csv
+import math
+
+def spot(header, rows):
+    """
+    Identifies suspicious rows by calculating the Z-score of numeric inputs.
+    Rows with values significantly outside the distribution (Z > 3) are 
+    flagged as potential data entry errors.
+    """
+    numeric_indices = [i for i, h in enumerate(header) if h[0].isupper()]
+    
+    # Calculate means and std devs for numeric columns
+    stats = {}
+    for i in numeric_indices:
+        vals = [row[i] for row in rows if isinstance(row[i], (int, float))]
+        if not vals:
+            continue
+        mean = sum(vals) / len(vals)
+        std = math.sqrt(sum((x - mean) ** 2 for x in vals) / len(vals))
+        if std > 0:
+            stats[i] = (mean, std)
+            
+    # Score rows based on how many standard deviations they are from the mean
+    scores = []
+    for r_idx, row in enumerate(rows):
+        row_score = 0
+        for c_idx, (mean, std) in stats.items():
+            val = row[c_idx]
+            if isinstance(val, (int, float)):
+                z = abs(val - mean) / std
+                if z > 3:
+                    row_score += z
+        if row_score > 0:
+            scores.append((r_idx, row_score))
+            
+    # Sort by suspicion score descending
+    scores.sort(key=lambda x: x[1], reverse=True)
+    return [s[0] for s in scores]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    suspects = spot(header, rows)
+    
+    print("Analysis: Identifying potential data entry errors.")
+    print(f"Found {len(suspects)} rows with suspicious numeric values.")
+    print("Top 5 most suspicious row indices:")
+    for idx in suspects[:5]:
+        print(f"- Row {idx}")
+    print("These rows contain values that deviate significantly from the dataset norms.")

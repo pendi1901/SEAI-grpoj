@@ -1,0 +1,67 @@
+import csv
+
+def flow(header, row, seen):
+    """
+    Decides whether to stop at the current row based on whether it is 
+    'good enough' compared to the history seen so far.
+    We define 'good enough' as being in the top 5% of the expected total 
+    population (800 rows), which is 40 rows.
+    """
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+
+    # If this is the first row, we can't compare yet
+    if not seen:
+        return False
+
+    # Extract goals from seen rows
+    mre_vals = [r[mre_idx] for r in seen]
+    acc_vals = [r[acc_idx] for r in seen]
+    pred_vals = [r[pred_idx] for r in seen]
+
+    # Calculate current row score
+    # We use the min/max of the history to normalize
+    all_mre = mre_vals + [row[mre_idx]]
+    all_acc = acc_vals + [row[acc_idx]]
+    all_pred = pred_vals + [row[pred_idx]]
+
+    def get_score(r, m_min, m_max, a_min, a_max, p_min, p_max):
+        n_mre = (m_max - r[mre_idx]) / (m_max - m_min) if m_max > m_min else 0
+        n_acc = (r[acc_idx] - a_min) / (a_max - a_min) if a_max > a_min else 0
+        n_pred = (r[pred_idx] - p_min) / (p_max - p_min) if p_max > p_min else 0
+        return n_mre + n_acc + n_pred
+
+    score = get_score(row, min(all_mre), max(all_mre), min(all_acc), max(all_acc), min(all_pred), max(all_pred))
+    
+    # Compare against the best score seen so far
+    best_seen = max([get_score(r, min(all_mre), max(all_mre), min(all_acc), max(all_acc), min(all_pred), max(all_pred)) 
+                     for r in seen])
+
+    # If we have seen enough rows, and this one is significantly better than the best seen, stop.
+    # Threshold: 5% of 800 is 40. If we are deep into the stream, be more selective.
+    if len(seen) > 40 and score > best_seen * 1.1:
+        return True
+    
+    return False
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            rows.append([val if header[i] == 'criterion' else float(val) for i, val in enumerate(row)])
+
+    seen = []
+    found = False
+    for i, row in enumerate(rows):
+        if flow(header, row, seen):
+            print(f"Stopped at row {i}: Found a setup good enough to ship.")
+            found = True
+            break
+        seen.append(row)
+    
+    if not found:
+        print("Processed all rows without finding a setup meeting the criteria.")

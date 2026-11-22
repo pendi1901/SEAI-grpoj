@@ -1,0 +1,64 @@
+import csv
+import math
+
+def flow(header, row, seen):
+    """
+    Detects if the current row represents a 'drift' from the established 
+    norm of the team. We use the Mahalanobis-like distance for numeric 
+    columns to detect outliers. If the current row's numeric features 
+    deviate significantly from the mean of the 'seen' rows, we flag it.
+    """
+    if len(seen) < 30:
+        return False
+
+    # Identify numeric columns
+    num_indices = [i for i, h in enumerate(header) if h[0].isupper()]
+    
+    # Calculate means and standard deviations of seen data
+    means = {}
+    stds = {}
+    for i in num_indices:
+        vals = [r[i] for r in seen]
+        means[i] = sum(vals) / len(vals)
+        variance = sum((x - means[i]) ** 2 for x in vals) / len(vals)
+        stds[i] = math.sqrt(variance) if variance > 0 else 1.0
+
+    # Calculate Z-score for the current row
+    total_z = 0
+    for i in num_indices:
+        z = abs(row[i] - means[i]) / stds[i]
+        total_z += z
+    
+    avg_z = total_z / len(num_indices)
+    
+    # If the average deviation is > 3 standard deviations, flag as drift
+    return avg_z > 3.0
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    seen = []
+    drift_count = 0
+    for row in rows:
+        if flow(header, row, seen):
+            drift_count += 1
+        seen.append(row)
+        
+    print("Team Drift Analysis:")
+    print(f"Processed {len(rows)} records.")
+    print(f"Detected {drift_count} records that deviate significantly from the team norm.")
+    print("Logic: Flagged records where the average Z-score of numeric features exceeds 3.0.")

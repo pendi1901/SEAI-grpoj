@@ -1,0 +1,80 @@
+import csv
+import random
+
+def get_score(header, row):
+    """Calculates a normalized score [0, 1] where lower is better."""
+    goal_indices = []
+    for i, name in enumerate(header):
+        if name.endswith('-') or name.endswith('+'):
+            goal_indices.append((i, name[-1]))
+    
+    scores = []
+    for idx, op in goal_indices:
+        val = float(row[idx])
+        scores.append(val if op == '-' else (1.0 - val))
+    return sum(scores) / len(scores)
+
+def choose(header, rows, label):
+    """
+    Finds the best row by sampling 50 rows and evaluating them.
+    """
+    # We have 800 rows. We can label 50.
+    # Strategy: Randomly sample 50 indices to get a baseline, 
+    # then return the index of the best one found.
+    indices = list(range(len(rows)))
+    sample_indices = random.sample(indices, 50)
+    
+    best_idx = -1
+    best_score = float('inf')
+    
+    for i in sample_indices:
+        # Get true values for this row
+        true_goals = label(i)
+        
+        # Construct a temporary row with true goals to score it
+        temp_row = list(rows[i])
+        goal_indices = [idx for idx, name in enumerate(header) if name.endswith(('-', '+'))]
+        for j, g_idx in enumerate(goal_indices):
+            temp_row[g_idx] = true_goals[j]
+            
+        score = get_score(header, temp_row)
+        if score < best_score:
+            best_score = score
+            best_idx = i
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            # Store full data to retrieve goals for the label function
+            full_data = []
+            for row in reader:
+                full_data.append([float(x) for x in row])
+                # Masked rows for the choose function
+                masked = []
+                for i, val in enumerate(row):
+                    if header[i].endswith(('-', '+')):
+                        masked.append("?")
+                    else:
+                        masked.append(float(val))
+                rows.append(masked)
+
+        def label(i):
+            # Return the goal values for the row at index i
+            goal_indices = [idx for idx, name in enumerate(header) if name.endswith(('-', '+'))]
+            return [full_data[i][idx] for idx in goal_indices]
+
+        best_idx = choose(header, rows, label)
+        
+        print("Customer Inquiry: Best Setup Selection")
+        print(f"After evaluating 50 random samples, the best setup found is at index {best_idx}.")
+        print("This setup provides the most optimal balance across all goal objectives.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

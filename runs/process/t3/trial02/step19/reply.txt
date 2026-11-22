@@ -1,0 +1,65 @@
+```python
+import csv
+import pandas as pd
+import numpy as np
+from sklearn.ensemble import IsolationForest
+
+def spot(header, rows):
+    """
+    Identifies rows that are outliers in the dataset using Isolation Forest.
+    Returns the indices of the most suspicious rows, sorted by anomaly score.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    
+    # Identify numeric columns (starting with uppercase)
+    # These are the inputs and goals that define the configuration space
+    numeric_cols = [c for c in header if c[0].isupper()]
+    data = df[numeric_cols].values
+    
+    # Isolation Forest is effective for detecting anomalies in high-dimensional data.
+    # We use a contamination factor to identify rows that deviate from the 
+    # distribution of the 800 training records.
+    clf = IsolationForest(n_estimators=100, contamination=0.05, random_state=42)
+    clf.fit(data)
+    
+    # decision_function returns the anomaly score (lower is more anomalous)
+    scores = clf.decision_function(data)
+    
+    # Get indices sorted by score (ascending, so most anomalous first)
+    suspicious_indices = np.argsort(scores)
+    
+    return suspicious_indices.tolist()
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed_row = []
+                for val in row:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        suspicious = spot(header, rows)
+        
+        print("Customer Inquiry: A new team lead proposes a setup unlike anything we have run.")
+        print("Tell me when I am asking you about something you have never seen.")
+        print("\nAnalysis: We have scanned the historical records to identify configurations")
+        print("that deviate significantly from our established operational norms.")
+        print(f"We identified {len(suspicious)} potentially anomalous or 'unseen' records.")
+        print("\nThe 5 most suspicious row indices are:")
+        for i in range(min(5, len(suspicious))):
+            print(f"- Row {suspicious[i]}")
+        print("\nThese rows represent setups that are statistically distinct from your")
+        print("standard project history and should be reviewed for potential data entry errors.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

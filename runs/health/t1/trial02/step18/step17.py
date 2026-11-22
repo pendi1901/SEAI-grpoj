@@ -1,0 +1,86 @@
+import csv
+import random
+
+def choose(header, rows, label):
+    """
+    Finds a setup that balances performance (multi-objective score) 
+    and efficiency (small N_estimators, small Max_depth).
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    idx_n = header.index('N_estimators')
+    idx_depth = header.index('Max_depth')
+    
+    # Budget: 50 labels
+    indices = random.sample(range(len(rows)), 50)
+    
+    best_idx = -1
+    best_score = -float('inf')
+    
+    # Collect data to normalize goals
+    labeled_data = []
+    for i in indices:
+        labeled_data.append((i, label(i)))
+        
+    # Normalize goals
+    goals_only = [d[1] for d in labeled_data]
+    mins = [min(g[j] for g in goals_only) for j in range(len(goal_indices))]
+    maxs = [max(g[j] for g in goals_only) for j in range(len(goal_indices))]
+    
+    for i, goals in labeled_data:
+        # Performance score (normalized)
+        perf = 0
+        for j, g_idx in enumerate(goal_indices):
+            rng = maxs[j] - mins[j]
+            norm = (goals[j] - mins[j]) / rng if rng > 0 else 0
+            if header[g_idx].endswith('-'):
+                perf -= norm
+            else:
+                perf += norm
+        
+        # Efficiency penalty: smaller is better
+        # Normalize N_estimators and Max_depth to [0, 1] roughly
+        n_val = rows[i][idx_n]
+        d_val = rows[i][idx_depth]
+        efficiency = (n_val / 200.0 + d_val / 20.0) / 2.0
+        
+        # Combined score: prioritize performance but penalize heavy setups
+        score = perf - (0.3 * efficiency)
+        
+        if score > best_score:
+            best_score = score
+            best_idx = i
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    try:
+        rows = []
+        true_goals = []
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            for row in reader:
+                processed = []
+                goals = []
+                for i, val in enumerate(row):
+                    if header[i].endswith(('-', '+')):
+                        goals.append(float(val))
+                        processed.append("?")
+                    elif header[i] == 'criterion':
+                        processed.append(val)
+                    else:
+                        processed.append(float(val))
+                rows.append(processed)
+                true_goals.append(goals)
+        
+        def label(i):
+            return true_goals[i]
+            
+        best_idx = choose(header, rows, label)
+        print(f"Recommended setup index: {best_idx}")
+        print(f"This setup balances high forecast accuracy with low resource usage.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

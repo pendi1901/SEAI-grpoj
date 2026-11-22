@@ -1,0 +1,77 @@
+```python
+import ezr
+import random
+
+def fix(header, row, levers):
+    """
+    Given a 'bad' row, find a change in the allowed levers that 
+    minimizes the row's ydist (distance to ideal goals).
+    """
+    # Create a dummy table to use ydist
+    # We need the header to identify columns
+    tbl = ezr.Tbl([header])
+    
+    best_change = {}
+    best_ydist = float('inf')
+    
+    # Try each lever
+    for col_name, allowed in levers.items():
+        col_idx = header.index(col_name)
+        col = tbl.cols[col_idx]
+        
+        # Generate candidate values
+        candidates = []
+        if isinstance(col, ezr.Num):
+            low, high = allowed
+            # Try a few points in the range
+            candidates = [low, (low + high) / 2, high]
+        else:
+            candidates = allowed
+            
+        # Test each candidate
+        for val in candidates:
+            new_row = list(row)
+            new_row[col_idx] = val
+            
+            # Calculate distance to goal
+            # We use ydist which measures how far goals are from their ideal
+            d = ezr.ydist(tbl, new_row)
+            
+            if d < best_ydist:
+                best_ydist = d
+                best_change = {col_name: val}
+                
+    return best_change
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Define levers
+    levers = {
+        "businessTravel": ["Non-Travel", "Travel_Rarely", "Travel_Frequently"],
+        "overTime": ["No", "Yes"],
+        "TrainingTimesLastYear": (0, 6),
+        "PercentSalaryHike": (11, 25),
+        "StockOptionLevel": (0, 3)
+    }
+    
+    # Pick a "bad" row (e.g., one with high ydist)
+    tbl = ezr.Tbl([header] + rows)
+    scored = sorted([(ezr.ydist(tbl, r), r) for r in rows], key=lambda x: x[0])
+    bad_row = scored[-1][1]
+    
+    recommendation = fix(header, bad_row, levers)
+    
+    print("Retention Strategy Analysis:")
+    print(f"For the identified high-attrition profile, we recommend the following change:")
+    for col, val in recommendation.items():
+        print(f"- Adjust '{col}' to: {val}")
+    print("-" * 60)
+    print("This recommendation is based on minimizing the distance to")
+    print("ideal performance metrics within the provided constraints.")
+    
+    exit(0)
+```

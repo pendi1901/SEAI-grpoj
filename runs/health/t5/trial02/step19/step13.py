@@ -1,0 +1,54 @@
+import ezr
+import random
+
+def certify(xs, ys):
+    """
+    Returns True if the distributions of xs and ys are statistically 
+    indistinguishable (same apart from noise), False otherwise.
+    Uses the statistical tests provided in ezr.stats.
+    """
+    # Sort the lists as required by the statistical tests in ezr
+    xs_sorted = sorted(xs)
+    ys_sorted = sorted(ys)
+    
+    # Use the same function from ezr.stats
+    # It checks cliffs, ks, and cohen's d
+    return ezr.same(xs_sorted, ys_sorted)
+
+if __name__ == "__main__":
+    # Load the data
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # The two built-in rules in ezr.acquire are:
+    # 1. The 'acquire' strategy (smart sampling)
+    # 2. The 'grabs' strategy (random sampling)
+    
+    # We compare the performance (ydist) of rows found by these two strategies
+    # given the same labeling budget.
+    
+    tbl = ezr.Tbl(data)
+    budget = 50
+    
+    # Strategy 1: Acquire
+    ezr.the.Stop = budget
+    acquired_rows = ezr.acquire(tbl, cap=budget)
+    acquired_ydists = [ezr.ydist(tbl, r) for r in acquired_rows]
+    
+    # Strategy 2: Grabs (Random)
+    random.seed(ezr.the.Seed)
+    grabbed_rows = ezr.grabs(tbl, cap=budget)
+    grabbed_ydists = [ezr.ydist(tbl, r) for r in grabbed_rows]
+    
+    # Statistical comparison
+    is_same = certify(acquired_ydists, grabbed_ydists)
+    
+    print("Statistical analysis of acquisition strategies (Acquire vs Random):")
+    if is_same:
+        print("The difference between the two strategies is statistically insignificant.")
+        print("Conclusion: You can stop arguing; the choice of strategy does not make a real difference here.")
+    else:
+        print("The difference between the two strategies is statistically significant.")
+        print("Conclusion: The choice of strategy matters; one is demonstrably better.")

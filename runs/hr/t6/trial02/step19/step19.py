@@ -1,0 +1,35 @@
+import ezr
+import step09
+
+def spot(header, rows):
+    """
+    Returns a list of row indices that are most suspicious.
+    A row is suspicious if it is an outlier in the input space (x-columns)
+    relative to the rest of the data. We use the distance to the nearest 
+    neighbor in the x-space as a measure of 'strangeness'.
+    """
+    # We reuse the logic from step09 which identifies rows that are 
+    # statistically distant from the rest of the dataset.
+    return step09.spot(header, rows)
+
+if __name__ == "__main__":
+    # Load data
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Identify suspicious rows
+    suspicious_indices = spot(header, rows)
+    
+    print("Customer Query: Tell me when your estimate for a new hire cannot be trusted.")
+    print("Analysis: We identified records that are statistical outliers in the input space.")
+    print("Estimates for new hires similar to these records are less reliable.")
+    print("\nTop 5 most suspicious row indices:")
+    for i in suspicious_indices[:5]:
+        print(f" - Row {i}")
+        
+    print("\nConclusion: If a new hire's profile matches these suspicious records, "
+          "our model's predictions should be treated with caution.")
+    
+    exit(0)

@@ -1,0 +1,55 @@
+import csv
+from scipy import stats
+
+def certify(xs, ys):
+    """
+    Performs a Welch's t-test to determine if the difference between two 
+    groups (xs and ys) is statistically significant or just noise.
+    Returns True if the difference is not significant (p > 0.05),
+    False if they really differ (p <= 0.05).
+    """
+    if len(xs) < 2 or len(ys) < 2:
+        return True
+    
+    t_stat, p_value = stats.ttest_ind(xs, ys, equal_var=False)
+    
+    # If p_value > 0.05, we fail to reject the null hypothesis (they are the same)
+    return p_value > 0.05
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                try:
+                    processed_row.append(float(val))
+                except ValueError:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Define "big" vs "small" based on N_estimators (index 3)
+    # Split by median N_estimators
+    n_estimators_idx = 3
+    n_vals = [row[n_estimators_idx] for row in rows]
+    median_n = sum(n_vals) / len(n_vals)
+    
+    # Goal is ACC+ (index 1)
+    acc_idx = 1
+    big_setups = [row[acc_idx] for row in rows if row[n_estimators_idx] >= median_n]
+    small_setups = [row[acc_idx] for row in rows if row[n_estimators_idx] < median_n]
+    
+    is_noise = certify(big_setups, small_setups)
+    
+    print("Analysis of Setup Size vs Accuracy:")
+    if is_noise:
+        print("The observed difference in accuracy between big and small setups is likely noise.")
+        print("There is no statistically significant evidence that bigger setups are better.")
+    else:
+        print("The difference in accuracy between big and small setups is statistically significant.")
+        print("Bigger setups perform differently than smaller ones.")

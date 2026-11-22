@@ -1,0 +1,49 @@
+```python
+import csv
+import pandas as pd
+from step01 import remember
+
+def flow(header, row, seen):
+    """
+    Decides whether to accept a row based on whether it is better than 
+    the current best seen so far. We use the logic from step01 to 
+    evaluate the quality of rows.
+    """
+    if not seen:
+        return True
+    
+    # Combine seen rows and current row to normalize goals correctly
+    all_rows = seen + [row]
+    
+    # Use the remember logic to evaluate the current row against history
+    # A row is "good" if it ranks in the top 5% of the current set
+    best_indices = remember(header, all_rows)
+    
+    # If the current row (the last one in all_rows) is in the top 5%, accept it
+    return (len(all_rows) - 1) in best_indices
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) for val in row])
+        
+        accepted = []
+        seen = []
+        for row in rows:
+            if flow(header, row, seen):
+                accepted.append(row)
+            seen.append(row)
+            
+        print(f"Processed {len(rows)} proposals.")
+        print(f"Accepted {len(accepted)} proposals based on real-time evaluation.")
+        print("Strategy: Accept if the proposal ranks in the top 5% of all seen so far.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

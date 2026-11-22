@@ -1,0 +1,77 @@
+import csv
+import random
+
+def choose(header, rows, label):
+    """
+    Finds the best row by sampling 50 setups.
+    We use a simple random sampling strategy to explore the space,
+    labeling 50 rows and picking the one with the best multi-objective score.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    
+    # Randomly select 50 indices to label
+    indices_to_sample = random.sample(range(len(rows)), min(50, len(rows)))
+    
+    best_idx = -1
+    best_score = -float('inf')
+    
+    # We need to normalize goals to compare them. 
+    # Since we only have 50 samples, we normalize based on those samples.
+    sampled_data = []
+    for i in indices_to_sample:
+        goals = label(i)
+        sampled_data.append((i, goals))
+        
+    # Calculate min/max for normalization based on the 50 samples
+    mins = [min(s[1][j] for s in sampled_data) for j in range(len(goal_indices))]
+    maxs = [max(s[1][j] for s in sampled_data) for j in range(len(goal_indices))]
+    
+    for i, goals in sampled_data:
+        score = 0
+        for j, g_idx in enumerate(goal_indices):
+            val = goals[j]
+            rng = maxs[j] - mins[j]
+            norm = (val - mins[j]) / rng if rng > 0 else 0
+            # MRE- (minimize), ACC+ (maximize), PRED40+ (maximize)
+            if header[g_idx].endswith('-'):
+                score -= norm
+            else:
+                score += norm
+        
+        if score > best_score:
+            best_score = score
+            best_idx = i
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            true_goals = []
+            for row in reader:
+                processed = []
+                goals = []
+                for i, val in enumerate(row):
+                    if header[i].endswith(('-', '+')):
+                        goals.append(float(val))
+                        processed.append("?")
+                    elif header[i] == 'criterion':
+                        processed.append(val)
+                    else:
+                        processed.append(float(val))
+                rows.append(processed)
+                true_goals.append(goals)
+        
+        def label(i):
+            return true_goals[i]
+            
+        best_idx = choose(header, rows, label)
+        print(f"The best setup found among the 50 sampled is at index {best_idx}.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

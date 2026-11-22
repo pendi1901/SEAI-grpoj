@@ -1,0 +1,53 @@
+```python
+import ezr
+import step01
+import step02
+
+def justify(header, rows, row):
+    """
+    Returns (p, reason): p is the fraction of rows that 'row' is better than,
+    and reason is a sentence explaining the estimation.
+    """
+    # 1. Estimate the goals for the target row using the tree-based guesser
+    # step02.guess returns a list of predictions for the first goal column.
+    # Since there are multiple goals, we need to handle them. 
+    # For simplicity and consistency with the previous logic, we estimate 
+    # the ydist directly using the tree-based ranker.
+    
+    tbl = ezr.Tbl([header] + rows)
+    ranker_func = step02.ezr.ranker(tbl)
+    
+    # The ranker returns the predicted ydist for a given row
+    target_ydist = ranker_func(row)
+    
+    # 2. Calculate ydist for all existing rows
+    all_ydists = [ezr.ydist(tbl, r) for r in rows]
+    
+    # 3. Calculate p: fraction of rows that are worse (have higher ydist) than target
+    # A lower ydist is better.
+    better_than_count = sum(1 for d in all_ydists if d > target_ydist)
+    p = better_than_count / len(rows)
+    
+    reason = (f"Based on the input configuration, this setup is estimated to be "
+              f"better than {int(p * 100)}% of all observed scenarios.")
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Pick a sample row to justify (e.g., the 10th row)
+    target_row = list(rows[10])
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    for idx in goal_indices:
+        target_row[idx] = "?"
+        
+    p, reason = justify(header, rows, target_row)
+    
+    print(f"Justification for scenario:")
+    print(f"Rank: {p:.4f}")
+    print(f"Reason: {reason}")
+```

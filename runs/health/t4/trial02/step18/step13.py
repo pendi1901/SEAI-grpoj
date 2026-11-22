@@ -1,0 +1,61 @@
+import csv
+from scipy import stats
+
+def certify(xs, ys):
+    """
+    Returns True if the difference between two distributions is likely noise,
+    False if they are statistically different. Uses Welch's t-test.
+    """
+    # If the variance is zero or lists are empty, treat as noise
+    if len(xs) < 2 or len(ys) < 2:
+        return True
+    t_stat, p_value = stats.ttest_ind(xs, ys, equal_var=False)
+    # If p_value > 0.05, we fail to reject the null hypothesis (it's noise)
+    return p_value > 0.05
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        crit_idx = header.index('criterion')
+        acc_idx = header.index('ACC+')
+        
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i].isupper() or header[i] in ['N_estimators', 'Min_sample_leaves', 'Min_impurity_decrease', 'Max_depth']:
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Group ACC+ by criterion
+    groups = {}
+    for row in rows:
+        crit = row[crit_idx]
+        acc = row[acc_idx]
+        if crit not in groups:
+            groups[crit] = []
+        groups[crit].append(acc)
+
+    # Compare the two most common criteria
+    # The data contains 'absolute_error', 'poisson', 'squared_error'
+    # We compare the two largest groups to see if the choice matters
+    sorted_crits = sorted(groups.keys(), key=lambda k: len(groups[k]), reverse=True)
+    
+    if len(sorted_crits) >= 2:
+        c1, c2 = sorted_crits[0], sorted_crits[1]
+        is_noise = certify(groups[c1], groups[c2])
+        
+        print(f"Comparing '{c1}' vs '{c2}':")
+        print(f"Mean ACC+ ({c1}): {sum(groups[c1])/len(groups[c1]):.4f}")
+        print(f"Mean ACC+ ({c2}): {sum(groups[c2])/len(groups[c2]):.4f}")
+        
+        if is_noise:
+            print("Conclusion: The choice between these criteria makes no real difference (it's just noise).")
+        else:
+            print("Conclusion: The choice between these criteria makes a statistically significant difference.")
+    else:
+        print("Not enough distinct criteria to compare.")

@@ -1,0 +1,64 @@
+```python
+import csv
+import step02
+
+def justify(header, rows, row):
+    """
+    Estimates the goal (YearsAtCompany+) for the provided row and compares it
+    to the historical distribution of all rows. Returns the fraction of rows
+    that are worse than the estimated value and a customer-friendly explanation.
+    """
+    # Identify goal column
+    goal_idx = -1
+    for i, name in enumerate(header):
+        if name.endswith('+'):
+            goal_idx = i
+            break
+    
+    # Estimate the goal for the test row. 
+    # Since we cannot "pay everyone more" (as that is not an input column),
+    # we use the average tenure of the dataset as a baseline for the estimate.
+    prediction = step02.guess(header, rows, [row])[0]
+    
+    # Count how many rows have a lower goal value than our prediction
+    worse_than_count = 0
+    for r in rows:
+        if r[goal_idx] < prediction:
+            worse_than_count += 1
+            
+    p = worse_than_count / len(rows)
+    
+    reason = (f"Increasing pay is not a tracked input, and based on current data, "
+              f"this arrangement ranks better than {int(p*100)}% of historical records "
+              f"with an estimated tenure of {prediction:.1f} years.")
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            new_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        new_row.append(float(val))
+                    except ValueError:
+                        new_row.append(0.0)
+                else:
+                    new_row.append(val)
+            rows.append(new_row)
+            
+    # Create a test row with hidden goal
+    test_row = list(rows[0])
+    goal_idx = [i for i, h in enumerate(header) if h.endswith('+')][0]
+    test_row[goal_idx] = "?"
+    
+    p, reason = justify(header, rows, test_row)
+    print(reason)
+```

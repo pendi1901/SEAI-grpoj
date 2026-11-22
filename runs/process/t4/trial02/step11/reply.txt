@@ -1,0 +1,65 @@
+```python
+import csv
+import pandas as pd
+from sklearn.neighbors import NearestNeighbors
+from step01 import remember as get_best_indices
+
+def find_similar(header, rows, target_row, n=5):
+    """
+    Finds the n most similar rows to the target_row using Euclidean distance
+    on input columns.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    goals = [c for c in header if c.endswith('-') or c.endswith('+')]
+    inputs = [c for c in header if c not in goals]
+    
+    # Filter out rows with "?" in inputs if any
+    df_clean = df.dropna(subset=inputs)
+    
+    # Fit KNN on inputs
+    nn = NearestNeighbors(n_neighbors=n)
+    nn.fit(df_clean[inputs])
+    
+    # Find neighbors for target
+    target_inputs = pd.DataFrame([target_row], columns=header)[inputs]
+    distances, indices = nn.kneighbors(target_inputs)
+    
+    return df_clean.iloc[indices[0]]
+
+def remember(header, rows):
+    """
+    Required harness function: returns indices of the best rows.
+    """
+    return get_best_indices(header, rows)
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [[float(val) for val in row] for row in reader]
+        
+        # Pick a sample row to act as the "proposed" setup
+        target_row = rows[0]
+        
+        # Find similar past setups
+        similar_rows = find_similar(header, rows, target_row, n=3)
+        
+        print("Customer Inquiry: Show me the past ones most like my proposed setup.")
+        print("\nProposed Setup (first 5 inputs):")
+        print(target_row[:5])
+        
+        print("\nMost similar past setups and their outcomes:")
+        goals = [c for c in header if c.endswith('-') or c.endswith('+')]
+        for i, (_, row) in enumerate(similar_rows.iterrows()):
+            outcomes = {g: row[g] for g in goals}
+            print(f"Match {i+1}: {outcomes}")
+            
+        print("\nAnalysis: These historical configurations share the most similar input parameters.")
+        print("You can compare these outcomes to gauge the likely performance of your proposal.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

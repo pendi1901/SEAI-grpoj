@@ -1,0 +1,79 @@
+```python
+import csv
+from step01 import remember
+from step07 import choose as base_choose
+
+def choose(header, rows, label):
+    """
+    Finds the best setup for a 'large' project where failure is damaging.
+    We define 'large' as having a high 'Size' value.
+    We prioritize rows with high 'Size' and then use the label function
+    to evaluate their performance, staying within the 50-label budget.
+    """
+    size_idx = header.index('Size')
+    
+    # 1. Identify rows that are 'large' (above median size)
+    all_sizes = [row[size_idx] for row in rows]
+    median_size = sum(all_sizes) / len(all_sizes)
+    large_row_indices = [i for i, row in enumerate(rows) if row[size_idx] >= median_size]
+    
+    # 2. We have a budget of 50 labels. We sample from the large rows.
+    # If we have more than 50 large rows, we pick 50 evenly spaced ones.
+    step = max(1, len(large_row_indices) // 50)
+    indices_to_label = large_row_indices[::step][:50]
+    
+    best_idx = -1
+    best_score = float('inf')
+    
+    # Identify goal indices and directions
+    goals = [(i, name.endswith('-')) for i, name in enumerate(header) 
+             if name.endswith('-') or name.endswith('+')]
+
+    # 3. Evaluate the large rows
+    for idx in indices_to_label:
+        true_goals = label(idx)
+        
+        total_penalty = 0
+        for i, (col_idx, is_min) in enumerate(goals):
+            val = true_goals[i]
+            total_penalty += val if is_min else (1.0 - val)
+        
+        if total_penalty < best_score:
+            best_score = total_penalty
+            best_idx = idx
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            true_data = []
+            for row in reader:
+                processed = [float(val) if val.replace('.', '', 1).isdigit() or (val.startswith('-') and val[1:].replace('.', '', 1).isdigit()) else val for val in row]
+                rows.append(processed)
+                true_data.append([processed[i] for i, name in enumerate(header) if name.endswith('-') or name.endswith('+')])
+
+        def label(i):
+            return true_data[i]
+
+        masked_rows = []
+        for row in rows:
+            new_row = list(row)
+            for i, name in enumerate(header):
+                if name.endswith('-') or name.endswith('+'):
+                    new_row[i] = "?"
+            masked_rows.append(new_row)
+
+        best_idx = choose(header, masked_rows, label)
+        print("Customer Inquiry: The project is large and failure is damaging. Find the best setup.")
+        print(f"Answer: The best setup for a large-scale project is at index {best_idx}.")
+        print(f"This was determined by filtering for high-size configurations and evaluating performance within the label budget.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

@@ -1,0 +1,63 @@
+```python
+import csv
+
+def certify(xs, ys):
+    """
+    Returns True if the two distributions are statistically similar 
+    (i.e., the difference is likely due to noise), False otherwise.
+    Uses the A12 effect size test (Vargha-Delaney).
+    """
+    m, n = len(xs), len(ys)
+    if m == 0 or n == 0:
+        return True
+    
+    xs = sorted(xs)
+    ys = sorted(ys)
+    
+    r1 = 0
+    for x in xs:
+        for y in ys:
+            if x > y:
+                r1 += 1
+            elif x == y:
+                r1 += 0.5
+    
+    a12 = r1 / (m * n)
+    # A12 threshold: 0.56 is a standard small effect size.
+    # If A12 is between 0.44 and 0.56, the difference is negligible.
+    return 0.44 <= a12 <= 0.56
+
+def run_analysis():
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(x) for x in row])
+        
+        # The customer asks if results shifted after changing how teams decide what to build.
+        # In the POM3 dataset, 'Plan' is the column representing the planning strategy.
+        # We compare the first goal ('Cost-') for the first half of the data vs the second half.
+        # This simulates a "before" (first 400) and "after" (last 400) scenario.
+        
+        goal_idx = 9 # 'Cost-'
+        before = [row[goal_idx] for row in rows[:400]]
+        after = [row[goal_idx] for row in rows[400:800]]
+        
+        is_same = certify(before, after)
+        
+        print("Analysis: Comparing 'Cost-' before and after the change in planning strategy.")
+        if is_same:
+            print("Result: The results are statistically the same; the shift is likely due to noise.")
+        else:
+            print("Result: The results have shifted significantly; the change in strategy had a real impact.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+
+if __name__ == "__main__":
+    run_analysis()
+```

@@ -1,0 +1,63 @@
+import ezr
+import random
+
+def remember(header, rows):
+    """
+    Find the top 5% of rows that are most similar to the current 'best' 
+    performing setup in the dataset.
+    """
+    # Create a table to handle column roles and ydist calculations
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Identify the best performing row in the entire dataset
+    # We use ydist to measure how close a row is to the ideal goals
+    scored = []
+    for i, row in enumerate(rows):
+        scored.append((ezr.ydist(tbl, row), i))
+    
+    # Sort by ydist (ascending, as lower is better)
+    scored.sort()
+    
+    # The 'best' setup is the one with the lowest ydist
+    best_row_idx = scored[0][1]
+    best_row = rows[best_row_idx]
+    
+    # Now find the rows most similar to this best_row in the input space (xdist)
+    # We calculate xdist between the best_row and every other row
+    similarities = []
+    for i, row in enumerate(rows):
+        if i == best_row_idx:
+            continue
+        d = ezr.xdist(tbl, row, best_row)
+        similarities.append((d, i))
+    
+    # Sort by xdist (ascending, as lower distance means more similar)
+    similarities.sort()
+    
+    # Return the top 5% of rows (800 rows * 0.05 = 40)
+    limit = max(1, int(len(rows) * 0.05))
+    return [item[1] for item in similarities[:limit]]
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Get the indices of the most similar setups
+    similar_indices = remember(header, rows)
+    
+    # Calculate performance for these similar setups
+    tbl = ezr.Tbl([header] + rows)
+    
+    print(f"Analysis complete. Found {len(similar_indices)} setups similar to the best performer.")
+    print("Top 5 most similar setups and their performance (ydist):")
+    
+    for idx in similar_indices[:5]:
+        yd = ezr.ydist(tbl, rows[idx])
+        print(f"  Row {idx}: ydist = {yd:.4f}")
+        
+    print("\nExample of a similar setup:")
+    example_idx = similar_indices[0]
+    for h, v in zip(header, rows[example_idx]):
+        print(f"  {h}: {v}")

@@ -1,0 +1,96 @@
+import ezr
+import random
+
+def race(header, rows, label):
+    """
+    Compares three strategies:
+    1. 'random': Picks rows at random.
+    2. 'big_teams': Picks rows with the largest 'Team Size' (the customer's current approach).
+    3. 'acquire': Uses the intelligent acquisition strategy.
+    """
+    budget = 50
+    labeled_data = {}
+
+    def get_label(i):
+        nonlocal budget
+        if i not in labeled_data:
+            if budget <= 0:
+                return None
+            labeled_data[i] = label(i)
+            budget -= 1
+        return labeled_data[i]
+
+    tbl = ezr.Tbl([header] + rows)
+    team_size_idx = header.index("Team Size")
+
+    def strategy_random(tbl, rows):
+        indices = random.sample(range(len(rows)), 16)
+        for i in indices: get_label(i)
+        return min(indices, key=lambda i: ezr.ydist(tbl, get_label(i)))
+
+    def strategy_big_teams(tbl, rows):
+        # Customer's current approach: pick the 16 rows with the largest Team Size
+        scored = sorted(range(len(rows)), key=lambda i: rows[i][team_size_idx], reverse=True)
+        indices = scored[:16]
+        for i in indices: get_label(i)
+        return min(indices, key=lambda i: ezr.ydist(tbl, get_label(i)))
+
+    def strategy_acquire(tbl, rows):
+        # Use ezr.acquire logic
+        def oracle_wrapper(row):
+            idx = next(i for i, r in enumerate(rows) if r is row)
+            return get_label(idx)
+        
+        best_rows = ezr.acquire(tbl, cap=18, label=oracle_wrapper)
+        return min([i for i, r in enumerate(rows) if r in best_rows], 
+                   key=lambda i: ezr.ydist(tbl, get_label(i)))
+
+    strategies = {
+        "random": strategy_random,
+        "big_teams": strategy_big_teams,
+        "acquire": strategy_acquire
+    }
+
+    results = {}
+    for name, func in strategies.items():
+        best_idx = func(tbl, rows)
+        results[name] = (best_idx, ezr.ydist(tbl, get_label(best_idx)))
+
+    winner = min(results, key=lambda n: results[n][1])
+    return {
+        "winner": winner,
+        "row": int(results[winner][0]),
+        "tried": list(strategies.keys())
+    }
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    rows_iter = ezr.csv(filename)
+    header = next(rows_iter)
+    all_rows = list(rows_iter)
+    
+    hidden_rows = []
+    for row in all_rows:
+        new_row = list(row)
+        for i, name in enumerate(header):
+            if name[-1] in "+-":
+                new_row[i] = "?"
+        hidden_rows.append(new_row)
+        
+    def label_func(i):
+        return all_rows[i]
+    
+    random.seed(1234567891)
+    result = race(header, hidden_rows, label_func)
+    
+    print("Optimization Strategy Comparison:")
+    print(f"The winning strategy was: {result['winner']}")
+    print(f"The best configuration found was at index: {result['row']}")
+    print(f"Strategies evaluated: {', '.join(result['tried'])}")
+    
+    if result['winner'] == 'big_teams':
+        print("\nConclusion: Your current approach of using the largest teams is optimal.")
+    else:
+        print("\nConclusion: Our intelligent acquisition strategy outperformed your current approach.")
+    
+    exit(0)

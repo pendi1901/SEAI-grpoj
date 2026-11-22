@@ -1,0 +1,53 @@
+import ezr
+import step01
+
+def remember(header, rows):
+    """
+    Find the 5% of rows most similar to the 'best' rows found in step01.
+    We use xdist to find rows in the input space that are closest to the 
+    top-performing configurations identified by the multi-objective ydist.
+    """
+    # Create a table to establish the context of the data
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Identify the top 5% of rows based on performance (ydist)
+    # We reuse the logic from step01 to find the "best" setups
+    best_indices = step01.remember(header, rows)
+    best_rows = [rows[i] for i in best_indices]
+    
+    # Calculate the centroid of the best rows in the input space (x-space)
+    # We create a temporary table of just the best rows to find their midpoints
+    best_tbl = ezr.clone(tbl, best_rows)
+    best_mids = ezr.mids(best_tbl)
+    
+    # Score all rows by their x-distance to the centroid of the best rows
+    # Lower xdist means the configuration is more similar to the top performers
+    scored = []
+    for i, row in enumerate(rows):
+        d = ezr.xdist(tbl, row, best_mids)
+        scored.append((d, i))
+    
+    # Sort by similarity (ascending xdist)
+    scored.sort(key=lambda x: x[0])
+    
+    # Return the indices of the top 5% most similar rows
+    limit = max(1, len(rows) // 20)
+    return [x[1] for x in scored[:limit]]
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data_iter = ezr.csv(filename)
+    header = next(data_iter)
+    rows = list(data_iter)
+    
+    # Get indices of setups most similar to the best ones
+    similar_indices = remember(header, rows)
+    
+    # Create table for scoring
+    tbl = ezr.Tbl([header] + rows)
+    
+    print(f"Found {len(similar_indices)} setups most similar to the top performers.")
+    print("Indices and their performance (ydist):")
+    for idx in similar_indices:
+        score = ezr.ydist(tbl, rows[idx])
+        print(f"Row {idx}: ydist={score:.4f}")

@@ -1,0 +1,12 @@
+
+--- stderr ---
+Traceback (most recent call last):
+  File "<repo>\runs\health\t1\trial02\step12\step12.py", line 66, in <module>
+    full_preds = get_preds(5)
+  File "<repo>\runs\health\t1\trial02\step12\step12.py", line 62, in get_preds
+    dists = sorted([(sum(((t_row[i]-tr[i])/(200.0 if header[i]!='criterion' else 1))**2 for i in range(len(header)) if not header[i].endswith(('-', '+'))) + (1.0 if t_row[4]!=tr[4] else 0), tr[goal_idx]) for tr in train])
+                     ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<repo>\runs\health\t1\trial02\step12\step12.py", line 62, in <genexpr>
+    dists = sorted([(sum(((t_row[i]-tr[i])/(200.0 if header[i]!='criterion' else 1))**2 for i in range(len(header)) if not header[i].endswith(('-', '+'))) + (1.0 if t_row[4]!=tr[4] else 0), tr[goal_idx]) for tr in train])
+                           ~~~~~~~~^~~~~~
+TypeError: unsupported operand type(s) for -: 'str' and 'str'

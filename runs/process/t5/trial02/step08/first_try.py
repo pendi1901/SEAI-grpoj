@@ -1,0 +1,76 @@
+import ezr
+import random
+
+def fix(header, row, levers):
+    """
+    Finds the best change to a 'bad' row to improve its goals.
+    We evaluate potential changes by simulating the impact on ydist.
+    """
+    # Create a dummy table to use ydist normalization logic
+    # We use the full dataset to establish the normalization bounds
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    tbl = ezr.Tbl(data)
+    
+    best_change = {}
+    best_ydist = ezr.ydist(tbl, row)
+    
+    # Try changing each lever
+    for col_name, allowed in levers.items():
+        col_idx = header.index(col_name)
+        original_val = row[col_idx]
+        
+        # Generate candidates based on type
+        candidates = []
+        if isinstance(allowed, (list, tuple)) and not isinstance(allowed[0], (int, float)):
+            # Symbolic: try all allowed values
+            candidates = [v for v in allowed if v != original_val]
+        else:
+            # Numeric: try low, high, and midpoint
+            low, high = allowed
+            candidates = [low, high, (low + high) / 2]
+            
+        for val in candidates:
+            # Create a copy and apply change
+            new_row = list(row)
+            new_row[col_idx] = val
+            
+            # Evaluate
+            new_ydist = ezr.ydist(tbl, new_row)
+            if new_ydist < best_ydist:
+                best_ydist = new_ydist
+                best_change = {col_name: val}
+                
+    return best_change
+
+if __name__ == "__main__":
+    # Load data
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Define levers: numeric ranges based on observed data (0 to 1)
+    levers = {
+        "Culture": (0, 1),
+        "Criticality": (0, 1),
+        "Size": (0, 1),
+        "Plan": (0, 1),
+        "Team Size": (0, 1)
+    }
+    
+    # Find a 'bad' row (high ydist)
+    tbl = ezr.Tbl(data)
+    scored = sorted([(ezr.ydist(tbl, r), r) for r in rows], key=lambda x: x[0])
+    bad_row = scored[-1][1]
+    
+    # Get recommendation
+    recommendation = fix(header, bad_row, levers)
+    
+    print("--- Optimization Recommendation ---")
+    print(f"Bad row identified with ydist: {scored[-1][0]:.4f}")
+    if recommendation:
+        col, val = list(recommendation.items())[0]
+        print(f"To improve performance, change '{col}' to {val:.4f}.")
+    else:
+        print("No single lever change found to improve this configuration.")

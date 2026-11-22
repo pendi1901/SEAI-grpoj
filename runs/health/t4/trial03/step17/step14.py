@@ -1,0 +1,66 @@
+import csv
+
+def flow(header, row, seen):
+    """
+    Decides whether to stop at the current row based on whether it is 
+    'good enough' compared to the history seen so far.
+    We define 'good enough' as being significantly better than the best 
+    seen so far, indicating that further improvement is unlikely.
+    """
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+
+    if not seen:
+        return False
+
+    # Extract goals from seen rows
+    mre_vals = [r[mre_idx] for r in seen]
+    acc_vals = [r[acc_idx] for r in seen]
+    pred_vals = [r[pred_idx] for r in seen]
+
+    # Calculate min/max for normalization
+    all_mre = mre_vals + [row[mre_idx]]
+    all_acc = acc_vals + [row[acc_idx]]
+    all_pred = pred_vals + [row[pred_idx]]
+    
+    m_min, m_max = min(all_mre), max(all_mre)
+    a_min, a_max = min(all_acc), max(all_acc)
+    p_min, p_max = min(all_pred), max(all_pred)
+
+    def get_score(r):
+        n_mre = (m_max - r[mre_idx]) / (m_max - m_min) if m_max > m_min else 0
+        n_acc = (r[acc_idx] - a_min) / (a_max - a_min) if a_max > a_min else 0
+        n_pred = (r[pred_idx] - p_min) / (p_max - p_min) if p_max > p_min else 0
+        return n_mre + n_acc + n_pred
+
+    current_score = get_score(row)
+    best_seen_score = max([get_score(r) for r in seen])
+
+    # If we have a decent sample size and the current row is significantly 
+    # better than the best seen (e.g., 20% improvement), we stop.
+    if len(seen) > 50 and current_score > best_seen_score * 1.2:
+        return True
+    
+    return False
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            rows.append([val if header[i] == 'criterion' else float(val) for i, val in enumerate(row)])
+
+    seen = []
+    stopped = False
+    for i, row in enumerate(rows):
+        if flow(header, row, seen):
+            print(f"Stopped at row {i}: The performance has plateaued; no further significant improvements expected.")
+            stopped = True
+            break
+        seen.append(row)
+    
+    if not stopped:
+        print("Processed all rows; no significant plateau detected.")

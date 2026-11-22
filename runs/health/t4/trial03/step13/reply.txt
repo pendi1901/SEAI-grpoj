@@ -1,0 +1,69 @@
+```python
+import csv
+from scipy import stats
+from step03 import certify as base_certify
+
+def certify(xs, ys):
+    """
+    Returns True if the difference between two distributions is likely noise,
+    False if they are statistically significantly different.
+    """
+    return base_certify(xs, ys)
+
+def analyze_criterion_impact(header, rows):
+    """
+    Compares the performance of different 'criterion' settings to see if
+    the choice makes a statistically significant difference.
+    """
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+    crit_idx = header.index('criterion')
+
+    # Normalize goals for scoring
+    mre_vals = [r[mre_idx] for r in rows]
+    acc_vals = [r[acc_idx] for r in rows]
+    pred_vals = [r[pred_idx] for r in rows]
+    
+    min_mre, max_mre = min(mre_vals), max(mre_vals)
+    min_acc, max_acc = min(acc_vals), max(acc_vals)
+    min_pred, max_pred = min(pred_vals), max(pred_vals)
+
+    def get_score(row):
+        n_mre = (max_mre - row[mre_idx]) / (max_mre - min_mre) if max_mre > min_mre else 0
+        n_acc = (row[acc_idx] - min_acc) / (max_acc - min_acc) if max_acc > min_acc else 0
+        n_pred = (row[pred_idx] - min_pred) / (max_pred - min_pred) if max_pred > min_pred else 0
+        return n_mre + n_acc + n_pred
+
+    # Group scores by criterion
+    groups = {}
+    for row in rows:
+        crit = row[crit_idx]
+        if crit not in groups:
+            groups[crit] = []
+        groups[crit].append(get_score(row))
+    
+    # Compare the two most common criteria: 'absolute_error' and 'squared_error'
+    if 'absolute_error' in groups and 'squared_error' in groups:
+        is_noise = certify(groups['absolute_error'], groups['squared_error'])
+        return is_noise, 'absolute_error', 'squared_error'
+    return True, None, None
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = [val if header[i] == 'criterion' else float(val) for i, val in enumerate(row)]
+            rows.append(processed_row)
+
+    is_noise, c1, c2 = analyze_criterion_impact(header, rows)
+    
+    print(f"Comparing performance between '{c1}' and '{c2}':")
+    if is_noise:
+        print("The choice between these rules makes no real difference; it is statistically indistinguishable from noise.")
+    else:
+        print("There is a statistically significant difference in performance between these rules; your argument is justified.")
+```

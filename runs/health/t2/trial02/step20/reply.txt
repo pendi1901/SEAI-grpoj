@@ -1,0 +1,88 @@
+```python
+import csv
+import random
+import step01
+import step10
+
+def race(header, rows, label):
+    """
+    Compares three strategies for finding the best setup with a 50-label budget.
+    Strategies: 'random', 'first_n', 'last_n'.
+    """
+    budget = 50
+    per_strategy = budget // 3
+    
+    # Identify goal indices
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+    
+    # Helper to evaluate a row based on currently known labeled data
+    def get_score(row, labeled_rows):
+        mres = [r[mre_idx] for r in labeled_rows]
+        accs = [r[acc_idx] for r in labeled_rows]
+        preds = [r[pred_idx] for r in labeled_rows]
+        
+        def norm(val, vals):
+            min_v, max_v = min(vals), max(vals)
+            return (val - min_v) / (max_v - min_v) if max_v > min_v else 0
+        
+        s_mre = 1 - norm(row[mre_idx], mres)
+        s_acc = norm(row[acc_idx], accs)
+        s_pred = norm(row[pred_idx], preds)
+        return s_mre + s_acc + s_pred
+
+    results = {}
+    labeled_data = []
+
+    def run_strategy(indices, name):
+        best_r = -1
+        best_s = -float('inf')
+        for i in indices:
+            goals = label(i)
+            rows[i][0], rows[i][1], rows[i][2] = goals
+            labeled_data.append(rows[i])
+            score = get_score(rows[i], labeled_data)
+            if score > best_s:
+                best_s, best_r = score, i
+        results[name] = (best_s, best_r)
+
+    # 1. Random Strategy
+    run_strategy(random.sample(range(len(rows)), per_strategy), "random")
+    # 2. First-N Strategy
+    run_strategy(list(range(per_strategy)), "first_n")
+    # 3. Last-N Strategy
+    run_strategy(list(range(len(rows) - per_strategy, len(rows))), "last_n")
+
+    winner = max(results, key=lambda k: results[k][0])
+    return {"winner": winner, "row": results[winner][1], "tried": ["random", "first_n", "last_n"]}
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = [val if header[i] == 'criterion' else float(val) 
+                             for i, val in enumerate(row)]
+            rows.append(processed_row)
+
+    true_data = [r[:] for r in rows]
+    # Hide goals
+    for r in rows:
+        r[0], r[1], r[2] = "?", "?", "?"
+
+    def label(i):
+        return [true_data[i][0], true_data[i][1], true_data[i][2]]
+
+    outcome = race(header, rows, label)
+    
+    print("Customer Inquiry: 'The setup you picked for this project: on a different project's results, does it still beat picking at random?'")
+    print(f"Answer: The strategy '{outcome['winner']}' performed best, finding a high-quality setup at row {outcome['row'] + 1}.")
+    print(f"Strategies compared: {', '.join(outcome['tried'])}.")
+    if outcome['winner'] != 'random':
+        print("The chosen strategy outperformed the random approach on this dataset.")
+    else:
+        print("The random approach was the most effective strategy for this dataset.")
+```

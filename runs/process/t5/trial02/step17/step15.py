@@ -1,0 +1,67 @@
+import ezr
+import random
+
+def blame(header, rows):
+    """
+    Identify the input columns that best explain why the worst rows are bad.
+    We compare the distribution of input values in the worst 25% 
+    against the best 25% to find the most significant differences.
+    """
+    # Create a table to handle normalization and ydist
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Score all rows
+    scored = []
+    for row in rows:
+        scored.append((ezr.ydist(tbl, row), row))
+    
+    # Sort by ydist (worst are at the end)
+    scored.sort(key=lambda x: x[0])
+    
+    n = len(scored) // 4
+    best = [x[1] for x in scored[:n]]
+    worst = [x[1] for x in scored[-n:]]
+    
+    # Identify input columns (those not ending in + or -)
+    input_indices = [i for i, name in enumerate(header) if name[-1] not in "+-"]
+    
+    # For each input column, check if the distributions differ significantly
+    # between best and worst.
+    explanations = []
+    for i in input_indices:
+        best_vals = [r[i] for r in best if r[i] != "?"]
+        worst_vals = [r[i] for r in worst if r[i] != "?"]
+        
+        if not best_vals or not worst_vals:
+            continue
+            
+        # If they are NOT the same, this column helps explain the difference
+        if not ezr.same(best_vals, worst_vals):
+            explanations.append(header[i])
+            
+    return explanations
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Get the important factors
+    important = blame(header, rows)
+    
+    # Identify the factors we can stop worrying about (the ones not in important)
+    input_names = [name for name in header if name[-1] not in "+-"]
+    unimportant = [name for name in input_names if name not in important]
+    
+    print("--- Project Factor Analysis ---")
+    print("The following factors matter most to project cost and performance:")
+    for factor in important:
+        print(f" - {factor}")
+        
+    print("\nYou can safely stop worrying about these factors:")
+    for factor in unimportant:
+        print(f" - {factor}")
+    
+    print("\nAnalysis: Factors that significantly differentiate the best-performing")
+    print("setups from the worst-performing ones are the primary drivers of cost.")

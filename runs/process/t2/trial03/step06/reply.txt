@@ -1,0 +1,78 @@
+```python
+import csv
+import step01
+import step02
+
+def justify(header, rows, row):
+    """
+    Estimates the goals for the given row and calculates its percentile rank
+    against the provided dataset.
+    """
+    # 1. Estimate the missing goal values in 'row' using the nearest neighbor approach
+    # We need to pass the full dataset as training data to guess the goals
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('-') or name.endswith('+')]
+    
+    # Use step02's logic to estimate the goals. 
+    # Since step02.guess only estimates the first goal, we extend the logic 
+    # to estimate all goal columns for the specific row.
+    input_indices = [i for i, name in enumerate(header) if i not in goal_indices]
+    
+    estimated_row = list(row)
+    for g_idx in goal_indices:
+        # Find nearest neighbor in rows based on input_indices
+        best_dist = float('inf')
+        best_val = 0.0
+        for r in rows:
+            dist = sum((float(row[i]) - float(r[i]))**2 for i in input_indices)
+            if dist < best_dist:
+                best_dist = dist
+                best_val = r[g_idx]
+        estimated_row[g_idx] = best_val
+
+    # 2. Score the estimated row and all rows in the dataset
+    def get_score(r):
+        total = 0.0
+        for idx in goal_indices:
+            val = float(r[idx])
+            if header[idx].endswith('-'):
+                total += val
+            else:
+                total += (1.0 - val)
+        return total
+
+    target_score = get_score(estimated_row)
+    all_scores = [get_score(r) for r in rows]
+    
+    # 3. Calculate percentile: fraction of rows that are worse (have higher scores)
+    # A row is better if its score is lower.
+    better_than_count = sum(1 for s in all_scores if s > target_score)
+    p = better_than_count / len(rows)
+    
+    reason = f"This setup is better than {p:.1%} of all possible configurations because its estimated performance metrics are superior to the majority of the training data."
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', newline='') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) if val.replace('.','',1).isdigit() or '-' in val else val for val in row])
+        
+        # Take the last row as a test case, mask its goals
+        test_row = list(rows[-1])
+        masked_row = [val if i not in [j for j, n in enumerate(header) if n.endswith(('-', '+'))] else "?" for i, val in enumerate(test_row)]
+        
+        # Use the first 800 rows as the reference set
+        p, reason = justify(header, rows[:-1], masked_row)
+        
+        print(f"Percentile: {p}")
+        print(f"Justification: {reason}")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

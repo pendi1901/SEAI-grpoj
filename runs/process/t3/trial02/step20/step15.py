@@ -1,0 +1,67 @@
+import csv
+import pandas as pd
+import numpy as np
+from sklearn.ensemble import RandomForestRegressor
+
+def blame(header, rows):
+    """
+    Identifies the most important input columns that drive the 'Cost-' goal.
+    Returns the top 2 input columns that explain the variance in 'Cost-'.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    
+    # Identify goal columns and input columns
+    goals = [c for c in header if c.endswith('-') or c.endswith('+')]
+    inputs = [c for c in header if c not in goals]
+    
+    # Target is 'Cost-'
+    target = 'Cost-'
+    
+    # Prepare data: only numeric inputs for Random Forest
+    X = df[inputs].select_dtypes(include=[np.number])
+    y = df[target]
+    
+    # Train a Random Forest to find feature importance
+    rf = RandomForestRegressor(n_estimators=100, random_state=42)
+    rf.fit(X, y)
+    
+    # Get feature importances
+    importances = rf.feature_importances_
+    
+    # Pair names with importance scores
+    feat_importances = sorted(zip(X.columns, importances), key=lambda x: x[1], reverse=True)
+    
+    # Return the top 2 inputs that explain the variance in Cost-
+    return [feat[0] for feat in feat_importances[:2]]
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed_row = []
+                for val in row:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        important_factors = blame(header, rows)
+        
+        print("Customer Inquiry: Which project facts matter most to cost?")
+        print("Analysis: Based on our model, the following factors have the greatest impact on cost:")
+        for i, factor in enumerate(important_factors, 1):
+            print(f"{i}. {factor}")
+        
+        all_inputs = [c for c in header if not (c.endswith('-') or c.endswith('+'))]
+        unimportant = [c for c in all_inputs if c not in important_factors]
+        
+        print(f"\nYou can safely deprioritize monitoring: {', '.join(unimportant)}")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

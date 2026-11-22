@@ -1,0 +1,57 @@
+import csv
+from sklearn.ensemble import IsolationForest
+
+def spot(header, rows):
+    """
+    Identifies rows that are outliers (unlike anything seen before) 
+    using IsolationForest on the input columns.
+    Returns the indices of the rows, sorted by suspicion (highest anomaly score first).
+    """
+    # Identify input columns (non-goal columns)
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    input_indices = [i for i in range(len(header)) if i not in goal_indices]
+    
+    # Extract only numeric input columns for anomaly detection
+    X = []
+    for row in rows:
+        X.append([float(row[i]) for i in input_indices])
+    
+    # IsolationForest: contamination=0.05 assumes 5% of data might be outliers
+    # decision_function returns lower scores for anomalies
+    clf = IsolationForest(contamination=0.05, random_state=42)
+    anomaly_scores = clf.fit_predict(X)
+    decision_scores = clf.decision_function(X)
+    
+    # Combine index with score, sort by score (lowest first = most suspicious)
+    indexed_scores = list(enumerate(decision_scores))
+    indexed_scores.sort(key=lambda x: x[1])
+    
+    # Return indices of rows identified as anomalies
+    return [idx for idx, score in indexed_scores]
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed_row = []
+                for val in row:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        suspicious_indices = spot(header, rows)
+        
+        print("Analysis: Identifying setups unlike anything we have run before.")
+        print(f"Found {len(suspicious_indices)} potentially unusual configurations.")
+        print("The 5 most suspicious row indices (0-based) are:")
+        print(suspicious_indices[:5])
+        exit(0)
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

@@ -1,0 +1,49 @@
+```python
+import ezr
+import random
+
+def spot(header, rows):
+    """
+    Finds rows that look wrong. A row is suspicious if it is an outlier
+    in the input space (x-columns) relative to the rest of the data.
+    We use the distance to the nearest neighbor in the x-space as a 
+    measure of 'strangeness'.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate the distance of each row to its nearest neighbor in the x-space.
+    # Rows that are far from all other rows are likely outliers/errors.
+    scores = []
+    for i, r1 in enumerate(rows):
+        # Find distance to the nearest neighbor (excluding self)
+        min_dist = 1e30
+        for j, r2 in enumerate(rows):
+            if i == j:
+                continue
+            d = ezr.xdist(tbl, r1, r2)
+            if d < min_dist:
+                min_dist = d
+        scores.append((i, min_dist))
+    
+    # Sort by distance descending (most isolated/suspicious first)
+    scores.sort(key=lambda x: x[1], reverse=True)
+    
+    return [idx for idx, score in scores]
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Identify suspicious rows
+    suspicious_indices = spot(header, rows)
+    
+    print(f"Analysis of {len(rows)} records for potential data entry errors.")
+    print("The following row indices are most suspicious (most isolated in input space):")
+    for i in suspicious_indices[:10]:
+        print(f" - Row {i}")
+        
+    print("\nNote: These rows are statistically distant from the rest of the dataset.")
+    exit(0)
+```

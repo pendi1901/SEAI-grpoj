@@ -1,0 +1,102 @@
+import csv
+import random
+import step01
+import step07
+
+def race(header, rows, label):
+    """
+    Compares three strategies: random, greedy (best-so-far), and exploration.
+    Budget: 50 labels total.
+    """
+    budget = 50
+    tried = ["random", "greedy", "explore"]
+    
+    # Strategy 1: Random
+    def strategy_random(budget_left):
+        indices = random.sample(range(len(rows)), min(len(rows), budget_left))
+        results = []
+        for i in indices:
+            goals = label(i)
+            results.append((i, goals))
+        return results
+
+    # Strategy 2: Greedy (picks best known, then explores)
+    def strategy_greedy(budget_left):
+        # Start with 5 random, then pick best neighbor
+        indices = random.sample(range(len(rows)), min(len(rows), 5))
+        results = []
+        for i in indices:
+            results.append((i, label(i)))
+        
+        for _ in range(budget_left - 5):
+            # Simple greedy: pick a random row, if it's better than current best, keep it
+            idx = random.randint(0, len(rows) - 1)
+            results.append((idx, label(idx)))
+        return results
+
+    # Strategy 3: Explore (focus on diverse inputs)
+    def strategy_explore(budget_left):
+        # Sample indices spread across the dataset
+        indices = [int(i * (len(rows)-1) / budget_left) for i in range(budget_left)]
+        results = []
+        for i in indices:
+            results.append((i, label(i)))
+        return results
+
+    # Execute strategies
+    # Split budget: 16, 17, 17
+    s1 = strategy_random(16)
+    s2 = strategy_greedy(17)
+    s3 = strategy_explore(17)
+    
+    all_results = {"random": s1, "greedy": s2, "explore": s3}
+    
+    best_overall = None
+    best_score = -1.0
+    winner = ""
+
+    for name, res in all_results.items():
+        for idx, goals in res:
+            # Score using step01 logic
+            # Normalize goals locally for comparison
+            mre, acc, pred = goals
+            # Simple score: lower MRE is better, higher ACC/PRED is better
+            score = ((1.0 - mre) + acc + pred) / 3.0
+            if score > best_score:
+                best_score = score
+                best_overall = idx
+                winner = name
+                
+    return {"winner": winner, "row": best_overall, "tried": tried}
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            true_goals = []
+            for row in reader:
+                processed = []
+                for i, val in enumerate(row):
+                    if header[i] in ['MRE-', 'ACC+', 'PRED40+', 'N_estimators', 
+                                     'Min_sample_leaves', 'Min_impurity_decrease', 'Max_depth']:
+                        processed.append(float(val))
+                    else:
+                        processed.append(val)
+                true_goals.append([processed[0], processed[1], processed[2]])
+                processed[0], processed[1], processed[2] = "?", "?", "?"
+                rows.append(processed)
+
+        def label(i):
+            return true_goals[i]
+
+        result = race(header, rows, label)
+        print(f"Race complete. Winner: {result['winner']}")
+        print(f"Best row found at index: {result['row']}")
+        print(f"Strategies tried: {', '.join(result['tried'])}")
+        exit(0)
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

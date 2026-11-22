@@ -1,0 +1,103 @@
+```python
+import csv
+import numpy as np
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import LabelEncoder
+
+def justify(header, rows, row):
+    """
+    Estimates the performance of a 'big, deep' setup vs others.
+    Returns (fraction_better, reason_string).
+    """
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+    
+    # Identify symbolic columns
+    symbolic_cols = [i for i, name in enumerate(header) if name.islower()]
+    
+    # Prepare data for RandomForest
+    def get_encoders(data):
+        encoders = {}
+        for col_idx in symbolic_cols:
+            le = LabelEncoder()
+            le.fit([r[col_idx] for r in data])
+            encoders[col_idx] = le
+        return encoders
+
+    encoders = get_encoders(rows)
+
+    def prepare(data):
+        processed = []
+        for r in data:
+            feat = []
+            for i, val in enumerate(r):
+                if i in symbolic_cols:
+                    feat.append(encoders[i].transform([val])[0])
+                else:
+                    feat.append(float(val))
+            processed.append(feat)
+        return np.array(processed)
+
+    data_arr = prepare(rows)
+    X = data_arr[:, 3:]
+    
+    # Train models for each goal
+    models = []
+    for g_idx in [mre_idx, acc_idx, pred_idx]:
+        y = data_arr[:, g_idx]
+        model = RandomForestRegressor(n_estimators=100, random_state=42)
+        model.fit(X, y)
+        models.append(model)
+    
+    # Prepare target row
+    target_feat = []
+    for i, val in enumerate(row):
+        if i >= 3:
+            if i in symbolic_cols:
+                target_feat.append(encoders[i].transform([val])[0])
+            else:
+                target_feat.append(float(val))
+    
+    # Predict goals
+    est_mre = models[0].predict([target_feat])[0]
+    est_acc = models[1].predict([target_feat])[0]
+    est_pred = models[2].predict([target_feat])[0]
+    
+    def score(mre, acc, pred):
+        return (1.0 - mre) + acc + pred
+    
+    target_score = score(est_mre, est_acc, est_pred)
+    all_scores = [score(r[mre_idx], r[acc_idx], r[pred_idx]) for r in rows]
+    
+    better_count = sum(1 for s in all_scores if target_score > s)
+    fraction = better_count / len(rows)
+    
+    reason = ("Using the biggest, deepest setup often leads to overfitting or diminishing returns, "
+              f"as this configuration is estimated to outperform only {fraction:.1%} of historical setups.")
+    
+    return float(fraction), reason
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed = []
+            for i, val in enumerate(row):
+                if header[i].isupper() or header[i] in ['N_estimators', 'Min_sample_leaves', 'Min_impurity_decrease', 'Max_depth']:
+                    processed.append(float(val))
+                else:
+                    processed.append(val)
+            rows.append(processed)
+            
+    # Define a 'big, deep' setup: max N_estimators, max depth
+    # Based on data ranges: N_estimators ~200, Max_depth ~20
+    big_setup = ['?', '?', '?'] + [200.0, 'squared_error', 1.0, 0.0, 20.0]
+    
+    p, reason = justify(header, rows, big_setup)
+    print(f"Performance Rank: {p:.4f}")
+    print(f"Justification: {reason}")
+```

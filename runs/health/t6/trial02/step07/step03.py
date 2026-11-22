@@ -1,0 +1,41 @@
+import ezr
+import step01
+
+def certify(xs, ys):
+    """
+    Returns True if xs and ys are statistically indistinguishable,
+    False if they differ significantly.
+    """
+    # Use ezr's statistical tests to compare two distributions
+    # same() checks cliffs delta and KS test
+    return ezr.same(xs, ys)
+
+if __name__ == "__main__":
+    # Load data
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    all_data = list(ezr.csv(filename))
+    header = all_data[0]
+    rows = all_data[1:]
+
+    # Define "big" vs "small" based on N_estimators (index 3)
+    # We split by the median of N_estimators
+    n_est_idx = 3
+    n_estimators = [r[n_est_idx] for r in rows]
+    median = sorted(n_estimators)[len(n_estimators) // 2]
+
+    # We compare the MRE- (index 0) performance of big vs small setups
+    # MRE- is a goal to minimize (lower is better)
+    small_setups = [r[0] for r in rows if r[n_est_idx] <= median]
+    big_setups = [r[0] for r in rows if r[n_est_idx] > median]
+
+    # Certify if the difference is real
+    is_same = certify(small_setups, big_setups)
+
+    print(f"Comparing MRE- for {len(small_setups)} small setups vs {len(big_setups)} big setups.")
+    print(f"Mean MRE- (small): {sum(small_setups)/len(small_setups):.4f}")
+    print(f"Mean MRE- (big):   {sum(big_setups)/len(big_setups):.4f}")
+    
+    if is_same:
+        print("Conclusion: The difference is likely noise.")
+    else:
+        print("Conclusion: The difference is statistically significant.")

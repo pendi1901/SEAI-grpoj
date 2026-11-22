@@ -1,0 +1,83 @@
+import csv
+import random
+from step09 import spot
+
+def race(header, rows, label):
+    """
+    Compares three strategies: random, greedy, and suspicious.
+    Budget: 50 labels total.
+    """
+    tried = ["random", "greedy", "suspicious"]
+    
+    # We need global min/max for scoring. Since we don't have all labels,
+    # we use the known values from the rows that are NOT "?" to estimate ranges.
+    # If a column is entirely "?", we default to 0-1.
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+    
+    def get_known_vals(idx):
+        vals = [r[idx] for r in rows if r[idx] != "?"]
+        return (min(vals), max(vals)) if vals else (0.0, 1.0)
+
+    mre_range = get_known_vals(mre_idx)
+    acc_range = get_known_vals(acc_idx)
+    pred_range = get_known_vals(pred_idx)
+    
+    def get_score(row):
+        def norm(v, mi, ma): return (v - mi) / (ma - mi) if ma > mi else 0
+        return (1 - norm(row[mre_idx], mre_range[0], mre_range[1])) + \
+               norm(row[acc_idx], acc_range[0], acc_range[1]) + \
+               norm(row[pred_idx], pred_range[0], pred_range[1])
+
+    # Budget allocation: 16 + 17 + 17 = 50
+    # Strategy 1: Random
+    best_rand = {"score": -1.0, "idx": -1}
+    for i in random.sample(range(len(rows)), 16):
+        goals = label(i)
+        row = [goals[0], goals[1], goals[2]] + rows[i][3:]
+        s = get_score(row)
+        if s > best_rand["score"]: best_rand = {"score": s, "idx": i}
+
+    # Strategy 2: Greedy (first 17)
+    best_greedy = {"score": -1.0, "idx": -1}
+    for i in range(17):
+        goals = label(i)
+        row = [goals[0], goals[1], goals[2]] + rows[i][3:]
+        s = get_score(row)
+        if s > best_greedy["score"]: best_greedy = {"score": s, "idx": i}
+
+    # Strategy 3: Suspicious (top 17 from spot)
+    best_susp = {"score": -1.0, "idx": -1}
+    suspicious = spot(header, rows)
+    for i in suspicious[:17]:
+        goals = label(i)
+        row = [goals[0], goals[1], goals[2]] + rows[i][3:]
+        s = get_score(row)
+        if s > best_susp["score"]: best_susp = {"score": s, "idx": i}
+
+    results = [("random", best_rand), ("greedy", best_greedy), ("suspicious", best_susp)]
+    winner = max(results, key=lambda x: x[1]["score"])
+    
+    return {"winner": winner[0], "row": winner[1]["idx"], "tried": tried}
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            rows.append([val if header[i] == 'criterion' else float(val) for i, val in enumerate(row)])
+
+    def label(i):
+        return [rows[i][0], rows[i][1], rows[i][2]]
+
+    masked_rows = [r[:] for r in rows]
+    for r in masked_rows:
+        r[0] = r[1] = r[2] = "?"
+
+    result = race(header, masked_rows, label)
+    print(f"Winner: {result['winner']}")
+    print(f"Best row index found: {result['row']}")
+    print(f"Strategies tried: {', '.join(result['tried'])}")

@@ -1,0 +1,98 @@
+```python
+import csv
+import numpy as np
+import pandas as pd
+from sklearn.ensemble import RandomForestRegressor
+
+def get_score(header, row_goals, df_full):
+    """Calculates normalized aggregate score for a row."""
+    goals = [c for c in header if c.endswith('-') or c.endswith('+')]
+    scores = []
+    for i, col in enumerate(goals):
+        vals = df_full[col].astype(float)
+        norm = (row_goals[i] - vals.min()) / (vals.max() - vals.min() + 1e-9)
+        scores.append(1 - norm if col.endswith('-') else norm)
+    return np.mean(scores)
+
+def race(header, rows, label):
+    """
+    Compares three strategies: random, greedy, and uncertainty-based.
+    Total budget: 50 labels.
+    """
+    goal_cols = [c for c in header if c.endswith('-') or c.endswith('+')]
+    input_cols = [c for c in header if c not in goal_cols]
+    
+    # Ensure numeric types for processing
+    df_full = pd.DataFrame(rows, columns=header)
+    for col in header:
+        if col not in goal_cols:
+            df_full[col] = pd.to_numeric(df_full[col], errors='ignore')
+    
+    labeled = {}
+    budget = 50
+    
+    def run_strategy(name, n_trials):
+        nonlocal budget
+        strat_labeled = {}
+        
+        for _ in range(n_trials):
+            if budget <= 0: break
+            
+            # Pick index
+            if name == "random":
+                idx = np.random.choice(len(rows))
+            else:
+                # Train on all currently labeled data
+                df_l = pd.DataFrame([rows[i] for i in labeled], columns=header)
+                for i, col in enumerate(goal_cols):
+                    df_l[col] = [labeled[idx][i] for idx in labeled]
+                
+                X = df_l[input_cols]
+                y = df_l[goal_cols[0]]
+                model = RandomForestRegressor(n_estimators=20).fit(X, y)
+                
+                if name == "greedy":
+                    preds = model.predict(df_full[input_cols])
+                    idx = np.argmax(preds)
+                else: # uncertainty
+                    preds = [tree.predict(df_full[input_cols]) for tree in model.estimators_]
+                    idx = np.argmax(np.std(preds, axis=0))
+            
+            if idx not in labeled:
+                labeled[idx] = label(idx)
+                strat_labeled[idx] = labeled[idx]
+                budget -= 1
+        
+        # Evaluate this strategy's performance
+        best_idx, best_score = -1, -1
+        for idx, g in strat_labeled.items():
+            s = get_score(header, g, df_full)
+            if s > best_score:
+                best_score, best_idx = s, idx
+        return best_idx, best_score
+
+    s1_idx, s1_score = run_strategy("random", 16)
+    s2_idx, s2_score = run_strategy("greedy", 17)
+    s3_idx, s3_score = run_strategy("uncertainty", 17)
+    
+    results = {"random": s1_score, "greedy": s2_score, "uncertainty": s3_score}
+    winner = max(results, key=results.get)
+    winner_idx = {"random": s1_idx, "greedy": s2_idx, "uncertainty": s3_idx}[winner]
+    
+    return {"winner": winner, "row": winner_idx, "tried": ["random", "greedy", "uncertainty"]}
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    df = pd.read_csv(filename)
+    header = df.columns.tolist()
+    rows = df.values.tolist()
+    
+    def label(i):
+        goals = [c for c in header if c.endswith('-') or c.endswith('+')]
+        return [float(df.iloc[i][c]) for c in goals]
+    
+    result = race(header, rows, label)
+    print(f"The winner is: {result['winner']}")
+    print(f"Best row found at index: {result['row']}")
+    print(f"Strategies compared: {', '.join(result['tried'])}")
+```

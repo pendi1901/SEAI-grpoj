@@ -1,0 +1,72 @@
+```python
+import csv
+
+def flow(header, row, seen):
+    """
+    Decides if the current employee needs a 'what would keep you here' conversation.
+    We use a simple threshold strategy: if the employee's 'YearsAtCompany+' 
+    is significantly lower than the average of those seen so far, 
+    or if they are in a high-risk category (e.g., low JobSatisfaction), 
+    we flag them.
+    
+    Since we must stop eventually, we use a 1/e (approx 37%) stopping rule 
+    to establish a baseline, then pick the next one that is 'better' 
+    than our observed baseline.
+    """
+    yac_idx = header.index('YearsAtCompany+')
+    js_idx = header.index('JobSatisfaction')
+    
+    # If this is the first row, we can't compare
+    if not seen:
+        return False
+    
+    # 1/e stopping rule: explore first 37% of data to set a benchmark
+    n = len(seen) + 1
+    limit = 800 // 3  # Approx 266
+    
+    # Calculate baseline from seen data
+    avg_yac = sum(r[yac_idx] for r in seen) / len(seen)
+    
+    # Decision logic:
+    # If we are past the exploration phase, flag if:
+    # 1. YearsAtCompany is below average (potential churn risk)
+    # 2. JobSatisfaction is low (<= 2)
+    if n > limit:
+        if row[yac_idx] < avg_yac or row[js_idx] <= 2:
+            return True
+            
+    return False
+
+def load_data(filename):
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    return header, rows
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    header, rows = load_data(filename)
+    
+    seen = []
+    flags = 0
+    for row in rows:
+        if flow(header, row, seen):
+            flags += 1
+        seen.append(row)
+        
+    print(f"Processed {len(rows)} employees.")
+    print(f"Identified {flags} employees for a 'what would keep you here' conversation.")
+    print("Strategy: Flagged employees with below-average tenure or low job satisfaction after initial baseline period.")
+```

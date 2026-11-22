@@ -1,0 +1,75 @@
+import ezr
+import step01
+
+def fix(header, row, levers):
+    """
+    Finds the best change to a 'bad' row by exploring the neighborhood
+    of the row within the allowed lever constraints.
+    """
+    # Create a dummy table to use ydist for scoring
+    # We use the header to define the structure
+    tbl = ezr.Tbl([header])
+    
+    best_change = {}
+    best_score = float('inf')
+    
+    # Try changing each lever to its bounds or midpoint to find an improvement
+    for col_name, allowed in levers.items():
+        at = header.index(col_name)
+        original_val = row[at]
+        
+        # Generate candidates: for numeric, try low and high bounds
+        candidates = []
+        if isinstance(allowed, tuple):
+            candidates = [allowed[0], allowed[1]]
+        else:
+            candidates = allowed
+            
+        for val in candidates:
+            if val == original_val:
+                continue
+                
+            # Create a modified row
+            new_row = list(row)
+            new_row[at] = val
+            
+            # Score the new row (lower ydist is better)
+            # We use the existing table's goal definitions
+            score = ezr.ydist(tbl, new_row)
+            
+            if score < best_score:
+                best_score = score
+                best_change = {col_name: val}
+                
+    return best_change
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    
+    try:
+        header = next(data_gen)
+        rows = list(data_gen)
+    except StopIteration:
+        exit(1)
+        
+    # Define levers: numeric ranges based on typical normalized data (0 to 1)
+    # We focus on 'Plan' and 'Team Size' as they are common project levers
+    levers = {
+        "Plan": (0.1, 0.9),
+        "Team Size": (0.1, 0.9)
+    }
+    
+    # Find a 'bad' row (high ydist) to fix
+    tbl = ezr.Tbl([header] + rows)
+    scored = sorted([(ezr.ydist(tbl, r), r) for r in rows], key=lambda x: x[0], reverse=True)
+    bad_row = scored[0][1]
+    
+    recommendation = fix(header, bad_row, levers)
+    
+    print("Rescue Plan for Over-Budget/Idle Project:")
+    for col, val in recommendation.items():
+        print(f"Adjust '{col}' to {val:.2f}.")
+    print("This change minimizes the distance to the ideal project goals.")
+    
+    exit(0)

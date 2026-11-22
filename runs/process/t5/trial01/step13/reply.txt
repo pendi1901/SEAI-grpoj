@@ -1,0 +1,50 @@
+```python
+import ezr
+import random
+
+def certify(xs, ys):
+    """
+    Returns True if the distributions are statistically indistinguishable,
+    False if they are significantly different.
+    Uses ezr.same which performs Cliff's Delta and KS tests.
+    """
+    return ezr.same(sorted(xs), sorted(ys))
+
+if __name__ == "__main__":
+    # Load data
+    filename = "pom3a.n1000.train.csv"
+    rows_iter = ezr.csv(filename)
+    header = next(rows_iter)
+    rows = list(rows_iter)
+    
+    # The customer asks if results shifted after a change in decision-making.
+    # We simulate this by splitting the data into two halves:
+    # 'before' (first 400 rows) and 'after' (last 400 rows).
+    # We compare the primary goal 'Cost-' to see if the distribution shifted.
+    
+    cost_idx = header.index("Cost-")
+    
+    # Split data into two chronological halves
+    n = len(rows)
+    mid = n // 2
+    before_costs = [r[cost_idx] for r in rows[:mid]]
+    after_costs = [r[cost_idx] for r in rows[mid:]]
+    
+    # Perform certification
+    is_same = certify(before_costs, after_costs)
+    
+    # Report results
+    print("Analysis: Did the results shift after the spring change?")
+    print(f"Before change count: {len(before_costs)}, After change count: {len(after_costs)}")
+    print(f"Mean Cost- (Before): {sum(before_costs)/len(before_costs):.4f}")
+    print(f"Mean Cost- (After): {sum(after_costs)/len(after_costs):.4f}")
+    
+    if is_same:
+        print("Result: The difference is statistically insignificant.")
+        print("Conclusion: The results are effectively the same as before.")
+    else:
+        print("Result: The difference is statistically significant.")
+        print("Conclusion: The results have genuinely shifted.")
+    
+    exit(0)
+```

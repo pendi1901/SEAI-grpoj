@@ -1,0 +1,72 @@
+import ezr
+
+def blame(header, rows):
+    """
+    Identify input columns that best explain why the worst rows are bad.
+    We compare the distribution of input values in the worst 25% of rows
+    against the rest of the data. Columns where the distributions differ
+    significantly (using a simple rank-based heuristic) are identified as
+    the 'blame' columns.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate ydist for all rows to identify the worst performers
+    scored = []
+    for row in rows:
+        scored.append((ezr.ydist(tbl, row), row))
+    
+    # Sort by ydist descending (worst first)
+    scored.sort(key=lambda x: x[0], reverse=True)
+    
+    # Split into worst 25% and the rest
+    n_worst = max(1, len(rows) // 4)
+    worst = [x[1] for x in scored[:n_worst]]
+    rest = [x[1] for x in scored[n_worst:]]
+    
+    # Identify input columns (skip goals)
+    input_cols = [c for c in tbl.x]
+    
+    blame_scores = []
+    for col in input_cols:
+        # Compare distributions using a simple distance metric
+        # For numeric: difference in means of normalized values
+        # For symbolic: difference in frequency of the most common symbol
+        if isinstance(tbl.cols[col.at], ezr.Num):
+            mu_w = sum(r[col.at] for r in worst if r[col.at] != "?") / max(1, len(worst))
+            mu_r = sum(r[col.at] for r in rest if r[col.at] != "?") / max(1, len(rest))
+            score = abs(mu_w - mu_r)
+        else:
+            # Symbolic: check if the most common value in 'worst' is over-represented
+            w_counts = {}
+            for r in worst:
+                v = r[col.at]
+                if v != "?": w_counts[v] = w_counts.get(v, 0) + 1
+            r_counts = {}
+            for r in rest:
+                v = r[col.at]
+                if v != "?": r_counts.get(v, 0) + 1
+            
+            top_w = max(w_counts, key=w_counts.get) if w_counts else None
+            if top_w:
+                score = (w_counts[top_w] / len(worst)) - (r_counts.get(top_w, 0) / len(rest))
+            else:
+                score = 0
+        
+        blame_scores.append((score, header[col.at]))
+    
+    # Return the top 3 columns that contribute most to the difference
+    blame_scores.sort(key=lambda x: x[0], reverse=True)
+    return [name for score, name in blame_scores[:3]]
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    results = blame(header, rows)
+    
+    print("Analysis of poor performance:")
+    print("The following settings are most strongly associated with the worst-performing setups:")
+    for i, name in enumerate(results, 1):
+        print(f"{i}. {name}")

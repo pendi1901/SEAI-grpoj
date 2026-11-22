@@ -1,0 +1,64 @@
+import csv
+import math
+
+def remember(header, rows):
+    """
+    Identifies the best rows by calculating a utility score for each row
+    and returning the indices of the top 5% of rows.
+    Utility = -MRE + ACC + PRED40 (normalized).
+    """
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+
+    # Filter out rows that might have hidden goals ("?")
+    valid_rows = []
+    for i, row in enumerate(rows):
+        if isinstance(row[mre_idx], float):
+            valid_rows.append((i, row))
+
+    # Calculate utility for each valid row
+    # Since goals are on different scales, we normalize them
+    mres = [r[mre_idx] for i, r in valid_rows]
+    accs = [r[acc_idx] for i, r in valid_rows]
+    preds = [r[pred_idx] for i, r in valid_rows]
+
+    def normalize(val, col):
+        min_v, max_v = min(col), max(col)
+        if max_v == min_v: return 0
+        return (val - min_v) / (max_v - min_v)
+
+    scored = []
+    for i, row in valid_rows:
+        u = -normalize(row[mre_idx], mres) + normalize(row[acc_idx], accs) + normalize(row[pred_idx], preds)
+        scored.append((u, i))
+
+    # Sort by utility descending
+    scored.sort(key=lambda x: x[0], reverse=True)
+
+    # Return top 5%
+    limit = max(1, int(len(rows) * 0.05))
+    return [item[1] for item in scored[:limit]]
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i] == 'criterion':
+                    processed_row.append(val)
+                else:
+                    processed_row.append(float(val))
+            rows.append(processed_row)
+
+    best_indices = remember(header, rows)
+    
+    print("Top performing configurations identified:")
+    for idx in best_indices:
+        row = rows[idx]
+        utility_val = -row[0] + row[1] + row[2]
+        print(f"Index {idx}: MRE={row[0]:.3f}, ACC={row[1]:.3f}, PRED40={row[2]:.3f} | Utility Score: {utility_val:.3f}")

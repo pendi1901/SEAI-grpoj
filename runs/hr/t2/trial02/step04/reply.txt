@@ -1,0 +1,67 @@
+```python
+import csv
+import step01
+
+def flow(header, row, seen):
+    """
+    Decide if the current row is a 'keeper' based on the 'YearsAtCompany+' goal.
+    We compare the current row's tenure against the historical average of 
+    previous rows (seen). If the current row's tenure is significantly 
+    higher than the average of what we have seen so far, we flag it.
+    """
+    # Identify goal column
+    goal_idx = -1
+    for i, name in enumerate(header):
+        if name.endswith('+'):
+            goal_idx = i
+            break
+    
+    if goal_idx == -1:
+        return False
+
+    current_val = row[goal_idx]
+    
+    # If this is the first row, keep it
+    if not seen:
+        return True
+    
+    # Calculate average of seen rows
+    seen_vals = [r[goal_idx] for r in seen]
+    avg_seen = sum(seen_vals) / len(seen_vals)
+    
+    # If current tenure is at least 20% higher than the average of seen,
+    # we consider it a 'what would keep you here' candidate.
+    if current_val > (avg_seen * 1.2):
+        return True
+    
+    return False
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            new_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        new_row.append(float(val))
+                    except ValueError:
+                        new_row.append(0.0)
+                else:
+                    new_row.append(val)
+            rows.append(new_row)
+            
+    seen = []
+    keepers = 0
+    for row in rows:
+        if flow(header, row, seen):
+            keepers += 1
+        seen.append(row)
+        
+    print(f"Analysis complete. Out of {len(rows)} employees, {keepers} were identified as needing a 'what would keep you here' conversation based on high tenure.")
+```

@@ -1,0 +1,49 @@
+import ezr
+import step01
+
+def spot(header, rows):
+    """
+    Finds rows that look 'wrong' by identifying outliers.
+    A row is suspicious if its input values are far from the 
+    expected distribution of the rest of the data.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate the distance of each row from the centroid of the data.
+    # Rows that are far from the centroid (in x-space) are potential outliers.
+    # We use xdist to measure distance in input space.
+    mids = ezr.mids(tbl)
+    
+    # Calculate xdist for every row
+    distances = []
+    for i, row in enumerate(rows):
+        d = ezr.xdist(tbl, row, mids)
+        distances.append((d, i))
+    
+    # Sort by distance descending (most suspicious first)
+    distances.sort(key=lambda x: x[0], reverse=True)
+    
+    # Return the indices of the top 10 most suspicious rows
+    return [idx for d, idx in distances[:10]]
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    suspicious_indices = spot(header, rows)
+    
+    print("Data Integrity Analysis: Identifying potentially erroneous records.")
+    print(f"Found {len(suspicious_indices)} records that appear to be outliers.")
+    print("-" * 60)
+    print("Top 5 most suspicious records (by index):")
+    for i in range(min(5, len(suspicious_indices))):
+        idx = suspicious_indices[i]
+        print(f"- Record {idx}: This row contains input values that deviate "
+              f"significantly from the population average.")
+    
+    print("-" * 60)
+    print("These records should be reviewed for manual entry errors.")
+    
+    exit(0)

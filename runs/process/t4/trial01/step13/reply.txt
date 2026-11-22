@@ -1,0 +1,47 @@
+```python
+import csv
+from scipy import stats
+
+def certify(xs, ys):
+    """
+    Returns True if the two distributions are statistically similar (null hypothesis 
+    not rejected), False if they differ significantly. Uses a t-test.
+    """
+    # A p-value > 0.05 suggests we cannot reject the null hypothesis (they are the same)
+    t_stat, p_value = stats.ttest_ind(xs, ys, equal_var=False)
+    return p_value > 0.05
+
+def run_analysis():
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(x) for x in row])
+
+        # The customer asks if results shifted after a change in decision-making.
+        # We simulate this by splitting the data into two halves:
+        # 'before' (first 400) and 'after' (last 400).
+        # We compare the primary goal 'Cost-' to see if the distribution shifted.
+        cost_idx = header.index('Cost-')
+        
+        before = [row[cost_idx] for row in rows[:400]]
+        after = [row[cost_idx] for row in rows[400:800]]
+
+        is_same = certify(before, after)
+
+        print("Analysis: Comparing 'Cost-' before and after the team decision change.")
+        if is_same:
+            print("Result: The difference is not statistically significant. The results are the same as before.")
+        else:
+            print("Result: The difference is statistically significant. The results have genuinely shifted.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+
+if __name__ == "__main__":
+    run_analysis()
+```

@@ -1,0 +1,59 @@
+```python
+import ezr
+import random
+
+def flow(header, row, seen):
+    """
+    Detects if a new row represents a significant shift in the team's 
+    performance distribution. We compare the new row's performance 
+    (ydist) against the distribution of performance in the 'seen' data.
+    If the new row is an extreme outlier (e.g., outside the 95th 
+    percentile of observed performance), we flag it as a change.
+    """
+    if len(seen) < 30:
+        return False
+    
+    # Create a table from seen rows to establish the baseline
+    tbl = ezr.Tbl([header] + seen)
+    
+    # Calculate performance (ydist) for all seen rows
+    seen_ydists = [ezr.ydist(tbl, r) for r in seen]
+    
+    # Calculate the threshold for "normal" behavior (e.g., 95th percentile)
+    # A higher ydist means worse performance.
+    seen_ydists.sort()
+    threshold = seen_ydists[int(len(seen_ydists) * 0.95)]
+    
+    # Calculate performance of the new row
+    # Note: If the row has '?' in goal columns, ydist treats it as neutral.
+    current_ydist = ezr.ydist(tbl, row)
+    
+    # If the new row is significantly worse than 95% of the team's history,
+    # we flag it as a shift in team dynamics.
+    return current_ydist > threshold
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Simulate the arrival of rows
+    random.seed(1234567891)
+    random.shuffle(rows)
+    
+    seen = []
+    flagged_count = 0
+    
+    for row in rows:
+        if flow(header, row, seen):
+            flagged_count += 1
+        seen.append(row)
+        
+    print(f"Processed {len(rows)} employee records.")
+    print(f"Detected {flagged_count} instances where the team's performance profile shifted significantly.")
+    print("Methodology: Flagged records that fall into the worst 5% of historical performance,")
+    print("indicating a potential change in team composition or working conditions.")
+    
+    exit(0)
+```

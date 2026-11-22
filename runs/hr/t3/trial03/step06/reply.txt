@@ -1,0 +1,86 @@
+```python
+import csv
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import LabelEncoder
+
+def justify(header, rows, row):
+    """
+    Estimates the performance of a given row relative to the population
+    using a Random Forest Regressor to predict goal columns.
+    Returns (percentile, reason).
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    feature_indices = [i for i in range(len(header)) if i not in goal_indices]
+    
+    # Prepare training data
+    encoders = {}
+    def encode(data):
+        encoded = []
+        for r in data:
+            new_row = []
+            for i in feature_indices:
+                val = r[i]
+                if isinstance(val, str):
+                    if i not in encoders:
+                        encoders[i] = LabelEncoder().fit([row_i[i] for row_i in rows])
+                    new_row.append(float(encoders[i].transform([val])[0]))
+                else:
+                    new_row.append(float(val))
+            encoded.append(new_row)
+        return encoded
+
+    X_train = encode(rows)
+    X_test = [encode([row])[0]]
+    
+    # Predict goals
+    predictions = []
+    for g_idx in goal_indices:
+        y_train = [r[g_idx] for r in rows]
+        model = RandomForestRegressor(n_estimators=50, random_state=42)
+        model.fit(X_train, y_train)
+        predictions.append(model.predict(X_test)[0])
+    
+    # Calculate percentile
+    better_count = 0
+    for r in rows:
+        is_better = True
+        for i, g_idx in enumerate(goal_indices):
+            val_r = r[g_idx]
+            val_p = predictions[i]
+            # If +, higher is better. If -, lower is better.
+            if header[g_idx].endswith('+'):
+                if not (val_p >= val_r): is_better = False
+            else:
+                if not (val_p <= val_r): is_better = False
+        if is_better:
+            better_count += 1
+            
+    p = better_count / len(rows)
+    reason = f"This arrangement ranks in the top {int((1-p)*100)}% of all teams based on predicted performance metrics."
+    return p, reason
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    # Test with the first row, masking its goals
+    test_row = list(rows[0])
+    for i, name in enumerate(header):
+        if name.endswith('+') or name.endswith('-'):
+            test_row[i] = "?"
+            
+    p, reason = justify(header, rows, test_row)
+    print(f"Percentile: {p:.4f}")
+    print(f"Reason: {reason}")
+```

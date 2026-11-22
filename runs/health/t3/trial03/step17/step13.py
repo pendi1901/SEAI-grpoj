@@ -1,0 +1,54 @@
+import csv
+from scipy import stats
+
+def certify(xs, ys):
+    """
+    Performs a Welch's t-test to determine if the difference between two 
+    groups (xs and ys) is statistically significant or just noise.
+    Returns True if the difference is not significant (p > 0.05),
+    False if they really differ (p <= 0.05).
+    """
+    if len(xs) < 2 or len(ys) < 2:
+        return True
+    
+    t_stat, p_value = stats.ttest_ind(xs, ys, equal_var=False)
+    
+    # If p_value > 0.05, we fail to reject the null hypothesis (they are the same)
+    return p_value > 0.05
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                try:
+                    processed_row.append(float(val))
+                except ValueError:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # The customer asks if the choice between two built-in rules makes a difference.
+    # We test this by comparing the performance (ACC+) of rows using 
+    # 'absolute_error' vs 'squared_error' as the 'criterion' (index 4).
+    
+    criterion_idx = 4
+    acc_idx = 1
+    
+    abs_error_acc = [row[acc_idx] for row in rows if row[criterion_idx] == 'absolute_error']
+    sq_error_acc = [row[acc_idx] for row in rows if row[criterion_idx] == 'squared_error']
+    
+    is_noise = certify(abs_error_acc, sq_error_acc)
+    
+    print("Analysis: Does the choice of 'criterion' rule make a real difference?")
+    if is_noise:
+        print("Result: The difference in accuracy between 'absolute_error' and 'squared_error' is statistically insignificant.")
+        print("Conclusion: You can stop arguing about it; the choice does not make a real difference.")
+    else:
+        print("Result: The difference in accuracy between 'absolute_error' and 'squared_error' is statistically significant.")
+        print("Conclusion: The choice of rule does matter.")

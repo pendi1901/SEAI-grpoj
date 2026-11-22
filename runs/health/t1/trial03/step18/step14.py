@@ -1,0 +1,64 @@
+import csv
+
+def flow(header, row, seen):
+    """
+    Decides when to stop based on whether the current row is a 'Pareto improvement'
+    over the best seen so far. If we haven't seen a new 'best' in a long time,
+    we stop (return True).
+    """
+    goal_indices = [i for i, h in enumerate(header) if h.endswith(('-', '+'))]
+    
+    def get_score(r):
+        # Normalize goals: MRE- (min), ACC+ (max), PRED40+ (max)
+        # We use the current 'seen' set to define the range for normalization
+        if not seen: return 0
+        
+        score = 0
+        for i in goal_indices:
+            col = header[i]
+            vals = [s[i] for s in seen]
+            mn, mx = min(vals), max(vals)
+            norm = (r[i] - mn) / (mx - mn) if mx > mn else 0
+            score += (1 - norm) if col.endswith('-') else norm
+        return score
+
+    # If we have enough history, check if we've stopped improving
+    if len(seen) > 50:
+        # Look at the last 50 rows. If the current row is not better than the 
+        # best of the last 50, we assume we've plateaued.
+        recent = seen[-50:]
+        best_recent = max(get_score(r) for r in recent)
+        current_score = get_score(row)
+        
+        # If current is significantly better than recent best, keep going.
+        # Otherwise, stop.
+        if current_score > best_recent * 1.05:
+            return False
+        else:
+            return True
+            
+    return False
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = [val if header[i] == 'criterion' else float(val) 
+                             for i, val in enumerate(row)]
+            rows.append(processed_row)
+
+    seen = []
+    stopped_at = -1
+    for i, row in enumerate(rows):
+        if flow(header, row, seen):
+            stopped_at = i
+            break
+        seen.append(row)
+
+    if stopped_at != -1:
+        print(f"Optimization stopped at row {stopped_at} as no significant improvements were found.")
+    else:
+        print("Optimization completed through all rows without finding a clear stopping point.")

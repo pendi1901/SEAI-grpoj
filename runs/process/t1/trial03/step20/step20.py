@@ -1,0 +1,104 @@
+import csv
+import random
+
+def race(header, rows, label):
+    """
+    Compares three strategies:
+    1. 'random': Picks 16 random rows.
+    2. 'big_teams': Picks 17 rows with the largest 'Team Size'.
+    3. 'greedy': Picks 17 rows closest to the best row found by 'big_teams'.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    input_indices = [i for i, name in enumerate(header) if not name.endswith(('-', '+'))]
+    team_size_idx = header.index('Team Size')
+    
+    def get_score(goals):
+        score = 0
+        for i, val in enumerate(goals):
+            name = header[goal_indices[i]]
+            score += val if name.endswith('-') else -val
+        return score
+
+    memo = {}
+    def get_label(i):
+        if i not in memo:
+            if len(memo) >= 50:
+                raise Exception("Budget exceeded")
+            memo[i] = label(i)
+        return memo[i]
+
+    # Strategy 1: Random
+    def strategy_random():
+        indices = random.sample(range(len(rows)), 16)
+        best_idx, best_score = -1, float('inf')
+        for idx in indices:
+            score = get_score(get_label(idx))
+            if score < best_score:
+                best_score, best_idx = score, idx
+        return best_idx, best_score
+
+    # Strategy 2: Big Teams (The customer's current approach)
+    def strategy_big_teams():
+        indices = sorted(range(len(rows)), key=lambda i: rows[i][team_size_idx], reverse=True)[:17]
+        best_idx, best_score = -1, float('inf')
+        for idx in indices:
+            score = get_score(get_label(idx))
+            if score < best_score:
+                best_score, best_idx = score, idx
+        return best_idx, best_score
+
+    # Strategy 3: Greedy
+    def strategy_greedy():
+        best_big_idx, _ = strategy_big_teams()
+        
+        def dist(i, j):
+            d = 0
+            for k in input_indices:
+                d += (rows[i][k] - rows[j][k])**2
+            return d**0.5
+        
+        others = sorted([i for i in range(len(rows)) if i not in memo], key=lambda i: dist(i, best_big_idx))
+        best_idx, best_score = best_big_idx, get_score(get_label(best_big_idx))
+        for idx in others[:16]:
+            score = get_score(get_label(idx))
+            if score < best_score:
+                best_score, best_idx = score, idx
+        return best_idx, best_score
+
+    results = {
+        "random": strategy_random(),
+        "big_teams": strategy_big_teams(),
+        "greedy": strategy_greedy()
+    }
+    
+    winner = min(results, key=lambda k: results[k][1])
+    return {"winner": winner, "row": results[winner][0], "tried": list(results.keys())}
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            full_data = [[float(x) for x in row] for row in reader]
+        
+        def label(i):
+            return [full_data[i][idx] for idx in range(len(header)) if header[idx].endswith(('-', '+'))]
+        
+        masked_rows = []
+        for row in full_data:
+            masked_rows.append([row[i] if not header[i].endswith(('-', '+')) else "?" for i in range(len(row))])
+            
+        result = race(header, masked_rows, label)
+        print(f"Analysis: Is 'biggest teams' the best strategy?")
+        print(f"The winning strategy was: {result['winner']}.")
+        print(f"The best configuration found was at index {result['row']}.")
+        print(f"Strategies compared: {', '.join(result['tried'])}.")
+        if result['winner'] != 'big_teams':
+            print("Conclusion: Your current 'big teams' strategy is outperformed by smarter search methods.")
+        else:
+            print("Conclusion: Your current 'big teams' strategy is optimal.")
+        exit(0)
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

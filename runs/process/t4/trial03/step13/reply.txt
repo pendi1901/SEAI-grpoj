@@ -1,0 +1,55 @@
+```python
+import csv
+import pandas as pd
+import numpy as np
+from step03 import certify
+
+def get_combined_scores(header, rows):
+    """
+    Calculates a single performance score for each row.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    goals = [c for c in header if c.endswith('-') or c.endswith('+')]
+    
+    scores = []
+    for col in goals:
+        vals = df[col].astype(float)
+        norm = (vals - vals.min()) / (vals.max() - vals.min() + 1e-9)
+        if col.endswith('-'):
+            scores.append(1 - norm)
+        else:
+            scores.append(norm)
+            
+    return np.mean(scores, axis=0)
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) for val in row])
+        
+        # Split the data into two halves to represent "before" and "after" the change
+        # The prompt implies a temporal shift or split in the data
+        midpoint = len(rows) // 2
+        before_rows = rows[:midpoint]
+        after_rows = rows[midpoint:]
+        
+        scores_before = get_combined_scores(header, before_rows)
+        scores_after = get_combined_scores(header, after_rows)
+        
+        is_same = certify(scores_before.tolist(), scores_after.tolist())
+        
+        print("Customer Inquiry: Did the team's decision process change results?")
+        if is_same:
+            print("Answer: No, the results are statistically the same as before; the shift is likely just noise.")
+        else:
+            print("Answer: Yes, there is a statistically significant difference in performance following the change.")
+            
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
+```

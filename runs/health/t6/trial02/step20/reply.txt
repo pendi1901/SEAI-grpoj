@@ -1,0 +1,62 @@
+```python
+import ezr
+import random
+import step10
+
+def race(header, rows, label):
+    """
+    Compares three strategies for finding the best setup:
+    1. random: Randomly samples rows.
+    2. acquire: Uses the ezr.acquire logic (active learning).
+    3. greedy: Picks rows based on proximity to the current best-known configuration.
+    
+    This reuses the logic from step10 to compare strategies on the current data.
+    """
+    return step10.race(header, rows, label)
+
+if __name__ == "__main__":
+    # Load data
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    all_data = list(ezr.csv(filename))
+    header = all_data[0]
+    rows = all_data[1:]
+    
+    # Keep a copy of original rows to look up true values
+    original_rows = [list(r) for r in rows]
+    
+    # Mask goals
+    goal_indices = [i for i, h in enumerate(header) if h[-1] in "+-"]
+    for row in rows:
+        for idx in goal_indices:
+            row[idx] = "?"
+                
+    def label(i):
+        return original_rows[i]
+    
+    # Run the race
+    outcome = race(header, rows, label)
+    
+    print("Race Results: Comparing search strategies on Health-ClosedIssues data.")
+    print(f"Strategies tried: {', '.join(outcome['tried'])}")
+    print(f"The winning strategy was '{outcome['winner']}'.")
+    print(f"The best setup found by the winner is at index {outcome['row']}.")
+    
+    # Final check: does the winner beat random?
+    # We evaluate the winner's best row vs a random selection
+    final_tbl = ezr.Tbl([header] + original_rows)
+    
+    # Get a random row for comparison
+    random_idx = random.choice(range(len(original_rows)))
+    
+    winner_score = ezr.ydist(final_tbl, original_rows[outcome['row']])
+    random_score = ezr.ydist(final_tbl, original_rows[random_idx])
+    
+    print(f"\nPerformance (ydist, lower is better):")
+    print(f" - Winner ({outcome['winner']}): {winner_score:.4f}")
+    print(f" - Random baseline: {random_score:.4f}")
+    
+    if winner_score < random_score:
+        print("Conclusion: The chosen strategy outperforms random selection.")
+    else:
+        print("Conclusion: The chosen strategy performed similarly to or worse than random.")
+```

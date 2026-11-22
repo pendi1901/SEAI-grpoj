@@ -1,0 +1,77 @@
+import csv
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column (MRE-) for test rows using a 
+    k-Nearest Neighbors approach based on Euclidean distance of 
+    input features.
+    """
+    # Identify goal and input columns
+    goal_idx = 0
+    input_indices = [i for i, h in enumerate(header) if h not in ['MRE-', 'ACC+', 'PRED40+']]
+    
+    # Normalize numeric inputs for distance calculation
+    # Only consider columns that are numeric (not 'criterion')
+    numeric_inputs = [i for i in input_indices if header[i] != 'criterion']
+    
+    # Pre-calculate min/max for normalization
+    mins = [min(row[i] for row in train) for i in numeric_inputs]
+    maxs = [max(row[i] for row in train) for i in numeric_inputs]
+    
+    def normalize(val, i):
+        idx = numeric_inputs.index(i)
+        if maxs[idx] == mins[idx]: return 0
+        return (val - mins[idx]) / (maxs[idx] - mins[idx])
+
+    def distance(row1, row2):
+        d = 0
+        for i in input_indices:
+            if header[i] == 'criterion':
+                d += 0 if row1[i] == row2[i] else 1
+            else:
+                d += (normalize(row1[i], i) - normalize(row2[i], i))**2
+        return d**0.5
+
+    predictions = []
+    k = 5  # Number of neighbors
+    for t_row in test:
+        # Find k nearest neighbors
+        distances = []
+        for train_row in train:
+            distances.append((distance(t_row, train_row), train_row[goal_idx]))
+        distances.sort(key=lambda x: x[0])
+        
+        # Average the goal value of the k nearest neighbors
+        avg_mre = sum(d[1] for d in distances[:k]) / k
+        predictions.append(avg_mre)
+        
+    return predictions
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i] == 'criterion':
+                    processed_row.append(val)
+                else:
+                    processed_row.append(float(val))
+            rows.append(processed_row)
+    
+    # Create a dummy test set from the last 5 rows to demonstrate
+    test_rows = []
+    for r in rows[-5:]:
+        new_r = list(r)
+        new_r[0] = "?" # MRE-
+        new_r[1] = "?" # ACC+
+        new_r[2] = "?" # PRED40+
+        test_rows.append(new_r)
+    
+    results = guess(header, rows[:-5], test_rows)
+    print("Estimated MRE- values for test rows:")
+    for i, val in enumerate(results):
+        print(f"Test Row {i}: {val:.4f}")

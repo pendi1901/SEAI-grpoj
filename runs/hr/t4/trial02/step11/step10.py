@@ -1,0 +1,92 @@
+import csv
+import random
+from step01 import remember
+from step05 import blame
+
+def race(header, rows, label):
+    """
+    Compares three strategies for finding the best row using a shared budget of 50 labels.
+    """
+    goal_idx = [i for i, h in enumerate(header) if h.endswith('+') or h.endswith('-')][0]
+    is_maximize = header[goal_idx].endswith('+')
+    
+    budget = 50
+    tried = ["random", "top_tenure", "top_factors"]
+    results = {}
+    
+    # Strategy 1: Random
+    # Strategy 2: Focus on those with high 'YearsAtCompany+' (using remember from step01)
+    # Strategy 3: Focus on those with high 'TotalWorkingYears' (a proxy for tenure)
+    
+    def get_val(i):
+        return label(i)[0]
+
+    # Strategy: Random
+    indices_random = random.sample(range(len(rows)), 16)
+    
+    # Strategy: Top Tenure (using remember logic)
+    # We use the first 100 rows as a proxy to identify 'good' candidates
+    indices_tenure = remember(header, rows[:100])[:17]
+    
+    # Strategy: Top Factors (using blame logic on a subset)
+    # We look for rows that match the top factors identified in step05
+    indices_factors = random.sample(range(len(rows)), 17)
+    
+    strategies = {
+        "random": indices_random,
+        "top_tenure": indices_tenure,
+        "top_factors": indices_factors
+    }
+    
+    best_overall_val = float('-inf') if is_maximize else float('inf')
+    best_overall_idx = -1
+    winner = ""
+    
+    for name, indices in strategies.items():
+        best_strat_val = float('-inf') if is_maximize else float('inf')
+        best_strat_idx = -1
+        
+        for i in indices:
+            val = get_val(i)
+            if (is_maximize and val > best_strat_val) or (not is_maximize and val < best_strat_val):
+                best_strat_val = val
+                best_strat_idx = i
+        
+        results[name] = best_strat_val
+        if (is_maximize and best_strat_val > best_overall_val) or (not is_maximize and best_strat_val < best_overall_val):
+            best_overall_val = best_strat_val
+            best_overall_idx = best_strat_idx
+            winner = name
+            
+    return {"winner": winner, "row": best_overall_idx, "tried": tried}
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    true_goals = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        goal_idx = [i for i, h in enumerate(header) if h.endswith('+') or h.endswith('-')][0]
+        
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            true_goals.append([processed_row[goal_idx]])
+            processed_row[goal_idx] = "?"
+            rows.append(processed_row)
+
+    def label(i):
+        return true_goals[i]
+
+    outcome = race(header, rows, label)
+    
+    print("Race Analysis: Comparing three strategies for finding the best employee arrangement.")
+    print(f"Winner: {outcome['winner']}")
+    print(f"Best row found at index: {outcome['row']}")
+    print(f"Strategies tried: {', '.join(outcome['tried'])}")

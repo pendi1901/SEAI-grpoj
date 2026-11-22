@@ -1,0 +1,70 @@
+import ezr
+import step01
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column (Cost-) for each test row.
+    Uses the tree-based ranker from ezr to find the leaf node
+    containing the most similar training rows and returns the mean
+    of the target goal column in that leaf.
+    """
+    # Create a table for the training data
+    train_tbl = ezr.Tbl([header] + train)
+    
+    # Build a tree on the training data
+    root = ezr.tree(train_tbl, train_tbl.rows)
+    
+    # Identify the index of the first goal column (Cost-)
+    # Based on the provided header, it is at index 9
+    target_idx = 9
+    
+    results = []
+    for row in test:
+        # Walk the tree to find the leaf node for this test row
+        leaf_node = ezr.leaf(root, row)
+        
+        # Calculate the mean of the target column in this leaf
+        vals = [r[target_idx] for r in leaf_node.rows if r[target_idx] != "?"]
+        if vals:
+            results.append(sum(vals) / len(vals))
+        else:
+            # Fallback to global mean if leaf is empty or data missing
+            all_vals = [r[target_idx] for r in train_tbl.rows]
+            results.append(sum(all_vals) / len(all_vals))
+            
+    return results
+
+if __name__ == "__main__":
+    # Load the data
+    filename = "pom3a.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    
+    try:
+        header = next(data_gen)
+        all_rows = list(data_gen)
+    except StopIteration:
+        print("Error: File is empty or missing.")
+        exit(1)
+        
+    # Split data: 80% train, 20% test
+    split_idx = int(len(all_rows) * 0.8)
+    train = all_rows[:split_idx]
+    test_raw = all_rows[split_idx:]
+    
+    # Mask the goals in the test set to simulate "unknown"
+    # Goals are the last 3 columns: Cost-, Score-, Idle- (indices 9, 10, 11)
+    test = []
+    for row in test_raw:
+        new_row = row[:]
+        new_row[9] = new_row[10] = new_row[11] = "?"
+        test.append(new_row)
+        
+    # Get estimates
+    estimates = guess(header, train, test)
+    
+    # Print a summary for the customer
+    print(f"Estimated Cost- for {len(estimates)} test configurations:")
+    print(f"Average estimated cost: {sum(estimates)/len(estimates):.4f}")
+    print(f"Sample estimates: {[round(x, 4) for x in estimates[:5]]}...")
+    
+    exit(0)

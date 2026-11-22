@@ -1,0 +1,58 @@
+```python
+import ezr
+import step02
+import step06
+
+def justify(header, rows, row):
+    """
+    Justify why a 'biggest, deepest' setup might not be optimal by comparing
+    it against the distribution of performance across all known setups.
+    """
+    # Create a table to establish the performance landscape
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Estimate the performance of the target row using the tree-based ranker
+    # The ranker returns the mean ydist of the leaf node the row falls into
+    ranker = step02.guess(header, rows, [row])
+    estimated_ydist = ranker[0]
+    
+    # Calculate ydist for all rows in the dataset to build a reference distribution
+    all_ydists = [ezr.ydist(tbl, r) for r in rows]
+    
+    # A row is better if its ydist is lower.
+    # We count how many rows are worse (have a higher ydist) than our estimate.
+    worse_count = sum(1 for d in all_ydists if d > estimated_ydist)
+    p = worse_count / len(rows)
+    
+    # Construct a customer-friendly explanation
+    reason = (f"While a 'biggest, deepest' setup might seem robust, this specific "
+              f"configuration is only expected to outperform {int(p * 100)}% of "
+              "all known setups, suggesting that complexity does not guarantee "
+              "superior performance.")
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data_iter = ezr.csv(filename)
+    header = next(data_iter)
+    rows = list(data_iter)
+    
+    # Simulate a 'biggest, deepest' setup (e.g., high N_estimators, high Max_depth)
+    # We pick a row that represents a complex configuration
+    # N_estimators is at index 3, Max_depth is at index 7
+    complex_row = list(rows[0])
+    complex_row[3] = 200.0  # High N_estimators
+    complex_row[7] = 20.0   # High Max_depth
+    
+    # Mask the goals
+    for i, name in enumerate(header):
+        if name[-1] in "+-!":
+            complex_row[i] = "?"
+            
+    p, reason = justify(header, rows, complex_row)
+    
+    print(f"Analysis of 'biggest, deepest' configuration:")
+    print(f"Performance percentile (p): {p:.4f}")
+    print(f"Reason: {reason}")
+```

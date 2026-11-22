@@ -1,0 +1,80 @@
+```python
+import csv
+
+def flow(header, row, seen):
+    """
+    Decides when to stop searching by monitoring the improvement of the 
+    Pareto frontier. If the current row does not improve the best-observed 
+    performance significantly after a burn-in period, we stop.
+    """
+    goals = []
+    for i, name in enumerate(header):
+        if name.endswith('-'):
+            goals.append((i, -1))
+        elif name.endswith('+'):
+            goals.append((i, 1))
+
+    def get_score(r):
+        score = 0
+        for i, (col_idx, direction) in enumerate(goals):
+            val = r[col_idx]
+            # Normalize based on the range of the current 'seen' set
+            all_vals = [s[col_idx] for s in seen] + [val]
+            min_v, max_v = min(all_vals), max(all_vals)
+            rng = max_v - min_v if max_v != min_v else 1.0
+            norm = (val - min_v) / rng
+            if direction == -1:
+                norm = 1.0 - norm
+            score += norm
+        return score / len(goals)
+
+    # Burn-in period: wait for at least 50 rows to establish a baseline
+    if len(seen) < 50:
+        return False
+
+    # Calculate the best score seen so far
+    seen_scores = [get_score(s) for s in seen]
+    best_score = max(seen_scores)
+    
+    # Current row score
+    current_score = get_score(row)
+    
+    # If the current row is the best we've ever seen, keep going.
+    # If we haven't seen an improvement in the last 50 rows, stop.
+    if current_score > best_score:
+        return False
+    
+    # Check if we've plateaued (no improvement in the last 50 rows)
+    recent_scores = seen_scores[-50:]
+    if best_score > max(recent_scores):
+        return True
+        
+    return False
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                try:
+                    processed_row.append(float(val))
+                except ValueError:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    seen = []
+    stopped = False
+    for i, row in enumerate(rows):
+        if i > 50 and flow(header, row, seen):
+            print(f"Optimization stopped at row {i}. No significant improvement detected.")
+            stopped = True
+            break
+        seen.append(row)
+    
+    if not stopped:
+        print("Processed all records. No clear plateau detected.")
+```

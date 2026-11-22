@@ -1,0 +1,74 @@
+import ezr
+import random
+
+def blame(header, rows):
+    """
+    Identifies input columns that correlate with 'bad' outcomes (short stays).
+    'Bad' is defined as having a high ydist (far from the goal).
+    We compare the distribution of input values in the worst 25% of rows
+    against the rest of the data.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate ydist for all rows to identify the "worst" ones
+    scored = []
+    for row in rows:
+        scored.append((ezr.ydist(tbl, row), row))
+    
+    # Sort by ydist descending (worst first)
+    scored.sort(key=lambda x: x[0], reverse=True)
+    
+    n = len(scored) // 4
+    worst = [x[1] for x in scored[:n]]
+    rest = [x[1] for x in scored[n:]]
+    
+    # Identify input columns (exclude goals and skip columns)
+    input_indices = [i for i, name in enumerate(header) 
+                     if name[-1] not in "+-!" and name != "EmployeeNumber"]
+    
+    # Heuristic: Find columns where the distribution in 'worst' 
+    # differs significantly from 'rest'.
+    # For symbols, we look for high frequency in 'worst'.
+    # For numbers, we look for low/high values compared to the mean.
+    scores = []
+    for at in input_indices:
+        col = tbl.cols[at]
+        if isinstance(col, ezr.Sym):
+            # Frequency of symbols in worst vs rest
+            w_counts = {v: 0 for v in col.has}
+            for r in worst: w_counts[r[at]] += 1
+            # Score based on how much more frequent a value is in worst
+            score = 0
+            for v, count in w_counts.items():
+                if count > 0:
+                    score += (count / n)
+            scores.append((score, header[at]))
+        else:
+            # For numbers, check if mean of worst is significantly different
+            w_vals = [r[at] for r in worst if r[at] != "?"]
+            r_vals = [r[at] for r in rest if r[at] != "?"]
+            if w_vals and r_vals:
+                w_mu = sum(w_vals) / len(w_vals)
+                r_mu = sum(r_vals) / len(r_vals)
+                # Score based on normalized difference
+                diff = abs(w_mu - r_mu) / (ezr.div(col) + 1e-32)
+                scores.append((diff, header[at]))
+                
+    # Return top 3 columns that explain the bad outcomes
+    scores.sort(key=lambda x: x[0], reverse=True)
+    return [name for score, name in scores[:3]]
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    explanations = blame(header, rows)
+    
+    print("Analysis of short-stay employees complete.")
+    print("The following factors are most strongly associated with shorter tenure:")
+    for i, factor in enumerate(explanations, 1):
+        print(f"{i}. {factor}")
+    
+    exit(0)

@@ -1,0 +1,76 @@
+```python
+import csv
+import pandas as pd
+import numpy as np
+from sklearn.neighbors import NearestNeighbors
+
+def remember(header, rows):
+    """
+    Identifies the 5% of rows that are most similar to the 'best' performing rows
+    in the dataset. We define 'best' as those with the lowest aggregate normalized
+    cost across all goal columns.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    
+    # Identify goal columns
+    goals = [c for c in header if c.endswith('-') or c.endswith('+')]
+    inputs = [c for c in header if c not in goals]
+    
+    # 1. Calculate aggregate score to find the 'best' rows
+    # Normalize goals: lower is better for all (invert '+' goals)
+    normalized_goals = pd.DataFrame(index=df.index)
+    for goal in goals:
+        col = df[goal].astype(float)
+        if goal.endswith('-'):
+            normalized_goals[goal] = (col - col.min()) / (col.max() - col.min() + 1e-9)
+        else:
+            normalized_goals[goal] = (col.max() - col) / (col.max() - col.min() + 1e-9)
+            
+    df['score'] = normalized_goals.sum(axis=1)
+    
+    # 2. Find the top 1% of rows (the "gold standard" examples)
+    n_rows = len(df)
+    k_best = max(1, n_rows // 100)
+    best_indices = df.nsmallest(k_best, 'score').index.tolist()
+    
+    # 3. Use Nearest Neighbors to find rows most similar to these gold standards
+    # We use numeric inputs for similarity
+    X = df[inputs].select_dtypes(include=[np.number])
+    nn = NearestNeighbors(n_neighbors=max(1, n_rows // 20))
+    nn.fit(X)
+    
+    # Find neighbors of the best rows
+    distances, indices = nn.kneighbors(X.iloc[best_indices])
+    
+    # Flatten and get unique indices, limited to 5% of total rows
+    result_indices = list(set(indices.flatten()))
+    limit = max(1, n_rows // 20)
+    
+    return sorted(result_indices)[:limit]
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed_row = []
+                for val in row:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        best_indices = remember(header, rows)
+        
+        print("Customer Inquiry: Show me the past configurations most like the best ones.")
+        print(f"Analysis: Found {len(best_indices)} historical configurations that align with our top performers.")
+        print("Indices of recommended configurations:", best_indices)
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

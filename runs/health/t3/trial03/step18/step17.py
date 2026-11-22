@@ -1,0 +1,98 @@
+import csv
+import random
+
+def choose(header, rows, label):
+    """
+    Finds a setup that is both high-performing and 'small'.
+    We define 'small' as having low N_estimators and low Max_depth.
+    We sample 50 rows, score them based on a weighted combination of 
+    performance (goals) and efficiency (smallness), and return the best.
+    """
+    goal_indices = [i for i, h in enumerate(header) if h.endswith('-') or h.endswith('+')]
+    n_est_idx = header.index('N_estimators')
+    max_depth_idx = header.index('Max_depth')
+
+    # Normalize goals to [0, 1] for scoring
+    def get_performance_score(goals):
+        score = 0
+        for i, val in enumerate(goals):
+            # For this specific dataset, we know the range of goals roughly
+            # MRE- (0 to 1), ACC+ (0 to 1), PRED40+ (0 to 1)
+            if header[goal_indices[i]].endswith('-'):
+                score += (1.0 - val)
+            else:
+                score += val
+        return score / len(goal_indices)
+
+    # Efficiency score: smaller is better (lower N_estimators and Max_depth)
+    # We normalize these to [0, 1] where 1 is "very small"
+    def get_efficiency_score(row):
+        n_est = row[n_est_idx]
+        depth = row[max_depth_idx]
+        # Max values in dataset are ~200 and ~20
+        norm_n = 1.0 - (min(n_est, 200) / 200.0)
+        norm_d = 1.0 - (min(depth, 20) / 20.0)
+        return (norm_n + norm_d) / 2.0
+
+    # Sample 50 rows
+    indices = random.sample(range(len(rows)), min(50, len(rows)))
+    
+    best_idx = -1
+    best_total_score = -1.0
+    
+    for i in indices:
+        goals = label(i)
+        perf = get_performance_score(goals)
+        eff = get_efficiency_score(rows[i])
+        
+        # Combined score: balance performance and smallness
+        # We weight performance slightly higher (0.6) than efficiency (0.4)
+        total_score = (0.6 * perf) + (0.4 * eff)
+        
+        if total_score > best_total_score:
+            best_total_score = total_score
+            best_idx = i
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                try:
+                    processed_row.append(float(val))
+                except ValueError:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Mask goals
+    true_goals = []
+    for row in rows:
+        true_goals.append([row[i] for i, h in enumerate(header) if h.endswith('-') or h.endswith('+')])
+        for i in range(len(row)):
+            if header[i].endswith('-') or header[i].endswith('+'):
+                row[i] = "?"
+
+    called_indices = set()
+    def label(i):
+        if i not in called_indices:
+            if len(called_indices) >= 50:
+                raise ValueError("Budget exceeded")
+            called_indices.add(i)
+        return true_goals[i]
+
+    best_idx = choose(header, rows, label)
+    
+    print(f"Analysis complete. Evaluated {len(called_indices)} configurations.")
+    print(f"Recommended setup (Row {best_idx}):")
+    print(f"N_estimators: {rows[best_idx][header.index('N_estimators')]}")
+    print(f"Max_depth: {rows[best_idx][header.index('Max_depth')]}")
+    print(f"Performance metrics: {true_goals[best_idx]}")
+    print("This setup balances high predictive accuracy with low resource usage.")

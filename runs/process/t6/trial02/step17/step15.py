@@ -1,0 +1,42 @@
+import ezr
+import step05
+
+def blame(header, rows):
+    """
+    Identify input columns that best explain why the worst rows are bad.
+    We use the logic from step05, which compares the distribution of 
+    input values in the worst 25% of rows against the rest of the data.
+    """
+    # step05.blame already implements the logic of identifying 
+    # statistically significant input factors that correlate with poor performance.
+    return step05.blame(header, rows)
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    
+    try:
+        header = next(data_gen)
+        rows = list(data_gen)
+    except StopIteration:
+        exit(1)
+        
+    # Get the columns that explain the worst performance
+    factors = blame(header, rows)
+    
+    # Identify all input columns (those not ending in - or +)
+    all_inputs = [name for name in header if not (name.endswith('-') or name.endswith('+'))]
+    
+    # Columns to stop worrying about are those that are NOT in the 'blame' list
+    safe_to_ignore = [f for f in all_inputs if f not in factors]
+    
+    print("Analysis: Which project factors matter most to Cost-?")
+    print("Factors that significantly impact performance (Focus here):")
+    for factor in factors[:2]:  # Customer asked for one or two
+        print(f"- {factor}")
+        
+    print("\nFactors you can safely stop worrying about:")
+    for safe in safe_to_ignore[:2]: # Show a few examples
+        print(f"- {safe}")
+        
+    exit(0)

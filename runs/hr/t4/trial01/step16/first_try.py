@@ -1,0 +1,58 @@
+import csv
+from step02 import guess
+from step06 import justify as base_justify
+
+def justify(header, rows, row):
+    """
+    Estimates the goal column for the given row and calculates its rank
+    relative to the existing rows. This implementation specifically addresses
+    the 'pay everyone more' question by comparing the current row's goal
+    to a hypothetical version where 'MonthlyIncome' is increased.
+    """
+    # Identify goal column and income column
+    goal_idx = next(i for i, col in enumerate(header) if col.endswith('+') or col.endswith('-'))
+    income_idx = header.index('MonthlyIncome')
+    
+    # Get the baseline justification using existing logic
+    p, reason = base_justify(header, rows, row)
+    
+    # Simulate 'paying more' by increasing income by 20%
+    hypothetical_row = list(row)
+    hypothetical_row[income_idx] = row[income_idx] * 1.2
+    
+    # Predict the outcome of this change
+    # We need to train on the provided rows to estimate the impact
+    # We use the guess function from step02
+    prediction_baseline = guess(header, rows, [row])[0]
+    prediction_boosted = guess(header, rows, [hypothetical_row])[0]
+    
+    # Compare the impact
+    is_maximize = header[goal_idx].endswith('+')
+    improvement = (prediction_boosted - prediction_baseline) if is_maximize else (prediction_baseline - prediction_boosted)
+    
+    if improvement <= 0:
+        extra = "Increasing pay does not significantly improve the outcome for this employee."
+    else:
+        extra = f"Increasing pay by 20% is estimated to improve the goal by {improvement:.2f} units."
+        
+    return p, f"{reason} {extra}"
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = [float(val) if header[i][0].isupper() else val for i, val in enumerate(row)]
+            rows.append(processed_row)
+            
+    # Test with the last row
+    test_row = list(rows[-1])
+    goal_idx = next(i for i, col in enumerate(header) if col.endswith('+') or col.endswith('-'))
+    test_row[goal_idx] = "?"
+    
+    p, reason = justify(header, rows[:-1], test_row)
+    
+    print(f"Rank: {p:.4f}")
+    print(f"Reason: {reason}")

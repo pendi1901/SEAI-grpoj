@@ -1,0 +1,73 @@
+```python
+import csv
+
+def flow(header, row, seen):
+    """
+    Decides if the current row is 'good enough' to stop searching.
+    We use a simple threshold strategy: if the current row is better than 
+    all previously seen rows (Pareto-wise), we accept it if it exceeds 
+    a calculated quality threshold based on the distribution of seen rows.
+    """
+    goals = []
+    for i, name in enumerate(header):
+        if name.endswith('-'):
+            goals.append((i, -1))
+        elif name.endswith('+'):
+            goals.append((i, 1))
+
+    def get_score(r):
+        # Normalize score: higher is better
+        score = 0
+        for idx, direction in goals:
+            score += r[idx] * direction
+        return score
+
+    current_score = get_score(row)
+    
+    if not seen:
+        return False
+    
+    # Calculate scores of all seen rows
+    seen_scores = [get_score(s) for s in seen]
+    max_seen = max(seen_scores)
+    
+    # If this row is better than anything seen so far, 
+    # we consider it a candidate. We stop if it's significantly 
+    # better than the average of what we've seen.
+    if current_score > max_seen:
+        avg_seen = sum(seen_scores) / len(seen_scores)
+        if current_score > avg_seen * 1.1:  # 10% improvement threshold
+            return True
+            
+    return False
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                try:
+                    processed_row.append(float(val))
+                except ValueError:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    seen = []
+    found = False
+    for i, row in enumerate(rows):
+        if flow(header, row, seen):
+            print(f"Stopped at row {i}: Found a configuration good enough to ship.")
+            print(f"Configuration: {row}")
+            found = True
+            break
+        seen.append(row)
+    
+    if not found:
+        print("Processed all rows without finding a configuration that met the criteria.")
+```

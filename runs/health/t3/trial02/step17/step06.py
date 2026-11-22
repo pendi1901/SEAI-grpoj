@@ -1,0 +1,87 @@
+import csv
+from sklearn.ensemble import RandomForestRegressor
+import numpy as np
+
+def justify(header, rows, row):
+    """
+    Estimates the performance of the given row and compares it against the dataset.
+    Returns (fraction_better, reason_string).
+    """
+    # Identify indices
+    goal_indices = [i for i, h in enumerate(header) if h.endswith('-') or h.endswith('+')]
+    input_indices = [i for i, h in enumerate(header) if not (h.endswith('-') or h.endswith('+'))]
+    
+    # Preprocess: convert symbolic to numeric
+    def encode(data):
+        encoded = []
+        for r in data:
+            new_r = []
+            for i, val in enumerate(r):
+                if isinstance(val, str):
+                    new_r.append(hash(val) % 1000)
+                else:
+                    new_r.append(float(val))
+            encoded.append(new_r)
+        return np.array(encoded)
+
+    data_mat = encode(rows)
+    X = data_mat[:, input_indices]
+    
+    # Estimate goals for the provided row
+    estimated_goals = []
+    for g_idx in goal_indices:
+        y = data_mat[:, g_idx]
+        model = RandomForestRegressor(n_estimators=50, random_state=42)
+        model.fit(X, y)
+        estimated_goals.append(model.predict([encode([row])[0][input_indices]])[0])
+
+    # Calculate score for the row
+    def get_score(vals, row_goals):
+        score = 0
+        for i, g_idx in enumerate(goal_indices):
+            col_vals = [r[g_idx] for r in rows]
+            min_v, max_v = min(col_vals), max(col_vals)
+            rng = max_v - min_v if max_v != min_v else 1.0
+            norm = (row_goals[i] - min_v) / rng
+            if header[g_idx].endswith('-'):
+                norm = 1.0 - norm
+            score += norm
+        return score / len(goal_indices)
+
+    row_score = get_score(rows, estimated_goals)
+    
+    # Compare against all rows
+    all_scores = []
+    for r in rows:
+        r_goals = [r[i] for i in goal_indices]
+        all_scores.append(get_score(rows, r_goals))
+    
+    better_count = sum(1 for s in all_scores if row_score > s)
+    p = better_count / len(rows)
+    
+    reason = f"This setup is estimated to outperform {p:.1%} of all known configurations based on its input parameters."
+    return p, reason
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                try:
+                    processed_row.append(float(val))
+                except ValueError:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Pick a sample row and mask its goals
+    test_row = list(rows[0])
+    for i in range(len(header)):
+        if header[i].endswith('-') or header[i].endswith('+'):
+            test_row[i] = "?"
+
+    p, reason = justify(header, rows, test_row)
+    print(f"Performance Analysis: {reason}")

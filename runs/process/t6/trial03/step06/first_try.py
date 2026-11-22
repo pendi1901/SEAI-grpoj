@@ -1,0 +1,56 @@
+import ezr
+import step01
+import step02
+
+def justify(header, rows, row):
+    """
+    Returns (p, reason): p is the fraction of rows that 'row' is better than,
+    and reason is a sentence explaining the estimation.
+    """
+    # 1. Estimate the goals for the target row using the tree-based guesser
+    # We use all rows as training data to build the model
+    predictions = step02.guess(header, rows, [row])
+    estimated_goals = predictions[0]
+    
+    # 2. Create a table to calculate ydist for all rows
+    tbl = ezr.Tbl([header] + rows)
+    
+    # 3. Calculate ydist for the target row using its estimated goals
+    # We create a temporary row with the estimated values
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    temp_row = list(row)
+    for i, g_idx in enumerate(goal_indices):
+        temp_row[g_idx] = estimated_goals[i]
+    
+    target_ydist = ezr.ydist(tbl, temp_row)
+    
+    # 4. Calculate ydist for all existing rows
+    all_ydists = [ezr.ydist(tbl, r) for r in rows]
+    
+    # 5. Calculate p: fraction of rows that are worse (have higher ydist) than target
+    # A lower ydist is better.
+    better_than_count = sum(1 for d in all_ydists if d > target_ydist)
+    p = better_than_count / len(rows)
+    
+    reason = (f"Based on the input configuration, this setup is estimated to be "
+              f"better than {int(p * 100)}% of all observed scenarios.")
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Pick a sample row to justify (e.g., the 10th row)
+    target_row = list(rows[10])
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    for idx in goal_indices:
+        target_row[idx] = "?"
+        
+    p, reason = justify(header, rows, target_row)
+    
+    print(f"Justification for scenario:")
+    print(f"Rank: {p:.4f}")
+    print(f"Reason: {reason}")

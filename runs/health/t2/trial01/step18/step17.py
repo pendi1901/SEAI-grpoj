@@ -1,0 +1,88 @@
+import csv
+import random
+import step01
+import step07
+
+def choose(header, rows, label):
+    """
+    Finds a setup that forecasts well (multi-objective score) 
+    and is small (low N_estimators).
+    
+    We sample 50 rows, label them, and score them using a 
+    weighted objective: maximize (score) and minimize (N_estimators).
+    """
+    n = len(rows)
+    n_est_idx = header.index('N_estimators')
+    
+    # Sample 50 indices
+    indices = random.sample(range(n), min(n, 50))
+    
+    # Get true goals for sampled rows
+    labeled_data = []
+    for i in indices:
+        goals = label(i)
+        row = list(rows[i])
+        row[0], row[1], row[2] = goals[0], goals[1], goals[2]
+        labeled_data.append((i, row))
+    
+    # Extract goals for normalization
+    mres = [r[1][0] for r in labeled_data]
+    accs = [r[1][1] for r in labeled_data]
+    preds = [r[1][2] for r in labeled_data]
+    n_ests = [r[1][n_est_idx] for r in labeled_data]
+    
+    def norm(val, min_v, max_v, reverse=False):
+        if max_v == min_v: return 0.0
+        res = (val - min_v) / (max_v - min_v)
+        return (1.0 - res) if reverse else res
+
+    # Score: 0.7 * performance_score + 0.3 * normalized_smallness
+    # performance_score = (norm(MRE, rev) + norm(ACC) + norm(PRED)) / 3
+    best_score = -1.0
+    best_idx = indices[0]
+    
+    for i, row in labeled_data:
+        perf = (norm(row[0], min(mres), max(mres), True) +
+                norm(row[1], min(accs), max(accs), False) +
+                norm(row[2], min(preds), max(preds), False)) / 3.0
+        
+        smallness = norm(row[n_est_idx], min(n_ests), max(n_ests), True)
+        
+        total_score = 0.7 * perf + 0.3 * smallness
+        if total_score > best_score:
+            best_score = total_score
+            best_idx = i
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            true_goals = []
+            for row in reader:
+                processed = []
+                for i, val in enumerate(row):
+                    if header[i] in ['MRE-', 'ACC+', 'PRED40+', 'N_estimators', 
+                                     'Min_sample_leaves', 'Min_impurity_decrease', 'Max_depth']:
+                        processed.append(float(val))
+                    else:
+                        processed.append(val)
+                true_goals.append([processed[0], processed[1], processed[2]])
+                processed[0], processed[1], processed[2] = "?", "?", "?"
+                rows.append(processed)
+
+        def label(i):
+            return true_goals[i]
+
+        best_idx = choose(header, rows, label)
+        print(f"Recommended setup found at index: {best_idx}")
+        print(f"Goals (MRE-, ACC+, PRED40+): {true_goals[best_idx]}")
+        print("This setup balances high forecast accuracy with a small model footprint.")
+        exit(0)
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

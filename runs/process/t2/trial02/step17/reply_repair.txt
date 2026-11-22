@@ -1,0 +1,63 @@
+```python
+import csv
+import random
+from step01 import remember
+
+def choose(header, rows, label):
+    """
+    Finds the best setup for a large, high-stakes project.
+    Since we cannot use 'remember' on rows with '?' goals, we use a 
+    random sampling strategy to explore the space within the 50-label budget.
+    """
+    goal_indices = [(i, name[-1]) for i, name in enumerate(header) 
+                    if name.endswith('-') or name.endswith('+')]
+
+    def get_score(row_goals):
+        s = 0
+        for i, (idx, op) in enumerate(goal_indices):
+            val = float(row_goals[i])
+            s += val if op == '-' else -val
+        return s
+
+    # We have a budget of 50 labels.
+    # We sample 50 random indices to evaluate.
+    n = len(rows)
+    sample_size = min(50, n)
+    to_label = random.sample(range(n), sample_size)
+
+    best_idx = -1
+    best_score = float('inf')
+
+    for i in to_label:
+        true_goals = label(i)
+        score = get_score(true_goals)
+        
+        if score < best_score:
+            best_score = score
+            best_idx = i
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [row for row in reader]
+            
+        # Mock label function for the test harness
+        def label(i):
+            return [rows[i][idx] for idx, _ in 
+                    [(j, name[-1]) for j, name in enumerate(header) 
+                     if name.endswith('-') or name.endswith('+')]]
+
+        best_row_idx = choose(header, rows, label)
+        
+        print(f"For high-stakes projects, the recommended setup is at row index: {best_row_idx}")
+        print("This selection was made by evaluating a random sample of configurations.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

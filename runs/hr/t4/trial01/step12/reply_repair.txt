@@ -1,0 +1,74 @@
+```python
+import csv
+from step02 import guess as base_guess
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column for test rows.
+    The harness passes '?' in the goal column, so we must handle that 
+    before passing to the underlying model.
+    """
+    goal_idx = next(i for i, col in enumerate(header) if col.endswith('+') or col.endswith('-'))
+    
+    # Create a sanitized version of test rows where '?' is replaced with a dummy value
+    # so the model doesn't crash on string conversion.
+    sanitized_test = []
+    for row in test:
+        new_row = list(row)
+        new_row[goal_idx] = 0.0
+        sanitized_test.append(new_row)
+        
+    return base_guess(header, train, sanitized_test)
+
+def analyze_sales_overtime(header, rows):
+    """
+    Estimates the impact of cutting overtime in the Sales department.
+    """
+    dept_idx = header.index('department')
+    ot_idx = header.index('overTime')
+    yac_idx = header.index('YearsAtCompany+')
+    
+    # Identify Sales employees
+    sales_rows = [r for r in rows if r[dept_idx] == 'Sales']
+    
+    # Create test sets: force 'overTime' to 'No' for all Sales employees
+    test_rows = []
+    for r in sales_rows:
+        new_row = list(r)
+        new_row[ot_idx] = 'No'
+        new_row[yac_idx] = '?'
+        test_rows.append(new_row)
+        
+    # Predict tenure if overtime were cut to 'No'
+    predictions = guess(header, rows, test_rows)
+    
+    # Compare with actual tenure of those currently in Sales
+    actual_tenure = [r[yac_idx] for r in sales_rows]
+    
+    avg_actual = sum(actual_tenure) / len(actual_tenure)
+    avg_predicted = sum(predictions) / len(predictions)
+    
+    return avg_actual, avg_predicted
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = [float(val) if header[i][0].isupper() else val for i, val in enumerate(row)]
+            rows.append(processed_row)
+            
+    avg_actual, avg_predicted = analyze_sales_overtime(header, rows)
+    
+    print("Impact Analysis: Cutting Overtime in Sales")
+    print(f"Current average tenure in Sales: {avg_actual:.2f} years")
+    print(f"Predicted average tenure if overtime is cut: {avg_predicted:.2f} years")
+    
+    diff = avg_predicted - avg_actual
+    if diff > 0:
+        print(f"Conclusion: Cutting overtime is predicted to increase average tenure by {diff:.2f} years.")
+    else:
+        print(f"Conclusion: Cutting overtime is predicted to decrease average tenure by {abs(diff):.2f} years.")
+```

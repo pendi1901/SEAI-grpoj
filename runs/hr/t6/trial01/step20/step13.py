@@ -1,0 +1,46 @@
+import ezr
+import step03
+
+def certify(xs, ys):
+    """
+    Returns True if the two distributions are statistically indistinguishable,
+    False if they differ significantly. Uses the same() function from ezr.stats.
+    """
+    return ezr.same(xs, ys)
+
+if __name__ == "__main__":
+    # Load data
+    data = list(ezr.csv("WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"))
+    header = data[0]
+    rows = data[1:]
+
+    # Identify indices
+    # 'TrainingTimesLastYear' is numeric, 'YearsWithCurrManager+' is numeric (goal)
+    train_idx = header.index('TrainingTimesLastYear')
+    manager_idx = header.index('YearsWithCurrManager+')
+
+    # Split data into two groups: those with low training (0-2) vs high training (3+)
+    # This threshold is chosen to split the population into two meaningful groups
+    low_training = []
+    high_training = []
+
+    for row in rows:
+        val = row[manager_idx]
+        if val == "?":
+            continue
+        if row[train_idx] <= 2:
+            low_training.append(val)
+        else:
+            high_training.append(val)
+
+    # Perform statistical test
+    is_noise = certify(low_training, high_training)
+
+    print("Analysis: Do people with more training stay longer with their manager?")
+    print(f"Average tenure with manager (Training <= 2 days): {sum(low_training)/len(low_training):.2f} years")
+    print(f"Average tenure with manager (Training > 2 days):  {sum(high_training)/len(high_training):.2f} years")
+    
+    if is_noise:
+        print("Result: The difference is statistically insignificant (just noise).")
+    else:
+        print("Result: The difference is statistically significant (not just noise).")

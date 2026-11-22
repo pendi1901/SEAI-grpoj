@@ -1,0 +1,52 @@
+import ezr
+import random
+
+def remember(header, rows):
+    """
+    Finds the best rows based on the goals defined in the header.
+    Goals ending in '+' are maximized, '-' are minimized.
+    """
+    # Create a table object to use ezr's utility functions
+    # We reconstruct the header with the original names
+    tbl = ezr.Tbl([header] + rows)
+    
+    # ydist calculates how far a row is from the ideal goal values.
+    # Lower ydist is better.
+    scored = []
+    for i, row in enumerate(rows):
+        scored.append((ezr.ydist(tbl, row), i))
+    
+    # Sort by ydist ascending (best first)
+    scored.sort()
+    
+    # Return top 5% of rows (800 rows * 0.05 = 40)
+    limit = max(1, int(len(rows) * 0.05))
+    return [idx for score, idx in scored[:limit]]
+
+if __name__ == "__main__":
+    # Load the data
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Get the best indices
+    best_indices = remember(header, rows)
+    
+    # Print a summary for the customer
+    print(f"Analysis complete. Found {len(best_indices)} top-performing staff records.")
+    print("These individuals represent the 'best' working arrangements based on your goals.")
+    print("-" * 60)
+    
+    # Show a sample of the best rows
+    sample_size = min(3, len(best_indices))
+    print(f"Sample of {sample_size} top records:")
+    for i in range(sample_size):
+        idx = best_indices[i]
+        row = rows[idx]
+        # Display a few key columns for the customer
+        # YearsAtCompany+ is at index 31, YearsInCurrentRole+ at 32
+        print(f"Record {idx}: Years at Company: {row[31]}, Years in Role: {row[32]}, "
+              f"Monthly Income: {row[18]}, Job Satisfaction: {row[16]}")
+    
+    exit(0)

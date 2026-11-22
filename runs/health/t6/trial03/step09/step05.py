@@ -1,0 +1,58 @@
+import ezr
+import step01
+
+def blame(header, rows):
+    """
+    Identifies which input settings contribute most to poor performance.
+    We compare the distribution of input values in the worst 25% of rows
+    against the rest of the data.
+    """
+    # Create a table to use ydist for ranking
+    data = [header] + rows
+    tbl = ezr.Tbl(data)
+    
+    # Rank rows by ydist (higher ydist = worse performance)
+    scored = []
+    for row in rows:
+        scored.append((ezr.ydist(tbl, row), row))
+    
+    scored.sort(key=lambda x: x[0], reverse=True)
+    
+    # Split into worst 25% and the rest
+    n_worst = len(rows) // 4
+    worst = [x[1] for x in scored[:n_worst]]
+    rest = [x[1] for x in scored[n_worst:]]
+    
+    # For each input column, check if the distribution in 'worst'
+    # is significantly different from 'rest' using the same logic as step03
+    culprits = []
+    for col in tbl.x:
+        # Extract values for this column
+        w_vals = [r[col.at] for r in worst if r[col.at] != "?"]
+        r_vals = [r[col.at] for r in rest if r[col.at] != "?"]
+        
+        if not w_vals or not r_vals:
+            continue
+            
+        # If distributions are NOT the same, this column is a potential culprit
+        if not ezr.same(w_vals, r_vals):
+            culprits.append(col.txt)
+            
+    return culprits
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    results = blame(header, rows)
+    
+    print("Analysis of poor-performing setups:")
+    if results:
+        print(f"The following settings are strongly associated with poor outcomes: {', '.join(results)}")
+        print("Adjusting these parameters may help improve your system's performance.")
+    else:
+        print("No single setting clearly explains the poor performance.")
+        
+    exit(0)

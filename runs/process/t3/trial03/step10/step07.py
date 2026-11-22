@@ -1,0 +1,116 @@
+import csv
+import numpy as np
+import pandas as pd
+from sklearn.ensemble import RandomForestRegressor
+
+def choose(header, rows, label):
+    """
+    Finds the best row by using an active learning approach:
+    1. Use initial random samples to train a surrogate model.
+    2. Use the model to predict goals for all rows.
+    3. Use Expected Improvement (or similar) to pick the next best candidate.
+    """
+    goal_cols = [c for c in header if c.endswith('-') or c.endswith('+')]
+    input_cols = [c for c in header if c not in goal_cols]
+    
+    df = pd.DataFrame(rows, columns=header)
+    
+    # Track which rows we have labeled
+    labeled_indices = []
+    
+    # 1. Initial exploration: Sample 10 random rows to build a baseline
+    np.random.seed(42)
+    initial_indices = np.random.choice(len(rows), 10, replace=False).tolist()
+    
+    # 2. Iterative refinement: 40 more queries
+    # We use a Random Forest to predict the aggregate score of rows
+    for _ in range(40):
+        # Update labels
+        for idx in initial_indices:
+            if idx not in labeled_indices:
+                true_goals = label(idx)
+                for i, col in enumerate(goal_cols):
+                    rows[idx][header.index(col)] = true_goals[i]
+                labeled_indices.append(idx)
+        
+        # Train model on currently labeled data
+        df_labeled = pd.DataFrame([r for i, r in enumerate(rows) if i in labeled_indices], columns=header)
+        
+        # Calculate aggregate score for labeled data
+        def get_agg(row_data):
+            scores = []
+            for col in goal_cols:
+                val = row_data[col]
+                # Normalize based on current labeled range
+                col_min, col_max = df_labeled[col].min(), df_labeled[col].max()
+                norm = (val - col_min) / (col_max - col_min + 1e-9)
+                scores.append(1 - norm if col.endswith('-') else norm)
+            return np.mean(scores)
+        
+        y = df_labeled.apply(get_agg, axis=1)
+        X = df_labeled[input_cols]
+        
+        model = RandomForestRegressor(n_estimators=50)
+        model.fit(X, y)
+        
+        # Predict for all unlabeled rows
+        unlabeled_indices = [i for i in range(len(rows)) if i not in labeled_indices]
+        if not unlabeled_indices:
+            break
+            
+        X_unlabeled = df[input_cols].iloc[unlabeled_indices]
+        preds = model.predict(X_unlabeled)
+        
+        # Pick the best predicted row
+        best_unlabeled = unlabeled_indices[np.argmax(preds)]
+        initial_indices = [best_unlabeled]
+        
+    # Final evaluation: return index of the best labeled row
+    best_idx = labeled_indices[0]
+    best_score = -1
+    for idx in labeled_indices:
+        s = get_agg(pd.Series({c: rows[idx][header.index(c)] for c in goal_cols}))
+        if s > best_score:
+            best_score = s
+            best_idx = idx
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed = [float(val) if val.replace('.', '', 1).isdigit() or 
+                             (val.startswith('-') and val[1:].replace('.', '', 1).isdigit()) 
+                             else val for val in row]
+                # Hide goals
+                for i, col in enumerate(header):
+                    if col.endswith('-') or col.endswith('+'):
+                        processed[i] = "?"
+                rows.append(processed)
+        
+        # Create a copy for labeling
+        full_data = []
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            next(reader)
+            for row in reader:
+                full_data.append([float(val) if val.replace('.', '', 1).isdigit() or 
+                                 (val.startswith('-') and val[1:].replace('.', '', 1).isdigit()) 
+                                 else val for val in row])
+        
+        def label(i):
+            goals = [c for c in header if c.endswith('-') or c.endswith('+')]
+            return [full_data[i][header.index(c)] for c in goals]
+        
+        best_row_idx = choose(header, rows, label)
+        print(f"The best setup found is at index: {best_row_idx}")
+        print("This setup was identified using 50 targeted trials.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

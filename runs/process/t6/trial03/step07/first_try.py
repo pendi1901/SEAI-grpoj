@@ -1,0 +1,68 @@
+import ezr
+import step01
+
+def choose(header, rows, label):
+    """
+    Find the best row by using the acquire logic from ezr.
+    We label up to 50 rows and return the index of the best one found.
+    """
+    # Create a table object. Note: rows currently have '?' for goals.
+    # We need to label them to know their true values.
+    tbl = ezr.Tbl([header] + rows)
+    
+    # The acquire function in ezr uses a budget (the.Stop) to label rows.
+    # It returns the rows that were labeled.
+    # We wrap the label function to track indices.
+    labeled_data = []
+    
+    def tracked_label(row):
+        # Find the original index of this row
+        idx = rows.index(row)
+        true_row = label(idx)
+        labeled_data.append((idx, true_row))
+        return true_row
+
+    # Use ezr.acquire to pick the best rows to label
+    # This will call our tracked_label up to the.Stop (50) times
+    ezr.acquire(tbl, cap=50, label=tracked_label)
+    
+    # Now find the best row among those we labeled
+    best_idx = -1
+    best_ydist = 1e30
+    
+    # We need to evaluate the labeled rows against the full table context
+    # to calculate ydist correctly.
+    for idx, row in labeled_data:
+        d = ezr.ydist(tbl, row)
+        if d < best_ydist:
+            best_ydist = d
+            best_idx = idx
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Create a local cache for the label function
+    # The customer wants us to find the best one using the label budget
+    full_data = [list(r) for r in rows]
+    
+    def label(i):
+        return full_data[i]
+    
+    # Mask the goals for the rows passed to choose
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    for row in rows:
+        for idx in goal_indices:
+            row[idx] = "?"
+            
+    best_idx = choose(header, rows, label)
+    
+    print(f"Optimization complete.")
+    print(f"The best row found is at index: {best_idx}")
+    print(f"Goal values for this row: {full_data[best_idx][goal_indices[0]]}, "
+          f"{full_data[best_idx][goal_indices[1]]}, "
+          f"{full_data[best_idx][goal_indices[2]]}")

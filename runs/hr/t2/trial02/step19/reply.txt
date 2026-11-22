@@ -1,0 +1,79 @@
+```python
+import csv
+import step09
+
+def spot(header, rows):
+    """
+    Identifies rows that are 'unlike anyone we have employed'.
+    We define this as rows that are statistical outliers (using the logic 
+    from step09) and also rows that are 'distant' from the rest of the 
+    population (using a simple distance-based anomaly detection).
+    """
+    # Reuse the outlier detection logic from step09
+    suspicious = step09.spot(header, rows)
+    
+    # Additionally, identify rows that are 'unlike' others by calculating
+    # the average distance to all other rows.
+    # For efficiency on 800 rows, we sample 50 rows to compare against.
+    import random
+    sample = random.sample(rows, min(50, len(rows)))
+    
+    distances = []
+    for i, row in enumerate(rows):
+        # Calculate average distance to the sample
+        total_dist = 0
+        for s_row in sample:
+            # Simple distance: count mismatches in symbolic, diff in numeric
+            d = 0
+            for j, val in enumerate(row):
+                if header[j][0].isupper():
+                    d += abs(val - s_row[j])
+                elif val != s_row[j]:
+                    d += 1
+            total_dist += d
+        distances.append((total_dist / len(sample), i))
+        
+    # Sort by distance (most distant first)
+    distances.sort(key=lambda x: x[0], reverse=True)
+    
+    # Combine: prioritize the outliers from step09, then the most distant
+    outlier_set = set(suspicious)
+    result = list(suspicious)
+    for _, idx in distances:
+        if idx not in outlier_set:
+            result.append(idx)
+            
+    return result
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            new_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        new_row.append(float(val))
+                    except ValueError:
+                        new_row.append(0.0)
+                else:
+                    new_row.append(val)
+            rows.append(new_row)
+            
+    suspects = spot(header, rows)
+    
+    print("Analysis: Identifying hires that are unlike anyone we have employed.")
+    print("Estimates for these individuals may be unreliable due to lack of historical precedent.")
+    if not suspects:
+        print("No unusual hires identified.")
+    else:
+        print(f"Found {len(suspects)} rows that are statistically unusual.")
+        print("Top 5 most unusual rows (indices):")
+        for i in suspects[:5]:
+            print(f"- Row {i}")
+```

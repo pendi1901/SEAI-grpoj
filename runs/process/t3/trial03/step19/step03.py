@@ -1,0 +1,61 @@
+import csv
+import pandas as pd
+import numpy as np
+from scipy import stats
+
+def certify(xs, ys):
+    """
+    Returns True if the difference between two distributions is statistically 
+    insignificant (likely noise), False if they are significantly different.
+    Uses Welch's t-test for independent samples with unequal variances.
+    """
+    # Use a standard significance level (alpha = 0.05)
+    # If p-value > 0.05, we fail to reject the null hypothesis (they are the same)
+    t_stat, p_value = stats.ttest_ind(xs, ys, equal_var=False)
+    return p_value > 0.05
+
+def analyze_team_size_impact(header, rows):
+    """
+    Splits data into small and big team setups and compares their costs.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    
+    # Define 'small' vs 'big' based on the median of 'Team Size'
+    median_team_size = df['Team Size'].median()
+    
+    small_teams = df[df['Team Size'] <= median_team_size]['Cost-']
+    big_teams = df[df['Team Size'] > median_team_size]['Cost-']
+    
+    is_same = certify(small_teams.tolist(), big_teams.tolist())
+    
+    return small_teams.mean(), big_teams.mean(), is_same
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed_row = [float(val) if val.replace('.', '', 1).isdigit() or 
+                                 (val.startswith('-') and val[1:].replace('.', '', 1).isdigit()) 
+                                 else val for val in row]
+                rows.append(processed_row)
+        
+        small_avg, big_avg, is_same = analyze_team_size_impact(header, rows)
+        
+        print("Analysis of Team Size vs Cost:")
+        print(f"Average Cost for Small Teams: {small_avg:.4f}")
+        print(f"Average Cost for Big Teams:   {big_avg:.4f}")
+        
+        if is_same:
+            print("\nConclusion: The observed difference is likely due to noise (luck).")
+            print("The team size does not have a statistically significant impact on cost.")
+        else:
+            print("\nConclusion: The difference is statistically significant.")
+            print("Small-team setups are genuinely cheaper than big-team ones.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

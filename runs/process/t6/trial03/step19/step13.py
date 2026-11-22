@@ -1,0 +1,43 @@
+import ezr
+import step03
+
+def certify(xs, ys):
+    """
+    Returns True if the distributions are statistically indistinguishable,
+    False if they differ significantly.
+    """
+    # Reuse the statistical test logic from step03
+    return step03.certify(xs, ys)
+
+def analyze():
+    """
+    Compares the 'Cost-' goal distribution between the first half 
+    and the second half of the data to see if results shifted.
+    """
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Identify the goal column 'Cost-'
+    cost_idx = header.index("Cost-")
+    
+    # Split data into two halves to represent 'before' and 'after' the change
+    mid = len(rows) // 2
+    before = [r[cost_idx] for r in rows[:mid]]
+    after = [r[cost_idx] for r in rows[mid:]]
+    
+    # Check if they are statistically the same
+    is_same = certify(before, after)
+    
+    print("Analysis: Did the results shift after the team changed their decision process?")
+    print(f"Mean cost (first half):  {sum(before)/len(before):.4f}")
+    print(f"Mean cost (second half): {sum(after)/len(after):.4f}")
+    
+    if is_same:
+        print("Result: The difference is statistically insignificant. The results are the same.")
+    else:
+        print("Result: The difference is statistically significant. The results have shifted.")
+
+if __name__ == "__main__":
+    analyze()

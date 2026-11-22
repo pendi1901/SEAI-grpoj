@@ -1,0 +1,68 @@
+```python
+import ezr
+import random
+
+def choose(header, rows, label):
+    """
+    Find the best working arrangement using at most 50 labels.
+    We use the 'acquire' strategy from ezr to intelligently sample 
+    the search space and identify the row with the best goal outcomes.
+    """
+    # Create a table object. Note: rows currently have '?' in goal columns.
+    # We need to wrap the label function to handle the row indices.
+    tbl = ezr.Tbl([header] + rows)
+    
+    # We need to map the index back to the row for the oracle
+    # The oracle in ezr.acquire expects a row, we provide a wrapper
+    def oracle_wrapper(row):
+        # Find the index of this row in the original list
+        # Since rows are unique in this dataset, we can match by content
+        # or simply rely on the fact that we are passing the row object.
+        # The label function provided by the harness expects an index.
+        # We find the index of the row in the original 'rows' list.
+        idx = rows.index(row)
+        true_row = label(idx)
+        # Update the row in place with the true values
+        for i, val in enumerate(true_row):
+            row[i] = val
+        return row
+
+    # Use ezr.acquire to perform the active learning search.
+    # It will call the oracle at most 50 times (the.Stop).
+    # We set the budget to 50.
+    ezr.the.Stop = 50
+    
+    # acquire returns the rows that were labeled and explored
+    labeled_rows = ezr.acquire(tbl, cap=50, label=oracle_wrapper)
+    
+    # Find the best row among the labeled ones
+    best_row = min(labeled_rows, key=lambda r: ezr.ydist(tbl, r))
+    
+    # Return the index of the best row
+    return rows.index(best_row)
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Keep a copy of the original rows to simulate the oracle
+    full_data = [list(r) for r in rows]
+    
+    # Mask the goals
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(("+", "-"))]
+    for row in rows:
+        for idx in goal_indices:
+            row[idx] = "?"
+            
+    def label(i):
+        return full_data[i]
+    
+    best_idx = choose(header, rows, label)
+    
+    print(f"Active learning complete. Best row found at index: {best_idx}")
+    print("The identified arrangement optimizes for the goal columns provided.")
+    
+    exit(0)
+```

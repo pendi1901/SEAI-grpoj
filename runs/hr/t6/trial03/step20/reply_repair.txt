@@ -1,0 +1,102 @@
+```python
+import ezr
+import random
+
+def race(header, rows, label):
+    """
+    Compare the customer's rule of thumb against active learning and random search.
+    Customer rule: Give biggest pay rises to the newest staff.
+    """
+    budget = 50
+    labeled_data = {}
+
+    def oracle_wrapper(idx):
+        if idx not in labeled_data:
+            if len(labeled_data) >= budget:
+                return None
+            labeled_data[idx] = label(idx)
+        return labeled_data[idx]
+
+    # We need a table that reflects the full data to calculate ydist correctly.
+    # Since we only have partial labels, we use the labeled rows to build a 
+    # representative table for distance calculations.
+    def get_best_idx(tbl, indices):
+        # Filter indices that were actually labeled
+        valid = [i for i in indices if i in labeled_data]
+        if not valid: return indices[0]
+        return min(valid, key=lambda i: ezr.ydist(tbl, labeled_data[i]))
+
+    # Strategy 1: Random
+    def strategy_random(tbl, rows):
+        indices = random.sample(range(len(rows)), budget // 3)
+        for i in indices: oracle_wrapper(i)
+        return get_best_idx(tbl, indices)
+
+    # Strategy 2: Active Learning
+    def strategy_active(tbl, rows):
+        # We use a subset of the budget for active learning
+        # We need to pass a label function that updates our shared labeled_data
+        def active_label(row):
+            for i, r in enumerate(rows):
+                if r is row:
+                    full = oracle_wrapper(i)
+                    if full:
+                        for j in range(len(row)): row[j] = full[j]
+                    return row
+            return row
+        
+        labeled = ezr.acquire(tbl, cap=budget // 3, label=active_label)
+        # Find index of best row among labeled
+        return min(range(len(rows)), key=lambda i: ezr.ydist(tbl, labeled_data.get(i, rows[i])))
+
+    # Strategy 3: Customer Rule (Newest staff = lowest YearsAtCompany+)
+    def strategy_customer(tbl, rows):
+        # Sort by YearsAtCompany+ (index 31) ascending
+        indices = sorted(range(len(rows)), key=lambda i: rows[i][31])[:budget // 3]
+        for i in indices: oracle_wrapper(i)
+        return get_best_idx(tbl, indices)
+
+    # Build initial table for distance calculations
+    tbl = ezr.Tbl([header] + rows)
+    
+    results = {
+        "random": strategy_random(tbl, rows),
+        "active": strategy_active(tbl, rows),
+        "customer_rule": strategy_customer(tbl, rows)
+    }
+    
+    # Determine winner: lowest ydist among the best found by each strategy
+    winner = min(results, key=lambda name: ezr.ydist(tbl, labeled_data[results[name]]))
+    
+    return {"winner": winner, "row": results[winner], "tried": list(results.keys())}
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    goal_indices = [i for i, name in enumerate(header) if name[-1] in "+-"]
+    masked_rows = []
+    for row in rows:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_rows.append(new_row)
+        
+    def label_func(i):
+        return rows[i]
+    
+    result = race(header, masked_rows, label_func)
+    
+    print("Strategy Race: Is the 'newest staff' rule of thumb effective?")
+    print(f"Winner: {result['winner']}")
+    print("-" * 60)
+    if result['winner'] == "customer_rule":
+        print("Your rule of thumb is effective for identifying high-potential records.")
+    else:
+        print("Our active learning strategy outperformed your rule of thumb.")
+        print("Focusing on the most informative records yields better retention insights.")
+    
+    exit(0)
+```

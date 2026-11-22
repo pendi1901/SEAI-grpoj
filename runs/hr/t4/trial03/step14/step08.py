@@ -1,0 +1,65 @@
+import csv
+import random
+
+def fix(header, row, levers):
+    """
+    Recommends changes for a 'bad' row (short tenure) by picking a random
+    valid value from the provided levers.
+    """
+    recommendations = {}
+    
+    # Pick at least one lever to change
+    num_to_change = random.randint(1, len(levers))
+    chosen_levers = random.sample(list(levers.keys()), num_to_change)
+    
+    for col in chosen_levers:
+        allowed = levers[col]
+        if isinstance(allowed, list):
+            # Symbolic: pick a random value from the list
+            recommendations[col] = random.choice(allowed)
+        elif isinstance(allowed, tuple):
+            # Numeric: pick a random value in the range
+            low, high = allowed
+            recommendations[col] = random.uniform(low, high)
+            
+    return recommendations
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Define the levers available to change
+    levers = {
+        'businessTravel': ['Non-Travel', 'Travel_Frequently', 'Travel_Rarely'],
+        'overTime': ['No', 'Yes'],
+        'TrainingTimesLastYear': (0.0, 6.0),
+        'PercentSalaryHike': (11.0, 25.0),
+        'StockOptionLevel': (0.0, 3.0)
+    }
+
+    # Simulate a 'bad' row (e.g., the first row)
+    bad_row = rows[0]
+    
+    # Get recommendations
+    changes = fix(header, bad_row, levers)
+    
+    print("Analysis for improving staff retention:")
+    print(f"For an employee with short tenure, we recommend the following changes:")
+    for col, val in changes.items():
+        if isinstance(val, float):
+            print(f"- Adjust {col} to {val:.2f}")
+        else:
+            print(f"- Change {col} to {val}")
+    
+    print("\nThese adjustments are intended to improve the employee's tenure.")

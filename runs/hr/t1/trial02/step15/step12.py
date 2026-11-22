@@ -1,0 +1,57 @@
+import csv
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column ('YearsAtCompany+') for test rows.
+    To answer the customer's question: 'If we cut overtime across Sales, 
+    what happens to how long people stay?', we simulate the effect by 
+    calculating the average tenure of Sales employees who do NOT work overtime 
+    in the training set and applying that as a baseline estimate.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    first_goal_idx = goal_indices[0]
+    
+    dept_idx = header.index('department')
+    ot_idx = header.index('overTime')
+    
+    # Filter training data for Sales employees who do not work overtime
+    sales_no_ot = [r[first_goal_idx] for r in train 
+                   if r[dept_idx] == 'Sales' and r[ot_idx] == 'No']
+    
+    # Calculate baseline tenure for this specific group
+    if sales_no_ot:
+        baseline = sum(sales_no_ot) / len(sales_no_ot)
+    else:
+        # Fallback to global average if no matching training data
+        all_tenures = [r[first_goal_idx] for r in train]
+        baseline = sum(all_tenures) / len(all_tenures)
+        
+    # Return the baseline for every test row
+    return [float(baseline) for _ in test]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Use all data to train the model
+    train_data = rows
+    # Create a dummy test set to answer the customer's hypothetical
+    test_data = [list(rows[0])] 
+    
+    results = guess(header, train_data, test_data)
+    
+    print("Customer Question: If we cut overtime across Sales, what happens to how long people stay?")
+    print(f"Analysis: Based on historical data of Sales employees who do not work overtime,")
+    print(f"the estimated average tenure is {results[0]:.2f} years.")
+    print("Conclusion: Eliminating overtime in Sales is associated with this average tenure duration.")

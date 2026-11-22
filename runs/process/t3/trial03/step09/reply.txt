@@ -1,0 +1,64 @@
+```python
+import csv
+import pandas as pd
+import numpy as np
+from sklearn.ensemble import IsolationForest
+
+def spot(header, rows):
+    """
+    Identifies rows that are outliers (potentially mistyped or made up)
+    using the Isolation Forest algorithm.
+    Returns the indices of the rows, sorted by suspicion (most suspicious first).
+    """
+    df = pd.DataFrame(rows, columns=header)
+    
+    # Identify numeric columns for anomaly detection
+    # We exclude goals as they are outcomes, not inputs that could be "mistyped"
+    # in the context of project configuration.
+    goals = [c for c in header if c.endswith('-') or c.endswith('+')]
+    inputs = [c for c in header if c not in goals]
+    
+    # Prepare numeric input data
+    X = df[inputs].select_dtypes(include=[np.number])
+    
+    # IsolationForest returns -1 for outliers and 1 for inliers.
+    # The decision_function returns the anomaly score (lower is more anomalous).
+    clf = IsolationForest(contamination=0.05, random_state=42)
+    clf.fit(X)
+    
+    # Get anomaly scores (lower = more suspicious)
+    scores = clf.decision_function(X)
+    
+    # Get indices of rows sorted by score (ascending, so lowest scores first)
+    suspicious_indices = np.argsort(scores)
+    
+    return suspicious_indices.tolist()
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed_row = []
+                for val in row:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        suspicious = spot(header, rows)
+        
+        print("Anomaly Detection Report:")
+        print(f"Identified {len(suspicious)} potentially mistyped or unusual records.")
+        print("The 5 most suspicious row indices are:")
+        print(suspicious[:5])
+        print("\nThese rows contain input values that deviate significantly from the rest of the dataset.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

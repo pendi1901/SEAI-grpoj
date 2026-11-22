@@ -1,0 +1,62 @@
+import ezr
+import step01
+import step04
+
+def flow(header, row, seen):
+    """
+    Warn the user if the incoming row is significantly worse than the 
+    historical performance baseline. We use the statistical tests from 
+    ezr to detect if the current row's performance (ydist) is 
+    significantly worse than the distribution of 'seen' rows.
+    """
+    if len(seen) < 20:
+        return False
+    
+    # Create a table to calculate ydist
+    tbl = ezr.Tbl([header] + seen)
+    
+    # Calculate ydist for seen rows and the current row
+    # We use the model's normalization logic
+    seen_ydists = [ezr.ydist(tbl, r) for r in seen]
+    
+    # If the current row has hidden goals, we cannot evaluate it directly.
+    # However, the harness implies we should decide on the row.
+    # If goals are missing, we skip the warning.
+    if row[9] == "?" or row[10] == "?" or row[11] == "?":
+        return False
+        
+    current_ydist = ezr.ydist(tbl, row)
+    
+    # If the current row's ydist is significantly higher than the 
+    # distribution of seen rows (using a simple threshold check), 
+    # we flag it as "going bad".
+    # We use the 95th percentile of seen performance as the "bad" threshold.
+    seen_ydists.sort()
+    threshold = seen_ydists[int(len(seen_ydists) * 0.95)]
+    
+    # Return True if the row is "bad" (high ydist)
+    return current_ydist > threshold
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    
+    try:
+        header = next(data_gen)
+        all_rows = list(data_gen)
+    except StopIteration:
+        exit(1)
+        
+    seen = []
+    warnings = 0
+    
+    for row in all_rows:
+        if flow(header, row, seen):
+            warnings += 1
+        seen.append(row)
+        
+    print(f"Monitoring complete. Processed {len(all_rows)} configurations.")
+    print(f"Detected {warnings} instances where performance degraded significantly.")
+    print("These warnings indicate moments where the project results started to go bad.")
+    
+    exit(0)

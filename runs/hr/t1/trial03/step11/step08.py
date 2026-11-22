@@ -1,0 +1,79 @@
+import csv
+
+def fix(header, row, levers):
+    """
+    Recommends changes to a 'bad' row to improve its goal metrics.
+    We prioritize increasing 'PercentSalaryHike' and 'StockOptionLevel',
+    and adjusting 'overTime' or 'businessTravel' to improve retention.
+    """
+    recommendations = {}
+    
+    for col, allowed in levers.items():
+        idx = header.index(col)
+        current_val = row[idx]
+        
+        if isinstance(allowed, tuple):  # Numeric lever (low, high)
+            low, high = allowed
+            # If current is low, push towards high
+            if current_val < high:
+                recommendations[col] = min(current_val + (high - low) * 0.2, high)
+        else:  # Symbolic lever (list of options)
+            # If current is 'Yes'/'No' or specific travel, try to switch
+            if current_val in allowed:
+                # Simple heuristic: pick the first option that isn't the current one
+                for option in allowed:
+                    if option != current_val:
+                        recommendations[col] = option
+                        break
+    
+    # Ensure at least one change is made if possible
+    if not recommendations and levers:
+        first_key = list(levers.keys())[0]
+        if isinstance(levers[first_key], tuple):
+            recommendations[first_key] = levers[first_key][1]
+        else:
+            recommendations[first_key] = levers[first_key][0]
+            
+    return recommendations
+
+def load_data(filename):
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    return header, rows
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    header, rows = load_data(filename)
+    
+    # Define levers based on customer request
+    levers = {
+        'businessTravel': ['Non-Travel', 'Travel_Frequently', 'Travel_Rarely'],
+        'overTime': ['No', 'Yes'],
+        'TrainingTimesLastYear': (0.0, 6.0),
+        'PercentSalaryHike': (11.0, 25.0),
+        'StockOptionLevel': (0.0, 3.0)
+    }
+    
+    # Example: Fix the first row
+    bad_row = rows[0]
+    changes = fix(header, bad_row, levers)
+    
+    print("Recommended changes for employee retention:")
+    for col, val in changes.items():
+        print(f"- Change '{col}' to {val}")
+    
+    print("\nStrategy: We focus on increasing salary hikes and stock options, "
+          "while optimizing work-life balance levers like overtime and travel.")

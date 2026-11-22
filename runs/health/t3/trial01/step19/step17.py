@@ -1,0 +1,81 @@
+import csv
+import random
+
+def choose(header, rows, label):
+    """
+    Finds a setup that is both high-performing (utility) and small (low N_estimators).
+    We use a multi-objective approach: maximize utility and minimize N_estimators.
+    We label 50 rows and pick the one that balances performance and efficiency.
+    """
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+    n_est_idx = header.index('N_estimators')
+    
+    # Sample 50 random indices
+    indices_to_label = random.sample(range(len(rows)), 50)
+    
+    best_idx = -1
+    best_score = -float('inf')
+    
+    # Normalize N_estimators to be in a similar range as utility for balancing
+    # N_estimators range is roughly 10-200.
+    all_n = [float(r[n_est_idx]) for r in rows]
+    min_n, max_n = min(all_n), max(all_n)
+    
+    for i in indices_to_label:
+        goals = label(i)
+        rows[i][mre_idx], rows[i][acc_idx], rows[i][pred_idx] = goals
+        
+        # Utility: -MRE + ACC + PRED40
+        utility = -goals[0] + goals[1] + goals[2]
+        
+        # Efficiency: Lower N_estimators is better. 
+        # Normalize N_estimators (0 to 1) and subtract from score.
+        norm_n = (float(rows[i][n_est_idx]) - min_n) / (max_n - min_n)
+        
+        # Combined score: Performance - Efficiency_Penalty
+        # We weight utility higher than efficiency.
+        score = utility - (0.2 * norm_n)
+        
+        if score > best_score:
+            best_score = score
+            best_idx = i
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i] == 'criterion':
+                    processed_row.append(val)
+                else:
+                    processed_row.append(float(val))
+            rows.append(processed_row)
+
+    # Store true values for the label function
+    true_goals = {i: [r[0], r[1], r[2]] for i, r in enumerate(rows)}
+    
+    # Mask rows
+    for r in rows:
+        r[0] = r[1] = r[2] = "?"
+
+    def label(i):
+        return true_goals[i]
+
+    best_idx = choose(header, rows, label)
+    
+    row = rows[best_idx]
+    print(f"Recommended setup found at index {best_idx}:")
+    print(f"  N_estimators: {row[header.index('N_estimators')]}")
+    print(f"  Criterion: {row[header.index('criterion')]}")
+    print(f"  Max_depth: {row[header.index('Max_depth')]}")
+    print("This configuration balances high forecast accuracy with a small footprint for nightly runs.")

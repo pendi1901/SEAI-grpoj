@@ -1,0 +1,121 @@
+```python
+import csv
+import random
+
+def get_score(header, row):
+    """Calculates a normalized score [0, 1] where lower is better."""
+    goal_indices = []
+    for i, name in enumerate(header):
+        if name.endswith('-') or name.endswith('+'):
+            goal_indices.append((i, name[-1]))
+    
+    scores = []
+    for idx, op in goal_indices:
+        val = float(row[idx])
+        scores.append(val if op == '-' else (1.0 - val))
+    return sum(scores) / len(scores)
+
+def race(header, rows, label):
+    """
+    Compares three strategies: random, greedy, and 'big_team_bias'.
+    Budget: 50 labels total.
+    """
+    budget = 50
+    labeled = {}
+    
+    def get_labeled_score(i):
+        if i not in labeled:
+            if len(labeled) >= budget:
+                raise Exception("Budget exceeded")
+            goals = label(i)
+            temp_row = list(rows[i])
+            goal_indices = [idx for idx, name in enumerate(header) if name.endswith(('-', '+'))]
+            for j, g_idx in enumerate(goal_indices):
+                temp_row[g_idx] = goals[j]
+            labeled[i] = get_score(header, temp_row)
+        return labeled[i]
+
+    # 1. Random Strategy
+    def strategy_random():
+        indices = random.sample(range(len(rows)), 16)
+        best_i = indices[0]
+        best_s = get_labeled_score(best_i)
+        for i in indices[1:]:
+            s = get_labeled_score(i)
+            if s < best_s:
+                best_s, best_i = s, i
+        return best_i, best_s
+
+    # 2. Greedy Strategy (Sample 17, pick best)
+    def strategy_greedy():
+        indices = random.sample(range(len(rows)), 17)
+        best_i = indices[0]
+        best_s = get_labeled_score(best_i)
+        for i in indices[1:]:
+            s = get_labeled_score(i)
+            if s < best_s:
+                best_s, best_i = s, i
+        return best_i, best_s
+
+    # 3. Big Team Bias (Customer's current strategy: pick rows with high Team Size)
+    def strategy_big_team_bias():
+        team_size_idx = header.index('Team Size')
+        # Sort by team size descending and pick top 17
+        sorted_indices = sorted(range(len(rows)), key=lambda i: float(rows[i][team_size_idx]), reverse=True)
+        indices = sorted_indices[:17]
+        best_i = indices[0]
+        best_s = get_labeled_score(best_i)
+        for i in indices[1:]:
+            s = get_labeled_score(i)
+            if s < best_s:
+                best_s, best_i = s, i
+        return best_i, best_s
+
+    strategies = {
+        "random": strategy_random,
+        "greedy": strategy_greedy,
+        "big_team_bias": strategy_big_team_bias
+    }
+    
+    results = {}
+    for name, func in strategies.items():
+        idx, score = func()
+        results[name] = (score, idx)
+        
+    winner = min(results, key=lambda n: results[n][0])
+    
+    return {
+        "winner": winner,
+        "row": results[winner][1],
+        "tried": list(strategies.keys())
+    }
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            full_data = [[float(x) for x in row] for row in reader]
+            rows = []
+            for row in full_data:
+                masked = [("?" if header[i].endswith(('-', '+')) else row[i]) for i in range(len(row))]
+                rows.append(masked)
+
+        def label(i):
+            goal_indices = [idx for idx, name in enumerate(header) if name.endswith(('-', '+'))]
+            return [full_data[i][idx] for idx in goal_indices]
+
+        result = race(header, rows, label)
+        print("Customer Inquiry: Is 'Big Teams' the best strategy?")
+        print(f"Analysis: Compared 'big_team_bias' against 'random' and 'greedy' search.")
+        print(f"Winner: {result['winner']}")
+        if result['winner'] == 'big_team_bias':
+            print("Conclusion: Your current strategy of maximizing team size is effective.")
+        else:
+            print("Conclusion: Your current strategy is outperformed by other search methods.")
+            
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
+```

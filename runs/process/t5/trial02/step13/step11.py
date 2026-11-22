@@ -1,0 +1,72 @@
+import ezr
+import random
+
+def find_similar(header, rows, target_row, k=5):
+    """
+    Find the k rows most similar to target_row in the input space.
+    """
+    # Create a table to handle normalization and distance calculations
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate distance from target_row to all other rows
+    distances = []
+    for i, row in enumerate(rows):
+        # Skip if it's the target row itself
+        if row == target_row:
+            continue
+        dist = ezr.xdist(tbl, target_row, row)
+        distances.append((dist, i))
+    
+    # Sort by distance (ascending)
+    distances.sort(key=lambda x: x[0])
+    
+    # Return the indices of the top k most similar rows
+    return [item[1] for item in distances[:k]]
+
+def remember(header, rows):
+    """
+    Identify the top 5% of rows that perform best across all goals.
+    This function is required by the harness.
+    """
+    data = [header] + rows
+    tbl = ezr.Tbl(data)
+    
+    # Score all rows by ydist (lower is better)
+    scored = []
+    for i, row in enumerate(rows):
+        scored.append((ezr.ydist(tbl, row), i))
+    
+    scored.sort(key=lambda x: x[0])
+    
+    # Return top 5%
+    limit = max(1, int(len(rows) * 0.05))
+    return [item[1] for item in scored[:limit]]
+
+if __name__ == "__main__":
+    # Load data
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Pick a sample row to act as the "proposed setup"
+    # We use a fixed seed for reproducibility
+    random.seed(1234567891)
+    target_idx = random.randint(0, len(rows) - 1)
+    target_row = rows[target_idx]
+    
+    # Find similar rows
+    similar_indices = find_similar(header, rows, target_row, k=3)
+    
+    print(f"--- Similar Past Setups ---")
+    print(f"Proposed setup (Row {target_idx}):")
+    print(f"  {target_row}")
+    print("\nMost similar past setups:")
+    
+    tbl = ezr.Tbl([header] + rows)
+    for idx in similar_indices:
+        score = ezr.ydist(tbl, rows[idx])
+        print(f"  Row {idx} (ydist: {score:.4f}): {rows[idx]}")
+    
+    print("\nThese past configurations are the most similar in input characteristics.")
+    print("Lower ydist values indicate better performance.")

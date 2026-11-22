@@ -1,0 +1,50 @@
+import csv
+import step05
+
+def blame(header, rows):
+    """
+    Identifies input columns that have the least impact on tenure.
+    We reuse the logic from step05 to find the most explanatory factors,
+    then return the inverse: the input columns that were NOT in the top 
+    factors explaining the 'worst' rows.
+    """
+    # Get the top factors that explain the worst rows
+    important_factors = step05.blame(header, rows)
+    
+    # Identify all input columns (non-goal, non-numeric or numeric)
+    # The rule is: input columns are those not ending in '+' or '-'
+    input_columns = [
+        name for name in header 
+        if not name.endswith('+') and not name.endswith('-')
+    ]
+    
+    # Return columns that are NOT in the important_factors list
+    # These are the ones that have little to do with tenure
+    unimportant = [col for col in input_columns if col not in important_factors]
+    
+    return unimportant
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    unimportant_cols = blame(header, rows)
+    
+    print("Data Collection Audit:")
+    print("The following columns have the least correlation with employee tenure")
+    print("and may be candidates for removal from future data collection:")
+    for col in unimportant_cols[:10]:  # Print first 10 for brevity
+        print(f" - {col}")
+    if len(unimportant_cols) > 10:
+        print(f" ... and {len(unimportant_cols) - 10} others.")

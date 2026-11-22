@@ -1,0 +1,91 @@
+```python
+import ezr
+import random
+
+def choose(header, rows, label):
+    """
+    Find the best setup by using the acquire strategy from ezr.
+    We have a budget of 50 labels.
+    """
+    # Create a table structure
+    # We need to handle the fact that rows have '?' for goals.
+    # We will use the provided label function to reveal them.
+    
+    # We need to keep track of which rows we have already labeled
+    # to ensure we don't exceed the budget of 50.
+    labeled_rows = []
+    
+    # We use the acquire logic from ezr. 
+    # The acquire function takes a TBL and an oracle.
+    # We need to wrap the label function to work with the TBL.
+    
+    # First, create a dummy table to define the structure
+    # We use the first row to define the columns, but we will fill it
+    # with the rows we label.
+    tbl = ezr.Tbl([header])
+    
+    # The acquire function in ezr expects a TBL with rows already in it.
+    # We will manually manage the acquisition process to respect the 50 limit.
+    # We use the logic: sample, label, sort, and pick.
+    
+    # Set the budget
+    ezr.the.Stop = 50
+    
+    # We need to pass a function that labels a row by index
+    # The label function provided to choose() takes an index.
+    def oracle(row):
+        # Find the index of this row in the original list
+        # Since we need to return the row with goals filled,
+        # we find the index and call label(index)
+        for i, r in enumerate(rows):
+            if r is row:
+                goals = label(i)
+                # Update the row with the true goals
+                for col in tbl.y:
+                    row[col.at] = goals[col.at]
+                return row
+        return row
+
+    # Use the acquire function from ezr
+    # We need to make sure the table has the rows to start with
+    # We provide the full list of rows to the table so it knows the distribution
+    tbl = ezr.Tbl([header] + rows)
+    
+    # The acquire function returns the rows it labeled
+    labeled = ezr.acquire(tbl, cap=50, label=oracle)
+    
+    # Find the best row among the labeled ones
+    best_row = min(labeled, key=lambda r: ezr.ydist(tbl, r))
+    
+    # Return the index of the best row
+    for i, r in enumerate(rows):
+        if r is best_row:
+            return i
+    return 0
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Keep a copy of original rows to compare
+    # The label function returns the true goals
+    def label(i):
+        return data[i+1]
+
+    # Mask the goals in the rows for the choose function
+    masked_rows = []
+    for row in rows:
+        new_row = list(row)
+        for col in ezr.Tbl([header]).y:
+            new_row[col.at] = "?"
+        masked_rows.append(new_row)
+        
+    best_idx = choose(header, masked_rows, label)
+    
+    print(f"Best setup found at index: {best_idx}")
+    print("Setup details:")
+    for h, v in zip(header, rows[best_idx]):
+        print(f"  {h}: {v}")
+```

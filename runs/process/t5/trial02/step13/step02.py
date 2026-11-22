@@ -1,0 +1,66 @@
+import ezr
+import random
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column for each test row.
+    We use the tree-based ranker from ezr to predict the outcome.
+    """
+    # Create a table from training data to learn the relationship
+    data = [header] + train
+    tbl = ezr.Tbl(data)
+    
+    # Build a tree on the training data
+    node = ezr.tree(tbl, tbl.rows)
+    
+    # The first goal column is the first column in tbl.y
+    # We want to estimate the value of this specific column.
+    # We can use the leaf's mean value for that specific column.
+    
+    # Pre-calculate the mean of the first goal column for each leaf
+    leaf_means = {}
+    for leaf in ezr.leafs(node):
+        goal_col = tbl.y[0]
+        vals = [r[goal_col.at] for r in leaf.rows if r[goal_col.at] != "?"]
+        leaf_means[id(leaf)] = sum(vals) / len(vals) if vals else 0
+        
+    results = []
+    for row in test:
+        leaf = ezr.leaf(node, row)
+        results.append(leaf_means[id(leaf)])
+        
+    return results
+
+if __name__ == "__main__":
+    # Load data
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Split data: 80% train, 20% test
+    random.seed(1234567891)
+    random.shuffle(rows)
+    n = int(len(rows) * 0.8)
+    train = rows[:n]
+    test_full = rows[n:]
+    
+    # Mask the goals in the test set to simulate the customer's request
+    # Goals are columns ending in '-' or '+'
+    goal_indices = [i for i, name in enumerate(header) if name[-1] in "+-"]
+    test_masked = []
+    for row in test_full:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        test_masked.append(new_row)
+        
+    # Get estimates
+    estimates = guess(header, train, test_masked)
+    
+    # Print a summary for the customer
+    print(f"Estimated the first goal column for {len(estimates)} test scenarios.")
+    print(f"Average estimated cost: {sum(estimates)/len(estimates):.4f}")
+    print("\nFirst 5 estimates:")
+    for i in range(min(5, len(estimates))):
+        print(f"Scenario {i+1}: {estimates[i]:.4f}")

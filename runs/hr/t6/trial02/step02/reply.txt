@@ -1,0 +1,72 @@
+```python
+import ezr
+import random
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column (YearsAtCompany+) for test rows
+    by building a tree on the training data and predicting the mean
+    of the leaf node where the test row lands.
+    """
+    # Create table from training data
+    tbl = ezr.Tbl([header] + train)
+    
+    # Build a tree on the training data
+    # The tree nodes store the mean ydist, but we need the mean of the 
+    # specific goal column. We can extend the node to store the mean of 
+    # the first goal column.
+    
+    goal_idx = -1
+    for i, name in enumerate(header):
+        if name.endswith('+') or name.endswith('-'):
+            goal_idx = i
+            break
+            
+    # Build tree
+    root = ezr.tree(tbl, tbl.rows)
+    
+    # Pre-calculate the mean of the goal column for each leaf
+    for leaf in ezr.leafs(root):
+        vals = [r[goal_idx] for r in leaf.rows if r[goal_idx] != "?"]
+        leaf.goal_mean = sum(vals) / len(vals) if vals else 0
+        
+    # Predict for each test row
+    results = []
+    for row in test:
+        node = ezr.leaf(root, row)
+        results.append(float(node.goal_mean))
+        
+    return results
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Split data: 80% train, 20% test
+    random.seed(1234567891)
+    random.shuffle(rows)
+    split = int(len(rows) * 0.8)
+    train = rows[:split]
+    test = rows[split:]
+    
+    # Mask the goals in the test set
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('+', '-'))]
+    masked_test = []
+    for row in test:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_test.append(new_row)
+        
+    # Get predictions
+    predictions = guess(header, train, masked_test)
+    
+    # Print summary
+    print(f"Estimated tenure (YearsAtCompany+) for {len(predictions)} new employees.")
+    print(f"Average predicted tenure: {sum(predictions)/len(predictions):.2f} years.")
+    print(f"Sample predictions: {predictions[:5]}")
+    
+    exit(0)
+```

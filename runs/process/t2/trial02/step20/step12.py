@@ -1,0 +1,64 @@
+import csv
+from step01 import remember
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column for test rows.
+    The customer asks about requirements changing twice as fast halfway through.
+    We simulate this by splitting the training data into two halves:
+    - First half: 'Stable' requirements
+    - Second half: 'Dynamic' requirements
+    We estimate the goal by looking at the performance of the 'Dynamic' 
+    half of the training data.
+    """
+    goal_idx = -1
+    for i, name in enumerate(header):
+        if name.endswith('-') or name.endswith('+'):
+            goal_idx = i
+            break
+    
+    # Split training data into two halves
+    mid = len(train) // 2
+    # The second half represents the period where requirements change faster
+    dynamic_train = train[mid:]
+    
+    # Use the 'remember' logic from step01 on the dynamic portion
+    best_indices = remember(header, dynamic_train)
+    
+    # Calculate the average of the first goal column for these best rows
+    total_val = sum(float(dynamic_train[i][goal_idx]) for i in best_indices)
+    avg_val = total_val / len(best_indices)
+    
+    return [avg_val for _ in test]
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [row for row in reader]
+            
+        # Split data: first 400 for training, last 400 for testing
+        train_data = rows[:400]
+        test_data = rows[400:]
+        
+        # Mask goals in test data
+        masked_test = []
+        for row in test_data:
+            new_row = [("?" if (header[i].endswith('-') or header[i].endswith('+')) 
+                        else val) for i, val in enumerate(row)]
+            masked_test.append(new_row)
+            
+        estimates = guess(header, train_data, masked_test)
+        
+        avg_estimate = sum(estimates) / len(estimates)
+        print("Analysis of increased requirement dynamism:")
+        print(f"When requirements change twice as fast, the projected average "
+              f"value for the first goal column ({header[0]}) is {avg_estimate:.4f}.")
+        print("Increased dynamism generally correlates with higher costs and idle times "
+              "due to the overhead of constant re-planning.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

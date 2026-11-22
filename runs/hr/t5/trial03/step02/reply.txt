@@ -1,0 +1,71 @@
+```python
+import ezr
+import random
+
+def guess(header, train, test):
+    """
+    Estimates the value of the first goal column for test rows.
+    Uses the tree-based ranker from ezr to find the leaf node 
+    containing similar training data and returns the mean of the 
+    first goal column in that leaf.
+    """
+    # Create a table for the training data
+    train_tbl = ezr.Tbl([header] + train)
+    
+    # Build a tree on the training data
+    root = ezr.tree(train_tbl, train_tbl.rows)
+    
+    # Identify the index of the first goal column
+    # Goal columns end in '+' or '-'
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(("+", "-"))]
+    first_goal_idx = goal_indices[0]
+    
+    results = []
+    for row in test:
+        # Walk the tree to find the leaf node for this test row
+        node = ezr.leaf(root, row)
+        
+        # Calculate the average of the first goal column in this leaf
+        vals = [r[first_goal_idx] for r in node.rows if r[first_goal_idx] != "?"]
+        if vals:
+            avg = sum(vals) / len(vals)
+            results.append(float(avg))
+        else:
+            # Fallback to global average if leaf is empty or data missing
+            all_vals = [r[first_goal_idx] for r in train if r[first_goal_idx] != "?"]
+            results.append(float(sum(all_vals) / len(all_vals)))
+            
+    return results
+
+if __name__ == "__main__":
+    # Load data
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Split data: 80% train, 20% test
+    random.seed(1234567891)
+    random.shuffle(rows)
+    split_idx = int(len(rows) * 0.8)
+    train = rows[:split_idx]
+    test = rows[split_idx:]
+    
+    # Mask the goal columns in the test set to simulate "day one"
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(("+", "-"))]
+    masked_test = []
+    for row in test:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_test.append(new_row)
+        
+    # Get estimates
+    estimates = guess(header, train, masked_test)
+    
+    # Print summary
+    first_goal_name = [name for name in header if name.endswith(("+", "-"))][0]
+    print(f"Estimation complete for {len(estimates)} employees.")
+    print(f"Average predicted {first_goal_name}: {sum(estimates)/len(estimates):.2f}")
+    print("Sample predictions:", [f"{x:.2f}" for x in estimates[:5]])
+```

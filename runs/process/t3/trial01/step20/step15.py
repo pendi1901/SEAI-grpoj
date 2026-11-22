@@ -1,0 +1,79 @@
+import csv
+
+def blame(header, rows):
+    """
+    Identifies the input columns that most strongly correlate with 'bad' performance.
+    'Bad' is defined as the bottom 25% of rows based on a Pareto-like score.
+    Returns the names of the top 2 input columns that explain the poor performance.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('-') or name.endswith('+')]
+    input_indices = [i for i in range(len(header)) if i not in goal_indices]
+
+    # Calculate a score for each row (higher is better)
+    def get_score(row):
+        score = 0
+        for i in goal_indices:
+            val = row[i]
+            # Normalize: for '-', lower is better; for '+', higher is better
+            # We use a simple relative score here
+            if header[i].endswith('-'):
+                score += (1.0 - val)
+            else:
+                score += val
+        return score / len(goal_indices)
+
+    # Rank rows by score
+    scored_rows = sorted([(get_score(r), r) for r in rows], key=lambda x: x[0])
+    
+    # Define 'worst' as the bottom 25%
+    n_worst = max(1, len(rows) // 4)
+    worst_rows = [r[1] for r in scored_rows[:n_worst]]
+    
+    # Calculate average value of each input column for the worst rows
+    # and compare to the global average to find the most 'deviant' inputs
+    def get_avg(data, col_idx):
+        vals = [r[col_idx] for r in data]
+        return sum(vals) / len(vals)
+
+    deviations = []
+    for i in input_indices:
+        worst_avg = get_avg(worst_rows, i)
+        global_avg = get_avg(rows, i)
+        # We look for inputs where the worst rows have significantly higher values
+        # (assuming higher input values correlate with worse outcomes)
+        diff = worst_avg - global_avg
+        deviations.append((diff, header[i]))
+    
+    # Sort by deviation descending
+    deviations.sort(key=lambda x: x[0], reverse=True)
+    
+    # Return the top 2 input columns that explain the bad performance
+    return [d[1] for d in deviations[:2]]
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed_row = []
+                for val in row:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        important_cols = blame(header, rows)
+        
+        print("Project Cost Analysis Report")
+        print("-" * 40)
+        print(f"The factors that matter most to cost are: {', '.join(important_cols)}.")
+        print("These inputs show the strongest correlation with poor project outcomes.")
+        print("You can safely focus your management attention on these two areas.")
+        
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

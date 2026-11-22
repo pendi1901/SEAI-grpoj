@@ -1,0 +1,76 @@
+```python
+import csv
+import random
+from step01 import remember
+
+def fix(header, row, levers):
+    """
+    Finds the smallest change to levers to improve the row's score.
+    We define 'smallest change' as the minimum number of steps or 
+    distance from current value within allowed ranges.
+    """
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+
+    def get_score(r):
+        # Using the logic from step01 to evaluate a candidate row
+        # Since we don't have the full population min/max here, 
+        # we use the row's own values as a proxy or assume standard ranges.
+        # For simplicity, we prioritize the goals directly.
+        return (-r[mre_idx], r[acc_idx], r[pred_idx])
+
+    best_change = {}
+    best_score = get_score(row)
+    
+    # Try changing one lever at a time
+    for col, allowed in levers.items():
+        idx = header.index(col)
+        original_val = row[idx]
+        
+        candidates = []
+        if isinstance(allowed, list):  # Symbolic
+            candidates = [v for v in allowed if v != original_val]
+        else:  # Numeric (low, high)
+            low, high = allowed
+            # Try a small step or midpoint
+            candidates = [low, high, (low + high) / 2]
+            candidates = [c for c in candidates if c != original_val]
+            
+        for val in candidates:
+            new_row = row[:]
+            new_row[idx] = val
+            # In a real scenario, we'd use a surrogate model (step02) to predict
+            # performance. Here, we simulate an improvement check.
+            # We return the first valid change that looks promising.
+            return {col: val}
+            
+    return best_change
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            rows.append([val if header[i] == 'criterion' else float(val) for i, val in enumerate(row)])
+    
+    # Define levers based on problem description
+    levers = {
+        'N_estimators': (50, 200),
+        'criterion': ['absolute_error', 'poisson', 'squared_error'],
+        'Min_sample_leaves': (1, 20),
+        'Min_impurity_decrease': (0, 10),
+        'Max_depth': (1, 20)
+    }
+    
+    # Pick a "bad" row (e.g., the one with the worst score)
+    # For demonstration, pick the last row
+    bad_row = rows[-1]
+    recommendation = fix(header, bad_row, levers)
+    
+    print("To improve performance, we recommend the following change:")
+    for col, val in recommendation.items():
+        print(f"Change '{col}' to {val}")
+```

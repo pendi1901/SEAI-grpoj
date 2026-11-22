@@ -1,0 +1,85 @@
+import csv
+
+def fix(header, row, levers):
+    """
+    Finds the single best lever change to improve the performance of a 'bad' row.
+    Performance is defined by the aggregate normalized score of goal columns.
+    """
+    goal_indices = [i for i, h in enumerate(header) if h.endswith('-') or h.endswith('+')]
+    goal_directions = [-1 if header[i].endswith('-') else 1 for i in goal_indices]
+
+    def get_score(r):
+        score = 0
+        for i, g_idx in enumerate(goal_indices):
+            score += r[g_idx] * goal_directions[i]
+        return score
+
+    # Load the full dataset to estimate the impact of changes
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        next(reader)
+        for r in reader:
+            rows.append([float(x) if x.replace('.', '', 1).isdigit() or (x.startswith('-') and x[1:].replace('.', '', 1).isdigit()) else x for x in r])
+
+    best_change = {}
+    max_improvement = -float('inf')
+
+    for col_name, allowed in levers.items():
+        if col_name not in header:
+            continue
+        idx = header.index(col_name)
+        
+        # Generate candidate values
+        candidates = []
+        if isinstance(allowed, list):
+            candidates = allowed
+        else:
+            low, high = allowed
+            candidates = [low + (high - low) * i / 4 for i in range(5)]
+        
+        for val in candidates:
+            if val == row[idx]:
+                continue
+            
+            # Estimate performance by averaging rows in the dataset that match this value
+            if isinstance(val, str):
+                matches = [r for r in rows if r[idx] == val]
+            else:
+                matches = [r for r in rows if abs(r[idx] - val) < (max([r[idx] for r in rows]) - min([r[idx] for r in rows])) * 0.05]
+            
+            if matches:
+                avg_score = sum(get_score(r) for r in matches) / len(matches)
+                if avg_score > max_improvement:
+                    max_improvement = avg_score
+                    best_change = {col_name: val}
+    
+    return best_change
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            rows.append([float(x) if x.replace('.', '', 1).isdigit() or (x.startswith('-') and x[1:].replace('.', '', 1).isdigit()) else x for x in row])
+
+    levers = {
+        'N_estimators': (10.0, 200.0),
+        'criterion': ['absolute_error', 'poisson', 'squared_error'],
+        'Min_sample_leaves': (1.0, 20.0),
+        'Min_impurity_decrease': (0.0, 10.0),
+        'Max_depth': (1.0, 20.0)
+    }
+
+    # Pick a row that isn't performing well (e.g., the first one)
+    bad_row = rows[0]
+    recommendation = fix(header, bad_row, levers)
+    
+    if recommendation:
+        col, val = list(recommendation.items())[0]
+        print(f"Optimization complete. To improve your setup, change '{col}' to {val}.")
+    else:
+        print("No single-lever change found that improves performance.")

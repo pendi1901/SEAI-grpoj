@@ -1,0 +1,64 @@
+```python
+import ezr
+
+def blame(header, rows):
+    """
+    Identifies input columns that correlate with 'bad' outcomes (high ydist).
+    We compare the distribution of input values in the worst 25% of rows
+    against the rest of the data.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate ydist for all rows
+    scored = []
+    for row in rows:
+        scored.append((ezr.ydist(tbl, row), row))
+    
+    # Sort by ydist (higher is worse)
+    scored.sort(key=lambda x: x[0], reverse=True)
+    
+    # Split into worst 25% and the rest
+    n = len(scored) // 4
+    worst = [x[1] for x in scored[:n]]
+    rest = [x[1] for x in scored[n:]]
+    
+    # For each input column, check if the distribution in 'worst'
+    # is significantly different from 'rest'.
+    # We use a simple heuristic: compare the 'mid' (mean or mode)
+    # of the worst rows vs the rest.
+    explanations = []
+    for col in tbl.x:
+        # Create temporary columns to summarize the two groups
+        w_col = ezr.Col(col.txt, col.at)
+        r_col = ezr.Col(col.txt, col.at)
+        
+        for r in worst: ezr.add(w_col, r[col.at])
+        for r in rest:  ezr.add(r_col, r[col.at])
+        
+        # If the middle value is significantly different, it's a candidate
+        # For simplicity, we look for columns where the middle value differs
+        # or where the spread is notably different.
+        # Here we return the column name if the 'mid' is different.
+        if ezr.mid(w_col) != ezr.mid(r_col):
+            explanations.append(col.txt)
+            
+    return explanations
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    factors = blame(header, rows)
+    
+    print("Analysis: What factors contribute to short stays (worst performance)?")
+    print("The following input columns show the strongest correlation with poor outcomes:")
+    for f in factors[:5]:  # Show top 5
+        print(f" - {f}")
+    
+    print("\nThese factors are identified by comparing the characteristics of the lowest-performing")
+    print("25% of employees against the rest of the workforce.")
+    
+    exit(0)
+```

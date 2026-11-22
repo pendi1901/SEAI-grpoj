@@ -1,0 +1,55 @@
+import csv
+import math
+
+def certify(xs, ys):
+    """
+    Returns True if the two distributions are statistically similar 
+    (i.e., the difference is likely due to noise), False otherwise.
+    Uses a simple A12 effect size test (Vargha-Delaney).
+    """
+    def a12(lst1, lst2):
+        m, n = len(lst1), len(lst2)
+        lst1 = sorted(lst1)
+        lst2 = sorted(lst2)
+        r1 = 0
+        for x in lst1:
+            for y in lst2:
+                if x > y: r1 += 1
+                elif x == y: r1 += 0.5
+        return r1 / (m * n)
+
+    # If A12 is close to 0.5, they are similar. 
+    # Threshold 0.56 is a standard small effect size.
+    score = a12(xs, ys)
+    return 0.44 <= score <= 0.56
+
+def run_analysis():
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [ [float(x) for x in row] for row in reader ]
+        
+        # 'Team Size' is at index 8. 
+        # Split into small (bottom 50%) and big (top 50%) teams.
+        team_sizes = [row[8] for row in rows]
+        median_size = sum(team_sizes) / len(team_sizes)
+        
+        small_teams = [row[9] for row in rows if row[8] < median_size]
+        big_teams = [row[9] for row in rows if row[8] >= median_size]
+        
+        is_same = certify(small_teams, big_teams)
+        
+        print("Analysis: Comparing Cost- for small vs big teams.")
+        if is_same:
+            print("Result: The difference is likely due to noise. It is not statistically significant.")
+        else:
+            print("Result: The difference is real and statistically significant.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+
+if __name__ == "__main__":
+    run_analysis()

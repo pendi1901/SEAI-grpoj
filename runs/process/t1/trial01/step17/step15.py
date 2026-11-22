@@ -1,0 +1,63 @@
+import csv
+
+def get_score(header, row):
+    """Calculates a normalized score [0, 1] where lower is better."""
+    goal_indices = []
+    for i, name in enumerate(header):
+        if name.endswith('-') or name.endswith('+'):
+            goal_indices.append((i, name[-1]))
+    
+    scores = []
+    for idx, op in goal_indices:
+        val = float(row[idx])
+        scores.append(val if op == '-' else (1.0 - val))
+    return sum(scores) / len(scores)
+
+def blame(header, rows):
+    """
+    Identifies which input columns correlate most strongly with poor performance.
+    Returns the top two input columns that differentiate the worst 25% of rows.
+    """
+    input_indices = [i for i, name in enumerate(header) 
+                     if not (name.endswith('-') or name.endswith('+'))]
+    
+    # Sort rows by performance score descending (worst first)
+    scored_rows = sorted(rows, key=lambda r: get_score(header, r), reverse=True)
+    worst_rows = scored_rows[:len(rows) // 4]
+    
+    # Calculate mean of inputs for all rows vs worst rows
+    all_means = [sum(row[i] for row in rows) / len(rows) for i in input_indices]
+    worst_means = [sum(row[i] for row in worst_rows) / len(worst_rows) for i in input_indices]
+    
+    # Calculate absolute delta to find the most influential inputs
+    deltas = []
+    for i, idx in enumerate(input_indices):
+        delta = abs(worst_means[i] - all_means[i])
+        deltas.append((delta, header[idx]))
+    
+    # Sort by delta descending
+    deltas.sort(key=lambda x: x[0], reverse=True)
+    
+    # Return the top two names
+    return [name for delta, name in deltas[:2]]
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(x) for x in row])
+        
+        important_factors = blame(header, rows)
+        
+        print("Customer Inquiry: Project Drivers")
+        print("Analysis: We identified the factors that most strongly correlate with poor project outcomes.")
+        print(f"The two most critical factors to monitor are: {', '.join(important_factors)}.")
+        print("Other factors showed significantly less correlation and can be deprioritized.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

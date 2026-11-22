@@ -1,0 +1,58 @@
+import ezr
+import step06
+
+def justify(header, rows, row):
+    """
+    Compares a proposed configuration (row) against the historical dataset.
+    Returns the fraction of rows that are worse than the proposed row,
+    and a justification based on the decision model.
+    """
+    # Create a table to handle normalization and goal distance calculations
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Estimate the goals for the input row using the tree-based ranker
+    # We use the training data (all rows) to build the model
+    root = ezr.tree(tbl, tbl.rows)
+    
+    # Walk the tree to find the leaf node for this test row
+    leaf_node = ezr.leaf(root, row)
+    estimated_ydist = leaf_node.mu
+    
+    # Calculate ydist for all known rows
+    all_ydists = [ezr.ydist(tbl, r) for r in rows]
+    
+    # Calculate p: fraction of rows that are worse (have higher ydist) than our estimate
+    # A row is better if its ydist is lower.
+    better_than_count = sum(1 for d in all_ydists if d > estimated_ydist)
+    p = better_than_count / len(all_ydists)
+    
+    # Construct the reason
+    # Identify the most influential column (the one at the root of the tree)
+    reason = (f"This configuration is better than {p:.0%} of all historical setups "
+              f"because it aligns with the patterns found in our decision model "
+              f"when splitting on '{header[root.at]}'.")
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    
+    try:
+        header = next(data_gen)
+        rows = list(data_gen)
+    except StopIteration:
+        exit(1)
+        
+    # Pick a sample row and hide its goals to test the justification
+    # We simulate a user asking about a specific configuration (row 0)
+    test_row = rows[0][:]
+    test_row[9] = test_row[10] = test_row[11] = "?"
+    
+    p, reason = justify(header, rows, test_row)
+    
+    print(f"Justification for configuration:")
+    print(f"Performance Rank: {p:.4f}")
+    print(f"Reason: {reason}")
+    
+    exit(0)

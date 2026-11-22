@@ -1,0 +1,68 @@
+```python
+import csv
+
+def remember(header, rows):
+    """
+    Identifies the top 5% of rows based on multi-objective optimization.
+    Goals: MRE- (minimize), ACC+ (maximize), PRED40+ (maximize).
+    We use a simple Pareto-like ranking: normalize values and sum scores.
+    """
+    n = len(rows)
+    limit = max(1, n // 20)  # 5% of rows, at least 1
+    
+    # Identify column indices
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+    
+    # Extract columns for normalization
+    mres = [r[mre_idx] for r in rows]
+    accs = [r[acc_idx] for r in rows]
+    preds = [r[pred_idx] for r in rows]
+    
+    min_mre, max_mre = min(mres), max(mres)
+    min_acc, max_acc = min(accs), max(accs)
+    min_pred, max_pred = min(preds), max(preds)
+    
+    def get_score(row):
+        # Normalize: (val - min) / (max - min)
+        # For MRE-, we want low values, so we invert: (max - val) / (max - min)
+        s_mre = (max_mre - row[mre_idx]) / (max_mre - min_mre) if max_mre > min_mre else 0
+        s_acc = (row[acc_idx] - min_acc) / (max_acc - min_acc) if max_acc > min_acc else 0
+        s_pred = (row[pred_idx] - min_pred) / (max_pred - min_pred) if max_pred > min_pred else 0
+        return s_mre + s_acc + s_pred
+
+    # Calculate scores and keep track of original indices
+    scored = []
+    for i, row in enumerate(rows):
+        scored.append((get_score(row), i))
+    
+    # Sort by score descending
+    scored.sort(key=lambda x: x[0], reverse=True)
+    
+    # Return the indices of the top 5%
+    return [item[1] for item in scored[:limit]]
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            # Convert numeric columns to floats, keep strings as is
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i] in ['criterion']:
+                    processed_row.append(val)
+                else:
+                    processed_row.append(float(val))
+            rows.append(processed_row)
+            
+    best_indices = remember(header, rows)
+    
+    print(f"Found {len(best_indices)} unusually trustworthy setups.")
+    print("Top indices:", best_indices)
+    for idx in best_indices:
+        print(f"Row {idx}: {rows[idx]}")
+```

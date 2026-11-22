@@ -1,0 +1,79 @@
+```python
+import csv
+
+def blame(header, rows):
+    """
+    Identifies input columns that correlate most strongly with poor performance.
+    'Bad' rows are defined as those in the bottom 25% of aggregate performance.
+    We calculate the correlation between input values and the 'badness' score.
+    """
+    # Identify goal columns
+    goals = []
+    for i, name in enumerate(header):
+        if name.endswith('-'):
+            goals.append((i, -1))
+        elif name.endswith('+'):
+            goals.append((i, 1))
+
+    # Calculate aggregate performance score for each row
+    def get_score(row):
+        score = 0
+        for i, (col_idx, direction) in enumerate(goals):
+            # We use the row's own values relative to the dataset range
+            col_vals = [r[col_idx] for r in rows if isinstance(r[col_idx], (int, float))]
+            min_v, max_v = min(col_vals), max(col_vals)
+            rng = max_v - min_v if max_v != min_v else 1.0
+            norm = (row[col_idx] - min_v) / rng
+            if direction == -1:
+                norm = 1.0 - norm
+            score += norm
+        return score / len(goals)
+
+    # Identify input columns (not goals)
+    input_indices = [i for i, name in enumerate(header) 
+                     if not (name.endswith('-') or name.endswith('+'))]
+    
+    # Calculate scores and find the worst 25%
+    scores = [(get_score(r), r) for r in rows]
+    scores.sort(key=lambda x: x[0])
+    worst_rows = [x[1] for x in scores[:len(rows) // 4]]
+    
+    # For each input column, check if its values in 'worst' rows deviate 
+    # significantly from the global average (simple proxy for 'blame')
+    blame_scores = []
+    for idx in input_indices:
+        col_vals = [r[idx] for r in rows if not isinstance(r[idx], str)]
+        if not col_vals: continue
+        
+        avg = sum(col_vals) / len(col_vals)
+        worst_vals = [r[idx] for r in worst_rows if not isinstance(r[idx], str)]
+        if not worst_vals: continue
+        
+        worst_avg = sum(worst_vals) / len(worst_vals)
+        # The 'blame' is the absolute difference between worst-row average and global average
+        blame_scores.append((header[idx], abs(worst_avg - avg)))
+
+    # Sort by impact and return names
+    blame_scores.sort(key=lambda x: x[1], reverse=True)
+    return [x[0] for x in blame_scores]
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                try:
+                    processed_row.append(float(val))
+                except ValueError:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    blameworthy = blame(header, rows)
+    print("Analysis: Which settings are causing poor performance?")
+    print(f"The input settings most associated with bad outcomes are: {', '.join(blameworthy)}")
+    print("These columns show the largest deviation in the worst-performing setups.")
+```

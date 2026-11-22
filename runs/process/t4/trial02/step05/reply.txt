@@ -1,0 +1,67 @@
+```python
+import csv
+import pandas as pd
+from sklearn.ensemble import RandomForestRegressor
+from step01 import remember
+
+def blame(header, rows):
+    """
+    Identifies input columns that best explain the 'Idle-' goal for the worst setups.
+    We define 'worst' as the bottom 10% of rows based on the aggregate score.
+    We then use a Random Forest to find feature importances for 'Idle-'.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    
+    # Identify goal columns and input columns
+    goals = [c for c in header if c.endswith('-') or c.endswith('+')]
+    inputs = [c for c in header if c not in goals]
+    
+    # Calculate aggregate score to find the worst rows
+    # We reuse remember logic: lower score is better, so higher score is worse
+    # We'll calculate the score manually to get the bottom 10%
+    normalized_goals = pd.DataFrame(index=df.index)
+    for goal in goals:
+        col = df[goal].astype(float)
+        if goal.endswith('-'):
+            normalized_goals[goal] = (col - col.min()) / (col.max() - col.min())
+        else:
+            normalized_goals[goal] = (col.max() - col) / (col.max() - col.min())
+    
+    df['score'] = normalized_goals.sum(axis=1)
+    
+    # Define worst rows as the bottom 10%
+    n_worst = max(1, len(df) // 10)
+    worst_df = df.nlargest(n_worst, 'score')
+    
+    # Train a regressor to see what drives 'Idle-' in these worst setups
+    rf = RandomForestRegressor(n_estimators=50, random_state=42)
+    rf.fit(worst_df[inputs], worst_df['Idle-'])
+    
+    # Get feature importances
+    importances = pd.Series(rf.feature_importances_, index=inputs)
+    
+    # Return the top 3 inputs that explain the variance in 'Idle-'
+    top_features = importances.nlargest(3).index.tolist()
+    
+    return top_features
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [[float(val) for val in row] for row in reader]
+        
+        reasons = blame(header, rows)
+        
+        print("Customer Inquiry: Why do our worst setups leave so many people waiting around?")
+        print("Analysis: The primary factors driving high idle time in the worst-performing setups are:")
+        for i, reason in enumerate(reasons, 1):
+            print(f"{i}. {reason}")
+        print("\nThese inputs show the strongest correlation with 'Idle-' in your least efficient configurations.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

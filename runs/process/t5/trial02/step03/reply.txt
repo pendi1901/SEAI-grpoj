@@ -1,0 +1,55 @@
+```python
+import ezr
+import random
+
+def certify(xs, ys):
+    """
+    Returns True if the distributions are statistically indistinguishable,
+    False if they differ significantly.
+    """
+    return ezr.same(xs, ys, eps=0.35)
+
+def analyze(header, rows):
+    """
+    Compare 'Cost-' for small teams vs big teams.
+    'Team Size' is at index 8. 'Cost-' is at index 9.
+    """
+    team_size_idx = 8
+    cost_idx = 9
+    
+    # Filter out rows with missing data
+    valid_rows = [r for r in rows if r[team_size_idx] != "?" and r[cost_idx] != "?"]
+    
+    # Median split for Team Size
+    sizes = sorted([r[team_size_idx] for r in valid_rows])
+    median = sizes[len(sizes) // 2]
+    
+    small_teams = [r[cost_idx] for r in valid_rows if r[team_size_idx] <= median]
+    big_teams = [r[cost_idx] for r in valid_rows if r[team_size_idx] > median]
+    
+    is_same = certify(small_teams, big_teams)
+    
+    return {
+        "small_mean": sum(small_teams) / len(small_teams),
+        "big_mean": sum(big_teams) / len(big_teams),
+        "is_same": is_same
+    }
+
+if __name__ == "__main__":
+    # Load data
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    results = analyze(header, rows)
+    
+    print("--- Team Size vs Cost Analysis ---")
+    print(f"Small team average cost: {results['small_mean']:.4f}")
+    print(f"Big team average cost:   {results['big_mean']:.4f}")
+    
+    if results['is_same']:
+        print("\nConclusion: The difference is statistically insignificant (it was likely luck).")
+    else:
+        print("\nConclusion: The difference is statistically significant (it is real).")
+```

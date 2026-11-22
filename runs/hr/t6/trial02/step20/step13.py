@@ -1,0 +1,48 @@
+import ezr
+import step03
+
+def certify(xs, ys):
+    """
+    Returns True if the distributions are statistically indistinguishable 
+    (noise), False if they are significantly different.
+    """
+    return ezr.same(xs, ys)
+
+def analyze_training_impact(header, rows):
+    """
+    Splits data into 'Low Training' (<= 2 days) and 'High Training' (> 2 days)
+    and compares their 'YearsWithCurrManager+' values.
+    """
+    train_idx = header.index("TrainingTimesLastYear")
+    mgr_idx = header.index("YearsWithCurrManager+")
+    
+    low_train = [r[mgr_idx] for r in rows if r[train_idx] <= 2]
+    high_train = [r[mgr_idx] for r in rows if r[train_idx] > 2]
+    
+    is_noise = certify(low_train, high_train)
+    
+    return is_noise, low_train, high_train
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    is_noise, low_train, high_train = analyze_training_impact(header, rows)
+    
+    avg_low = sum(low_train) / len(low_train) if low_train else 0
+    avg_high = sum(high_train) / len(high_train) if high_train else 0
+    
+    print("Analysis: Do people with more training stay longer with their manager?")
+    print(f"Average years with manager (Training <= 2 days): {avg_low:.2f} years")
+    print(f"Average years with manager (Training > 2 days):  {avg_high:.2f} years")
+    
+    if is_noise:
+        print("Conclusion: The difference is statistically indistinguishable from noise. "
+              "More training does not significantly change tenure with the manager.")
+    else:
+        print("Conclusion: The difference is statistically significant. "
+              "Training frequency is linked to tenure with the manager.")
+    
+    exit(0)

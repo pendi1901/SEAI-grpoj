@@ -1,0 +1,58 @@
+```python
+import ezr
+import step07
+
+def choose(header, rows, label):
+    """
+    Find the best working arrangement for 'Laboratory Technician' staff only,
+    using a budget of 50 labels.
+    """
+    # Identify the jobRole column index
+    role_idx = header.index('jobRole')
+    
+    # Filter rows to only include 'Laboratory Technician'
+    # We keep track of the original indices to return the correct one
+    lab_staff_indices = [i for i, row in enumerate(rows) if row[role_idx] == 'Laboratory Technician']
+    lab_staff_rows = [rows[i] for i in lab_staff_indices]
+    
+    # Create a mapping from the filtered list to the original index
+    def label_wrapper(i):
+        # i is the index in lab_staff_rows
+        original_idx = lab_staff_indices[i]
+        return label(original_idx)
+    
+    # Use the logic from step07 to perform the active learning search
+    # We pass the filtered rows to the choose logic
+    best_local_idx = step07.choose(header, lab_staff_rows, label_wrapper)
+    
+    # Return the original index
+    return lab_staff_indices[best_local_idx]
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Mask goals
+    goal_indices = [i for i, name in enumerate(header) if name[-1] in "+-"]
+    masked_rows = []
+    for row in rows:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_rows.append(new_row)
+        
+    # Define the label function for the harness
+    def label_func(i):
+        return rows[i]
+    
+    # Run the selection
+    best_idx = choose(header, masked_rows, label_func)
+    
+    print(f"Analysis complete. Best working arrangement for Laboratory Technician found at record index: {best_idx}")
+    print(f"Goal metrics for this record: {[rows[best_idx][i] for i in goal_indices]}")
+    print("This selection was made using an active learning strategy focused on laboratory staff.")
+    
+    exit(0)
+```

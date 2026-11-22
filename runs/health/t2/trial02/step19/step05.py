@@ -1,0 +1,74 @@
+import csv
+import step01
+
+def blame(header, rows):
+    """
+    Identifies input columns that correlate most strongly with 'bad' performance.
+    'Bad' is defined as the bottom 10% of rows based on the multi-objective score.
+    We compare the distribution of each input in the 'bad' set vs the 'good' set.
+    """
+    # Identify goal indices
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+    
+    # Identify input indices
+    input_indices = [i for i, name in enumerate(header) 
+                     if not (name.endswith('-') or name.endswith('+'))]
+
+    # Calculate scores for all rows
+    mres = [r[mre_idx] for r in rows]
+    accs = [r[acc_idx] for r in rows]
+    preds = [r[pred_idx] for r in rows]
+    min_mre, max_mre = min(mres), max(mres)
+    min_acc, max_acc = min(accs), max(accs)
+    min_pred, max_pred = min(preds), max(preds)
+
+    def get_score(r):
+        def norm(val, min_v, max_v):
+            return (val - min_v) / (max_v - min_v) if max_v > min_v else 0
+        return (1 - norm(r[mre_idx], min_mre, max_mre)) + \
+               norm(r[acc_idx], min_acc, max_acc) + \
+               norm(r[pred_idx], min_pred, max_pred)
+
+    scored_rows = sorted([(get_score(r), r) for r in rows], key=lambda x: x[0])
+    
+    # Define bad (bottom 10%) and good (top 10%)
+    n = len(scored_rows)
+    bad = [x[1] for x in scored_rows[:n // 10]]
+    good = [x[1] for x in scored_rows[-n // 10:]]
+
+    # Calculate "blame" score: difference in mean (numeric) or frequency (symbolic)
+    blame_scores = []
+    for i in input_indices:
+        if isinstance(rows[0][i], (int, float)):
+            mean_bad = sum(r[i] for r in bad) / len(bad)
+            mean_good = sum(r[i] for r in good) / len(good)
+            diff = abs(mean_bad - mean_good)
+        else:
+            # For symbolic, check frequency of the most common value in bad set
+            vals = [r[i] for r in bad]
+            most_common = max(set(vals), key=vals.count)
+            freq_bad = vals.count(most_common) / len(bad)
+            freq_good = [r[i] for r in good].count(most_common) / len(good)
+            diff = freq_bad - freq_good
+        blame_scores.append((diff, header[i]))
+
+    # Return top 3 inputs that contribute to bad performance
+    blame_scores.sort(key=lambda x: x[0], reverse=True)
+    return [name for diff, name in blame_scores[:3]]
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = [val if header[i] == 'criterion' else float(val) 
+                             for i, val in enumerate(row)]
+            rows.append(processed_row)
+
+    blame_cols = blame(header, rows)
+    print("Customer Inquiry: 'Why do the bad setups miss so badly? Which settings are doing the damage?'")
+    print(f"Answer: The settings most responsible for poor performance are: {', '.join(blame_cols)}.")

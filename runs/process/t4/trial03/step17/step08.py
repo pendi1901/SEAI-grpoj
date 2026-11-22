@@ -1,0 +1,80 @@
+import csv
+import pandas as pd
+import numpy as np
+from sklearn.ensemble import RandomForestRegressor
+
+def fix(header, row, levers):
+    """
+    Recommends a change to a bad row to improve its goals.
+    Uses a Random Forest to predict the impact of changing levers.
+    """
+    # Load data to train a surrogate model for goal prediction
+    filename = 'pom3a.n1000.train.csv'
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header_csv = next(reader)
+        rows = [[float(x) for x in r] for r in reader]
+    
+    df = pd.DataFrame(rows, columns=header_csv)
+    inputs = [c for c in header if c in levers]
+    goals = [c for c in header if c.endswith('-') or c.endswith('+')]
+    
+    # Train model to predict combined goal score
+    X = df[inputs]
+    y_scores = []
+    for col in goals:
+        norm = (df[col] - df[col].min()) / (df[col].max() - df[col].min())
+        y_scores.append(1 - norm if col.endswith('-') else norm)
+    y = np.mean(y_scores, axis=0)
+    
+    model = RandomForestRegressor(n_estimators=20, random_state=42)
+    model.fit(X, y)
+    
+    # Find the best lever change
+    best_change = {}
+    best_score = -1
+    
+    # Try small perturbations for numeric levers
+    for col, bounds in levers.items():
+        idx = header.index(col)
+        original_val = row[idx]
+        
+        # Test 5 points within the allowed range
+        low, high = bounds
+        for val in np.linspace(low, high, 5):
+            if val == original_val: continue
+            
+            test_row = list(row)
+            test_row[idx] = val
+            
+            # Predict score
+            test_x = pd.DataFrame([test_row], columns=header)[inputs]
+            score = model.predict(test_x)[0]
+            
+            if score > best_score:
+                best_score = score
+                best_change = {col: val}
+                
+    return best_change
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = [[float(x) for x in r] for r in reader]
+    
+    # Define levers based on problem description (Plan and Team Size)
+    levers = {'Plan': (0.0, 1.0), 'Team Size': (0.0, 1.0)}
+    
+    # Pick a "bad" row (e.g., one with high Cost and high Idle)
+    df = pd.DataFrame(rows, columns=header)
+    bad_row = df.nlargest(1, 'Cost-').iloc[0].tolist()
+    
+    recommendation = fix(header, bad_row, levers)
+    
+    print("Customer Inquiry: How to rescue the over-budget, idle programme?")
+    print(f"Analysis: To improve performance, we recommend adjusting the following:")
+    for col, val in recommendation.items():
+        print(f"- {col}: Set to {val:.4f}")
+    print("This change is predicted to optimize your resource allocation and reduce idle time.")

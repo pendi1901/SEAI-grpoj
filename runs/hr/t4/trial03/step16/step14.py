@@ -1,0 +1,68 @@
+import csv
+import math
+
+def flow(header, row, seen):
+    """
+    Determines if the current row is an outlier compared to the 'seen' population.
+    We calculate the Mahalanobis-like distance (sum of squared z-scores) of 
+    numeric features. If the new row deviates significantly (score > threshold),
+    we flag it as a shift in team composition.
+    """
+    if len(seen) < 10:
+        return False
+    
+    # Identify numeric columns (excluding goals)
+    numeric_indices = [
+        i for i, col in enumerate(header) 
+        if col[0].isupper() and not (col.endswith('+') or col.endswith('-'))
+    ]
+    
+    # Calculate mean and standard deviation for each column based on 'seen'
+    n = len(seen)
+    means = []
+    stds = []
+    for i in numeric_indices:
+        col_vals = [r[i] for r in seen]
+        m = sum(col_vals) / n
+        means.append(m)
+        var = sum((x - m)**2 for x in col_vals) / n
+        stds.append(math.sqrt(var))
+    
+    # Calculate squared z-score sum for the current row
+    score = 0
+    for idx, i in enumerate(numeric_indices):
+        if stds[idx] > 0:
+            z = (row[i] - means[idx]) / stds[idx]
+            score += z**2
+            
+    # Threshold: 3.0 is a common heuristic for outlier detection in multivariate data
+    return score > 3.0
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    seen = []
+    anomalies = 0
+    for row in rows:
+        if flow(header, row, seen):
+            anomalies += 1
+        seen.append(row)
+        
+    print(f"Analysis complete: Detected {anomalies} instances where the team composition "
+          "deviated significantly from the established historical norm.")
+    exit(0)

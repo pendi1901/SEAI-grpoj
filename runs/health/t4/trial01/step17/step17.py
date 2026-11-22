@@ -1,0 +1,75 @@
+import csv
+import random
+from step01 import remember
+from step07 import choose as step07_choose
+
+def choose(header, rows, label):
+    """
+    Finds a setup that forecasts well (high aggregate score) and is small 
+    (low N_estimators). We sample 50 rows, label them, and select the one 
+    that maximizes (Score - Normalized_Size).
+    """
+    idx_mre = header.index('MRE-')
+    idx_acc = header.index('ACC+')
+    idx_pred = header.index('PRED40+')
+    idx_size = header.index('N_estimators')
+
+    # Get all sizes to normalize
+    all_sizes = [float(r[idx_size]) for r in rows]
+    min_s, max_s = min(all_sizes), max(all_sizes)
+
+    def get_score(i):
+        goals = label(i)
+        mre, acc, pred = goals[idx_mre], goals[idx_acc], goals[idx_pred]
+        # Aggregate performance score
+        perf = (1.0 - mre) + acc + pred
+        # Size penalty: smaller is better
+        size_norm = (float(rows[i][idx_size]) - min_s) / (max_s - min_s + 1e-9)
+        # We want high performance and low size
+        return perf - (0.2 * size_norm)
+
+    # Sample 50 indices
+    indices = random.sample(range(len(rows)), 50)
+    
+    best_idx = -1
+    best_val = -float('inf')
+    
+    for i in indices:
+        val = get_score(i)
+        if val > best_val:
+            best_val = val
+            best_idx = i
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed = []
+            for i, val in enumerate(row):
+                if header[i] in ['MRE-', 'ACC+', 'PRED40+', 'N_estimators', 'Min_sample_leaves', 'Min_impurity_decrease', 'Max_depth']:
+                    try:
+                        processed.append(float(val))
+                    except ValueError:
+                        processed.append(0.0)
+                else:
+                    processed.append(val)
+            rows.append(processed)
+
+    def label(i):
+        return [rows[i][0], rows[i][1], rows[i][2]]
+
+    # Mask goals
+    masked_rows = [["?" if j < 3 else val for j, val in enumerate(row)] for row in rows]
+
+    best_idx = choose(header, masked_rows, label)
+    
+    print(f"Recommended setup found at index {best_idx}.")
+    print(f"This configuration balances high forecast accuracy with a small footprint for nightly runs.")
+    print(f"Details: {rows[best_idx]}")

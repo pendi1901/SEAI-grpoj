@@ -1,0 +1,65 @@
+```python
+import csv
+import random
+from step01 import remember
+
+def choose(header, rows, label):
+    """
+    Finds the best working arrangement by sampling 50 rows, 
+    labeling them to find their true tenure, and returning the index
+    of the row with the highest tenure.
+    """
+    idx_years = header.index('YearsAtCompany+')
+    
+    # We have 800 rows, we can label 50.
+    # To find the one that keeps people longest, we sample 50 indices.
+    indices_to_sample = random.sample(range(len(rows)), min(50, len(rows)))
+    
+    best_idx = -1
+    max_tenure = -1.0
+    
+    for i in indices_to_sample:
+        # label(i) returns the true goal values for rows[i]
+        true_values = label(i)
+        tenure = true_values[0] # The goal is the first (and only) goal column
+        
+        if tenure > max_tenure:
+            max_tenure = tenure
+            best_idx = i
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Setup for the harness
+    goal_idx = next(i for i, col in enumerate(header) if col.endswith('+'))
+    
+    # Store true values to simulate the label() function
+    true_goals = [row[goal_idx] for row in rows]
+    
+    # Mask the rows
+    for row in rows:
+        row[goal_idx] = "?"
+        
+    def label(i):
+        return [true_goals[i]]
+    
+    best_index = choose(header, rows, label)
+    
+    print(f"Analysis complete.")
+    print(f"The row that keeps people longest among the sampled 50 is at index: {best_index}")
+    print(f"True tenure for this record: {true_goals[best_index]} years.")
+```

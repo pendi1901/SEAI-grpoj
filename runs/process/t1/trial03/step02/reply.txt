@@ -1,0 +1,63 @@
+```python
+import csv
+
+def guess(header, train, test):
+    """
+    Estimates the value of the first goal column for each test row
+    by finding the nearest neighbor in the training data based on 
+    Euclidean distance of input columns.
+    """
+    # Identify input columns (those that are not goals)
+    input_indices = [i for i, name in enumerate(header) 
+                     if not (name.endswith('-') or name.endswith('+'))]
+    
+    # Identify the first goal column index
+    goal_idx = next(i for i, name in enumerate(header) 
+                    if name.endswith('-') or name.endswith('+'))
+
+    predictions = []
+    for t_row in test:
+        best_dist = float('inf')
+        best_val = 0.0
+        
+        for train_row in train:
+            dist = 0
+            for i in input_indices:
+                # Assuming numeric inputs as per problem description
+                dist += (float(t_row[i]) - float(train_row[i]))**2
+            
+            if dist < best_dist:
+                best_dist = dist
+                best_val = float(train_row[goal_idx])
+        
+        predictions.append(best_val)
+        
+    return predictions
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(x) for x in row])
+        
+        # Split data: use first 700 for training, next 100 for testing
+        train_data = rows[:700]
+        test_data = [row[:9] + ["?"] * 3 for row in rows[700:800]]
+        
+        results = guess(header, train_data, test_data)
+        
+        # Calculate average estimate for the customer
+        avg_cost = sum(results) / len(results)
+        
+        print("Analysis complete.")
+        print(f"Estimated average cost for the provided setups: {avg_cost:.4f}")
+        print("Note: Estimates are based on nearest-neighbor matching from training data.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

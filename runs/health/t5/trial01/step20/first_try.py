@@ -1,0 +1,104 @@
+import ezr
+import random
+
+def race(header, rows, label):
+    """
+    Compare three strategies for finding the best setup within a 50-label budget.
+    Strategies:
+    1. random: Randomly samples rows.
+    2. acquire: Uses ezr's smart sampling (exploration/exploitation).
+    3. greedy: Picks the next row based on the best-performing leaf in a tree.
+    """
+    budget = 50
+    labeled_indices = set()
+    cache = {}
+
+    def oracle_wrapper(idx):
+        if idx not in labeled_indices:
+            if len(labeled_indices) >= budget:
+                raise Exception("Budget exceeded")
+            labeled_indices.add(idx)
+            cache[idx] = label(idx)
+        return cache[idx]
+
+    # Reference table for ydist calculations
+    tbl = ezr.Tbl([header] + [r for r in rows if "?" not in r])
+
+    def strategy_random():
+        indices = random.sample(range(len(rows)), budget // 3)
+        for i in indices:
+            oracle_wrapper(i)
+        return min(indices, key=lambda i: ezr.ydist(tbl, cache[i]))
+
+    def strategy_acquire():
+        # Seed with a small random sample
+        start_indices = random.sample(range(len(rows)), ezr.the.Start)
+        for i in start_indices:
+            oracle_wrapper(i)
+        
+        # Create a working table from labeled data
+        work_tbl = ezr.Tbl([header] + [cache[i] for i in labeled_indices])
+        
+        def wrapper(row):
+            idx = rows.index(row)
+            return oracle_wrapper(idx)
+        
+        best_rows = ezr.acquire(work_tbl, cap=budget // 3, label=wrapper)
+        return min(labeled_indices, key=lambda i: ezr.ydist(tbl, cache[i]))
+
+    def strategy_greedy():
+        start_indices = random.sample(range(len(rows)), ezr.the.Start)
+        for i in start_indices: oracle_wrapper(i)
+        
+        while len(labeled_indices) < (budget // 3) * 3:
+            labeled_rows = [cache[i] for i in labeled_indices]
+            lab_tbl = ezr.Tbl([header] + labeled_rows)
+            rank = ezr.ranker(lab_tbl)
+            unlabeled = [i for i in range(len(rows)) if i not in labeled_indices]
+            if not unlabeled: break
+            best_idx = min(unlabeled, key=lambda i: rank(rows[i]))
+            oracle_wrapper(best_idx)
+            
+        return min(labeled_indices, key=lambda i: ezr.ydist(tbl, cache[i]))
+
+    results = {}
+    strategies = [("random", strategy_random), ("acquire", strategy_acquire), ("greedy", strategy_greedy)]
+    
+    for name, func in strategies:
+        results[name] = func()
+
+    winner = min(results, key=lambda n: ezr.ydist(tbl, cache[results[n]]))
+    
+    return {
+        "winner": winner,
+        "row": results[winner],
+        "tried": [s[0] for s in strategies]
+    }
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    try:
+        header = next(data_gen)
+        all_rows = list(data_gen)
+    except StopIteration:
+        exit(0)
+
+    masked_rows = []
+    for row in all_rows:
+        new_row = list(row)
+        for i, name in enumerate(header):
+            if name[-1] in "+-":
+                new_row[i] = "?"
+        masked_rows.append(new_row)
+
+    def label(i):
+        return all_rows[i]
+
+    result = race(header, masked_rows, label)
+    print(f"Optimization Race Results:")
+    print(f"Winner: {result['winner']}")
+    print(f"Best row found at index: {result['row']}")
+    print(f"Strategies tried: {', '.join(result['tried'])}")
+    print(f"Conclusion: The {result['winner']} strategy outperformed others on this dataset.")
+    exit(0)

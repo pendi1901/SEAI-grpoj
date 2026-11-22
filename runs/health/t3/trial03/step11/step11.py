@@ -1,0 +1,67 @@
+import csv
+
+def remember(header, rows):
+    """
+    Identifies the best rows by calculating a normalized score for each row.
+    Goals ending in '-' are minimized, goals ending in '+' are maximized.
+    Returns the indices of the top 5% of rows.
+    """
+    goal_indices = [i for i, h in enumerate(header) if h.endswith('-') or h.endswith('+')]
+    
+    # Calculate scores for all rows
+    # We normalize each goal column to [0, 1] to ensure equal weighting
+    scores = []
+    for i, row in enumerate(rows):
+        row_score = 0
+        for g_idx in goal_indices:
+            col_vals = [r[g_idx] for r in rows if isinstance(r[g_idx], (int, float))]
+            min_val = min(col_vals)
+            max_val = max(col_vals)
+            val = row[g_idx]
+            
+            # Normalize
+            if max_val - min_val == 0:
+                norm = 0
+            else:
+                norm = (val - min_val) / (max_val - min_val)
+            
+            # If goal ends in '-', we want low values (1 - norm)
+            # If goal ends in '+', we want high values (norm)
+            if header[g_idx].endswith('-'):
+                row_score += (1 - norm)
+            else:
+                row_score += norm
+        scores.append((row_score, i))
+    
+    # Sort by score descending
+    scores.sort(key=lambda x: x[0], reverse=True)
+    
+    # Return top 5%
+    limit = max(1, len(rows) // 20)
+    return [item[1] for item in scores[:limit]]
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                try:
+                    processed_row.append(float(val))
+                except ValueError:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    best_indices = remember(header, rows)
+    
+    print("Top performing configurations identified:")
+    for idx in best_indices[:5]:
+        print(f"Row {idx}: {rows[idx]}")
+    
+    print(f"\nTotal configurations analyzed: {len(rows)}")
+    print(f"Number of top setups returned: {len(best_indices)}")

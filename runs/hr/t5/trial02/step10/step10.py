@@ -1,0 +1,98 @@
+import ezr
+import random
+
+def race(header, rows, label):
+    """
+    Compares three strategies for finding the best employee arrangement.
+    Budget: 50 labels total.
+    """
+    # Shared state for the race
+    labeled_indices = set()
+    
+    def oracle_wrapper(i):
+        if i not in labeled_indices:
+            if len(labeled_indices) >= 50:
+                raise Exception("Label budget exceeded!")
+            labeled_indices.add(i)
+            # Update the row with true values
+            true_row = label(i)
+            for col_idx, val in enumerate(true_row):
+                rows[i][col_idx] = val
+        return rows[i]
+
+    # Initialize table with current (partially labeled) rows
+    tbl = ezr.Tbl([header] + rows)
+
+    def get_ydist(row):
+        # Ensure row is fully updated in the table before calculating distance
+        return ezr.ydist(tbl, row)
+
+    # Strategy 1: Random
+    def strategy_random(rows, oracle):
+        indices = random.sample(range(len(rows)), 16)
+        for i in indices: oracle(i)
+        return min(indices, key=lambda i: get_ydist(rows[i]))
+
+    # Strategy 2: Active Learning
+    def strategy_active(rows, oracle):
+        # Use a fresh table for the active learner to avoid state pollution
+        local_tbl = ezr.Tbl([header] + rows)
+        def local_oracle(row):
+            idx = rows.index(row)
+            return oracle(idx)
+        
+        ezr.the.Stop = 17
+        labeled = ezr.acquire(local_tbl, cap=17, label=local_oracle)
+        best_row = min(labeled, key=lambda r: get_ydist(r))
+        return rows.index(best_row)
+
+    # Strategy 3: Greedy (Pick best based on initial sample)
+    def strategy_greedy(rows, oracle):
+        indices = random.sample(range(len(rows)), 17)
+        for i in indices: oracle(i)
+        return min(indices, key=lambda i: get_ydist(rows[i]))
+
+    # Run race
+    results = {
+        "random": strategy_random(rows, oracle_wrapper),
+        "active": strategy_active(rows, oracle_wrapper),
+        "greedy": strategy_greedy(rows, oracle_wrapper)
+    }
+    
+    # Find winner (lowest ydist)
+    winner = min(results, key=lambda name: get_ydist(rows[results[name]]))
+    
+    return {
+        "winner": winner,
+        "row": results[winner],
+        "tried": ["random", "active", "greedy"]
+    }
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Keep a copy of the original rows to simulate the oracle
+    full_data = [list(r) for r in rows]
+    
+    # Mask the goals in the rows passed to race()
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(("+", "-"))]
+    masked_rows = []
+    for r in rows:
+        new_row = list(r)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_rows.append(new_row)
+            
+    def label(i): return full_data[i]
+    
+    result = race(header, masked_rows, label)
+    
+    print(f"Race Results:")
+    print(f"  Winner: {result['winner']}")
+    print(f"  Best Row Index Found: {result['row']}")
+    print(f"  Strategies Tried: {', '.join(result['tried'])}")
+    
+    exit(0)

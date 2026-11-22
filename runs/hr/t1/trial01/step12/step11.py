@@ -1,0 +1,64 @@
+import csv
+
+def remember(header, rows):
+    """
+    Finds the 5% of employees most similar to the 'average' employee 
+    (based on numeric inputs) and returns their indices.
+    """
+    # Identify numeric input columns (excluding goals)
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    input_indices = [i for i, name in enumerate(header) if name[0].isupper() and i not in goal_indices]
+    
+    # Calculate global means for numeric inputs to define the 'average' employee
+    means = {}
+    for i in input_indices:
+        vals = [r[i] for r in rows if isinstance(r[i], (int, float))]
+        means[i] = sum(vals) / len(vals) if vals else 0
+    
+    # Calculate distance of each row to the 'average' employee
+    # Lower distance means more similar to the average
+    distances = []
+    for idx, row in enumerate(rows):
+        dist = 0
+        for i in input_indices:
+            val = row[i] if isinstance(row[i], (int, float)) else 0
+            dist += (val - means[i]) ** 2
+        distances.append((dist**0.5, idx))
+    
+    # Sort by distance ascending (closest first)
+    distances.sort(key=lambda x: x[0])
+    
+    # Return top 5% (800 rows * 0.05 = 40 rows)
+    limit = max(1, int(len(rows) * 0.05))
+    return [item[1] for item in distances[:limit]]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    best_indices = remember(header, rows)
+    
+    tenure_idx = header.index('YearsAtCompany+')
+    print("Top 5% of employees most similar to the average profile:")
+    for idx in best_indices[:10]:  # Print first 10 for brevity
+        tenure = rows[idx][tenure_idx]
+        print(f"- Row {idx}: Stayed {tenure:.1f} years")
+    
+    if len(best_indices) > 10:
+        print(f"... and {len(best_indices) - 10} others.")

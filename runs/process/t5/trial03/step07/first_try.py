@@ -1,0 +1,75 @@
+import ezr
+import random
+
+def choose(header, rows, label):
+    """
+    Find the best row by using the acquire strategy from ezr.
+    We have a budget of 50 labels.
+    """
+    # Create a table object to manage the data
+    # We need to handle the fact that rows have '?' in goal columns
+    # The Tbl constructor will ignore '?' in its column statistics
+    tbl = ezr.Tbl([header] + rows)
+    
+    # The acquire function in ezr.py is designed to spend a label budget
+    # to find the best rows. It uses the provided label function.
+    # We need to wrap the label function to map the index to the row.
+    def oracle_wrapper(row):
+        # Find the original index of this row to call the label function
+        # Since rows are passed by reference, we can find the index
+        idx = rows.index(row)
+        true_row = label(idx)
+        # Update the row in place with the true values
+        for i in range(len(row)):
+            row[i] = true_row[i]
+        return row
+
+    # Use the acquire strategy to explore and label
+    # This will return the set of rows that were labeled
+    labeled_rows = ezr.acquire(tbl, cap=50, label=oracle_wrapper)
+    
+    # Find the best row among those labeled
+    # We use ydist to evaluate quality
+    best_row = min(labeled_rows, key=lambda r: ezr.ydist(tbl, r))
+    
+    # Return the index of the best row
+    return rows.index(best_row)
+
+if __name__ == "__main__":
+    # Load the data
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Keep a copy of the original rows to simulate the oracle
+    original_rows = [list(r) for r in rows]
+    
+    # Mask the goals in the rows provided to the choose function
+    goal_indices = [i for i, h in enumerate(header) if h.endswith(('-', '+'))]
+    masked_rows = []
+    for row in rows:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_rows.append(new_row)
+    
+    # Define the label function for the harness
+    labeled_count = 0
+    labeled_indices = set()
+    
+    def label(i):
+        global labeled_count
+        if i not in labeled_indices:
+            labeled_count += 1
+            labeled_indices.add(i)
+        if labeled_count > 50:
+            raise Exception("Budget exceeded!")
+        return original_rows[i]
+    
+    # Run the selection
+    best_idx = choose(header, masked_rows, label)
+    
+    print(f"Strategy complete. Labeled {labeled_count} setups.")
+    print(f"The best setup found is at index {best_idx}.")
+    print(f"Goal values for this setup: {[original_rows[best_idx][i] for i in goal_indices]}")

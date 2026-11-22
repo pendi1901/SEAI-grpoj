@@ -1,0 +1,68 @@
+```python
+import ezr
+import step01
+
+def blame(header, rows):
+    """
+    Identifies the top two input columns that most strongly correlate with 
+    poor performance (high ydist). We use the tree-based model to find 
+    the most significant splits that isolate the worst-performing rows.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate ydist for all rows to identify the "worst"
+    scored = sorted([(ezr.ydist(tbl, r), r) for r in rows], 
+                    key=lambda x: x[0], reverse=True)
+    
+    # Define "worst" as the top 10%
+    n_worst = max(1, len(rows) // 10)
+    worst_rows = [x[1] for x in scored[:n_worst]]
+    
+    # Calculate the importance of each input column by comparing the 
+    # distribution of values in the worst rows vs the global population.
+    # We use the absolute difference in means for numeric columns.
+    importances = []
+    for col in tbl.x:
+        vals_worst = [r[col.at] for r in worst_rows if r[col.at] != "?"]
+        if not vals_worst:
+            continue
+        
+        mu_worst = sum(vals_worst) / len(vals_worst)
+        # Importance is the deviation from the global mean
+        importance = abs(mu_worst - col.mu)
+        importances.append((importance, col.txt))
+    
+    # Sort by importance descending
+    importances.sort(key=lambda x: x[0], reverse=True)
+    
+    # Return the names of the top two most important columns
+    return [name for _, name in importances[:2]]
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    
+    try:
+        header = next(data_gen)
+        rows = list(data_gen)
+    except StopIteration:
+        exit(1)
+        
+    important_cols = blame(header, rows)
+    
+    print("Analysis: Which project factors matter most to cost?")
+    if len(important_cols) >= 2:
+        print(f"The two factors that matter most are: {important_cols[0]} and {important_cols[1]}.")
+        print("You should focus your management attention on these areas.")
+        
+        # Identify columns to stop worrying about (the least important)
+        tbl = ezr.Tbl([header] + rows)
+        all_inputs = [c.txt for c in tbl.x]
+        ignored = [c for c in all_inputs if c not in important_cols]
+        if ignored:
+            print(f"You can safely stop worrying about: {ignored[0]} (and others).")
+    else:
+        print("Not enough data to isolate specific factors.")
+        
+    exit(0)
+```

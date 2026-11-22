@@ -1,0 +1,67 @@
+import csv
+import step01
+import step06
+
+def find_similar(header, rows, target_row, n=5):
+    """
+    Finds the top n rows most similar to target_row based on symbolic inputs.
+    Similarity is defined by the number of matching symbolic column values.
+    """
+    symbolic_indices = [
+        i for i, name in enumerate(header)
+        if not name.endswith('+') and not name.endswith('-') and not header[i][0].isupper()
+    ]
+    
+    scored_rows = []
+    for idx, row in enumerate(rows):
+        # Skip if it's the target row itself
+        if row == target_row:
+            continue
+            
+        # Calculate similarity score (number of matching symbolic fields)
+        match_count = sum(1 for i in symbolic_indices if row[i] == target_row[i])
+        scored_rows.append((match_count, idx))
+    
+    # Sort by match count descending
+    scored_rows.sort(key=lambda x: x[0], reverse=True)
+    
+    # Return indices of top n matches
+    return [item[1] for item in scored_rows[:n]]
+
+def remember(header, rows):
+    """
+    Returns the indices of the rows most similar to the first row in the dataset.
+    """
+    if not rows:
+        return []
+    
+    target = rows[0]
+    # Limit to 5% of 800 = 40 rows
+    limit = max(1, int(len(rows) * 0.05))
+    return find_similar(header, rows, target, n=limit)
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    target_idx = 0
+    similar_indices = remember(header, rows)
+    
+    print(f"Employees most similar to row {target_idx}:")
+    print(f"{'Index':<10} | {'Tenure Score':<15}")
+    print("-" * 30)
+    
+    for idx in similar_indices:
+        score = step06.get_score(header, rows[idx])
+        print(f"{idx:<10} | {score:<15.1f}")

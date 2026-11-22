@@ -1,0 +1,59 @@
+import csv
+import step02
+
+def guess(header, train, test):
+    """
+    Estimates the first goal (MRE-) for test rows.
+    To answer the customer's question about halving the forecaster size,
+    we compare the MRE- of the original setups vs. setups with halved N_estimators.
+    """
+    # Identify index of N_estimators
+    n_est_idx = header.index('N_estimators')
+    
+    # Create a modified training set where N_estimators is halved
+    halved_train = []
+    for row in train:
+        new_row = list(row)
+        new_row[n_est_idx] = row[n_est_idx] / 2.0
+        halved_train.append(new_row)
+    
+    # Use the k-NN logic from step02 to estimate MRE- for the test rows
+    # using the halved training data
+    return step02.guess(header, halved_train, test)
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed_row = []
+                for i, val in enumerate(row):
+                    if header[i] in ['MRE-', 'ACC+', 'PRED40+', 'N_estimators', 
+                                     'Min_sample_leaves', 'Min_impurity_decrease', 'Max_depth']:
+                        processed_row.append(float(val))
+                    else:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        # Split: use first 700 for training, next 100 for testing
+        train_data = rows[:700]
+        test_data = [[r[0] if i > 0 else "?" for i, r in enumerate(row)] for row in rows[700:800]]
+        
+        # Get estimates with halved forecaster size
+        estimates = guess(header, train_data, test_data)
+        
+        # Compare average MRE- of original test data vs estimated halved data
+        actual_mre = sum(r[0] for r in rows[700:800]) / 100
+        halved_mre = sum(estimates) / 100
+        
+        print("Analysis: Impact of halving N_estimators on MRE-")
+        print(f"Average MRE- (Original): {actual_mre:.4f}")
+        print(f"Average MRE- (Halved):   {halved_mre:.4f}")
+        print(f"The forecast error changes by {((halved_mre - actual_mre) / actual_mre) * 100:.2f}%.")
+        
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

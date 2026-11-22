@@ -1,0 +1,43 @@
+```python
+import ezr
+
+def certify(xs, ys):
+    """
+    Returns True if the two distributions are statistically indistinguishable
+    (i.e., the difference is just noise), False if they significantly differ.
+    """
+    # Using ezr.same which performs cliffs, ks, and cohen tests.
+    # We use the default eps=0 for cohen, which skips the effect size check,
+    # relying on cliffs and ks to determine if they are 'the same'.
+    return ezr.same(xs, ys)
+
+def analyze():
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+
+    # Identify indices
+    # 'overTime' is at index 22
+    # 'YearsInCurrentRole+' is at index 32
+    ot_idx = header.index('overTime')
+    years_idx = header.index('YearsInCurrentRole+')
+
+    # Split data based on overtime
+    yes_overtime = [r[years_idx] for r in rows if r[ot_idx] == 'Yes']
+    no_overtime = [r[years_idx] for r in rows if r[ot_idx] == 'No']
+
+    # Test if they are the same
+    is_noise = certify(yes_overtime, no_overtime)
+
+    print("Analysis: Do people who work overtime leave their role sooner?")
+    if is_noise:
+        print("Result: The difference is statistically insignificant (just noise).")
+    else:
+        print("Result: There is a statistically significant difference between the groups.")
+    
+    return is_noise
+
+if __name__ == "__main__":
+    analyze()
+```

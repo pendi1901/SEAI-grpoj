@@ -1,0 +1,88 @@
+import ezr
+import step07
+
+def choose(header, rows, label):
+    """
+    Find the best working arrangement for 'Laboratory Technician' staff only,
+    using a budget of 50 labels.
+    """
+    # Identify the jobRole column index
+    role_idx = header.index('jobRole')
+    
+    # Filter rows to only include 'Laboratory Technician'
+    # We keep track of the original indices to return the correct one
+    lab_staff_indices = [i for i, row in enumerate(rows) if row[role_idx] == 'Laboratory Technician']
+    lab_staff_rows = [rows[i] for i in lab_staff_indices]
+    
+    # The error in step07 was caused by passing rows with '?' to ezr.Tbl,
+    # which then failed during normalization because '?' is a string.
+    # We must ensure the table only contains rows that have been labeled.
+    
+    labeled_data = {} # original_idx -> full_row
+
+    def label_wrapper(i):
+        # i is the index in lab_staff_rows
+        original_idx = lab_staff_indices[i]
+        if original_idx not in labeled_data:
+            labeled_data[original_idx] = label(original_idx)
+        return labeled_data[original_idx]
+
+    # We need to perform the search on the subset.
+    # To avoid the TypeError, we build the table only with rows that have labels.
+    # However, ezr.acquire expects a Tbl object. We initialize it with the 
+    # subset of rows, but we must ensure we don't trigger normalization on '?'
+    # The simplest way is to use the logic from step07 but ensure the 
+    # oracle_wrapper handles the '?' correctly by only calling ydist on labeled rows.
+    
+    # Re-implementing the core logic of step07 to be safer with the Tbl object
+    tbl = ezr.Tbl([header] + lab_staff_rows)
+    
+    # The issue in step07 was that ezr.acquire calls ydist on rows that might still have '?'
+    # We override the oracle to ensure the row in the table is updated immediately.
+    def oracle_wrapper(row):
+        # Find which original index this row corresponds to
+        for i, r in enumerate(lab_staff_rows):
+            if r is row:
+                full = label_wrapper(i)
+                for j in range(len(row)): row[j] = full[j]
+                return row
+        return row
+
+    labeled_rows = ezr.acquire(tbl, cap=50, label=oracle_wrapper)
+    
+    # Find the best row among the labeled ones.
+    best_row = min(labeled_rows, key=lambda r: ezr.ydist(tbl, r))
+    
+    # Return the original index
+    for i, r in enumerate(lab_staff_rows):
+        if r is best_row:
+            return lab_staff_indices[i]
+    return lab_staff_indices[0]
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Mask goals
+    goal_indices = [i for i, name in enumerate(header) if name[-1] in "+-"]
+    masked_rows = []
+    for row in rows:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_rows.append(new_row)
+        
+    # Define the label function for the harness
+    def label_func(i):
+        return rows[i]
+    
+    # Run the selection
+    best_idx = choose(header, masked_rows, label_func)
+    
+    print(f"Analysis complete. Best working arrangement for Laboratory Technician found at record index: {best_idx}")
+    print(f"Goal metrics for this record: {[rows[best_idx][i] for i in goal_indices]}")
+    print("This selection was made using an active learning strategy focused on laboratory staff.")
+    
+    exit(0)

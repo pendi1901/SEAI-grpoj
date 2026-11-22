@@ -1,0 +1,57 @@
+```python
+import ezr
+import random
+
+def flow(header, row, seen):
+    """
+    Warn the customer if a new row is 'going bad'.
+    We define 'going bad' as a row that is significantly worse than the 
+    historical average performance of the 'seen' data.
+    
+    Specifically, we calculate the ydist of the new row and compare it 
+    to the distribution of ydist values in 'seen'. If the new row's 
+    ydist is in the worst 10% of the historical distribution, we return 
+    True (warning: this is a bad setup).
+    """
+    if not seen:
+        return False
+    
+    # Create a table from seen rows to calculate ydist
+    # We need to handle the fact that 'seen' might contain rows with '?'
+    # but for the purpose of this check, we evaluate the row as it is.
+    tbl = ezr.Tbl([header] + seen)
+    
+    # Calculate ydist for all seen rows
+    seen_ydists = [ezr.ydist(tbl, r) for r in seen]
+    
+    # Calculate ydist for the new row
+    current_ydist = ezr.ydist(tbl, row)
+    
+    # A row is 'going bad' if its ydist is worse than 90% of what we have seen.
+    # Higher ydist means worse performance.
+    threshold = sorted(seen_ydists)[int(len(seen_ydists) * 0.9)]
+    
+    return current_ydist > threshold
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Simulate the arrival process
+    random.seed(1234567891)
+    random.shuffle(rows)
+    
+    seen = []
+    warnings = 0
+    
+    for row in rows:
+        if flow(header, row, seen):
+            warnings += 1
+        seen.append(row)
+        
+    print(f"Processed {len(rows)} incoming setups.")
+    print(f"Detected {warnings} setups that were performing significantly worse than historical norms.")
+    print("These setups represent potential regressions in project performance.")
+```

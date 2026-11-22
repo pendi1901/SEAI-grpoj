@@ -1,0 +1,74 @@
+```python
+import csv
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import LabelEncoder
+import numpy as np
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column ('YearsAtCompany+') for test rows
+    using a Random Forest Regressor.
+    """
+    # Identify goal column (first column ending in + or -)
+    goal_idx = -1
+    for i, col in enumerate(header):
+        if col.endswith('+') or col.endswith('-'):
+            goal_idx = i
+            break
+    
+    # Prepare data: convert symbolic columns to numeric
+    def encode_data(data):
+        data_arr = np.array(data, dtype=object)
+        encoded = np.zeros(data_arr.shape)
+        for i in range(data_arr.shape[1]):
+            if isinstance(data_arr[0, i], str):
+                le = LabelEncoder()
+                encoded[:, i] = le.fit_transform(data_arr[:, i])
+            else:
+                encoded[:, i] = data_arr[:, i]
+        return encoded
+
+    # Combine train and test to ensure consistent encoding
+    all_data = train + test
+    encoded_all = encode_data(all_data)
+    
+    X_train = np.delete(encoded_all[:len(train)], goal_idx, axis=1)
+    y_train = encoded_all[:len(train), goal_idx]
+    X_test = np.delete(encoded_all[len(train):], goal_idx, axis=1)
+    
+    # Train model
+    model = RandomForestRegressor(n_estimators=100, random_state=42)
+    model.fit(X_train, y_train)
+    
+    return model.predict(X_test).tolist()
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    # Split data for demonstration: use last 100 as test
+    train_data = rows[:-100]
+    test_data = rows[-100:]
+    
+    # Mask the goal column in test data
+    goal_idx = next(i for i, col in enumerate(header) if col.endswith('+'))
+    for row in test_data:
+        row[goal_idx] = "?"
+        
+    predictions = guess(header, train_data, test_data)
+    
+    print(f"Estimated tenure for the first 5 test subjects:")
+    for i in range(min(5, len(predictions))):
+        print(f"Subject {i+1}: {predictions[i]:.2f} years")
+```

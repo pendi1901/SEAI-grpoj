@@ -1,0 +1,56 @@
+import csv
+
+def flow(header, row, seen):
+    """
+    Decides if the current employee needs a 'what would keep you here' conversation.
+    We target employees who are high performers (high YearsAtCompany+) but 
+    might be at risk. We use a simple threshold: if the employee's tenure 
+    is in the top 10% of the 'seen' population, we flag them for a conversation.
+    """
+    years_idx = header.index('YearsAtCompany+')
+    current_years = row[years_idx]
+    
+    if not seen:
+        return False
+    
+    # Get all previous years of tenure
+    seen_years = [r[years_idx] for r in seen]
+    
+    # Calculate the 90th percentile threshold of seen data
+    seen_years.sort()
+    threshold_idx = int(len(seen_years) * 0.9)
+    threshold = seen_years[threshold_idx]
+    
+    # If this employee has been here longer than 90% of the people we've seen,
+    # they are a high-tenure asset worth checking in on.
+    return current_years >= threshold
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Simulate the arrival process
+    seen = []
+    flags = 0
+    for row in rows:
+        if flow(header, row, seen):
+            flags += 1
+        seen.append(row)
+    
+    print(f"Processed {len(rows)} employees.")
+    print(f"Number of employees flagged for a 'what would keep you here' conversation: {flags}")
+    print("Logic: Flagged employees with tenure in the top 10% of those seen so far.")

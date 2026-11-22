@@ -1,0 +1,45 @@
+```python
+import ezr
+import step01
+
+def certify(xs, ys):
+    """
+    Returns True if the two distributions are statistically indistinguishable
+    (i.e., the difference is just noise), False if they are significantly different.
+    """
+    # ezr.same performs cliffs delta and KS tests, which are robust for this.
+    return ezr.same(xs, ys)
+
+if __name__ == "__main__":
+    # Load the data
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Identify column indices
+    # 'overTime' is at index 22
+    # 'YearsInCurrentRole+' is at index 32
+    ot_idx = 22
+    tenure_idx = 32
+    
+    # Split data into two groups: those who work overtime and those who don't
+    yes_overtime = [r[tenure_idx] for r in rows if r[ot_idx] == "Yes"]
+    no_overtime = [r[tenure_idx] for r in rows if r[ot_idx] == "No"]
+    
+    # Check if the difference is significant
+    # certify returns True if they are the same (noise), False if they differ
+    is_noise = certify(yes_overtime, no_overtime)
+    
+    print("Analysis: Does working overtime affect how long employees stay in their role?")
+    print(f"Average tenure (Overtime): {sum(yes_overtime)/len(yes_overtime):.2f} years")
+    print(f"Average tenure (No Overtime): {sum(no_overtime)/len(no_overtime):.2f} years")
+    
+    if is_noise:
+        print("Conclusion: The observed difference is statistically insignificant (noise).")
+    else:
+        print("Conclusion: There is a statistically significant difference in tenure.")
+        print("Working overtime appears to be a real factor in role duration.")
+    
+    exit(0)
+```

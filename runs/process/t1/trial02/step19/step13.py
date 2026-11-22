@@ -1,0 +1,74 @@
+import csv
+
+def certify(xs, ys):
+    """
+    Returns True if xs and ys are statistically similar (same distribution),
+    False if they differ significantly. Uses the A12 effect size test.
+    """
+    m, n = len(xs), len(ys)
+    if m == 0 or n == 0:
+        return True
+    
+    greater = 0
+    for x in xs:
+        for y in ys:
+            if x > y:
+                greater += 1
+            elif x == y:
+                greater += 0.5
+    
+    a12 = greater / (m * n)
+    # A12 threshold of 0.56 is a standard small effect size.
+    # If the probability is between 0.44 and 0.56, they are statistically similar.
+    return 0.44 <= a12 <= 0.56
+
+def analyze_shift(header, rows):
+    """
+    Compares the performance of the first half of the data vs the second half
+    to see if the results shifted after the process change.
+    """
+    goal_indices = [i for i, name in enumerate(header) 
+                    if name.endswith('-') or name.endswith('+')]
+    
+    def score_row(row):
+        total = 0.0
+        for idx in goal_indices:
+            val = float(row[idx])
+            # '-' minimized, '+' maximized
+            if header[idx].endswith('-'):
+                total += val
+            else:
+                total += (1.0 - val)
+        return total
+
+    mid = len(rows) // 2
+    before = [score_row(r) for r in rows[:mid]]
+    after = [score_row(r) for r in rows[mid:]]
+    
+    return certify(before, after), before, after
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [row for row in reader]
+            
+            is_same, before, after = analyze_shift(header, rows)
+            
+            print("Customer Inquiry: Did results shift after the team changed their build process?")
+            if is_same:
+                print("Answer: No, the results are statistically the same. The change did not have a significant impact.")
+            else:
+                avg_before = sum(before) / len(before)
+                avg_after = sum(after) / len(after)
+                print("Answer: Yes, the results have shifted significantly.")
+                if avg_after < avg_before:
+                    print("The new process has improved performance.")
+                else:
+                    print("The new process has resulted in worse performance.")
+                    
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

@@ -1,0 +1,85 @@
+```python
+import csv
+import pandas as pd
+import numpy as np
+from sklearn.ensemble import RandomForestRegressor
+
+def fix(header, row, levers):
+    """
+    Recommends changes to a bad row to reduce 'Idle-' while respecting 
+    the constraint that 'Team Size' cannot be changed.
+    """
+    filename = 'pom3a.n1000.train.csv'
+    df = pd.read_csv(filename)
+    
+    goals = [c for c in header if c.endswith('-') or c.endswith('+')]
+    inputs = [c for c in header if c not in goals]
+    
+    # We want to minimize 'Idle-'
+    target = 'Idle-'
+    
+    # Train a model to predict 'Idle-' based on inputs
+    model = RandomForestRegressor(n_estimators=50, random_state=42)
+    model.fit(df[inputs], df[target])
+    
+    best_change = {}
+    min_idle = float('inf')
+    
+    # Evaluate each allowed lever
+    for col, bounds in levers.items():
+        if col not in header:
+            continue
+            
+        test_vals = []
+        if isinstance(bounds, list):  # Symbolic
+            test_vals = bounds
+        else:  # Numeric (low, high)
+            # Test a few points in the range to find the best direction
+            test_vals = [bounds[0], (bounds[0] + bounds[1]) / 2, bounds[1]]
+            
+        for val in test_vals:
+            temp_row = dict(zip(header, row))
+            temp_row[col] = val
+            
+            # Predict Idle-
+            input_vec = pd.DataFrame([temp_row])[inputs]
+            pred_idle = model.predict(input_vec)[0]
+            
+            if pred_idle < min_idle:
+                min_idle = pred_idle
+                best_change = {col: val}
+                
+    return best_change
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        df = pd.read_csv(filename)
+        header = df.columns.tolist()
+        
+        # Find a "bad" row (high Idle-)
+        bad_row_df = df[df['Idle-'] > df['Idle-'].mean()].iloc[0]
+        bad_row = bad_row_df.tolist()
+        
+        # Levers excluding Team Size
+        levers = {
+            'Culture': (0.0, 1.0),
+            'Criticality': (0.0, 1.0),
+            'Initial Known': (0.0, 1.0),
+            'Inter-Dependency': (0.0, 1.0),
+            'Dynamism': (0.0, 1.0),
+            'Size': (0.0, 1.0),
+            'Plan': (0.0, 1.0)
+        }
+        
+        recommendation = fix(header, bad_row, levers)
+        
+        print("Customer Inquiry: I cannot hire. What else can I change to cut idle time?")
+        col, val = list(recommendation.items())[0]
+        print(f"Recommendation: Adjust '{col}' to {val:.4f}.")
+        print("Rationale: Our model predicts this change will reduce project idle time without requiring additional staff.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

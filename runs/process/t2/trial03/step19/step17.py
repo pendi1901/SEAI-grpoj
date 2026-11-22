@@ -1,0 +1,76 @@
+import csv
+import random
+import step01
+import step07
+
+def choose(header, rows, label):
+    """
+    Finds the best setup for a 'large' project (high 'Size') where failure is 
+    damaging (high 'Criticality'). We filter for high-risk, large-scale 
+    projects first, then sample to find the best configuration.
+    """
+    # Identify indices
+    size_idx = header.index('Size')
+    crit_idx = header.index('Criticality')
+    goal_indices = [i for i, name in enumerate(header) 
+                    if name.endswith('-') or name.endswith('+')]
+
+    # Filter: Focus on large projects (Size > 0.7) and high criticality (Criticality > 0.7)
+    # We use the index to keep track of original positions
+    candidates = [i for i, row in enumerate(rows) 
+                  if float(row[size_idx]) > 0.7 and float(row[crit_idx]) > 0.7]
+    
+    # If not enough candidates, fall back to all rows
+    if len(candidates) < 10:
+        candidates = range(len(rows))
+    
+    # Sample up to 50 from the candidates
+    sample_size = min(50, len(candidates))
+    to_check = random.sample(candidates, sample_size)
+    
+    best_idx = -1
+    best_score = float('inf')
+    
+    for i in to_check:
+        # Get true goal values using the provided label function
+        true_goals = label(i)
+        
+        # Calculate score (lower is better)
+        score = 0.0
+        for g_idx, val in zip(goal_indices, true_goals):
+            if header[g_idx].endswith('-'):
+                score += float(val)
+            else:
+                score += (1.0 - float(val))
+        
+        if score < best_score:
+            best_score = score
+            best_idx = i
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', newline='') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            full_data = []
+            for row in reader:
+                full_data.append([float(val) if val.replace('.','',1).isdigit() or '-' in val else val for val in row])
+        
+        # Masked rows for the function
+        rows = [[val if not (header[i].endswith(('-', '+'))) else "?" for i, val in enumerate(r)] for r in full_data]
+        
+        def label(i):
+            return [full_data[i][idx] for idx, name in enumerate(header) if name.endswith(('-', '+'))]
+        
+        best_index = choose(header, rows, label)
+        
+        print(f"Analysis complete for large, high-criticality projects.")
+        print(f"The recommended setup is at index {best_index}.")
+        print("This configuration was selected by prioritizing high-risk project constraints.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

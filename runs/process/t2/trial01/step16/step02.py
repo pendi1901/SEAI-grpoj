@@ -1,0 +1,54 @@
+import csv
+from step01 import remember
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column for each test row by finding the 
+    average of the first goal column from the top-performing training rows.
+    """
+    # Identify the first goal column index
+    goal_idx = -1
+    for i, name in enumerate(header):
+        if name.endswith('-') or name.endswith('+'):
+            goal_idx = i
+            break
+    
+    # Get indices of the best training rows
+    best_indices = remember(header, train)
+    
+    # Calculate the average of the first goal column from the best rows
+    total_val = sum(train[i][goal_idx] for i in best_indices)
+    avg_val = total_val / len(best_indices)
+    
+    # Return the estimate for each test row
+    return [avg_val for _ in test]
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed_row = [float(val) if val.replace('.', '', 1).isdigit() or (val.startswith('-') and val[1:].replace('.', '', 1).isdigit()) else val for val in row]
+                rows.append(processed_row)
+        
+        # For demonstration, we treat the last 5 rows of the training set as "test" data
+        # where we mask the goal columns.
+        test_rows = [row[:] for row in rows[-5:]]
+        for row in test_rows:
+            for i, name in enumerate(header):
+                if name.endswith('-') or name.endswith('+'):
+                    row[i] = "?"
+        
+        train_rows = rows[:-5]
+        predictions = guess(header, train_rows, test_rows)
+        
+        print("Customer Inquiry: Estimated Cost (First Goal Column)")
+        for i, val in enumerate(predictions):
+            print(f"Test Row {i+1} Estimate: {val:.4f}")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

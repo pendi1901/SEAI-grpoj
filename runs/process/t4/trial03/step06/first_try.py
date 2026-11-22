@@ -1,0 +1,74 @@
+import csv
+import pandas as pd
+import numpy as np
+from sklearn.neighbors import KNeighborsRegressor
+from step01 import remember
+
+def justify(header, rows, row):
+    """
+    Estimates goals for the given row and ranks it against the dataset.
+    Returns (fraction_better, reason_string).
+    """
+    df = pd.DataFrame(rows, columns=header)
+    inputs = [c for c in header if not (c.endswith('-') or c.endswith('+'))]
+    goals = [c for c in header if c.endswith('-') or c.endswith('+')]
+    
+    # Estimate goals for the input row using KNN
+    X_train = df[inputs]
+    y_train = df[goals]
+    model = KNeighborsRegressor(n_neighbors=5)
+    model.fit(X_train, y_train)
+    
+    # Predict goals for the input row
+    input_df = pd.DataFrame([row], columns=header)
+    predicted_goals = model.predict(input_df[inputs])[0]
+    
+    # Normalize all data to compare
+    all_data = pd.concat([df[goals], pd.DataFrame([predicted_goals], columns=goals)])
+    norm_data = (all_data - all_data.min()) / (all_data.max() - all_data.min())
+    
+    # Calculate combined score: 1-norm for '-', norm for '+'
+    def get_score(data):
+        scores = []
+        for i, col in enumerate(goals):
+            if col.endswith('-'):
+                scores.append(1 - data.iloc[:, i])
+            else:
+                scores.append(data.iloc[:, i])
+        return np.mean(scores, axis=0)
+    
+    all_scores = get_score(norm_data)
+    row_score = all_scores.iloc[-1]
+    dataset_scores = all_scores.iloc[:-1]
+    
+    # Fraction of rows that the input row is better than
+    p = (dataset_scores < row_score).mean()
+    
+    reason = f"This setup is better than {p:.1%} of all known configurations based on its predicted performance across all goal metrics."
+    
+    return float(p), reason
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) if val.replace('.','',1).isdigit() or (val.startswith('-') and val[1:].replace('.','',1).isdigit()) else val for val in row])
+        
+        # Take a sample row and mask its goals to test
+        test_row = list(rows[0])
+        goals = [i for i, col in enumerate(header) if col.endswith('-') or col.endswith('+')]
+        for g in goals:
+            test_row[g] = "?"
+            
+        p, reason = justify(header, rows, test_row)
+        print(f"Customer Inquiry: How does this setup rank?")
+        print(f"Rank: {p:.4f}")
+        print(f"Reason: {reason}")
+        
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

@@ -1,0 +1,90 @@
+```python
+import csv
+
+def justify(header, rows, row):
+    """
+    Estimates the goal values for a given row using a simple average of 
+    similar employees (those with the same JobLevel and Department), 
+    then ranks the row against the dataset.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    
+    # Identify input columns for similarity matching
+    dept_idx = header.index('department')
+    level_idx = header.index('JobLevel')
+    
+    # Helper to estimate goals for a row
+    def estimate_goals(r):
+        # Find similar employees
+        similar = [
+            x for x in rows 
+            if x[dept_idx] == r[dept_idx] and x[level_idx] == r[level_idx]
+        ]
+        if not similar:
+            similar = rows
+            
+        estimates = []
+        for g_idx in goal_indices:
+            vals = [x[g_idx] for x in similar]
+            estimates.append(sum(vals) / len(vals))
+        return estimates
+
+    # Calculate score for a row
+    def get_score(r, goals=None):
+        if goals is None:
+            goals = [r[i] if r[i] != "?" else 0 for i in goal_indices]
+        
+        score = 0
+        for i, g_idx in enumerate(goal_indices):
+            name = header[g_idx]
+            val = goals[i]
+            if name.endswith('+'):
+                score += val
+            else:
+                score -= val
+        return score
+
+    # Estimate goals for the target row
+    target_goals = estimate_goals(row)
+    target_score = get_score(row, target_goals)
+    
+    # Compare against all rows
+    better_count = sum(1 for r in rows if get_score(r) < target_score)
+    p = better_count / len(rows)
+    
+    reason = ("Simply paying everyone more ignores that tenure and retention are driven by "
+              "complex factors like job role, department, and career progression, "
+              "which cannot be solved by salary alone.")
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    # Test with a sample row
+    test_row = list(rows[0])
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    for idx in goal_indices:
+        test_row[idx] = "?"
+        
+    p, reason = justify(header, rows, test_row)
+    print(f"Rank: {p:.4f}")
+    print(f"Reason: {reason}")
+```

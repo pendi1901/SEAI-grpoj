@@ -1,0 +1,59 @@
+import csv
+import random
+from step08 import fix as base_fix
+
+def fix(header, row, levers):
+    """
+    Recommends changes for a 'bad' row (short tenure) by picking a random
+    valid value from the provided levers. Since there is no money for pay,
+    we explicitly exclude 'PercentSalaryHike' if it were present in levers.
+    """
+    # Filter out salary-related levers if they exist
+    filtered_levers = {k: v for k, v in levers.items() if 'Salary' not in k}
+    
+    # If no levers remain, fallback to the original fix logic
+    if not filtered_levers:
+        return base_fix(header, row, levers)
+        
+    return base_fix(header, row, filtered_levers)
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Define the levers available to change, excluding salary hikes
+    levers = {
+        'businessTravel': ['Non-Travel', 'Travel_Frequently', 'Travel_Rarely'],
+        'overTime': ['No', 'Yes'],
+        'TrainingTimesLastYear': (0.0, 6.0),
+        'StockOptionLevel': (0.0, 3.0),
+        'WorkLifeBalance': (1.0, 4.0)
+    }
+
+    # Simulate a 'bad' row (e.g., the first row)
+    bad_row = rows[0]
+    
+    # Get recommendations
+    changes = fix(header, bad_row, levers)
+    
+    print("Analysis for improving staff retention without salary increases:")
+    print("For an employee with short tenure, we recommend the following non-monetary adjustments:")
+    for col, val in changes.items():
+        if isinstance(val, float):
+            print(f"- Adjust {col} to {val:.2f}")
+        else:
+            print(f"- Change {col} to {val}")
+    
+    print("\nThese adjustments focus on work-life balance, training, and travel policies.")
+    exit(0)

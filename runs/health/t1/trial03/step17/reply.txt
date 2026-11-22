@@ -1,0 +1,90 @@
+```python
+import csv
+import random
+
+def choose(header, rows, label):
+    """
+    Finds a setup that balances performance (goals) and size (N_estimators).
+    We use a budget of 50 labels to perform a local search, prioritizing
+    both high performance and low N_estimators.
+    """
+    goal_indices = [i for i, h in enumerate(header) if h.endswith(('-', '+'))]
+    n_idx = header.index('N_estimators')
+    
+    # Cache labels to respect the 50-label budget
+    labeled = {}
+    def get_label(i):
+        if i not in labeled:
+            if len(labeled) >= 50:
+                raise Exception("Budget exceeded")
+            labeled[i] = label(i)
+        return labeled[i]
+
+    # Score function: Normalize goals and penalize large N_estimators
+    # We want low MRE, high ACC, high PRED, and low N_estimators.
+    # Since we don't have full data for normalization, we use a heuristic
+    # based on the 50 sampled rows.
+    def get_score(i):
+        goals = get_label(i)
+        n_val = rows[i][n_idx]
+        
+        # Simple heuristic: 
+        # Score = (1 - MRE_norm) + ACC_norm + PRED_norm - (N_norm)
+        # We use fixed ranges based on typical data values for normalization
+        mre = (goals[0] - 0.0) / 1.0
+        acc = (goals[1] - 0.0) / 1.0
+        pred = (goals[2] - 0.0) / 1.0
+        n_norm = (n_val - 50.0) / 150.0
+        
+        return (1 - mre) + acc + pred - n_norm
+
+    # Local search strategy
+    curr = random.choice(range(len(rows)))
+    get_label(curr)
+    
+    for _ in range(49):
+        # Look at 5 random neighbors
+        neighbors = random.sample(range(len(rows)), 5)
+        best_n = curr
+        best_val = get_score(curr)
+        
+        for n in neighbors:
+            s = get_score(n)
+            if s > best_val:
+                best_val = s
+                best_n = n
+        curr = best_n
+        
+    return curr
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = [val if header[i] == 'criterion' else float(val) 
+                             for i, val in enumerate(row)]
+            rows.append(processed_row)
+
+    # Store true values to simulate the label function
+    true_goals = []
+    for r in rows:
+        true_goals.append([r[i] for i, h in enumerate(header) if h.endswith(('-', '+'))])
+        # Hide goals
+        for i, h in enumerate(header):
+            if h.endswith(('-', '+')):
+                r[i] = "?"
+
+    def label(i):
+        return true_goals[i]
+
+    best_idx = choose(header, rows, label)
+    
+    print(f"Recommended setup found at row index: {best_idx}")
+    print(f"Configuration: {rows[best_idx]}")
+    print(f"This setup balances high forecast accuracy with a smaller model size (N_estimators).")
+```

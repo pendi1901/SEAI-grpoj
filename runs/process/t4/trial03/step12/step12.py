@@ -1,0 +1,69 @@
+import csv
+import pandas as pd
+import numpy as np
+from sklearn.ensemble import RandomForestRegressor
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column for test rows.
+    To account for the 'requirements changing twice as fast' scenario,
+    we weight the training data: rows from the second half (where dynamism 
+    is higher or requirements are more volatile) are given more importance.
+    """
+    df_train = pd.DataFrame(train, columns=header)
+    df_test = pd.DataFrame(test, columns=header)
+    
+    inputs = [c for c in header if not (c.endswith('-') or c.endswith('+'))]
+    goals = [c for c in header if c.endswith('-') or c.endswith('+')]
+    first_goal = goals[0]
+    
+    X_train = df_train[inputs]
+    y_train = df_train[first_goal]
+    X_test = df_test[inputs]
+    
+    # Weighting: rows in the second half of the training set are given 
+    # higher weight (2.0) to simulate the increased rate of change.
+    weights = np.ones(len(df_train))
+    weights[len(df_train) // 2:] = 2.0
+    
+    model = RandomForestRegressor(n_estimators=50, random_state=42)
+    model.fit(X_train, y_train, sample_weight=weights)
+    
+    predictions = model.predict(X_test)
+    return predictions.tolist()
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) for val in row])
+        
+        # Split: 80% train, 20% test
+        split = int(len(rows) * 0.8)
+        train_data = rows[:split]
+        test_data = rows[split:]
+        
+        # Mask goals in test
+        goals = [i for i, col in enumerate(header) if col.endswith('-') or col.endswith('+')]
+        masked_test = []
+        for row in test_data:
+            new_row = list(row)
+            for g in goals:
+                new_row[g] = "?"
+            masked_test.append(new_row)
+            
+        preds = guess(header, train_data, masked_test)
+        
+        print("Customer Inquiry: Impact of accelerated requirement changes.")
+        print("Analysis: By weighting recent data to reflect faster requirement changes,")
+        print(f"the estimated average for the first goal (Cost-) is {np.mean(preds):.4f}.")
+        print("Increased volatility in the second half of the project lifecycle typically")
+        print("leads to higher cost and idle time due to frequent re-planning.")
+        
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

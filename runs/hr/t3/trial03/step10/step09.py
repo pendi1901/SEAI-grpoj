@@ -1,0 +1,70 @@
+import csv
+
+def spot(header, rows):
+    """
+    Identifies rows that look 'wrong' by checking for outliers in numeric columns.
+    A row is considered suspicious if it contains values that are statistically
+    improbable (e.g., 3 standard deviations from the mean).
+    """
+    suspicious = {}
+    
+    # Identify numeric columns
+    numeric_indices = [i for i, name in enumerate(header) if name[0].isupper()]
+    
+    # Calculate mean and std for each numeric column
+    stats = {}
+    for i in numeric_indices:
+        vals = [row[i] for row in rows if isinstance(row[i], (int, float))]
+        if not vals:
+            continue
+        mean = sum(vals) / len(vals)
+        std = (sum((x - mean) ** 2 for x in vals) / len(vals)) ** 0.5
+        stats[i] = (mean, std)
+    
+    # Flag rows with values > 3 standard deviations from the mean
+    for row_idx, row in enumerate(rows):
+        score = 0
+        for i in numeric_indices:
+            if i in stats:
+                mean, std = stats[i]
+                if std > 0:
+                    val = row[i]
+                    z_score = abs(val - mean) / std
+                    if z_score > 3:
+                        score += z_score
+        
+        if score > 0:
+            suspicious[row_idx] = score
+            
+    # Sort by suspicion score descending
+    sorted_rows = sorted(suspicious.items(), key=lambda x: x[1], reverse=True)
+    return [item[0] for item in sorted_rows]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    suspects = spot(header, rows)
+    
+    print("Analysis of potentially erroneous data entries:")
+    if not suspects:
+        print("No suspicious entries found.")
+    else:
+        print(f"Found {len(suspects)} rows with potentially incorrect numeric data.")
+        print("Top 5 most suspicious row indices:")
+        for idx in suspects[:5]:
+            print(f"- Row {idx}")

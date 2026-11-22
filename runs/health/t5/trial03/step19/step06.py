@@ -1,0 +1,61 @@
+import ezr
+import random
+
+def justify(header, rows, row):
+    """
+    Returns (p, reason): p is the fraction of rows that 'row' is better than,
+    and a sentence explaining why the configuration is considered good.
+    """
+    # Create a table to handle column roles and ydist calculations
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Estimate the goal values for the target row.
+    # We use a simple k-nearest neighbor approach based on input columns (x)
+    # to estimate the performance of the target row.
+    def estimate_goals(target_row):
+        # Find the 10 nearest neighbors in the input space
+        neighbors = sorted(rows, key=lambda r: ezr.xdist(tbl, target_row, r))[:10]
+        # Average the goal values of these neighbors
+        y_indices = [c.at for c in tbl.y]
+        estimates = []
+        for idx in y_indices:
+            vals = [n[idx] for n in neighbors if n[idx] != "?"]
+            estimates.append(sum(vals) / len(vals) if vals else 0)
+        return estimates
+
+    # Create a copy of the row with estimated goals
+    estimated_row = list(row)
+    goals = estimate_goals(row)
+    y_indices = [c.at for c in tbl.y]
+    for i, val in zip(y_indices, goals):
+        estimated_row[i] = val
+        
+    # Calculate how many rows are worse than our estimated row
+    target_ydist = ezr.ydist(tbl, estimated_row)
+    worse_count = sum(1 for r in rows if ezr.ydist(tbl, r) > target_ydist)
+    p = worse_count / len(rows)
+    
+    reason = (f"This configuration is estimated to outperform {int(p * 100)}% of all "
+              f"known setups by balancing the input parameters to minimize MRE "
+              f"and maximize ACC and PRED40.")
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Pick a sample row to justify (e.g., the 10th row)
+    # Mask its goals to simulate the "unknown" state
+    target_row = list(rows[10])
+    for i, name in enumerate(header):
+        if name.endswith('+') or name.endswith('-'):
+            target_row[i] = "?"
+            
+    p, reason = justify(header, rows, target_row)
+    
+    print(f"Justification Analysis:")
+    print(f"Performance Rank: {p:.4f}")
+    print(f"Reasoning: {reason}")

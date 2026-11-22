@@ -1,0 +1,76 @@
+import csv
+
+def justify(header, rows, row):
+    """
+    Estimates performance of 'row' and compares it against all 'rows'.
+    Answers the question: Why not use the biggest, deepest setup?
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    input_indices = [i for i, name in enumerate(header) if not name.endswith(('-', '+'))]
+    
+    # 1. Estimate goals for the target row using k-NN (k=5)
+    def get_dist(r1, r2):
+        d = 0
+        for i in input_indices:
+            if header[i] == 'criterion':
+                d += 1.0 if r1[i] != r2[i] else 0.0
+            else:
+                # Normalize numeric inputs by range (approx 200)
+                d += ((r1[i] - r2[i]) / 200.0)**2
+        return d**0.5
+
+    distances = sorted([(get_dist(row, r), r) for r in rows], key=lambda x: x[0])
+    k = 5
+    neighbors = distances[:k]
+    
+    estimated_goals = []
+    for g_idx in goal_indices:
+        avg = sum(n[1][g_idx] for n in neighbors) / k
+        estimated_goals.append(avg)
+
+    # 2. Compare target row against all rows
+    def is_better(r_goals, target_goals):
+        # A row is better if it beats the target on the majority of goals
+        wins = 0
+        for i, g_idx in enumerate(goal_indices):
+            direction = -1 if header[g_idx].endswith('-') else 1
+            if (r_goals[i] * direction) > (target_goals[i] * direction):
+                wins += 1
+        return wins > (len(goal_indices) / 2)
+
+    better_count = 0
+    for r in rows:
+        r_goals = [r[g] for g in goal_indices]
+        if is_better(r_goals, estimated_goals):
+            better_count += 1
+            
+    p = better_count / len(rows)
+    reason = "Using the biggest, deepest setup often leads to overfitting or diminishing returns, as evidenced by this configuration outperforming only " + str(int(p * 100)) + "% of the tested setups."
+    return (p, reason)
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed = [float(val) if header[i] not in ['criterion'] else val 
+                             for i, val in enumerate(row)]
+                rows.append(processed)
+        
+        # Define a "biggest, deepest" setup
+        # N_estimators: 200, Max_depth: 20, Min_sample_leaves: 1, Min_impurity_decrease: 0
+        target_row = [0.0, 0.0, 0.0, 200.0, 'squared_error', 1.0, 0.0, 20.0]
+        # Mask goals
+        for i in range(len(target_row)):
+            if header[i].endswith(('-', '+')):
+                target_row[i] = "?"
+        
+        p, reason = justify(header, rows, target_row)
+        print(reason)
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

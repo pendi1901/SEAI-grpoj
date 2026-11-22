@@ -1,0 +1,55 @@
+import ezr
+import random
+
+def flow(header, row, seen):
+    """
+    Decide whether to approve a row on the spot.
+    We monitor for performance degradation by comparing the current row's
+    ydist against the distribution of the last 50 seen rows.
+    If the current row is significantly worse than the recent trend,
+    we warn (return False).
+    """
+    if len(seen) < 50:
+        return True
+    
+    # Create a table to handle normalization and ydist calculations
+    # We use the last 50 rows as our "recent" baseline
+    recent = seen[-50:]
+    tbl = ezr.Tbl([header] + seen)
+    
+    # Calculate ydist for the current row and the recent baseline
+    current_ydist = ezr.ydist(tbl, row)
+    recent_ydists = [ezr.ydist(tbl, r) for r in recent]
+    
+    # If the current row is worse than the 90th percentile of recent performance,
+    # we flag it as "going bad" and return False.
+    recent_ydists.sort()
+    threshold = recent_ydists[int(len(recent_ydists) * 0.9)]
+    
+    return current_ydist <= threshold
+
+if __name__ == "__main__":
+    # Load data
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Simulate the arrival process
+    random.seed(1234567891)
+    random.shuffle(rows)
+    
+    seen = []
+    rejected_count = 0
+    
+    for row in rows:
+        if not flow(header, row, seen):
+            rejected_count += 1
+        seen.append(row)
+        
+    print("--- Performance Monitoring Analysis ---")
+    print(f"Processed {len(rows)} incoming configurations.")
+    print(f"Flagged {rejected_count} configurations as 'going bad' based on recent trends.")
+    print("\nStrategy: The monitor maintains a sliding window of the last 50 configurations.")
+    print("If a new configuration's performance (ydist) exceeds the 90th percentile")
+    print("of the recent window, it is rejected as a sign of process degradation.")

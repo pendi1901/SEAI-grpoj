@@ -1,0 +1,75 @@
+import ezr
+import random
+
+def remember(header, rows):
+    """
+    Identify the top 5% of rows based on multi-objective optimization.
+    A row is better if its goals (ending in - or +) are closer to their ideal.
+    """
+    # Create a table object using the provided data
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate ydist for every row. ydist measures how far a row's goals
+    # are from the best possible values (0 for -, 1 for +).
+    # Lower ydist is better.
+    scored_rows = []
+    for i, row in enumerate(rows):
+        d = ezr.ydist(tbl, row)
+        scored_rows.append((d, i))
+    
+    # Sort by distance (ascending, so best first)
+    scored_rows.sort(key=lambda x: x[0])
+    
+    # Return the indices of the top 5%
+    limit = max(1, len(rows) // 20)
+    return [item[1] for item in scored_rows[:limit]]
+
+def find_similar(header, rows, target_row, k=3):
+    """
+    Find the k rows most similar to the target_row based on input columns.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate distance to target_row for all rows
+    distances = []
+    for i, row in enumerate(rows):
+        # We compare based on input columns (xdist)
+        d = ezr.xdist(tbl, row, target_row)
+        distances.append((d, i))
+    
+    # Sort by distance (ascending)
+    distances.sort(key=lambda x: x[0])
+    
+    # Return indices of the k most similar rows
+    return [item[1] for item in distances[:k]]
+
+if __name__ == "__main__":
+    # Load the data
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Pick a random row to act as the "proposed" setup
+    random.seed(1234567891)
+    target_idx = random.randint(0, len(rows) - 1)
+    target_row = rows[target_idx]
+    
+    # Find similar past setups
+    similar_indices = find_similar(header, rows, target_row, k=3)
+    
+    print("Customer Request: 'Here is the setup I am about to propose. "
+          "Show me the past ones most like it, and how they turned out.'")
+    print(f"\nProposed Setup Index: {target_idx}")
+    print("-" * 60)
+    
+    goal_indices = [i for i, h in enumerate(header) if h.endswith(('-', '+'))]
+    
+    for idx in similar_indices:
+        goals = [rows[idx][i] for i in goal_indices]
+        print(f"Similar Past Setup {idx}:")
+        print(f"  Goals (Cost-, Score-, Idle-): {goals}")
+        
+    print("\nSummary: These past configurations were the most similar in terms of "
+          "input parameters. Comparing their goal outcomes helps predict the "
+          "performance of your proposed setup.")

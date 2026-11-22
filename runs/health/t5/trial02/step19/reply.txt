@@ -1,0 +1,53 @@
+```python
+import ezr
+import random
+
+def spot(header, rows):
+    """
+    Identify rows that are 'suspicious' because they contain input values
+    that are far outside the observed distribution (outliers).
+    We use the distance from the centroid (mids) in the input space (xdist).
+    """
+    # Create a table to handle column roles and distance calculations
+    # We use the header to define the structure
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate the centroid of the input space
+    # The centroid represents the "typical" or "seen" configuration
+    mids = ezr.mids(tbl)
+    
+    # Calculate xdist for every row from the centroid.
+    # Rows with high xdist are far from the "seen" data,
+    # which is exactly what the customer is asking about.
+    scores = []
+    for i, row in enumerate(rows):
+        d = ezr.xdist(tbl, row, mids)
+        scores.append((d, i))
+    
+    # Sort by distance descending (most suspicious/unseen first)
+    scores.sort(key=lambda x: x[0], reverse=True)
+    
+    # Return the indices of the rows
+    return [item[1] for item in scores]
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Identify suspicious rows
+    suspicious_indices = spot(header, rows)
+    
+    print("Analysis complete.")
+    print("The following rows contain settings far outside what we have typically seen:")
+    
+    # Show the top 5 most suspicious rows
+    for i in range(min(5, len(suspicious_indices))):
+        idx = suspicious_indices[i]
+        print(f"\nSuspicious Row Index: {idx}")
+        for h, v in zip(header, rows[idx]):
+            print(f"  {h}: {v}")
+            
+    print(f"\nTotal suspicious rows identified: {len(suspicious_indices)}")
+```

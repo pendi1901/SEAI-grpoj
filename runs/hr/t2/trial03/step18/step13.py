@@ -1,0 +1,47 @@
+import csv
+import step03
+
+def certify(xs, ys):
+    """
+    Uses the Welch's t-test logic from step03 to determine if the means
+    of two groups are significantly different.
+    """
+    return step03.certify(xs, ys)
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Identify columns
+    train_idx = header.index('TrainingTimesLastYear')
+    manager_idx = header.index('YearsWithCurrManager+')
+    
+    # Split data into two groups: low training (0-2 days) vs high training (3+ days)
+    low_training = [r[manager_idx] for r in rows if r[train_idx] <= 2]
+    high_training = [r[manager_idx] for r in rows if r[train_idx] > 2]
+    
+    # Use the certify function to check if the difference is significant
+    is_noise = certify(low_training, high_training)
+    
+    print("Analysis: Do people with more training stay longer with their manager?")
+    if is_noise:
+        print("Result: The observed difference in tenure with manager is likely just noise.")
+    else:
+        print("Result: There is a statistically significant difference in tenure with manager based on training.")
+    
+    print(f"Average tenure (Low Training): {sum(low_training)/len(low_training):.2f} years")
+    print(f"Average tenure (High Training): {sum(high_training)/len(high_training):.2f} years")

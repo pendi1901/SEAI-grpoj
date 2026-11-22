@@ -1,0 +1,47 @@
+import ezr
+import step03
+
+def certify(xs, ys):
+    """
+    Returns True if the two distributions are statistically indistinguishable,
+    False if they are significantly different.
+    """
+    # Reuse the statistical certification logic from step03
+    return step03.certify(xs, ys)
+
+if __name__ == "__main__":
+    # Load the data
+    filename = "pom3a.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    
+    try:
+        header = next(data_gen)
+        rows = list(data_gen)
+    except StopIteration:
+        exit(1)
+        
+    # The customer asks if results shifted after a change in decision-making.
+    # We simulate this by splitting the data into two halves:
+    # 'Before' (first 400 rows) and 'After' (last 400 rows).
+    # We compare the primary goal 'Cost-' (index 9) to see if performance shifted.
+    cost_idx = 9
+    mid = len(rows) // 2
+    
+    before_costs = [r[cost_idx] for r in rows[:mid]]
+    after_costs = [r[cost_idx] for r in rows[mid:]]
+    
+    # Perform certification
+    is_same = certify(before_costs, after_costs)
+    
+    print("Analysis: Did the change in team decision-making shift results?")
+    print(f"Before change avg cost: {sum(before_costs)/len(before_costs):.4f}")
+    print(f"After change avg cost:  {sum(after_costs)/len(after_costs):.4f}")
+    
+    if is_same:
+        print("Result: The difference is statistically insignificant.")
+        print("The change in decision-making did not result in a real performance shift.")
+    else:
+        print("Result: The difference is statistically significant.")
+        print("The change in decision-making has caused a real shift in performance.")
+        
+    exit(0)

@@ -1,0 +1,69 @@
+import ezr
+import step02
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column for each test row.
+    To simulate the 'requirements changing twice as fast' scenario,
+    we weight the training data: the second half of the training data
+    is given double the influence (weight) when building the tree.
+    """
+    # Identify the index of the first goal column
+    goal_idx = [i for i, name in enumerate(header) if name.endswith(('-', '+'))][0]
+    
+    # Create a table from training data
+    # To simulate the change, we duplicate the second half of the training rows
+    split_idx = len(train) // 2
+    weighted_train = train + train[split_idx:]
+    
+    data = [header] + weighted_train
+    tbl = ezr.Tbl(data)
+    
+    # Build a tree to estimate values
+    node = ezr.tree(tbl, tbl.rows)
+    
+    # Calculate leaf means
+    leaf_means = {}
+    for leaf in ezr.leafs(node):
+        vals = [r[goal_idx] for r in leaf.rows]
+        leaf_means[id(leaf)] = sum(vals) / len(vals)
+        
+    # Predict for each test row
+    predictions = []
+    for row in test:
+        leaf = ezr.leaf(node, row)
+        predictions.append(leaf_means[id(leaf)])
+        
+    return predictions
+
+if __name__ == "__main__":
+    # Load the data
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Split data: 80% train, 20% test
+    split = int(len(rows) * 0.8)
+    train = rows[:split]
+    test = rows[split:]
+    
+    # Mask the goals in the test set
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    masked_test = []
+    for row in test:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_test.append(new_row)
+        
+    # Get estimates
+    estimates = guess(header, train, masked_test)
+    
+    # Print summary
+    print("Analysis: Impact of accelerated requirement changes on first goal.")
+    print(f"Estimated values for the first goal ('{header[goal_indices[0]]}'):")
+    for i in range(min(5, len(estimates))):
+        print(f"  Scenario {i+1}: {estimates[i]:.4f}")
+    print("\nNote: The model was adjusted to prioritize recent data trends, "
+          "simulating a scenario where requirements evolve twice as fast.")

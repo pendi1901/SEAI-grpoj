@@ -1,0 +1,54 @@
+import ezr
+import step01
+import step09
+
+def remember(header, rows):
+    """
+    Finds the most similar past setups to the current data distribution
+    and identifies the best-performing ones among them.
+    """
+    # Use step09 to find the most 'typical' rows (least suspicious)
+    # as these represent the core of our past experience.
+    # We invert the logic of step09 to find the most 'normal' rows.
+    data = [header] + rows
+    tbl = ezr.Tbl(data)
+    centroid = ezr.mids(tbl)
+    
+    # Calculate suspicion (distance from centroid)
+    suspicion = []
+    for i, row in enumerate(rows):
+        d = ezr.xdist(tbl, row, centroid)
+        suspicion.append((d, i))
+    
+    # Sort by suspicion ascending (most typical first)
+    suspicion.sort(key=lambda x: x[0])
+    
+    # Take the top 20% of typical rows to analyze their performance
+    typical_limit = len(rows) // 5
+    typical_indices = [idx for _, idx in suspicion[:typical_limit]]
+    typical_rows = [rows[i] for i in typical_indices]
+    
+    # From these typical rows, identify the best performers using step01 logic
+    best_in_typical = step01.remember(header, typical_rows)
+    
+    # Map back to original indices
+    return [typical_indices[i] for i in best_in_typical]
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    best_indices = remember(header, rows)
+    
+    print("Analysis: Past setups most similar to current trends and their outcomes:")
+    print(f"{'Index':<10} | {'Cost-':<10} | {'Score-':<10} | {'Idle-':<10}")
+    print("-" * 45)
+    
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    
+    for idx in best_indices:
+        row = rows[idx]
+        goals = [f"{row[i]:.4f}" for i in goal_indices]
+        print(f"{idx:<10} | {goals[0]:<10} | {goals[1]:<10} | {goals[2]:<10}")

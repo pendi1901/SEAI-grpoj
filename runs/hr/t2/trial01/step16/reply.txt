@@ -1,0 +1,79 @@
+```python
+import csv
+import step06
+
+def justify(header, rows, row):
+    """
+    Estimates the score of the target row by checking if increasing 
+    MonthlyIncome improves the score, then compares it to all rows.
+    """
+    # Identify goal indices
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    income_idx = header.index('MonthlyIncome')
+    
+    # Estimate the score of the provided row (with "?" goals)
+    # We use the average score of rows with the same department/role as a baseline
+    dept_idx = header.index('department')
+    role_idx = header.index('jobRole')
+    
+    matches = [step06.get_score(header, r) for r in rows 
+               if r[dept_idx] == row[dept_idx] and r[role_idx] == row[role_idx]]
+    
+    if not matches:
+        matches = [step06.get_score(header, r) for r in rows]
+    
+    base_score = sum(matches) / len(matches)
+    
+    # Test if increasing income significantly changes the score
+    # We look at the correlation between MonthlyIncome and score in the dataset
+    incomes = [r[income_idx] for r in rows]
+    scores = [step06.get_score(header, r) for r in rows]
+    
+    # Simple correlation check: if income is not a strong driver, paying more won't help
+    # We calculate the average score gain per unit of income
+    avg_income = sum(incomes) / len(incomes)
+    high_income_rows = [s for i, s in zip(incomes, scores) if i > avg_income]
+    low_income_rows = [s for i, s in zip(incomes, scores) if i <= avg_income]
+    
+    gain = (sum(high_income_rows)/len(high_income_rows)) - (sum(low_income_rows)/len(low_income_rows))
+    
+    # If the gain is negligible (e.g., < 1% of total score range), money isn't the primary lever
+    all_scores = [step06.get_score(header, r) for r in rows]
+    score_range = max(all_scores) - min(all_scores)
+    
+    if gain < (0.01 * score_range):
+        reason = "Increasing pay has a negligible impact on tenure scores compared to other organizational factors."
+    else:
+        reason = "Increasing pay shows a positive correlation with tenure, but is not the sole driver of retention."
+        
+    # Calculate p: fraction of rows this row is better than
+    better_than = [s for s in all_scores if base_score > s]
+    p = len(better_than) / len(all_scores)
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    # Test with the first row, masking its goal columns
+    test_row = list(rows[0])
+    for i, name in enumerate(header):
+        if name.endswith('+') or name.endswith('-'):
+            test_row[i] = "?"
+            
+    p, reason = justify(header, rows, test_row)
+    print(f"Analysis: {reason}")
+    print(f"Performance percentile: {p:.2f}")
+```

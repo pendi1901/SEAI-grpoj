@@ -1,0 +1,84 @@
+import csv
+import random
+import step01
+import step05
+
+def race(header, rows, label):
+    """
+    Compare three strategies for finding the best row within a 50-label budget.
+    1. random: Pick 16 random rows.
+    2. rule_of_thumb: Pick 17 rows with the lowest tenure (newest staff).
+    3. tenure_maximizer: Pick 17 rows with the highest tenure (using step01).
+    """
+    goal_idx = -1
+    for i, name in enumerate(header):
+        if name.endswith('+'):
+            goal_idx = i
+            break
+
+    # Budget: 50 labels total
+    # Strategy 1: Random
+    random_indices = random.sample(range(len(rows)), 16)
+    
+    # Strategy 2: Rule of thumb (newest staff = lowest tenure)
+    sorted_by_tenure = sorted(range(len(rows)), key=lambda i: rows[i][goal_idx])
+    rule_of_thumb_indices = random.sample(sorted_by_tenure[:len(rows)//5], 17)
+    
+    # Strategy 3: Tenure maximizer (using step01 logic)
+    top_tenure_indices = random.sample(step01.remember(header, rows), 17)
+    
+    strategies = {
+        "random": random_indices,
+        "rule_of_thumb": rule_of_thumb_indices,
+        "tenure_maximizer": top_tenure_indices
+    }
+    
+    best_overall_val = -float('inf')
+    best_overall_idx = -1
+    winner = ""
+    
+    for name, indices in strategies.items():
+        best_strat_val = -float('inf')
+        best_strat_idx = -1
+        for idx in indices:
+            val = label(idx)[0]
+            if val > best_strat_val:
+                best_strat_val = val
+                best_strat_idx = idx
+        
+        if best_strat_val > best_overall_val:
+            best_overall_val = best_strat_val
+            best_overall_idx = best_strat_idx
+            winner = name
+            
+    return {"winner": winner, "row": best_overall_idx, "tried": list(strategies.keys())}
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        goal_indices = [i for i, h in enumerate(header) if h.endswith('+') or h.endswith('-')]
+        for row in reader:
+            new_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try: new_row.append(float(val))
+                    except ValueError: new_row.append(0.0)
+                else: new_row.append(val)
+            rows.append(new_row)
+            
+    def label(i):
+        return [rows[i][g] for g in goal_indices]
+    
+    result = race(header, rows, label)
+    
+    print("Analysis: Is the 'rule of thumb' (pay rises to newest staff) effective?")
+    print(f"The winning strategy was: {result['winner']}")
+    if result['winner'] == 'rule_of_thumb':
+        print("Result: The rule of thumb is effective for finding high-tenure potential.")
+    else:
+        print("Result: The rule of thumb is not the most effective strategy compared to data-driven approaches.")

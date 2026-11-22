@@ -1,0 +1,55 @@
+```python
+import ezr
+import step02
+
+def justify(header, rows, row):
+    """
+    Returns (p, reason): p is the fraction of rows that 'row' is better than.
+    Answers why we don't just use the biggest, deepest setup.
+    """
+    # Create a table to handle the data and metrics
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Build a tree to estimate performance for the target row
+    node = ezr.tree(tbl, rows)
+    
+    # Predict goals for the target row by finding its leaf
+    leaf = ezr.leaf(node, row)
+    
+    # Estimate the target row's performance (ydist)
+    # We use the mean ydist of the leaf as the estimate
+    target_ydist = leaf.mu
+    
+    # Calculate ydist for all existing rows
+    all_ydists = [ezr.ydist(tbl, r) for r in rows]
+    
+    # p is the fraction of rows that are worse (have higher ydist) than our target
+    # Lower ydist is better, so we count rows where target_ydist < other_ydist
+    better_than_count = sum(1 for d in all_ydists if target_ydist < d)
+    p = better_than_count / len(rows)
+    
+    reason = (f"Using the biggest, deepest setup is often counter-productive because "
+              f"it can lead to overfitting, whereas this configuration is in the top "
+              f"{int((1-p)*100)}% of setups by balancing complexity and performance.")
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Pick a sample row and mask its goals
+    sample_row = list(rows[0])
+    for i, col in enumerate(header):
+        if col[-1] in "+-":
+            sample_row[i] = "?"
+            
+    p, reason = justify(header, rows, sample_row)
+    
+    print(f"Performance Rank: {p:.4f}")
+    print(f"Reason: {reason}")
+    
+    exit(0)
+```

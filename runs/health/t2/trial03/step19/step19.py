@@ -1,0 +1,72 @@
+import csv
+
+def spot(header, rows):
+    """
+    Identifies rows that contain input values far outside the observed range
+    (outliers) or values never seen before in the training set.
+    """
+    input_indices = [i for i, name in enumerate(header) if name not in ['MRE-', 'ACC+', 'PRED40+']]
+    
+    # Build a profile of known values for each input column
+    col_profiles = {}
+    for i in input_indices:
+        vals = [r[i] for r in rows if r[i] != "?"]
+        if not vals:
+            continue
+        
+        if isinstance(vals[0], str):
+            # Symbolic: store set of seen values
+            col_profiles[i] = set(vals)
+        else:
+            # Numeric: store min and max
+            col_profiles[i] = (min(vals), max(vals))
+
+    suspicion_scores = []
+    for row_idx, row in enumerate(rows):
+        score = 0
+        for i in input_indices:
+            val = row[i]
+            if val == "?":
+                continue
+            
+            profile = col_profiles.get(i)
+            if not profile:
+                continue
+                
+            if isinstance(profile, set):
+                # If symbolic value is not in the set of seen values, it's highly suspicious
+                if val not in profile:
+                    score += 10.0
+            else:
+                # If numeric value is outside the observed range, it's suspicious
+                mi, ma = profile
+                if val < mi or val > ma:
+                    score += 5.0
+        
+        if score > 0:
+            suspicion_scores.append((score, row_idx))
+
+    # Sort by suspicion score descending
+    suspicion_scores.sort(key=lambda x: x[0], reverse=True)
+    
+    return [item[1] for item in suspicion_scores]
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = [val if header[i] == 'criterion' else float(val) 
+                             for i, val in enumerate(row)]
+            rows.append(processed_row)
+    
+    suspicious_indices = spot(header, rows)
+    
+    print(f"Identified {len(suspicious_indices)} rows with settings outside known ranges.")
+    if suspicious_indices:
+        print("The most suspicious row index is:", suspicious_indices[0])
+        print("These rows contain values that have never been seen in your historical data.")
+    else:
+        print("All rows appear to be within the range of historical data.")

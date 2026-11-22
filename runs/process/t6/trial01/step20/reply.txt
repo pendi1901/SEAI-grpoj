@@ -1,0 +1,92 @@
+```python
+import ezr
+import random
+import step10
+
+def race(header, rows, label):
+    """
+    Compares the customer's current strategy (max team size) against
+    random search and the tree-based acquire strategy.
+    """
+    labeled_indices = {}
+    budget_limit = 50
+
+    def oracle_wrapper(i):
+        if i not in labeled_indices and len(labeled_indices) < budget_limit:
+            labeled_indices[i] = label(i)
+        return labeled_indices.get(i, rows[i])
+
+    full_tbl = ezr.Tbl([header] + [list(r) for r in rows])
+    
+    # Strategy 1: Random
+    def strategy_random(budget):
+        indices = random.sample(range(len(rows)), min(budget, budget_limit - len(labeled_indices)))
+        for i in indices: oracle_wrapper(i)
+        return min(range(len(rows)), key=lambda i: ezr.ydist(full_tbl, rows[i]))
+
+    # Strategy 2: Tree-based (acquire)
+    def strategy_tree(budget):
+        temp_tbl = ezr.clone(full_tbl, [list(r) for r in rows])
+        def local_oracle(row):
+            for i, r in enumerate(rows):
+                if r is row: return oracle_wrapper(i)
+            return row
+        ezr.acquire(temp_tbl, cap=len(labeled_indices) + budget, label=local_oracle)
+        return min(range(len(rows)), key=lambda i: ezr.ydist(full_tbl, rows[i]))
+
+    # Strategy 3: Customer's Current (Max Team Size)
+    # Team Size is at index 8. We pick the rows with the highest Team Size.
+    def strategy_customer(budget):
+        # Sort by Team Size (index 8) descending
+        sorted_indices = sorted(range(len(rows)), key=lambda i: rows[i][8], reverse=True)
+        for i in sorted_indices[:budget]:
+            oracle_wrapper(i)
+        return min(range(len(rows)), key=lambda i: ezr.ydist(full_tbl, rows[i]))
+
+    # Run the race
+    budget_per = 16
+    results = {
+        "random": strategy_random(budget_per),
+        "tree": strategy_tree(budget_per),
+        "max_team_size": strategy_customer(budget_per)
+    }
+    
+    winner = min(results, key=lambda name: ezr.ydist(full_tbl, rows[results[name]]))
+    
+    return {
+        "winner": winner,
+        "row": results[winner],
+        "tried": list(results.keys())
+    }
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    try:
+        header = next(data_gen)
+        all_rows = list(data_gen)
+    except StopIteration:
+        exit(1)
+
+    test_rows = [row[:] for row in all_rows]
+    for row in test_rows:
+        row[9] = row[10] = row[11] = "?"
+
+    def label_func(i):
+        return all_rows[i]
+
+    outcome = race(header, test_rows, label_func)
+    
+    print("Comparison: Is 'Max Team Size' better than intelligent search?")
+    print(f"Strategies tried: {', '.join(outcome['tried'])}")
+    print(f"Winner: {outcome['winner']}")
+    print(f"The winning strategy found a configuration with goal distance: "
+          f"{ezr.ydist(ezr.Tbl([header]+all_rows), all_rows[outcome['row']]):.4f}")
+    
+    if outcome['winner'] == "max_team_size":
+        print("Result: Your current strategy is optimal.")
+    else:
+        print("Result: Intelligent search outperforms the 'Max Team Size' strategy.")
+    
+    exit(0)
+```

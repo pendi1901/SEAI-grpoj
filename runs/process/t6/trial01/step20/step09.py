@@ -1,0 +1,51 @@
+import ezr
+import step01
+
+def spot(header, rows):
+    """
+    Identifies rows that are 'outliers' or 'mistyped' by checking how well
+    they fit into the decision tree model. Rows that are significantly
+    far from their leaf's mean ydist are considered suspicious.
+    """
+    # Create a table to handle the data
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Build a tree model to understand the expected distribution of ydist
+    root = ezr.tree(tbl, rows)
+    
+    # Calculate the deviation of each row from its leaf's mean ydist
+    # A large deviation suggests the row does not fit the local pattern
+    deviations = []
+    for i, row in enumerate(rows):
+        leaf_node = ezr.leaf(root, row)
+        actual_ydist = ezr.ydist(tbl, row)
+        # Deviation is the absolute difference from the leaf mean
+        dev = abs(actual_ydist - leaf_node.mu)
+        deviations.append((dev, i))
+    
+    # Sort by deviation descending (most suspicious first)
+    deviations.sort(key=lambda x: x[0], reverse=True)
+    
+    # Return the indices of the top 5% most suspicious rows
+    limit = max(1, int(len(rows) * 0.05))
+    return [item[1] for item in deviations[:limit]]
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    
+    try:
+        header = next(data_gen)
+        rows = list(data_gen)
+    except StopIteration:
+        print("Error: File is empty or missing.")
+        exit(1)
+        
+    suspicious_indices = spot(header, rows)
+    
+    print(f"Identified {len(suspicious_indices)} potentially mistyped configurations.")
+    print("Most suspicious row indices:")
+    print(suspicious_indices[:10])
+    print("These rows deviate most significantly from the patterns found in the rest of the data.")
+    
+    exit(0)

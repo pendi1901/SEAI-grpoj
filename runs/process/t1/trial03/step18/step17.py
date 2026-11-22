@@ -1,0 +1,74 @@
+import csv
+import random
+
+def choose(header, rows, label):
+    """
+    Finds the best setup for a 'large' project (high 'Size') where failure is 
+    damaging (high 'Criticality'). We sample 50 rows, prioritizing those 
+    with high 'Size' and 'Criticality', and return the best one.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('-') or name.endswith('+')]
+    size_idx = header.index('Size')
+    crit_idx = header.index('Criticality')
+
+    # Score function: lower is better for goals ending in '-', higher for '+'
+    def get_score(goals):
+        score = 0
+        for i, val in enumerate(goals):
+            name = header[goal_indices[i]]
+            score += val if name.endswith('-') else -val
+        return score
+
+    # Filter for 'large' and 'high criticality' projects (top 50% of each)
+    # This helps us focus our 50-label budget on the relevant subset.
+    candidates = []
+    for i, row in enumerate(rows):
+        if row[size_idx] > 0.5 and row[crit_idx] > 0.5:
+            candidates.append(i)
+
+    # If we have fewer than 50, label all. Otherwise, sample 50.
+    to_label = candidates if len(candidates) <= 50 else random.sample(candidates, 50)
+    
+    best_idx = -1
+    best_score = float('inf')
+    
+    for idx in to_label:
+        goals = label(idx)
+        score = get_score(goals)
+        if score < best_score:
+            best_score = score
+            best_idx = idx
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            full_data = []
+            for row in reader:
+                full_data.append([float(x) for x in row])
+        
+        goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+        
+        def label(i):
+            return [full_data[i][idx] for idx in goal_indices]
+            
+        masked_rows = []
+        for row in full_data:
+            new_row = [row[i] if i not in goal_indices else "?" for i in range(len(row))]
+            masked_rows.append(new_row)
+            
+        best_idx = choose(header, masked_rows, label)
+        
+        print("Analysis: Best setup for large, high-criticality projects.")
+        print(f"Recommended configuration found at index {best_idx}.")
+        print("Setup details:")
+        for name, val in zip(header, full_data[best_idx]):
+            print(f"  {name}: {val}")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

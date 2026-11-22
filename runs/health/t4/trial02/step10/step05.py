@@ -1,0 +1,74 @@
+import csv
+import numpy as np
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import LabelEncoder
+
+def blame(header, rows):
+    """
+    Identifies input columns that correlate most strongly with poor performance.
+    We define 'bad' as the bottom 25% of rows based on a multi-objective score.
+    We then use feature importance from a Random Forest to identify the culprits.
+    """
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+    
+    # Calculate score: (1 - MRE) + ACC + PRED
+    scores = []
+    for row in rows:
+        scores.append((1.0 - row[mre_idx]) + row[acc_idx] + row[pred_idx])
+    
+    # Identify the worst 25%
+    threshold = np.percentile(scores, 25)
+    is_bad = [1 if s <= threshold else 0 for s in scores]
+    
+    # Prepare data for feature importance
+    input_indices = [i for i, name in enumerate(header) if name not in ['MRE-', 'ACC+', 'PRED40+']]
+    input_names = [header[i] for i in input_indices]
+    
+    X = []
+    encoders = {}
+    for i in input_indices:
+        if isinstance(rows[0][i], str):
+            le = LabelEncoder()
+            le.fit([r[i] for r in rows])
+            encoders[i] = le
+            
+    for row in rows:
+        feat = []
+        for i in input_indices:
+            if i in encoders:
+                feat.append(encoders[i].transform([row[i]])[0])
+            else:
+                feat.append(float(row[i]))
+        X.append(feat)
+    
+    # Train a classifier to distinguish 'bad' rows
+    model = RandomForestRegressor(n_estimators=50, random_state=42)
+    model.fit(X, is_bad)
+    
+    # Get top 3 features
+    importances = model.feature_importances_
+    indices = np.argsort(importances)[::-1]
+    
+    return [input_names[i] for i in indices[:3]]
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i].isupper() or header[i] in ['N_estimators', 'Min_sample_leaves', 'Min_impurity_decrease', 'Max_depth']:
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    culprits = blame(header, rows)
+    print("The settings most responsible for poor performance are:")
+    for c in culprits:
+        print(f"- {c}")

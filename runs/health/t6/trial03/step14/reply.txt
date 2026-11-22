@@ -1,0 +1,54 @@
+```python
+import ezr
+import step01
+
+def flow(header, row, seen):
+    """
+    Decide whether to stop the process. We stop if the current row is 
+    the best seen so far, and we have seen enough data to be confident 
+    that further improvements are unlikely (e.g., we have seen at least 
+    10% of the total expected data, or the current row is significantly 
+    better than the previous best).
+    """
+    if not seen:
+        return False
+    
+    # Create a table to evaluate the current row against the history
+    data = [header] + seen + [row]
+    tbl = ezr.Tbl(data)
+    
+    # Calculate ydist for the current row and all seen rows
+    current_ydist = ezr.ydist(tbl, row)
+    seen_ydists = [ezr.ydist(tbl, r) for r in seen]
+    
+    # Stop if we have seen a reasonable amount of data and the current row
+    # is the best one we have encountered so far.
+    best_seen = min(seen_ydists)
+    
+    # Heuristic: Stop if we've seen at least 100 rows and this is the best
+    if len(seen) >= 100 and current_ydist < best_seen:
+        return True
+        
+    return False
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    seen = []
+    stopped = False
+    for i, row in enumerate(rows):
+        if flow(header, row, seen):
+            print(f"Stopping optimization at row {i+1} (index {i}).")
+            print("The current configuration is the best found so far and improvement has plateaued.")
+            stopped = True
+            break
+        seen.append(row)
+    
+    if not stopped:
+        print("Optimization completed without finding a definitive stopping point.")
+    
+    exit(0)
+```

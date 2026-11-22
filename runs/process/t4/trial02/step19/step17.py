@@ -1,0 +1,103 @@
+import csv
+import numpy as np
+from sklearn.ensemble import RandomForestRegressor
+from step01 import remember
+
+def choose(header, rows, label):
+    """
+    Finds the best setup for a large, high-criticality project by 
+    focusing on rows where 'Size' and 'Criticality' are high, 
+    using an active learning approach with a 50-label budget.
+    """
+    goals = [c for c in header if c.endswith('-') or c.endswith('+')]
+    inputs = [c for c in header if c not in goals]
+    
+    # Filter for "large and damaging" projects (high Size and Criticality)
+    size_idx = header.index('Size')
+    crit_idx = header.index('Criticality')
+    
+    # Score rows by their suitability for the customer's specific needs
+    # Higher size and criticality are prioritized
+    suitability = []
+    for i, row in enumerate(rows):
+        s = row[size_idx] + row[crit_idx]
+        suitability.append((s, i))
+    
+    # Sort by suitability descending
+    suitability.sort(key=lambda x: x[0], reverse=True)
+    
+    labeled_indices = {}
+    
+    # Strategy: Sample the top candidates to build a surrogate model
+    # We use 20 labels to seed the model and 30 to refine
+    candidates = [x[1] for x in suitability[:50]]
+    
+    # Seed with 20
+    for i in range(20):
+        idx = candidates[i]
+        labeled_indices[idx] = label(idx)
+        
+    # Active learning loop
+    for _ in range(30):
+        train_x = [rows[i][:-len(goals)] for i in labeled_indices]
+        train_y = [labeled_indices[i] for i in labeled_indices]
+        
+        unlabeled = [c for c in candidates if c not in labeled_indices]
+        if not unlabeled:
+            break
+            
+        # Predict goals for remaining candidates
+        preds = []
+        for g_idx in range(len(goals)):
+            rf = RandomForestRegressor(n_estimators=20, random_state=42)
+            rf.fit(train_x, [y[g_idx] for y in train_y])
+            preds.append(rf.predict([rows[i][:-len(goals)] for i in unlabeled]))
+            
+        # Evaluate predicted performance
+        temp_rows = []
+        for i, u_idx in enumerate(unlabeled):
+            row_vals = rows[u_idx][:-len(goals)] + [preds[g_idx][i] for g_idx in range(len(goals))]
+            temp_rows.append(row_vals)
+            
+        best_in_temp = remember(header, temp_rows)[0]
+        best_idx = unlabeled[best_in_temp]
+        labeled_indices[best_idx] = label(best_idx)
+        
+    # Final selection
+    final_data = []
+    indices = []
+    for idx, vals in labeled_indices.items():
+        final_data.append(rows[idx][:-len(goals)] + vals)
+        indices.append(idx)
+        
+    best_local_idx = remember(header, final_data)[0]
+    return indices[best_local_idx]
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            full_rows = [[float(val) for val in row] for row in reader]
+        
+        goal_indices = [i for i, h in enumerate(header) if h.endswith('-') or h.endswith('+')]
+        rows = []
+        true_goals = []
+        for r in full_rows:
+            row_copy = r[:]
+            true_goals.append([r[g] for g in goal_indices])
+            for g in goal_indices:
+                row_copy[g] = "?"
+            rows.append(row_copy)
+            
+        def label(i):
+            return true_goals[i]
+            
+        best_idx = choose(header, rows, label)
+        print(f"Best setup for large, high-criticality project found at index: {best_idx}")
+        print("This setup was identified by prioritizing high-impact configurations and using active learning.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

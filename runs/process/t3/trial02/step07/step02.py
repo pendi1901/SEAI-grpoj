@@ -1,0 +1,62 @@
+import csv
+import pandas as pd
+import numpy as np
+from sklearn.neighbors import KNeighborsRegressor
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column (Cost-) for test rows using k-Nearest Neighbors.
+    """
+    df_train = pd.DataFrame(train, columns=header)
+    df_test = pd.DataFrame(test, columns=header)
+    
+    # Identify goal columns and input columns
+    goals = [c for c in header if c.endswith('-') or c.endswith('+')]
+    inputs = [c for c in header if c not in goals]
+    
+    # Target is the first goal column
+    target_col = goals[0]
+    
+    # Prepare training data (numeric inputs only for simplicity)
+    X_train = df_train[inputs].select_dtypes(include=[np.number])
+    y_train = df_train[target_col]
+    
+    # Prepare test data
+    X_test = df_test[inputs].select_dtypes(include=[np.number])
+    
+    # Use KNN to predict the target
+    knn = KNeighborsRegressor(n_neighbors=5)
+    knn.fit(X_train, y_train)
+    
+    predictions = knn.predict(X_test)
+    return predictions.tolist()
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed_row = []
+                for val in row:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        # Split data for demonstration: use last 10 rows as 'test'
+        train_data = rows[:-10]
+        test_data = [row[:-3] + ['?', '?', '?'] for row in rows[-10:]]
+        
+        predictions = guess(header, train_data, test_data)
+        
+        print("Customer Inquiry: Estimated Cost- for the provided configurations:")
+        for i, pred in enumerate(predictions):
+            print(f"Configuration {i+1}: Estimated Cost- = {pred:.4f}")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

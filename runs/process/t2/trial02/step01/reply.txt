@@ -1,0 +1,58 @@
+```python
+import csv
+
+def remember(header, rows):
+    """
+    Identifies rows that perform well across all goal columns.
+    Goals ending in '-' are minimized, '+' are maximized.
+    """
+    goal_indices = []
+    for i, name in enumerate(header):
+        if name.endswith('-') or name.endswith('+'):
+            goal_indices.append((i, name[-1]))
+
+    def score_row(row):
+        # We want to minimize all goals. 
+        # For '-', lower is better. For '+', higher is better (so we negate it).
+        scores = []
+        for idx, op in goal_indices:
+            val = float(row[idx])
+            scores.append(val if op == '-' else -val)
+        return scores
+
+    # Calculate scores for all rows
+    indexed_scores = []
+    for i, row in enumerate(rows):
+        indexed_scores.append((i, score_row(row)))
+
+    # A row is "unusually well" if it dominates or performs well on all goals.
+    # We sort by the sum of normalized scores or simply lexicographical comparison.
+    # Here we sort by the sum of the goal values (since all are normalized to [0,1]).
+    indexed_scores.sort(key=lambda x: sum(x[1]))
+
+    # Return top 5% (or at least 1)
+    limit = max(1, len(rows) // 20)
+    return [item[0] for item in indexed_scores[:limit]]
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [row for row in reader]
+            
+        best_indices = remember(header, rows)
+        
+        print(f"Found {len(best_indices)} top-performing setups:")
+        for idx in best_indices:
+            row = rows[idx]
+            # Print the goal values for the selected rows
+            goals = {header[i]: row[i] for i, name in enumerate(header) 
+                     if name.endswith('-') or name.endswith('+')}
+            print(f"Row {idx}: {goals}")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

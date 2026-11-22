@@ -1,0 +1,51 @@
+import ezr
+import step01
+
+def blame(header, rows):
+    """
+    Identifies input columns that best explain why the worst rows are bad.
+    We compare the 'worst' rows (highest ydist) against the 'best' rows
+    and find which input columns show the most significant difference.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Sort rows by ydist (worst first)
+    sorted_rows = sorted(rows, key=lambda r: ezr.ydist(tbl, r), reverse=True)
+    
+    # Define worst and best sets
+    n = max(1, len(rows) // 10)
+    worst = sorted_rows[:n]
+    best = sorted_rows[-n:]
+    
+    # For each input column, check if the distributions differ significantly
+    # between the worst and best groups.
+    explanations = []
+    for col in tbl.x:
+        xs = [r[col.at] for r in worst if r[col.at] != "?"]
+        ys = [r[col.at] for r in best if r[col.at] != "?"]
+        
+        if len(xs) > 1 and len(ys) > 1:
+            # If distributions are different, this column helps explain the difference
+            if not ezr.same(xs, ys):
+                explanations.append(col.txt)
+                
+    return explanations
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    factors = blame(header, rows)
+    
+    print("Analysis of factors contributing to short employee tenure:")
+    if factors:
+        print("The following input columns significantly differentiate employees "
+              "with short stays from those with long stays:")
+        for f in factors:
+            print(f" - {f}")
+    else:
+        print("No single input column clearly explains the difference in tenure.")
+    
+    exit(0)

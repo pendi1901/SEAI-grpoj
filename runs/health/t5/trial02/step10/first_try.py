@@ -1,0 +1,95 @@
+import ezr
+import random
+
+def race(header, rows, label):
+    """
+    Compares three strategies: random, greedy (based on current best), 
+    and the ezr.acquire strategy. Total budget is 50 labels.
+    """
+    # Setup
+    budget = 50
+    labeled_indices = set()
+    
+    def get_label(i):
+        if i not in labeled_indices:
+            if len(labeled_indices) >= budget:
+                raise Exception("Budget exceeded")
+            labeled_indices.add(i)
+            goals = label(i)
+            for col in tbl.y:
+                rows[i][col.at] = goals[col.at]
+        return rows[i]
+
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Strategy 1: Random
+    def strategy_random():
+        indices = random.sample(range(len(rows)), 16)
+        for i in indices: get_label(i)
+        return min(indices, key=lambda i: ezr.ydist(tbl, rows[i]))
+
+    # Strategy 2: Greedy (pick closest to current best)
+    def strategy_greedy():
+        # Start with one random
+        idx = random.choice(range(len(rows)))
+        get_label(idx)
+        for _ in range(16):
+            # Find row closest to current best
+            best_idx = min(list(labeled_indices), key=lambda i: ezr.ydist(tbl, rows[i]))
+            unlabeled = [i for i in range(len(rows)) if i not in labeled_indices]
+            next_idx = min(unlabeled, key=lambda i: ezr.xdist(tbl, rows[i], rows[best_idx]))
+            get_label(next_idx)
+        return min(list(labeled_indices), key=lambda i: ezr.ydist(tbl, rows[i]))
+
+    # Strategy 3: Acquire (ezr's built-in)
+    def strategy_acquire():
+        # Use the remaining budget
+        remaining = budget - len(labeled_indices)
+        ezr.the.Stop = remaining
+        # We need to pass a function that labels a row
+        def oracle(r):
+            for i, row in enumerate(rows):
+                if r is row: return get_label(i)
+            return r
+        labeled = ezr.acquire(tbl, cap=remaining, label=oracle)
+        return min(range(len(rows)), key=lambda i: ezr.ydist(tbl, rows[i]))
+
+    # Run the race
+    results = {
+        "random": strategy_random(),
+        "greedy": strategy_greedy(),
+        "acquire": strategy_acquire()
+    }
+    
+    # Find winner (lowest ydist)
+    winner = min(results, key=lambda name: ezr.ydist(tbl, rows[results[name]]))
+    
+    return {
+        "winner": winner,
+        "row": results[winner],
+        "tried": ["random", "greedy", "acquire"]
+    }
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Mask goals
+    masked_rows = []
+    for row in rows:
+        new_row = list(row)
+        for col in ezr.Tbl([header]).y:
+            new_row[col.at] = "?"
+        masked_rows.append(new_row)
+        
+    def label(i):
+        return data[i+1]
+        
+    result = race(header, masked_rows, label)
+    
+    print(f"Race results:")
+    print(f"Winner: {result['winner']}")
+    print(f"Best row index found: {result['row']}")
+    print(f"Strategies compared: {', '.join(result['tried'])}")

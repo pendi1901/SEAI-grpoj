@@ -1,0 +1,66 @@
+import ezr
+import random
+
+def flow(header, row, seen):
+    """
+    Detects if a team 'no longer looks the way it normally does'.
+    We define 'normal' as the distribution of the first 20 rows.
+    If a new row is significantly different from the 'normal' 
+    centroid (using xdist), we flag it as an anomaly.
+    """
+    # Need at least 20 rows to establish a baseline
+    if len(seen) < 20:
+        return False
+    
+    # Create a table from the baseline to calculate the 'normal' centroid
+    # We only use the first 20 rows to define the baseline
+    baseline = seen[:20]
+    tbl = ezr.Tbl([header] + baseline)
+    centroid = ezr.mids(tbl)
+    
+    # Calculate distance of the new row from the normal centroid
+    # xdist measures distance across input columns
+    dist = ezr.xdist(tbl, row, centroid)
+    
+    # Calculate the average distance of the baseline rows from the centroid
+    # to establish a threshold for what constitutes 'normal' variation
+    baseline_dists = [ezr.xdist(tbl, r, centroid) for r in baseline]
+    avg_baseline_dist = sum(baseline_dists) / len(baseline_dists)
+    
+    # If the new row's distance is significantly higher than the average
+    # baseline distance (e.g., > 2x), it's an anomaly.
+    if dist > avg_baseline_dist * 2.0:
+        return True
+        
+    return False
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Simulate the arrival process
+    random.seed(1234567891)
+    random.shuffle(rows)
+    
+    seen = []
+    anomalies = []
+    
+    for row in rows:
+        if flow(header, row, seen):
+            anomalies.append(row)
+            # Stop after finding the first anomaly to report
+            break
+        seen.append(row)
+        
+    print("--- Anomaly Detection Analysis ---")
+    if anomalies:
+        print("Detected a team arrangement that deviates from the norm.")
+        print(f"Total rows processed before detection: {len(seen)}")
+        print(f"Anomaly detected at index: {len(seen)}")
+        print("This team's configuration is statistically distinct from the baseline.")
+    else:
+        print("No anomalous team configurations detected in the stream.")
+    
+    exit(0)

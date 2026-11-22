@@ -1,0 +1,56 @@
+import ezr
+import random
+
+def justify(header, rows, row):
+    """
+    Returns (p, reason): p is the fraction of rows that 'row' is better than,
+    and reason is a human-readable explanation of why this setup is good.
+    """
+    # Create table to handle column roles and ydist calculations
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Estimate the goals for the target row using a tree-based ranker
+    # We train on all available data to get the best possible estimate
+    ranker = ezr.ranker(tbl)
+    
+    # The ranker returns the mean ydist of the leaf the row falls into.
+    # This acts as our estimate for the row's performance.
+    estimated_ydist = ranker(row)
+    
+    # Calculate ydist for all known rows
+    all_ydists = [ezr.ydist(tbl, r) for r in rows]
+    
+    # Calculate p: fraction of rows that have a worse (higher) ydist
+    # A row is better if its ydist is lower.
+    better_than_count = sum(1 for yd in all_ydists if yd > estimated_ydist)
+    p = better_than_count / len(all_ydists)
+    
+    # Generate a reason based on the tree structure
+    # We find the leaf the row belongs to and identify the split criteria
+    node = ezr.leaf(ezr.tree(tbl, rows), row)
+    
+    reason = (
+        f"This setup is in the top {int((1-p)*100)}% of all configurations "
+        f"because it falls into a leaf node with an average performance "
+        f"distance of {estimated_ydist:.3f}."
+    )
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Pick a sample row to justify (e.g., the 10th row)
+    # Mask its goals to simulate the "unknown" scenario
+    target_row = list(rows[10])
+    for col in ezr.Tbl([header]).y:
+        target_row[col.at] = "?"
+        
+    p, reason = justify(header, rows, target_row)
+    
+    print(f"Justification for the selected setup:")
+    print(f"Performance percentile: {p:.2f}")
+    print(f"Reason: {reason}")

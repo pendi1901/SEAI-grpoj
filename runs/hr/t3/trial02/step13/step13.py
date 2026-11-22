@@ -1,0 +1,60 @@
+import csv
+from scipy import stats
+
+def certify(xs, ys):
+    """
+    Returns True if the difference between two groups is not statistically 
+    significant (p > 0.05), suggesting the difference is likely noise.
+    Returns False if the difference is statistically significant (p <= 0.05).
+    """
+    if not xs or not ys:
+        return True
+    t_stat, p_value = stats.ttest_ind(xs, ys, equal_var=False)
+    return p_value > 0.05
+
+def analyze_training_impact(header, rows):
+    """
+    Compares 'YearsWithCurrManager+' for employees with high training vs low training.
+    """
+    train_idx = header.index('TrainingTimesLastYear')
+    manager_idx = header.index('YearsWithCurrManager+')
+    
+    # Split into two groups based on median training days
+    all_training = [row[train_idx] for row in rows]
+    median_training = sum(all_training) / len(all_training)
+    
+    high_training = [row[manager_idx] for row in rows if row[train_idx] >= median_training]
+    low_training = [row[manager_idx] for row in rows if row[train_idx] < median_training]
+    
+    avg_high = sum(high_training) / len(high_training) if high_training else 0
+    avg_low = sum(low_training) / len(low_training) if low_training else 0
+    
+    is_noise = certify(high_training, low_training)
+    
+    return avg_high, avg_low, is_noise
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    avg_high, avg_low, is_noise = analyze_training_impact(header, rows)
+    
+    print("Analysis: Do people with more training stay longer with their manager?")
+    print(f"Average years with manager (High Training): {avg_high:.2f}")
+    print(f"Average years with manager (Low Training): {avg_low:.2f}")
+    
+    if is_noise:
+        print("Conclusion: The difference is not statistically significant; training does not clearly correlate with tenure under a manager.")
+    else:
+        print("Conclusion: The difference is statistically significant; training appears to correlate with tenure under a manager.")

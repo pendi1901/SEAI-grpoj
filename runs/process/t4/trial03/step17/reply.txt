@@ -1,0 +1,86 @@
+```python
+import csv
+import numpy as np
+import pandas as pd
+from step01 import remember
+
+def choose(header, rows, label):
+    """
+    Finds the best setup for a large, high-criticality project.
+    Strategy: Filter for high 'Size' and 'Criticality', then sample 
+    to find the best performer within that high-stakes subset.
+    """
+    # Identify indices
+    size_idx = header.index('Size')
+    crit_idx = header.index('Criticality')
+    
+    # Filter for large, high-criticality projects (top 25% in both)
+    df = pd.DataFrame(rows, columns=header)
+    threshold_size = df['Size'].quantile(0.75)
+    threshold_crit = df['Criticality'].quantile(0.75)
+    
+    candidates = [
+        i for i, row in enumerate(rows) 
+        if row[size_idx] >= threshold_size and row[crit_idx] >= threshold_crit
+    ]
+    
+    # We have a budget of 50 labels.
+    # If we have many candidates, sample 50. If few, label all.
+    to_label = candidates[:50]
+    
+    best_idx = -1
+    best_score = -float('inf')
+    
+    for i in to_label:
+        true_goals = label(i)
+        
+        # Scoring logic: '-' minimized (1-norm), '+' maximized (norm)
+        # Since we don't have the full distribution, we use the provided 
+        # values assuming they are already normalized [0,1]
+        scores = []
+        for j, col in enumerate([c for c in header if c.endswith('-') or c.endswith('+')]):
+            val = true_goals[j]
+            if col.endswith('-'):
+                scores.append(1.0 - val)
+            else:
+                scores.append(val)
+        
+        current_score = np.mean(scores)
+        
+        if current_score > best_score:
+            best_score = current_score
+            best_idx = i
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            true_goals_map = {}
+            for i, row in enumerate(reader):
+                processed_row = []
+                goals = []
+                for j, val in enumerate(row):
+                    if header[j].endswith('-') or header[j].endswith('+'):
+                        goals.append(float(val))
+                        processed_row.append("?")
+                    else:
+                        processed_row.append(float(val))
+                rows.append(processed_row)
+                true_goals_map[i] = goals
+        
+        def label(i):
+            return true_goals_map[i]
+        
+        best_row_idx = choose(header, rows, label)
+        print("Customer Inquiry: Best setup for a large, high-criticality project.")
+        print(f"Analysis: After evaluating high-stakes configurations, the recommended setup is at index: {best_row_idx}.")
+        
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
+```

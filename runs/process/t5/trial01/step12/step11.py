@@ -1,0 +1,45 @@
+import ezr
+import random
+
+def remember(header, rows):
+    """
+    Finds the best 5% of rows by calculating the distance to the ideal
+    (minimizing Cost-, Score-, Idle-).
+    """
+    # Create a table object to leverage ezr's column processing
+    data = [header] + rows
+    tbl = ezr.Tbl(data)
+    
+    # Calculate ydist for every row
+    # ydist measures how far a row's goals are from the best possible
+    scored_rows = []
+    for i, row in enumerate(rows):
+        d = ezr.ydist(tbl, row)
+        scored_rows.append((d, i))
+    
+    # Sort by distance (ascending, as lower ydist is better)
+    scored_rows.sort(key=lambda x: x[0])
+    
+    # Return the top 5% of rows (800 rows * 0.05 = 40 rows)
+    limit = max(1, int(len(rows) * 0.05))
+    return [item[1] for item in scored_rows[:limit]]
+
+if __name__ == "__main__":
+    # Load data
+    filename = "pom3a.n1000.train.csv"
+    rows_iter = ezr.csv(filename)
+    header = next(rows_iter)
+    rows = list(rows_iter)
+    
+    # Get best indices
+    best_indices = remember(header, rows)
+    
+    # Print results
+    print("Historical Analysis: Top Performing Configurations")
+    print(f"We identified {len(best_indices)} configurations that performed best.")
+    print("These rows represent the 'gold standard' based on your goals (Cost-, Score-, Idle-).")
+    print("\nSample of top rows (first 3):")
+    for i in best_indices[:3]:
+        print(f"Row {i}: {rows[i]}")
+    
+    exit(0)

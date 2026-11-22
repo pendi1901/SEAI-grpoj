@@ -1,0 +1,98 @@
+import ezr
+import step01
+import step07
+import step10
+
+def race(header, rows, label):
+    """
+    Compare three strategies:
+    1. 'random': The baseline.
+    2. 'big_teams': The customer's current strategy (always pick max team size).
+    3. 'acquire': The intelligent search strategy.
+    """
+    labeled_cache = {}
+    
+    def oracle_wrapper(i):
+        if i not in labeled_cache:
+            if len(labeled_cache) >= 50:
+                raise Exception("Budget exceeded")
+            labeled_cache[i] = label(i)
+        return labeled_cache[i]
+
+    # Reference table for ydist calculations
+    full_data = [label(i) for i in range(len(rows))]
+    ref_tbl = ezr.Tbl([header] + full_data)
+
+    def get_ydist(idx):
+        row = oracle_wrapper(idx)
+        return ezr.ydist(ref_tbl, row)
+
+    # 1. Random Strategy
+    def strategy_random():
+        indices = [i for i in range(len(rows))]
+        sample = [indices.pop(i) for i in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]]
+        for i in sample: oracle_wrapper(i)
+        return min(sample, key=get_ydist)
+
+    # 2. Customer's Strategy: "Biggest teams we can afford"
+    # We interpret this as picking rows with the highest 'Team Size' value.
+    def strategy_big_teams():
+        team_idx = header.index("Team Size")
+        # Sort by team size descending
+        candidates = sorted(range(len(rows)), key=lambda i: rows[i][team_idx], reverse=True)
+        # Label top 16
+        for i in candidates[:16]:
+            oracle_wrapper(i)
+        return min(candidates[:16], key=get_ydist)
+
+    # 3. Acquire Strategy
+    def strategy_acquire():
+        tbl = ezr.Tbl([header] + rows)
+        def local_label(row):
+            idx = rows.index(row)
+            return oracle_wrapper(idx)
+        best_rows = ezr.acquire(tbl, cap=16, label=local_label)
+        best_row = min(best_rows, key=lambda r: ezr.ydist(ref_tbl, r))
+        return rows.index(best_row)
+
+    results = {
+        "random": strategy_random(),
+        "big_teams": strategy_big_teams(),
+        "acquire": strategy_acquire()
+    }
+
+    best_name = min(results, key=lambda name: get_ydist(results[name]))
+    
+    return {
+        "winner": best_name,
+        "row": results[best_name],
+        "tried": list(results.keys())
+    }
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    full_rows = [list(r) for r in data[1:]]
+    
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    masked_rows = []
+    for r in full_rows:
+        new_row = list(r)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_rows.append(new_row)
+        
+    def label(i):
+        return full_rows[i]
+        
+    res = race(header, masked_rows, label)
+    
+    print("Comparison: Is 'biggest team' better than intelligent search?")
+    print(f"Winner: {res['winner']}")
+    print(f"Strategies compared: {', '.join(res['tried'])}")
+    if res['winner'] == "acquire":
+        print("Conclusion: Intelligent search outperforms the 'biggest team' strategy.")
+    else:
+        print("Conclusion: The 'biggest team' strategy remains competitive.")
+    exit(0)

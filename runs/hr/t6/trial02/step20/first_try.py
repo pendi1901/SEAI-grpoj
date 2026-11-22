@@ -1,0 +1,98 @@
+import ezr
+import step01
+import step02
+import step10
+import random
+
+def race(header, rows, label):
+    """
+    Compare 'random' strategy against 'rule_of_thumb' (pay rises to newest staff)
+    and 'greedy' (ezr.acquire). Budget: 50 labels total.
+    """
+    budget = 50
+    labeled_cache = {}
+
+    def get_label(i):
+        if i not in labeled_cache:
+            if len(labeled_cache) >= budget:
+                return rows[i]
+            labeled_cache[i] = label(i)
+        return labeled_cache[i]
+
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Strategy 1: Random
+    def strategy_random():
+        indices = random.sample(range(len(rows)), 16)
+        for i in indices: get_label(i)
+        return min(indices, key=lambda i: ezr.ydist(tbl, get_label(i)))
+
+    # Strategy 2: Rule of Thumb (Biggest pay rise to newest staff)
+    # Newest staff = low YearsAtCompany+
+    # Pay rise = PercentSalaryHike
+    def strategy_rule_of_thumb():
+        tenure_idx = header.index("YearsAtCompany+")
+        hike_idx = header.index("PercentSalaryHike")
+        # Sort by newest first, then highest hike
+        indices = sorted(range(len(rows)), key=lambda i: (rows[i][tenure_idx], -rows[i][hike_idx]))
+        top_indices = indices[:16]
+        for i in top_indices: get_label(i)
+        return min(top_indices, key=lambda i: ezr.ydist(tbl, get_label(i)))
+
+    # Strategy 3: Greedy (ezr.acquire)
+    def strategy_greedy():
+        best_rows = ezr.acquire(tbl, cap=18, label=lambda r: get_label(rows.index(r)))
+        best_row = min(best_rows, key=lambda r: ezr.ydist(tbl, r))
+        return rows.index(best_row)
+
+    strategies = {
+        "random": strategy_random,
+        "rule_of_thumb": strategy_rule_of_thumb,
+        "greedy": strategy_greedy
+    }
+
+    results = {}
+    for name, func in strategies.items():
+        results[name] = func()
+
+    # Determine winner: lowest ydist
+    best_name = min(results, key=lambda n: ezr.ydist(tbl, get_label(results[n])))
+    
+    return {
+        "winner": best_name,
+        "row": results[best_name],
+        "tried": list(strategies.keys())
+    }
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('+', '-'))]
+    masked_rows = []
+    for row in rows:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_rows.append(new_row)
+        
+    def oracle(i):
+        return rows[i]
+
+    result = race(header, masked_rows, oracle)
+    
+    print("Customer Query: Is your advice better than our rule of thumb (pay rises to newest staff)?")
+    print(f"Race Results:")
+    print(f"Winner: {result['winner']}")
+    print(f"Best row found at index: {result['row']}")
+    print(f"Strategies compared: {', '.join(result['tried'])}")
+    
+    if result['winner'] != 'rule_of_thumb':
+        print("\nConclusion: Our model-based strategies outperformed the rule of thumb, "
+              "suggesting that tenure-based pay hikes are not the most effective retention strategy.")
+    else:
+        print("\nConclusion: The rule of thumb performed competitively in this test.")
+    
+    exit(0)

@@ -1,0 +1,61 @@
+import csv
+
+def spot(header, rows):
+    """
+    Identifies rows that are outliers in the input space.
+    We calculate the Mahalanobis-like distance (using standard deviation)
+    for each row's input columns. Rows with high deviation are suspicious.
+    """
+    input_indices = [i for i, name in enumerate(header) 
+                     if not (name.endswith('-') or name.endswith('+'))]
+    
+    # Calculate means and standard deviations for each input column
+    stats = []
+    for i in input_indices:
+        col_vals = [row[i] for row in rows if isinstance(row[i], (int, float))]
+        mean = sum(col_vals) / len(col_vals)
+        std = (sum((x - mean)**2 for x in col_vals) / len(col_vals))**0.5
+        stats.append((i, mean, std if std > 0 else 1.0))
+    
+    # Score each row by its total deviation from the mean
+    suspicion_scores = []
+    for idx, row in enumerate(rows):
+        score = 0
+        for col_idx, mean, std in stats:
+            val = row[col_idx]
+            if isinstance(val, (int, float)):
+                score += abs(val - mean) / std
+        suspicion_scores.append((score, idx))
+    
+    # Sort by suspicion score descending
+    suspicion_scores.sort(key=lambda x: x[0], reverse=True)
+    
+    # Return the top 10 most suspicious row indices
+    return [item[1] for item in suspicion_scores[:10]]
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed = []
+                for val in row:
+                    try:
+                        processed.append(float(val))
+                    except ValueError:
+                        processed.append(val)
+                rows.append(processed)
+        
+        suspicious_indices = spot(header, rows)
+        
+        print("Customer Inquiry: Some records look mistyped or made up. Which ones?")
+        print("Answer: The following rows are statistically anomalous and warrant inspection:")
+        for i, idx in enumerate(suspicious_indices):
+            print(f"{i+1}. Row index {idx} (highest deviation from input norms)")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

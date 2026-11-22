@@ -1,0 +1,54 @@
+```python
+import ezr
+import step05
+
+def blame(header, rows):
+    """
+    Identify the top 2 input columns that correlate most with poor performance 
+    (the 'worst' rows), and identify columns that have little impact.
+    """
+    # Reuse the logic from step05 to identify the most impactful inputs
+    # step05.blame returns the top 3 inputs that correlate with being a 'worst' row.
+    # We will take the top 2 as requested.
+    impactful = step05.blame(header, rows)[:2]
+    
+    # To identify what to stop worrying about, we look for inputs with the 
+    # smallest difference in means between 'best' and 'worst' rows.
+    tbl = ezr.Tbl([header] + rows)
+    scored = sorted([(ezr.ydist(tbl, r), r) for r in rows], key=lambda x: x[0])
+    n = len(scored) // 10
+    worst = [x[1] for x in scored[-n:]]
+    best = [x[1] for x in scored[:n]]
+    
+    input_indices = [i for i, name in enumerate(header) if not name.endswith(('-', '+'))]
+    
+    diffs = []
+    for i in input_indices:
+        col = tbl.cols[i]
+        if isinstance(col, ezr.Num):
+            mu_worst = sum(r[i] for r in worst) / len(worst)
+            mu_best = sum(r[i] for r in best) / len(best)
+            diffs.append((abs(mu_worst - mu_best), header[i]))
+    
+    # Sort by smallest difference
+    diffs.sort(key=lambda x: x[0])
+    
+    # Return the impactful ones followed by the ones to stop worrying about
+    # The customer asked for "one or two facts that matter" and "what to stop worrying about"
+    # We return the top 2 impactful and the bottom 1 least impactful.
+    least_impactful = diffs[0][1]
+    
+    return impactful + [least_impactful]
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    results = blame(header, rows)
+    
+    print("Analysis: Project factors affecting cost.")
+    print(f"Most important factors to monitor: {results[0]} and {results[1]}.")
+    print(f"Factor you can safely stop worrying about: {results[2]}.")
+```

@@ -1,0 +1,59 @@
+```python
+import ezr
+import step07
+
+def choose(header, rows, label):
+    """
+    Find the best working arrangement for 'Laboratory Technician' staff
+    only, using at most 50 labels.
+    """
+    # Filter rows to only include 'Laboratory Technician'
+    role_idx = header.index('jobRole')
+    lab_indices = [i for i, row in enumerate(rows) if row[role_idx] == 'Laboratory Technician']
+    lab_rows = [rows[i] for i in lab_indices]
+    
+    # If no lab staff found, return first row index
+    if not lab_rows:
+        return 0
+
+    # Define a local label wrapper that maps back to the original row indices
+    def lab_label(i):
+        # i is the index within lab_rows
+        original_idx = lab_indices[i]
+        return label(original_idx)
+
+    # Use the logic from step07 to find the best row within the subset
+    # We pass the subset of rows and our custom label function
+    best_idx_in_subset = step07.choose(header, lab_rows, lab_label)
+    
+    # Return the index in the original rows list
+    return lab_indices[best_idx_in_subset]
+
+if __name__ == "__main__":
+    # Load data
+    data = list(ezr.csv("WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"))
+    header = data[0]
+    rows = data[1:]
+    
+    # Prepare rows by hiding goal columns
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    
+    hidden_rows = []
+    for row in rows:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        hidden_rows.append(new_row)
+        
+    # Define the label function for the harness
+    def label(i):
+        return [rows[i][idx] for idx in goal_indices]
+    
+    # Run the selection
+    best_idx = choose(header, hidden_rows, label)
+    
+    print(f"Analysis: Best working arrangement for Laboratory Technicians found at index {best_idx}.")
+    print(f"Details of the best row:")
+    for i, val in enumerate(rows[best_idx]):
+        print(f"  {header[i]}: {val}")
+```

@@ -1,0 +1,39 @@
+import csv
+from step09 import spot as base_spot
+
+def spot(header, rows):
+    """
+    Identifies rows that are outliers in the input space.
+    A setup "unlike anything we have run" is an outlier in the input distribution.
+    We reuse the logic from step09 which calculates Mahalanobis-like distance
+    to identify rows that deviate from the input norms.
+    """
+    return base_spot(header, rows)
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed = []
+                for val in row:
+                    try:
+                        processed.append(float(val))
+                    except ValueError:
+                        processed.append(val)
+                rows.append(processed)
+        
+        suspicious_indices = spot(header, rows)
+        
+        print("Customer Inquiry: A new team lead proposes a setup unlike anything we have run. Tell me when I am asking you about something you have never seen.")
+        print("Answer: The following rows represent setups that are statistically anomalous compared to our historical data:")
+        for i, idx in enumerate(suspicious_indices[:5]):
+            print(f"{i+1}. Row index {idx} (highly unusual input configuration)")
+        print("\nThese setups deviate significantly from our known operational norms.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

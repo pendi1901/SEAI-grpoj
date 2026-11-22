@@ -1,0 +1,68 @@
+import ezr
+import random
+
+def justify(header, rows, row):
+    """
+    Returns (p, reason): p is the fraction of rows that the given row is better than,
+    and reason is a sentence explaining the performance.
+    """
+    # Create a table to handle column logic and normalization
+    data = [header] + rows
+    tbl = ezr.Tbl(data)
+    
+    # Calculate ydist for all rows (lower is better)
+    all_ydists = [ezr.ydist(tbl, r) for r in rows]
+    
+    # Estimate the ydist for the target row.
+    # Since goal cells are "?", we use the tree-based ranker to estimate 
+    # the expected ydist based on the input columns.
+    ranker_func = ezr.ranker(tbl)
+    target_ydist = ranker_func(row)
+    
+    # Calculate p: fraction of rows that are worse than the target row
+    # (i.e., have a higher ydist)
+    better_than_count = sum(1 for d in all_ydists if d > target_ydist)
+    p = better_than_count / len(rows)
+    
+    # Construct the reason
+    reason = (f"This configuration is better than {int(p*100)}% of all "
+              f"possible setups based on our performance model.")
+    
+    return p, reason
+
+if __name__ == "__main__":
+    # Load data
+    filename = "pom3a.n1000.train.csv"
+    rows_iter = ezr.csv(filename)
+    header = next(rows_iter)
+    rows = list(rows_iter)
+    
+    # Pick two random rows to simulate the customer's choice (B) and our recommendation (A)
+    random.seed(1234567891)
+    row_a, row_b = random.sample(rows, 2)
+    
+    # Mask the goals in the rows as per instructions
+    def mask(r):
+        m = list(r)
+        for i, name in enumerate(header):
+            if name[-1] in "+-":
+                m[i] = "?"
+        return m
+
+    masked_a = mask(row_a)
+    masked_b = mask(row_b)
+    
+    # Get justification for both
+    p_a, reason_a = justify(header, rows, masked_a)
+    p_b, reason_b = justify(header, rows, masked_b)
+    
+    print("Comparison Report: Why we recommended A over B")
+    print(f"Recommendation A: {reason_a}")
+    print(f"Setup B: {reason_b}")
+    
+    if p_a >= p_b:
+        print("Conclusion: Setup A is statistically superior to Setup B.")
+    else:
+        print("Conclusion: Setup B is actually slightly better than our initial recommendation.")
+    
+    exit(0)

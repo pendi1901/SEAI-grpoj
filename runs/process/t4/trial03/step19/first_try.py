@@ -1,0 +1,50 @@
+import csv
+import pandas as pd
+import numpy as np
+from sklearn.ensemble import IsolationForest
+
+def spot(header, rows):
+    """
+    Identifies rows that are outliers (unseen/unusual configurations)
+    using an Isolation Forest model on the input columns.
+    Returns a list of row indices, most suspicious first.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    
+    # Identify input columns (those not ending in - or +)
+    inputs = [c for c in header if not (c.endswith('-') or c.endswith('+'))]
+    
+    # Use Isolation Forest to detect anomalies.
+    # A lower score indicates a more anomalous (unseen) configuration.
+    model = IsolationForest(n_estimators=100, contamination=0.05, random_state=42)
+    
+    # Fit on input data
+    X = df[inputs]
+    scores = model.decision_function(X)
+    
+    # Get indices sorted by anomaly score (lowest score = most suspicious)
+    suspicious_indices = np.argsort(scores)
+    
+    return suspicious_indices.tolist()
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                # Convert numeric columns to float
+                processed_row = [float(val) if val.replace('.','',1).isdigit() or (val.startswith('-') and val[1:].replace('.','',1).isdigit()) else val for val in row]
+                rows.append(processed_row)
+        
+        suspicious_rows = spot(header, rows)
+        
+        print("Customer Inquiry: A new team lead proposes a setup unlike anything we have run.")
+        print("Analysis: I have identified the configurations that are most 'unseen' or anomalous compared to our historical data.")
+        print(f"The most suspicious row indices (most unique/unseen first) are: {suspicious_rows[:10]}")
+        
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

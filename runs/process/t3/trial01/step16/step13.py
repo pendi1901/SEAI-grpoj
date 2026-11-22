@@ -1,0 +1,74 @@
+import csv
+from scipy import stats
+
+def certify(xs, ys):
+    """
+    Returns True if the two distributions are statistically similar 
+    (null hypothesis not rejected), False if they are significantly different.
+    Uses Welch's t-test to compare means.
+    """
+    if len(xs) < 2 or len(ys) < 2:
+        return True
+    
+    # Welch's t-test (does not assume equal variance)
+    t_stat, p_value = stats.ttest_ind(xs, ys, equal_var=False)
+    
+    # If p-value > 0.05, we fail to reject the null hypothesis (they are the same)
+    return p_value > 0.05
+
+def analyze_shift(header, rows):
+    """
+    Splits the data into two halves (before and after the 'spring' change)
+    and compares the performance (average of normalized goals).
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('-') or name.endswith('+')]
+    
+    def get_score(row):
+        score = 0
+        for i in goal_indices:
+            val = row[i]
+            # Normalize goals: lower is better for '-', higher for '+'
+            # Since we don't have global min/max, we use the row's own values
+            # relative to the dataset range.
+            if header[i].endswith('-'):
+                score += (1.0 - val)
+            else:
+                score += val
+        return score / len(goal_indices)
+
+    # Split the data into two halves
+    mid = len(rows) // 2
+    before = [get_score(r) for r in rows[:mid]]
+    after = [get_score(r) for r in rows[mid:]]
+    
+    is_same = certify(before, after)
+    return is_same, before, after
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) for val in row])
+        
+        is_same, before, after = analyze_shift(header, rows)
+        
+        print("Analysis: Did the spring process change actually shift results?")
+        print("-" * 60)
+        print(f"Average performance before: {sum(before)/len(before):.4f}")
+        print(f"Average performance after:  {sum(after)/len(after):.4f}")
+        
+        if is_same:
+            print("\nConclusion: The difference is not statistically significant.")
+            print("The results are effectively the same as before; any observed")
+            print("variation is likely due to noise.")
+        else:
+            print("\nConclusion: The difference is statistically significant.")
+            print("The spring process change has resulted in a real shift in performance.")
+            
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

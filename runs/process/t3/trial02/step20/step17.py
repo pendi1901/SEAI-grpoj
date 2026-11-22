@@ -1,0 +1,104 @@
+import csv
+import numpy as np
+from sklearn.neighbors import KNeighborsRegressor
+
+def choose(header, rows, label):
+    """
+    Finds the best setup for a large, high-criticality project by sampling 
+    the search space using an active learning strategy with a budget of 50 labels.
+    """
+    goals = [c for c in header if c.endswith('-') or c.endswith('+')]
+    inputs = [c for c in header if c not in goals]
+    
+    # Identify indices of rows that match "large" and "high criticality"
+    # Large: Size > 0.5, Criticality > 0.5
+    size_idx = header.index('Size')
+    crit_idx = header.index('Criticality')
+    candidates = [i for i, r in enumerate(rows) if r[size_idx] > 0.5 and r[crit_idx] > 0.5]
+    
+    # If no candidates match, fall back to all rows
+    if not candidates:
+        candidates = list(range(len(rows)))
+
+    def get_score(goal_vals):
+        # Normalize: lower is better for all (invert '+' goals)
+        score = 0
+        for i, g in enumerate(goals):
+            val = goal_vals[i]
+            if g.endswith('+'):
+                score += (1.0 - val)
+            else:
+                score += val
+        return score
+
+    labeled = {}
+    def get_label(idx):
+        if idx not in labeled:
+            labeled[idx] = label(idx)
+        return labeled[idx]
+
+    # Initial sampling: 5 random candidates to start
+    np.random.seed(42)
+    sample_size = min(5, len(candidates))
+    to_label = np.random.choice(candidates, sample_size, replace=False).tolist()
+    
+    best_idx = -1
+    best_score = float('inf')
+    
+    # Active learning loop
+    for _ in range(50):
+        if not to_label:
+            break
+            
+        idx = to_label.pop(0)
+        score = get_score(get_label(idx))
+        if score < best_score:
+            best_score = score
+            best_idx = idx
+            
+        if len(labeled) >= 50:
+            break
+            
+        # Train model to predict scores
+        X_train = [rows[i][:len(inputs)] for i in labeled]
+        y_train = [get_score(labeled[i]) for i in labeled]
+        
+        # Adjust n_neighbors based on available data
+        n_neighbors = min(3, len(labeled))
+        knn = KNeighborsRegressor(n_neighbors=n_neighbors).fit(X_train, y_train)
+        
+        # Predict on remaining candidates
+        pool = [i for i in candidates if i not in labeled]
+        if not pool:
+            break
+            
+        preds = knn.predict([rows[i][:len(inputs)] for i in pool])
+        # Pick the candidate with the lowest predicted score
+        next_idx = pool[np.argmin(preds)]
+        to_label.append(next_idx)
+        
+    return best_idx
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) if val.replace('.', '', 1).isdigit() or 
+                             (val.startswith('-') and val[1:].replace('.', '', 1).isdigit()) 
+                             else val for val in row])
+        
+        true_goals = [row[len(header)-3:] for row in rows]
+        def label(i): return true_goals[i]
+        
+        best_idx = choose(header, rows, label)
+        print(f"Customer Inquiry: Best setup for a large, high-criticality project.")
+        print(f"Analysis: Found optimal configuration at index {best_idx}.")
+        print(f"Performance metrics: {true_goals[best_idx]}")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

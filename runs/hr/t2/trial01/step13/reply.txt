@@ -1,0 +1,50 @@
+```python
+import csv
+import step03
+
+def certify(xs, ys):
+    """
+    Returns True if the two lists of numbers are statistically similar 
+    (i.e., they do not differ significantly), False otherwise.
+    Reuses the logic from step03.
+    """
+    return step03.certify(xs, ys)
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Identify columns
+    train_idx = header.index('TrainingTimesLastYear')
+    ywcm_idx = header.index('YearsWithCurrManager+')
+    
+    # Split data based on median training days
+    all_train_days = [r[train_idx] for r in rows]
+    median_train = sum(all_train_days) / len(all_train_days)
+    
+    more_training = [r[ywcm_idx] for r in rows if r[train_idx] >= median_train]
+    less_training = [r[ywcm_idx] for r in rows if r[train_idx] < median_train]
+    
+    # Analyze
+    is_noise = certify(more_training, less_training)
+    
+    print("Analysis: Does more training lead to longer tenure with the manager?")
+    if is_noise:
+        print("Result: The difference is statistically insignificant (noise).")
+    else:
+        print("Result: There is a statistically significant difference.")
+    
+    print(f"Average tenure (More training): {sum(more_training)/len(more_training):.2f} years")
+    print(f"Average tenure (Less training): {sum(less_training)/len(less_training):.2f} years")
+```

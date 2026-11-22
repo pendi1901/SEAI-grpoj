@@ -1,0 +1,52 @@
+```python
+import ezr
+import step02
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column for each test row.
+    Uses the tree-based ranker from ezr to predict the outcome.
+    """
+    return step02.guess(header, train, test)
+
+def analyze_overtime_impact(header, rows):
+    """
+    Analyzes the impact of 'overTime' on the first goal column (YearsAtCompany+)
+    specifically for the 'Sales' department.
+    """
+    # Identify indices
+    dept_idx = header.index('department')
+    ot_idx = header.index('overTime')
+    goal_idx = 0 # YearsAtCompany+ is the first goal column
+    
+    # Filter for Sales department
+    sales_rows = [r for r in rows if r[dept_idx] == 'Sales']
+    
+    # Split into Overtime vs No Overtime
+    ot_yes = [r[goal_idx] for r in sales_rows if r[ot_idx] == 'Yes']
+    ot_no = [r[goal_idx] for r in sales_rows if r[ot_idx] == 'No']
+    
+    mu_yes = sum(ot_yes) / len(ot_yes) if ot_yes else 0
+    mu_no = sum(ot_no) / len(ot_no) if ot_no else 0
+    
+    return mu_yes, mu_no
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    mu_yes, mu_no = analyze_overtime_impact(header, rows)
+    
+    print("Impact Analysis: Cutting Overtime in Sales")
+    print(f"Average 'YearsAtCompany+' (With Overtime): {mu_yes:.2f}")
+    print(f"Average 'YearsAtCompany+' (Without Overtime): {mu_no:.2f}")
+    print("-" * 60)
+    if mu_no > mu_yes:
+        print("Conclusion: Removing overtime in Sales is associated with higher retention.")
+    else:
+        print("Conclusion: Removing overtime in Sales shows no clear retention benefit.")
+    
+    exit(0)
+```

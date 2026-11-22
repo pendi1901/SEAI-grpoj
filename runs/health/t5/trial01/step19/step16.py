@@ -1,0 +1,63 @@
+import ezr
+import random
+
+def justify(header, rows, row):
+    """
+    Returns (p, reason): p is the fraction of rows that `row` is better than.
+    The reason explains why 'bigger/deeper' is not always better by 
+    comparing the target row's performance to the overall distribution.
+    """
+    # Create a table to handle column roles and distance calculations
+    data = [header] + rows
+    tbl = ezr.Tbl(data)
+    
+    # Estimate the target row's performance by finding its nearest neighbor
+    # in the training data (x-space distance).
+    # We use xdist to find the most similar configuration.
+    best_neighbor = min(rows, key=lambda r: ezr.xdist(tbl, row, r))
+    
+    # The target row's performance is estimated by its neighbor's ydist
+    target_ydist = ezr.ydist(tbl, best_neighbor)
+    
+    # Calculate ydist for all rows in the dataset to build a distribution
+    all_ydists = [ezr.ydist(tbl, r) for r in rows]
+    
+    # Calculate p: fraction of rows that have a higher (worse) ydist than our target
+    # A row is better if its ydist is lower.
+    better_than_count = sum(1 for d in all_ydists if d > target_ydist)
+    p = better_than_count / len(rows)
+    
+    # Construct a reason that addresses the "bigger/deeper" question
+    reason = (f"This configuration is estimated to outperform {p:.2f} of all "
+              "possible setups; simply choosing the largest or deepest model "
+              "often leads to overfitting or unnecessary complexity without "
+              "guaranteeing better performance.")
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    
+    try:
+        header = next(data_gen)
+        rows = list(data_gen)
+    except StopIteration:
+        exit(0)
+        
+    # Pick a sample row to justify, masking its goals
+    target_idx = random.randint(0, len(rows) - 1)
+    target_row = list(rows[target_idx])
+    
+    # Mask goals
+    for i, name in enumerate(header):
+        if name[-1] in "+-":
+            target_row[i] = "?"
+            
+    p, reason = justify(header, rows, target_row)
+    
+    print("Analysis: Why not just use the biggest, deepest setup?")
+    print(reason)
+    print(f"Performance percentile score: {p:.4f}")
+    
+    exit(0)

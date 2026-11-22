@@ -1,0 +1,98 @@
+import ezr
+import random
+
+def race(header, rows, label):
+    """
+    Compare three strategies for finding the best employee:
+    1. 'random': Random sampling.
+    2. 'acquire': The intelligent search from ezr.
+    3. 'greedy': Always pick the row closest to the current best.
+    """
+    budget = 50
+    labeled_indices = {}
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(("+", "-"))]
+
+    def get_label(idx):
+        if idx not in labeled_indices:
+            if len(labeled_indices) >= budget:
+                return None
+            goals = label(idx)
+            labeled_indices[idx] = goals
+            for k, g_idx in enumerate(goal_indices):
+                rows[idx][g_idx] = goals[k]
+        return labeled_indices[idx]
+
+    # Helper to calculate ydist safely (only for rows with revealed goals)
+    def get_ydist(tbl, row):
+        # If goals are still '?', we cannot calculate ydist. 
+        # Return a high value to avoid picking unlabelled rows.
+        for g_idx in goal_indices:
+            if row[g_idx] == "?": return 1e30
+        return ezr.ydist(tbl, row)
+
+    # Strategies
+    def strategy_random(tbl):
+        indices = random.sample(range(len(rows)), budget // 3)
+        for i in indices: get_label(i)
+        return min(range(len(rows)), key=lambda i: get_ydist(tbl, rows[i]))
+
+    def strategy_acquire(tbl):
+        def oracle_wrapper(row):
+            idx = rows.index(row)
+            get_label(idx)
+            return row
+        
+        ezr.the.Stop = budget // 3
+        labeled = ezr.acquire(tbl, label=oracle_wrapper)
+        return min(range(len(rows)), key=lambda i: get_ydist(tbl, rows[i]))
+
+    def strategy_greedy(tbl):
+        curr = random.randint(0, len(rows) - 1)
+        for _ in range(budget // 3):
+            get_label(curr)
+            best_so_far = min(range(len(rows)), key=lambda i: get_ydist(tbl, rows[i]))
+            curr = min(range(len(rows)), key=lambda i: ezr.xdist(tbl, rows[i], rows[best_so_far]))
+        return best_so_far
+
+    # Run race
+    tbl = ezr.Tbl([header] + rows)
+    results = {
+        "random": strategy_random(tbl),
+        "acquire": strategy_acquire(tbl),
+        "greedy": strategy_greedy(tbl)
+    }
+
+    # Determine winner (lowest ydist)
+    winner = min(results, key=lambda name: get_ydist(tbl, rows[results[name]]))
+    
+    return {
+        "winner": winner,
+        "row": results[winner],
+        "tried": ["random", "acquire", "greedy"]
+    }
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    original_rows = [list(r) for r in rows]
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(("+", "-"))]
+    
+    masked_rows = []
+    for r in rows:
+        new_r = list(r)
+        for idx in goal_indices:
+            new_r[idx] = "?"
+        masked_rows.append(new_r)
+        
+    def label(i):
+        return [original_rows[i][idx] for idx in goal_indices]
+    
+    result = race(header, masked_rows, label)
+    
+    print(f"Race complete. Winner: {result['winner']}")
+    print(f"Best row found at index: {result['row']}")
+    print(f"Strategies compared: {', '.join(result['tried'])}")
+    exit(0)

@@ -1,0 +1,87 @@
+```python
+import ezr
+import random
+
+def fix(header, row, levers):
+    """
+    Finds the smallest change to a bad row that improves its ydist.
+    'Smallest' is defined as the distance in the input space (xdist).
+    """
+    # Create a table to handle column roles and ydist calculations
+    # We need the full dataset to calculate accurate ydist
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    tbl = ezr.Tbl(data)
+    
+    best_change = {}
+    min_dist = float('inf')
+    
+    # Current performance
+    current_ydist = ezr.ydist(tbl, row)
+    
+    # Try changing each lever one by one
+    for col_name, allowed in levers.items():
+        if col_name not in header:
+            continue
+        col_idx = header.index(col_name)
+        col = tbl.cols[col_idx]
+        
+        # Generate candidate values
+        candidates = []
+        if isinstance(col, ezr.Num):
+            low, high = allowed
+            # Try a few points in the range to ensure we find a valid improvement
+            candidates = [low, (low + high) / 2, high]
+        else:
+            candidates = allowed
+            
+        for val in candidates:
+            if val == row[col_idx]:
+                continue
+                
+            # Create a modified row
+            new_row = list(row)
+            new_row[col_idx] = val
+            
+            # Calculate distance from original (input space)
+            d_input = ezr.xdist(tbl, row, new_row)
+            
+            # Calculate performance improvement
+            d_goal = ezr.ydist(tbl, new_row)
+            
+            # We want to minimize input change while improving ydist
+            if d_goal < current_ydist:
+                if d_input < min_dist:
+                    min_dist = d_input
+                    best_change = {col_name: val}
+                    
+    return best_change
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Define levers based on the data structure
+    levers = {
+        "N_estimators": (10, 200),
+        "Min_sample_leaves": (1, 20),
+        "Max_depth": (1, 20),
+        "criterion": ["absolute_error", "poisson", "squared_error"]
+    }
+    
+    # Pick a "bad" row (one with high ydist)
+    tbl = ezr.Tbl(data)
+    scored = sorted([(ezr.ydist(tbl, r), r) for r in rows], key=lambda x: x[0], reverse=True)
+    bad_row = scored[0][1]
+    
+    recommendation = fix(header, bad_row, levers)
+    
+    print("Optimization recommendation for the current setup:")
+    if recommendation:
+        for col, val in recommendation.items():
+            print(f"Change {col} to {val}")
+    else:
+        print("No simple improvement found.")
+```

@@ -1,0 +1,88 @@
+import csv
+import step01
+
+def blame(header, rows):
+    """
+    Identifies input columns that correlate with poor performance.
+    We define 'bad' rows as the bottom 25% based on the multi-objective score.
+    We then compare the distribution of input values in 'bad' rows vs 'good' rows.
+    """
+    # Use step01 logic to score all rows
+    n = len(rows)
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+    
+    # Calculate scores
+    mres = [r[mre_idx] for r in rows]
+    accs = [r[acc_idx] for r in rows]
+    preds = [r[pred_idx] for r in rows]
+    
+    min_mre, max_mre = min(mres), max(mres)
+    min_acc, max_acc = min(accs), max(accs)
+    min_pred, max_pred = min(preds), max(preds)
+
+    def normalize(val, min_v, max_v, reverse=False):
+        if max_v == min_v: return 0.0
+        norm = (val - min_v) / (max_v - min_v)
+        return (1.0 - norm) if reverse else norm
+
+    scored_rows = []
+    for i in range(n):
+        s = (normalize(rows[i][mre_idx], min_mre, max_mre, True) +
+             normalize(rows[i][acc_idx], min_acc, max_acc, False) +
+             normalize(rows[i][pred_idx], min_pred, max_pred, False)) / 3.0
+        scored_rows.append((s, rows[i]))
+
+    scored_rows.sort(key=lambda x: x[0])
+    
+    # Split into bottom 25% (bad) and top 25% (good)
+    q = n // 4
+    bad = [x[1] for x in scored_rows[:q]]
+    good = [x[1] for x in scored_rows[-q:]]
+    
+    input_cols = [i for i, name in enumerate(header) 
+                  if not (name.endswith('-') or name.endswith('+'))]
+    
+    # Simple heuristic: find input columns where the mean/mode in 'bad' 
+    # differs significantly from 'good'
+    diffs = []
+    for i in input_cols:
+        if isinstance(bad[0][i], (int, float)):
+            mean_bad = sum(r[i] for r in bad) / len(bad)
+            mean_good = sum(r[i] for r in good) / len(good)
+            diffs.append((abs(mean_bad - mean_good), header[i]))
+        else:
+            # For symbolic, check if the most common value in bad is absent in good
+            mode_bad = max(set(r[i] for r in bad), key=[r[i] for r in bad].count)
+            if mode_bad not in [r[i] for r in good]:
+                diffs.append((1.0, header[i]))
+            else:
+                diffs.append((0.0, header[i]))
+                
+    diffs.sort(key=lambda x: x[0], reverse=True)
+    return [d[1] for d in diffs[:2]]
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed = []
+                for i, val in enumerate(row):
+                    if header[i] in ['MRE-', 'ACC+', 'PRED40+', 'N_estimators', 
+                                     'Min_sample_leaves', 'Min_impurity_decrease', 'Max_depth']:
+                        processed.append(float(val))
+                    else:
+                        processed.append(val)
+                rows.append(processed)
+        
+        culprits = blame(header, rows)
+        print("The settings most responsible for poor performance are:")
+        print(", ".join(culprits))
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

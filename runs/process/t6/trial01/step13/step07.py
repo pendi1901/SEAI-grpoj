@@ -1,0 +1,71 @@
+import ezr
+
+def choose(header, rows, label):
+    """
+    Find the best row using a budget of 50 labels.
+    The harness provides a label function that takes an index and returns the row.
+    We map the index to the row to satisfy the oracle requirement.
+    """
+    # Create a table object from the provided rows.
+    # We need to preserve the original indices to return the correct one.
+    # We create a mapping of index to row.
+    indexed_rows = {i: row for i, row in enumerate(rows)}
+    
+    # The acquire function expects a label function that takes a row and returns a row.
+    # We wrap the harness's label function (which takes an index) to accept a row.
+    # We use the row's identity (or a unique identifier) to map back to the index.
+    def oracle_wrapper(row):
+        for i, r in indexed_rows.items():
+            if r is row:
+                # The harness label function takes an index
+                revealed_row = label(i)
+                # Update the row in our table with the revealed values
+                rows[i] = revealed_row
+                return revealed_row
+        return row
+
+    # Create the table
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Use ezr's acquire to find the best rows within the budget
+    # We set the budget to 50 as requested.
+    labeled_rows = ezr.acquire(tbl, cap=50, label=oracle_wrapper)
+    
+    # Find the best row among all rows (including those not labeled, 
+    # but we rely on the model built by acquire)
+    # We use the ydist of the final table to find the best configuration.
+    best_row = min(rows, key=lambda r: ezr.ydist(tbl, r))
+    
+    # Return the index of the best row
+    for i, row in enumerate(rows):
+        if row is best_row:
+            return i
+    return 0
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    
+    try:
+        header = next(data_gen)
+        all_rows = list(data_gen)
+    except StopIteration:
+        exit(1)
+        
+    # Prepare rows with hidden goals
+    test_rows = []
+    for row in all_rows:
+        new_row = row[:]
+        new_row[9] = new_row[10] = new_row[11] = "?"
+        test_rows.append(new_row)
+        
+    # Define the label function that the harness expects
+    def label_func(i):
+        return all_rows[i]
+        
+    best_idx = choose(header, test_rows, label_func)
+    
+    print(f"Best configuration found at index: {best_idx}")
+    print(f"Goal values: {all_rows[best_idx][9:]}")
+    
+    exit(0)

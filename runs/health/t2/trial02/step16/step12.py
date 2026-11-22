@@ -1,0 +1,50 @@
+import csv
+import step02
+
+def guess(header, train, test):
+    """
+    Estimates the MRE- (first goal column) for test rows.
+    To answer the customer's question about halving the forecaster size,
+    we compare the MRE of the original setups with the MRE of setups
+    where 'N_estimators' is halved.
+    """
+    # We use the k-NN logic from step02 to estimate performance
+    return step02.guess(header, train, test)
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = [val if header[i] == 'criterion' else float(val) 
+                             for i, val in enumerate(row)]
+            rows.append(processed_row)
+
+    n_est_idx = header.index('N_estimators')
+    mre_idx = 0
+    
+    # Create a test set: take existing rows and halve their N_estimators
+    test_rows = []
+    for r in rows:
+        new_r = r[:]
+        new_r[n_est_idx] /= 2.0
+        new_r[mre_idx] = "?" # Hide the goal
+        test_rows.append(new_r)
+    
+    # Estimate MRE for these halved setups
+    estimates = guess(header, rows, test_rows)
+    
+    # Compare average MRE of original vs halved
+    original_mre = sum(r[mre_idx] for r in rows) / len(rows)
+    halved_mre = sum(estimates) / len(estimates)
+    
+    diff = halved_mre - original_mre
+    
+    print("Customer Inquiry: 'If I halve the size of the forecaster to save run time, how much worse do the forecasts get?'")
+    print(f"Answer: The average MRE increases from {original_mre:.4f} to {halved_mre:.4f}.")
+    if diff > 0:
+        print(f"This represents a performance degradation of approximately {diff:.4f} in MRE.")
+    else:
+        print("The performance impact is negligible or potentially improved.")

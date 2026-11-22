@@ -1,0 +1,85 @@
+import csv
+
+def fix(header, row, levers):
+    """
+    Recommends non-monetary changes to improve retention for a 'bad' row.
+    Since there is no money for pay, we focus on 'WorkLifeBalance', 
+    'JobInvolvement', and 'EnvironmentSatisfaction'.
+    """
+    recommendations = {}
+    
+    # Map indices for easier access
+    idx_map = {name: i for i, name in enumerate(header)}
+    
+    # Strategy:
+    # 1. If 'WorkLifeBalance' is low (1 or 2), try to increase it.
+    # 2. If 'JobInvolvement' is low (1 or 2), try to increase it.
+    # 3. If 'EnvironmentSatisfaction' is low (1 or 2), try to increase it.
+    
+    # Check WorkLifeBalance (Numeric)
+    if 'WorkLifeBalance' in levers:
+        low, high = levers['WorkLifeBalance']
+        current = row[idx_map['WorkLifeBalance']]
+        if current < high:
+            recommendations['WorkLifeBalance'] = min(high, current + 1.0)
+            return recommendations
+
+    # Check JobInvolvement (Numeric)
+    if 'JobInvolvement' in levers:
+        low, high = levers['JobInvolvement']
+        current = row[idx_map['JobInvolvement']]
+        if current < high:
+            recommendations['JobInvolvement'] = min(high, current + 1.0)
+            return recommendations
+
+    # Check EnvironmentSatisfaction (Numeric)
+    if 'EnvironmentSatisfaction' in levers:
+        low, high = levers['EnvironmentSatisfaction']
+        current = row[idx_map['EnvironmentSatisfaction']]
+        if current < high:
+            recommendations['EnvironmentSatisfaction'] = min(high, current + 1.0)
+            return recommendations
+
+    # Fallback: If no numeric improvements possible, try changing business travel
+    if 'businessTravel' in levers:
+        options = levers['businessTravel']
+        if 'Non-Travel' in options:
+            recommendations['businessTravel'] = 'Non-Travel'
+            return recommendations
+
+    return recommendations
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Define non-monetary levers
+    levers = {
+        'WorkLifeBalance': (1.0, 4.0),
+        'JobInvolvement': (1.0, 4.0),
+        'EnvironmentSatisfaction': (1.0, 4.0),
+        'businessTravel': ['Non-Travel', 'Travel_Rarely', 'Travel_Frequently']
+    }
+
+    # Find a 'bad' row (short tenure)
+    idx_years = header.index('YearsAtCompany+')
+    bad_row = min(rows, key=lambda r: r[idx_years])
+    
+    recommendation = fix(header, bad_row, levers)
+    
+    print("Customer Request: No money for pay. What else can we change?")
+    print(f"Recommended non-monetary adjustments for employee (Current YearsAtCompany: {bad_row[idx_years]}):")
+    for col, val in recommendation.items():
+        print(f"- Change '{col}' to: {val}")
+    print("\nConclusion: By improving work-life balance and job engagement, we can support retention without salary increases.")

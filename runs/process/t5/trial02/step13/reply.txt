@@ -1,0 +1,60 @@
+```python
+import ezr
+import random
+
+def certify(xs, ys):
+    """
+    Returns True if the distributions are statistically indistinguishable,
+    False if they differ significantly.
+    Uses the same logic as step03, leveraging ezr's statistical tests.
+    """
+    # We use a slightly more conservative epsilon for the Cohen test
+    # to ensure we are robust against noise.
+    return ezr.same(xs, ys, eps=0.35)
+
+def analyze_shift(header, rows):
+    """
+    Compare the performance of the first half of the data (pre-change)
+    vs the second half (post-change).
+    """
+    # Create a table to calculate ydist
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate ydist for all rows
+    scores = [ezr.ydist(tbl, r) for r in rows]
+    
+    # Split into two halves
+    mid = len(scores) // 2
+    pre_change = scores[:mid]
+    post_change = scores[mid:]
+    
+    is_same = certify(pre_change, post_change)
+    
+    return {
+        "pre_mean": sum(pre_change) / len(pre_change),
+        "post_mean": sum(post_change) / len(post_change),
+        "is_same": is_same
+    }
+
+if __name__ == "__main__":
+    # Load data
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # The data is ordered, so we treat the first half as "before"
+    # and the second half as "after" the spring change.
+    results = analyze_shift(header, rows)
+    
+    print("--- Analysis: Did results shift after the spring change? ---")
+    print(f"Average performance (ydist) before: {results['pre_mean']:.4f}")
+    print(f"Average performance (ydist) after:  {results['post_mean']:.4f}")
+    
+    if results['is_same']:
+        print("\nConclusion: The results are statistically the same.")
+        print("The observed differences are likely due to noise, not the process change.")
+    else:
+        print("\nConclusion: The results have shifted significantly.")
+        print("The process change has had a real, measurable impact on performance.")
+```

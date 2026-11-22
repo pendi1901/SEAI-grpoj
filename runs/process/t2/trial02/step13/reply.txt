@@ -1,0 +1,42 @@
+```python
+import csv
+from step03 import certify
+
+def analyze_shift(header, rows):
+    """
+    Splits the data into two halves (before and after the 'spring' change)
+    and compares the performance of the primary goal (Cost-) to see if 
+    the results shifted significantly.
+    """
+    cost_idx = header.index('Cost-')
+    
+    # Split data into two halves: 'before' and 'after' the change
+    mid = len(rows) // 2
+    before = [float(row[cost_idx]) for row in rows[:mid]]
+    after = [float(row[cost_idx]) for row in rows[mid:]]
+    
+    # Use the certify function from step03 to check for statistical difference
+    is_same = certify(before, after)
+    
+    return is_same, before, after
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [row for row in reader]
+            
+        same, before, after = analyze_shift(header, rows)
+        
+        print("Analysis of the 'spring' change in team decision-making:")
+        if same:
+            print("The results are statistically the same as before. The change did not cause a significant shift.")
+        else:
+            print("The results have shifted significantly. The change in decision-making had a measurable impact.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

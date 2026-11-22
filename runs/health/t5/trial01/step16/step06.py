@@ -1,0 +1,59 @@
+import ezr
+import random
+
+def justify(header, rows, row):
+    """
+    Returns (p, reason): p is the fraction of rows that `row` is better than.
+    The reason explains the performance relative to the dataset.
+    """
+    # Create a table to handle column roles and distance calculations
+    data = [header] + rows
+    tbl = ezr.Tbl(data)
+    
+    # To estimate the goals of the target row, we find its nearest neighbor
+    # in the training data (x-space distance)
+    best_neighbor = min(rows, key=lambda r: ezr.xdist(tbl, row, r))
+    
+    # Extract the goal values from the neighbor as an estimate for the target row
+    # A row is better if its ydist is lower (closer to ideal)
+    # We use the neighbor's ydist as a proxy for the target row's performance
+    target_ydist = ezr.ydist(tbl, best_neighbor)
+    
+    # Calculate ydist for all rows in the dataset
+    all_ydists = [ezr.ydist(tbl, r) for r in rows]
+    
+    # Calculate p: fraction of rows that have a higher (worse) ydist than our target
+    better_than_count = sum(1 for d in all_ydists if d > target_ydist)
+    p = better_than_count / len(rows)
+    
+    reason = (f"This configuration is estimated to outperform {p:.1%} of all "
+              "possible setups based on its similarity to high-performing historical data.")
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    
+    try:
+        header = next(data_gen)
+        rows = list(data_gen)
+    except StopIteration:
+        exit(0)
+        
+    # Pick a sample row to justify, masking its goals
+    target_idx = random.randint(0, len(rows) - 1)
+    target_row = list(rows[target_idx])
+    
+    # Mask goals
+    for i, name in enumerate(header):
+        if name[-1] in "+-":
+            target_row[i] = "?"
+            
+    p, reason = justify(header, rows, target_row)
+    
+    print(f"Justification for configuration at index {target_idx}:")
+    print(reason)
+    print(f"Performance percentile score: {p:.4f}")
+    
+    exit(0)

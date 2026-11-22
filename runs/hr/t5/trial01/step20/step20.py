@@ -1,0 +1,117 @@
+import ezr
+import random
+
+def race(header, rows, label):
+    """
+    Compares three strategies for finding the best employee record:
+    1. 'random': Random sampling.
+    2. 'rule_of_thumb': Prioritizes newest staff (lowest YearsAtCompany+).
+    3. 'acquire': Intelligent sampling using ezr's acquire.
+    """
+    budget = 50
+    # Use a dictionary to cache labeled rows by their index in the original list
+    # to avoid unhashable list issues and track the budget.
+    labeled_cache = {}
+
+    def oracle(row):
+        # Find index of row in original list
+        idx = -1
+        for i, r in enumerate(rows):
+            if r is row:
+                idx = i
+                break
+        
+        if idx not in labeled_cache:
+            if len(labeled_cache) >= budget:
+                return None
+            labeled_cache[idx] = label(row)
+        return labeled_cache[idx]
+
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Strategy 1: Random
+    def strategy_random(tbl, rows):
+        samples = random.sample(rows, budget // 3)
+        return [oracle(r) for r in samples if oracle(r) is not None]
+
+    # Strategy 2: Rule of Thumb (Newest staff = lowest YearsAtCompany+)
+    def strategy_rule_of_thumb(tbl, rows):
+        yac_idx = header.index("YearsAtCompany+")
+        # Sort by years at company ascending
+        sorted_rows = sorted(rows, key=lambda r: r[yac_idx])
+        return [oracle(r) for r in sorted_rows[:budget // 3] if oracle(r) is not None]
+
+    # Strategy 3: Acquire
+    def strategy_acquire(tbl, rows):
+        return ezr.acquire(tbl, cap=budget // 3, label=oracle)
+
+    strategies = {
+        "random": strategy_random,
+        "rule_of_thumb": strategy_rule_of_thumb,
+        "acquire": strategy_acquire
+    }
+    
+    results = {}
+    best_row_idx = {}
+    
+    for name, func in strategies.items():
+        labeled = func(tbl, rows)
+        if labeled:
+            lab_tbl = ezr.Tbl([header] + labeled)
+            best_r = min(labeled, key=lambda r: ezr.ydist(lab_tbl, r))
+            results[name] = ezr.ydist(lab_tbl, best_r)
+            # Find index of best_r in original rows
+            for i, r in enumerate(rows):
+                if r is best_r:
+                    best_row_idx[name] = i
+                    break
+        else:
+            results[name] = 1e30
+            best_row_idx[name] = -1
+
+    winner = min(results, key=results.get)
+    
+    return {
+        "winner": winner,
+        "row": best_row_idx[winner],
+        "tried": list(strategies.keys())
+    }
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    
+    def label_oracle(row):
+        # Simulation: return the original row from the dataset
+        for original_row in rows:
+            match = True
+            for i in range(len(header)):
+                if i not in goal_indices and original_row[i] != row[i]:
+                    match = False
+                    break
+            if match:
+                return original_row
+        return row
+
+    masked_rows = []
+    for row in rows:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_rows.append(new_row)
+        
+    result = race(header, masked_rows, label_oracle)
+    
+    print("Strategy Race Results:")
+    print(f"  Winner: {result['winner']}")
+    print(f"  Best row index found: {result['row']}")
+    print(f"  Strategies compared: {', '.join(result['tried'])}")
+    
+    if result['winner'] == 'rule_of_thumb':
+        print("\nConclusion: Your rule of thumb is effective.")
+    else:
+        print("\nConclusion: Your rule of thumb is outperformed by data-driven strategies.")

@@ -1,0 +1,62 @@
+```python
+import csv
+import step01
+
+def remember(header, rows):
+    """
+    Identifies the rows most similar to the 'best' performing rows in the dataset.
+    This uses the scoring logic from step01 to find the top 5% of rows.
+    """
+    return step01.remember(header, rows)
+
+def find_similar(header, rows, target_row, k=3):
+    """
+    Finds the k most similar rows to the target_row based on Euclidean distance
+    of input columns.
+    """
+    input_indices = [i for i, name in enumerate(header) 
+                     if not (name.endswith('-') or name.endswith('+'))]
+    
+    distances = []
+    for i, row in enumerate(rows):
+        dist = sum((float(target_row[j]) - float(row[j]))**2 for j in input_indices)
+        distances.append((dist, i))
+    
+    distances.sort()
+    return distances[:k]
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', newline='') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) for val in row])
+        
+        # Assume the last row is the "proposed" setup
+        target = rows[-1]
+        others = rows[:-1]
+        
+        # Find similar past setups
+        similar = find_similar(header, others, target)
+        
+        print("Customer Request: 'Show me the past ones most like it, and how they turned out.'")
+        print("-" * 70)
+        print(f"Proposed setup inputs: {target[:9]}")
+        print("\nMost similar past setups found:")
+        
+        goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+        
+        for dist, idx in similar:
+            row = others[idx]
+            goals = {header[i]: row[i] for i in goal_indices}
+            print(f"  - Setup at index {idx} (Dist: {dist:.4f}):")
+            for name, val in goals.items():
+                print(f"      {name}: {val:.4f}")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

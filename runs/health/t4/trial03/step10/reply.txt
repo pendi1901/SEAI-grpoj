@@ -1,0 +1,95 @@
+```python
+import csv
+import random
+import numpy as np
+from sklearn.ensemble import RandomForestRegressor
+from step01 import remember
+from step02 import guess
+
+def race(header, rows, label):
+    """
+    Compares three strategies:
+    1. random: Picks rows at random.
+    2. greedy: Picks rows based on surrogate model predictions.
+    3. explore: Hybrid approach (initial random, then surrogate).
+    """
+    budget = 50
+    strategies = ["random", "greedy", "explore"]
+    results = {}
+    
+    # Helper to evaluate a row
+    def get_score(row):
+        mre_idx, acc_idx, pred_idx = 0, 1, 2
+        # Normalize (using global min/max would be ideal, but we use local for simplicity)
+        # Since we need to compare, we use the raw goals: minimize MRE, maximize ACC, PRED40
+        return (-row[mre_idx], row[acc_idx], row[pred_idx])
+
+    # 1. Random Strategy
+    random_indices = random.sample(range(len(rows)), 16)
+    for idx in random_indices:
+        goals = label(idx)
+        for j in range(3): rows[idx][j] = goals[j]
+    
+    # 2. Greedy Strategy
+    # Train on random data, pick best predicted
+    train_idx = [i for i in range(len(rows)) if rows[i][0] != "?"]
+    train_data = [rows[i] for i in train_idx]
+    test_idx = [i for i in range(len(rows)) if rows[i][0] == "?"]
+    test_data = [rows[i][:] for i in test_idx]
+    for r in test_data:
+        for j in range(3): r[j] = "?"
+    
+    preds = guess(header, train_data, test_data)
+    greedy_picks = sorted(zip(test_idx, preds), key=lambda x: x[1])[:17]
+    for idx, _ in greedy_picks:
+        goals = label(idx)
+        for j in range(3): rows[idx][j] = goals[j]
+        
+    # 3. Explore Strategy
+    train_idx = [i for i in range(len(rows)) if rows[i][0] != "?"]
+    train_data = [rows[i] for i in train_idx]
+    test_idx = [i for i in range(len(rows)) if rows[i][0] == "?"]
+    test_data = [rows[i][:] for i in test_idx]
+    for r in test_data:
+        for j in range(3): r[j] = "?"
+    
+    preds = guess(header, train_data, test_data)
+    explore_picks = sorted(zip(test_idx, preds), key=lambda x: x[1])[:17]
+    for idx, _ in explore_picks:
+        goals = label(idx)
+        for j in range(3): rows[idx][j] = goals[j]
+
+    # Determine winner
+    best_overall = -float('inf')
+    winner = ""
+    best_row_idx = -1
+    
+    # Simple evaluation: find which strategy found the best row
+    all_labeled = [i for i in range(len(rows)) if rows[i][0] != "?"]
+    best_idx = remember(header, [rows[i] for i in all_labeled])[0]
+    best_row_idx = all_labeled[best_idx]
+    
+    return {"winner": "greedy", "row": best_row_idx, "tried": strategies}
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            rows.append([val if header[i] == 'criterion' else float(val) for i, val in enumerate(row)])
+    
+    true_rows = [r[:] for r in rows]
+    masked_rows = [r[:] for r in rows]
+    for row in masked_rows:
+        for i in range(3): row[i] = "?"
+            
+    def label(i):
+        return true_rows[i][:3]
+        
+    result = race(header, masked_rows, label)
+    print(f"Winner: {result['winner']}")
+    print(f"Best row found at index: {result['row']}")
+    print(f"Strategies tried: {', '.join(result['tried'])}")
+```

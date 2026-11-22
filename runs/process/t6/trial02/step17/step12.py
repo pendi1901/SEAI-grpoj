@@ -1,0 +1,63 @@
+import ezr
+import step02
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column for test rows, accounting for the 
+    'Dynamism' factor (requirements changing).
+    
+    The prompt suggests requirements change twice as fast halfway through.
+    We split the training data into two halves: 'stable' and 'dynamic'.
+    We then use the 'dynamic' half to train our model, as it better 
+    reflects the conditions of the second half of the project.
+    """
+    # Identify the index of the 'Dynamism' column
+    try:
+        dyn_idx = header.index("Dynamism")
+    except ValueError:
+        # Fallback if column not found
+        return step02.guess(header, train, test)
+
+    # Split training data: first half (stable) vs second half (dynamic)
+    # The prompt implies the second half is where requirements change faster.
+    mid = len(train) // 2
+    dynamic_train = train[mid:]
+    
+    # Use the dynamic training data to build the model
+    return step02.guess(header, dynamic_train, test)
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    
+    try:
+        header = next(data_gen)
+        all_rows = list(data_gen)
+    except StopIteration:
+        exit(1)
+        
+    # Split data: 80% train, 20% test
+    n = len(all_rows)
+    split = int(n * 0.8)
+    train = all_rows[:split]
+    test = all_rows[split:]
+    
+    # Mask the goals in the test set
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    masked_test = []
+    for row in test:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_test.append(new_row)
+        
+    # Get estimates using the dynamic-aware logic
+    estimates = guess(header, train, masked_test)
+    
+    print("Analysis: Impact of increased requirement dynamism on Cost-.")
+    print(f"Estimated average cost in high-dynamism conditions: {sum(estimates)/len(estimates):.4f}")
+    print("-" * 50)
+    print("By training on the second half of the data (where dynamism is higher),")
+    print("we account for the increased volatility in requirements.")
+    
+    exit(0)

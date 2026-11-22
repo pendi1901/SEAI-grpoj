@@ -1,0 +1,56 @@
+import csv
+
+def flow(header, row, seen):
+    """
+    Decides whether to accept a row based on whether it is better than
+    the best row seen so far. This is a simple online optimization strategy.
+    """
+    goal_indices = []
+    for i, name in enumerate(header):
+        if name.endswith('-') or name.endswith('+'):
+            goal_indices.append((i, name[-1]))
+
+    def score_row(r):
+        total = 0
+        for idx, op in goal_indices:
+            val = float(r[idx])
+            total += val if op == '-' else (1.0 - val)
+        return total
+
+    # If this is the first row, accept it
+    if not seen:
+        return True
+
+    # Calculate score for current row
+    current_score = score_row(row)
+
+    # Find the best score seen so far
+    best_seen_score = min(score_row(r) for r in seen)
+
+    # If current row is better than anything seen before, accept it
+    # Note: lower score is better in our heuristic
+    return current_score < best_seen_score
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [row for row in reader]
+            
+            seen = []
+            accepted_count = 0
+            
+            for row in rows:
+                if flow(header, row, seen):
+                    accepted_count += 1
+                seen.append(row)
+            
+            print(f"Customer Inquiry: Online Proposal Selection")
+            print(f"Processed {len(rows)} proposals.")
+            print(f"Accepted {accepted_count} proposals based on the 'better than previous' strategy.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

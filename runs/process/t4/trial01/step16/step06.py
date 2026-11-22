@@ -1,0 +1,85 @@
+import csv
+from step01 import remember
+from step02 import guess
+
+def justify(header, rows, row):
+    """
+    Estimates the goals for the target row, compares it against all rows,
+    and returns the percentile rank and a justification string.
+    """
+    # Identify goal indices
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    
+    # Estimate goals for the target row using KNN.
+    # guess() returns a list of predictions for the first goal column.
+    # Since we need all goal columns, we call guess for each goal.
+    estimated_goals = []
+    for g_idx in goal_indices:
+        # Temporarily swap the goal column to be the first one for guess()
+        # or just use the logic that guess() only predicts the first goal.
+        # To handle multiple goals, we run guess for each goal index.
+        # Note: step02.py's guess() is hardcoded to predict the first goal.
+        # We adapt by creating a temporary header/data structure.
+        
+        # Create a version of header where the target goal is first
+        temp_header = [header[g_idx]] + [header[i] for i in range(len(header)) if i != g_idx]
+        temp_rows = [[r[g_idx]] + [r[i] for i in range(len(header)) if i != g_idx] for r in rows]
+        temp_row = ["?"] + [row[i] for i in range(len(header)) if i != g_idx]
+        
+        pred = guess(temp_header, temp_rows, [temp_row])[0]
+        estimated_goals.append(pred)
+    
+    # Create a full version of the target row with estimated goals
+    full_row = list(row)
+    for i, goal_idx in enumerate(goal_indices):
+        full_row[goal_idx] = estimated_goals[i]
+    
+    # Calculate normalized scores for all rows
+    goal_directions = [-1 if header[i].endswith('-') else 1 for i in goal_indices]
+    
+    cols = [[float(r[idx]) for r in rows] + [float(full_row[idx])] for idx in goal_indices]
+    mins = [min(c) for c in cols]
+    maxs = [max(c) for c in cols]
+    
+    def get_agg_score(r):
+        scores = []
+        for i, idx in enumerate(goal_indices):
+            val = float(r[idx])
+            denom = maxs[i] - mins[i]
+            norm = (val - mins[i]) / denom if denom != 0 else 0
+            scores.append(1 - norm if goal_directions[i] == -1 else norm)
+        return min(scores)
+    
+    target_score = get_agg_score(full_row)
+    all_scores = [get_agg_score(r) for r in rows]
+    
+    # Calculate fraction of rows that are worse than target
+    better_than_count = sum(1 for s in all_scores if s < target_score)
+    p = better_than_count / len(rows)
+    
+    reason = f"This setup is better than {p:.2f} of all known configurations based on its estimated performance across all goals."
+    
+    return (p, reason)
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) if val.replace('.','',1).isdigit() or (val.startswith('-') and val[1:].replace('.','',1).isdigit()) else val for val in row])
+        
+        target_row = list(rows[-1])
+        goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+        for idx in goal_indices:
+            target_row[idx] = "?"
+            
+        p, reason = justify(header, rows[:-1], target_row)
+        print(f"Rank: {p:.4f}")
+        print(f"Justification: {reason}")
+        exit(0)
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

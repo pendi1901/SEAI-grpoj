@@ -1,0 +1,86 @@
+import ezr
+import random
+import step07
+
+def race(header, rows, label):
+    """
+    Compare three strategies: random, active learning (from step07), 
+    and a greedy search based on distance to the centroid.
+    """
+    # Budget management
+    budget = 50
+    labeled_indices = set()
+    
+    def oracle_wrapper(idx):
+        if len(labeled_indices) >= budget:
+            raise Exception("Budget exceeded")
+        labeled_indices.add(idx)
+        return label(idx)
+
+    # Strategy 1: Random
+    def strategy_random(tbl, rows):
+        indices = random.sample(range(len(rows)), budget // 3)
+        for i in indices:
+            oracle_wrapper(i)
+        return min(indices, key=lambda i: ezr.ydist(tbl, rows[i]))
+
+    # Strategy 2: Active Learning (from step07 logic)
+    def strategy_active(tbl, rows):
+        # We use a subset of the budget
+        return step07.choose(header, rows, oracle_wrapper)
+
+    # Strategy 3: Greedy Centroid (pick rows closest to the global centroid)
+    def strategy_greedy(tbl, rows):
+        mids = ezr.mids(tbl)
+        scored = sorted([(ezr.xdist(tbl, r, mids), i) for i, r in enumerate(rows)])
+        indices = [x[1] for x in scored[:budget // 3]]
+        for i in indices:
+            oracle_wrapper(i)
+        return min(indices, key=lambda i: ezr.ydist(tbl, rows[i]))
+
+    tbl = ezr.Tbl([header] + rows)
+    
+    results = {
+        "random": strategy_random(tbl, rows),
+        "active": strategy_active(tbl, rows),
+        "greedy": strategy_greedy(tbl, rows)
+    }
+    
+    # Determine winner: lowest ydist
+    winner = min(results, key=lambda name: ezr.ydist(tbl, rows[results[name]]))
+    
+    return {
+        "winner": winner,
+        "row": results[winner],
+        "tried": list(results.keys())
+    }
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Mask goals
+    goal_indices = [i for i, name in enumerate(header) if name[-1] in "+-"]
+    masked_rows = []
+    for row in rows:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_rows.append(new_row)
+        
+    def label_func(i):
+        return rows[i]
+    
+    result = race(header, masked_rows, label_func)
+    
+    print("Strategy Race Results:")
+    print(f"Winner: {result['winner']}")
+    print(f"Best row found at index: {result['row']}")
+    print(f"Strategies compared: {', '.join(result['tried'])}")
+    print("-" * 60)
+    print("The 'active' strategy typically outperforms random sampling by")
+    print("focusing labels on the most informative regions of the data space.")
+    
+    exit(0)

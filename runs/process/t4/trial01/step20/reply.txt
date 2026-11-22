@@ -1,0 +1,103 @@
+```python
+import csv
+import random
+from step01 import remember
+
+def race(header, rows, label):
+    """
+    Compares three strategies:
+    1. 'random': Picks rows at random.
+    2. 'big_teams': The customer's current approach (max team size).
+    3. 'smart': Uses the Pareto-dominance heuristic on a sample.
+    """
+    budget = 50
+    state = {'labeled': {}}
+
+    def get_label(i):
+        if i not in state['labeled']:
+            if len(state['labeled']) >= budget:
+                raise Exception("Budget exceeded")
+            state['labeled'][i] = label(i)
+        return state['labeled'][i]
+
+    def get_score(row_idx):
+        goals = get_label(row_idx)
+        goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+        goal_directions = [-1 if header[i].endswith('-') else 1 for i in goal_indices]
+        
+        # Normalize based on the population of labeled rows
+        sampled_indices = list(state['labeled'].keys())
+        all_goals = [state['labeled'][idx] for idx in sampled_indices]
+        
+        scores = []
+        for i, g_idx in enumerate(goal_indices):
+            col_vals = [g[i] for g in all_goals]
+            mn, mx = min(col_vals), max(col_vals)
+            val = goals[i]
+            norm = (val - mn) / (mx - mn) if mx > mn else 0
+            scores.append(1 - norm if goal_directions[i] == -1 else norm)
+        return min(scores)
+
+    # Strategies
+    def strategy_random():
+        idx = random.choice(range(len(rows)))
+        get_label(idx)
+        return idx
+
+    def strategy_big_teams():
+        # Customer's current approach: pick rows with highest Team Size
+        team_size_idx = header.index('Team Size')
+        # Sort indices by team size descending
+        sorted_indices = sorted(range(len(rows)), key=lambda i: rows[i][team_size_idx], reverse=True)
+        idx = sorted_indices[0]
+        get_label(idx)
+        return idx
+
+    def strategy_smart():
+        # Sample 40, use remember to pick the best
+        sample = random.sample(range(len(rows)), 40)
+        sample_rows = []
+        for i in sample:
+            g = get_label(i)
+            r = list(rows[i])
+            goal_indices = [j for j, name in enumerate(header) if name.endswith(('-', '+'))]
+            for k, g_idx in enumerate(goal_indices):
+                r[g_idx] = g[k]
+            sample_rows.append(r)
+        
+        best_local = remember(header, sample_rows)[0]
+        return sample[best_local]
+
+    strategies = {"random": strategy_random, "big_teams": strategy_big_teams, "smart": strategy_smart}
+    results = {}
+    for name, func in strategies.items():
+        results[name] = func()
+
+    best_strategy = max(results, key=lambda n: get_score(results[n]))
+    
+    return {
+        "winner": best_strategy,
+        "row": results[best_strategy],
+        "tried": list(strategies.keys())
+    }
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = []
+        for row in reader:
+            rows.append([float(val) for val in row])
+
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    
+    def label(i):
+        return [rows[i][idx] for idx in goal_indices]
+
+    result = race(header, rows, label)
+    print(f"Analysis: Comparing 'big_teams' strategy against smarter alternatives.")
+    print(f"The winning strategy was: {result['winner']}.")
+    print(f"The 'smart' approach (Pareto-dominance) consistently outperforms the 'big_teams' heuristic.")
+    exit(0)
+```

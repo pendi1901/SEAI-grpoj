@@ -1,0 +1,76 @@
+import csv
+
+def remember(header, rows):
+    """
+    Finds the 5% of rows that are most similar to the 'best' performing rows
+    in the dataset. We define 'best' as those with the highest aggregate 
+    normalized score across the goal columns.
+    """
+    goal_indices = [i for i, h in enumerate(header) if h.endswith(('-', '+'))]
+    input_indices = [i for i, h in enumerate(header) if not h.endswith(('-', '+'))]
+    
+    # 1. Calculate scores for all rows to identify the "gold standard"
+    def get_score(row):
+        s = 0
+        for i in goal_indices:
+            col = header[i]
+            vals = [r[i] for r in rows if isinstance(r[i], (int, float))]
+            if not vals: continue
+            mn, mx = min(vals), max(vals)
+            norm = (row[i] - mn) / (mx - mn) if mx > mn else 0
+            s += (1 - norm) if col.endswith('-') else norm
+        return s
+
+    scores = [(get_score(r), i) for i, r in enumerate(rows)]
+    # Top 5% of rows are our "target" setups
+    limit = max(1, len(rows) // 20)
+    best_rows = sorted(scores, key=lambda x: x[0], reverse=True)[:limit]
+    best_indices = [x[1] for x in best_rows]
+
+    # 2. Find rows most similar to these best setups using Euclidean distance
+    # on input features.
+    def get_dist(r1, r2):
+        d = 0
+        for i in input_indices:
+            if header[i] == 'criterion':
+                d += 0 if r1[i] == r2[i] else 1
+            else:
+                # Simple normalization for distance
+                vals = [r[i] for r in rows if isinstance(r[i], (int, float))]
+                mn, mx = min(vals), max(vals)
+                if mx > mn:
+                    d += ((r1[i] - r2[i]) / (mx - mn))**2
+        return d**0.5
+
+    # Find rows that are not in the top 5% but are closest to them
+    candidates = []
+    for i, row in enumerate(rows):
+        if i in best_indices: continue
+        # Distance to the nearest 'best' row
+        min_d = min(get_dist(row, rows[b]) for b in best_indices)
+        candidates.append((min_d, i))
+    
+    candidates.sort(key=lambda x: x[0])
+    
+    # Return the indices of the best rows + the closest neighbors to fill the 5%
+    result = best_indices + [x[1] for x in candidates[:limit]]
+    return result[:limit]
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = [val if header[i] == 'criterion' else float(val) 
+                             for i, val in enumerate(row)]
+            rows.append(processed_row)
+            
+    best_indices = remember(header, rows)
+    
+    print(f"Identified {len(best_indices)} setups most similar to the top performers.")
+    for idx in best_indices:
+        # Extract goals for display
+        goals = {header[i]: rows[idx][i] for i, h in enumerate(header) if h.endswith(('-', '+'))}
+        print(f"Row {idx}: Goals {goals}")

@@ -1,0 +1,82 @@
+```python
+import csv
+
+def blame(header, rows):
+    """
+    Identifies input columns that have the least impact on performance.
+    Columns with low correlation to 'badness' are safe to leave at defaults.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('-') or name.endswith('+')]
+    input_indices = [i for i, name in enumerate(header) if i not in goal_indices]
+    
+    # Calculate a 'badness' score for each row
+    # Normalize goals: MRE (lower is better), ACC/PRED (higher is better)
+    def get_goals(r):
+        return [r[i] for i in goal_indices]
+
+    def norm(val, vals, reverse=False):
+        mn, mx = min(vals), max(vals)
+        if mx == mn: return 0.5
+        n = (val - mn) / (mx - mn)
+        return (1 - n) if reverse else n
+
+    all_goals = [get_goals(r) for r in rows]
+    badness = []
+    for r in rows:
+        goals = get_goals(r)
+        scores = []
+        for i, g_idx in enumerate(goal_indices):
+            col_vals = [g[i] for g in all_goals]
+            reverse = header[g_idx].endswith('-')
+            scores.append(norm(goals[i], col_vals, reverse))
+        badness.append(1 - (sum(scores) / len(scores)))
+    
+    # Find correlations between input columns and badness
+    impacts = {}
+    for idx in input_indices:
+        col_vals = [r[idx] for r in rows]
+        # Handle symbolic columns by mapping to numeric
+        if isinstance(col_vals[0], str):
+            unique = list(set(col_vals))
+            col_vals = [unique.index(v) for v in col_vals]
+        
+        # Correlation: average badness for high values vs low values
+        mid = sum(col_vals) / len(col_vals)
+        low_bad = [badness[i] for i, v in enumerate(col_vals) if v <= mid]
+        high_bad = [badness[i] for i, v in enumerate(col_vals) if v > mid]
+        
+        avg_low = sum(low_bad) / len(low_bad) if low_bad else 0
+        avg_high = sum(high_bad) / len(high_bad) if high_bad else 0
+        
+        impacts[header[idx]] = abs(avg_high - avg_low)
+    
+    # Return columns sorted by their impact (least impact first)
+    sorted_cols = sorted(impacts.items(), key=lambda x: x[1])
+    return [item[0] for item in sorted_cols]
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            for row in reader:
+                processed_row = []
+                for i, val in enumerate(row):
+                    if header[i] in ['MRE-', 'ACC+', 'PRED40+', 'N_estimators', 
+                                     'Min_sample_leaves', 'Min_impurity_decrease', 'Max_depth']:
+                        processed_row.append(float(val))
+                    else:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        results = blame(header, rows)
+        print("Settings you can safely leave at factory defaults (least impact on performance):")
+        for i, col in enumerate(results):
+            print(f"{i+1}. {col}")
+        exit(0)
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

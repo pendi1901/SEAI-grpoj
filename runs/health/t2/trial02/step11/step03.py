@@ -1,0 +1,55 @@
+import csv
+import math
+
+def certify(xs, ys):
+    """
+    Returns True if the difference between two distributions is likely noise,
+    False if they really differ. Uses a simple T-test approach.
+    """
+    n1, n2 = len(xs), len(ys)
+    if n1 < 2 or n2 < 2:
+        return True
+    
+    m1, m2 = sum(xs) / n1, sum(ys) / n2
+    v1 = sum((x - m1)**2 for x in xs) / (n1 - 1)
+    v2 = sum((y - m2)**2 for y in ys) / (n2 - 1)
+    
+    # Pooled standard deviation
+    pooled_std = math.sqrt(((n1 - 1) * v1 + (n2 - 1) * v2) / (n1 + n2 - 2))
+    if pooled_std == 0:
+        return m1 == m2
+    
+    # T-statistic
+    t_stat = (m1 - m2) / (pooled_std * math.sqrt(1/n1 + 1/n2))
+    
+    # For a 95% confidence interval, critical value is approx 1.96
+    return abs(t_stat) < 1.96
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = [val if header[i] == 'criterion' else float(val) 
+                             for i, val in enumerate(row)]
+            rows.append(processed_row)
+
+    # Define "big" as N_estimators > median, "small" as <= median
+    n_est_idx = header.index('N_estimators')
+    acc_idx = header.index('ACC+')
+    
+    n_ests = [r[n_est_idx] for r in rows]
+    median_n = sorted(n_ests)[len(n_ests) // 2]
+    
+    big_accs = [r[acc_idx] for r in rows if r[n_est_idx] > median_n]
+    small_accs = [r[acc_idx] for r in rows if r[n_est_idx] <= median_n]
+    
+    is_noise = certify(big_accs, small_accs)
+    
+    print("Customer Inquiry: 'In my last batch the big setups looked more accurate than the small ones. Is that real, or noise?'")
+    if is_noise:
+        print("Answer: The difference in accuracy between big and small setups is likely just noise.")
+    else:
+        print("Answer: The difference in accuracy between big and small setups is statistically significant.")

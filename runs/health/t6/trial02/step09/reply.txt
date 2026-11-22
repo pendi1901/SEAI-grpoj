@@ -1,0 +1,45 @@
+```python
+import ezr
+import step01
+
+def spot(header, rows):
+    """
+    Identifies suspicious rows by calculating the distance of each row
+    from the rest of the population. Rows that are extreme outliers in 
+    the input (x) space are flagged as potentially 'wrongly entered'.
+    """
+    # Create a table to manage the data and calculate distances
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate the average x-distance of each row to all other rows.
+    # A row that is very far from the 'center' of the input space is 
+    # considered suspicious.
+    suspicious = []
+    for i, row in enumerate(rows):
+        # Calculate distance to the centroid of the data
+        d = ezr.xdist(tbl, row, ezr.mids(tbl))
+        suspicious.append((d, i))
+    
+    # Sort by distance descending (most suspicious/outlier first)
+    suspicious.sort(key=lambda x: x[0], reverse=True)
+    
+    return [idx for _, idx in suspicious]
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    all_data = list(ezr.csv(filename))
+    header = all_data[0]
+    rows = all_data[1:]
+    
+    # Get suspicious indices
+    indices = spot(header, rows)
+    
+    # Print the top 5 most suspicious rows
+    print("Top 5 most suspicious rows (potential data entry errors):")
+    for i in range(min(5, len(indices))):
+        idx = indices[i]
+        print(f"  Row {idx}: {rows[idx]}")
+    
+    print(f"\nTotal rows analyzed: {len(rows)}")
+    print("The rows were ranked by their distance from the population centroid.")
+```

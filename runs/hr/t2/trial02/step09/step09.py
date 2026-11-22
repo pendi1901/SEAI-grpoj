@@ -1,0 +1,67 @@
+import csv
+
+def spot(header, rows):
+    """
+    Identifies suspicious rows by checking for outliers in numeric columns.
+    A value is considered suspicious if it is more than 3 standard deviations 
+    away from the mean of its column.
+    """
+    suspicious = {}
+    
+    # Identify numeric columns
+    numeric_indices = [i for i, h in enumerate(header) if h[0].isupper()]
+    
+    for idx in numeric_indices:
+        col_data = [r[idx] for r in rows if isinstance(r[idx], (int, float))]
+        if not col_data:
+            continue
+            
+        mean = sum(col_data) / len(col_data)
+        variance = sum((x - mean) ** 2 for x in col_data) / len(col_data)
+        std_dev = variance ** 0.5
+        
+        if std_dev == 0:
+            continue
+            
+        # Flag rows where value is > 3 std devs from mean
+        for row_idx, row in enumerate(rows):
+            val = row[idx]
+            if isinstance(val, (int, float)):
+                z_score = abs(val - mean) / std_dev
+                if z_score > 3:
+                    suspicious[row_idx] = suspicious.get(row_idx, 0) + z_score
+                    
+    # Sort by suspicion score descending
+    sorted_rows = sorted(suspicious.items(), key=lambda x: x[1], reverse=True)
+    return [item[0] for item in sorted_rows]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            new_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        new_row.append(float(val))
+                    except ValueError:
+                        new_row.append(0.0)
+                else:
+                    new_row.append(val)
+            rows.append(new_row)
+            
+    suspects = spot(header, rows)
+    
+    print("Analysis: Identifying potentially erroneous data entries.")
+    if not suspects:
+        print("No suspicious entries found.")
+    else:
+        print(f"Found {len(suspects)} rows with potentially incorrect data.")
+        print("Top 5 most suspicious rows:")
+        for i in suspects[:5]:
+            print(f"- Row {i} (Check numeric inputs for outliers)")

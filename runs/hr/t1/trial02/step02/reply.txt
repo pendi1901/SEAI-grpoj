@@ -1,0 +1,82 @@
+```python
+import csv
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column ('YearsAtCompany+') for test rows.
+    Uses a simple K-Nearest Neighbors approach based on numeric input columns.
+    """
+    # Identify goal columns and input columns
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    first_goal_idx = goal_indices[0]
+    
+    # Use numeric input columns for distance calculation
+    input_indices = [i for i, name in enumerate(header) 
+                     if name[0].isupper() and i not in goal_indices]
+    
+    # Normalize numeric inputs to handle different scales
+    def get_stats(data):
+        mins = [min(row[i] for row in data) for i in input_indices]
+        maxs = [max(row[i] for row in data) for i in input_indices]
+        return mins, maxs
+
+    mins, maxs = get_stats(train)
+    
+    def dist(r1, r2):
+        d = 0
+        for i in input_indices:
+            idx = input_indices.index(i)
+            range_val = maxs[idx] - mins[idx]
+            if range_val == 0: continue
+            d += ((r1[i] - r2[i]) / range_val) ** 2
+        return d ** 0.5
+
+    predictions = []
+    for t_row in test:
+        # Find 5 nearest neighbors in training set
+        distances = []
+        for train_row in train:
+            distances.append((dist(t_row, train_row), train_row[first_goal_idx]))
+        
+        distances.sort(key=lambda x: x[0])
+        # Average the goal value of the 5 nearest neighbors
+        k = 5
+        avg = sum(d[1] for d in distances[:k]) / k
+        predictions.append(float(avg))
+        
+    return predictions
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Split: use first 700 for training, next 100 for testing
+    train_data = rows[:700]
+    test_data = rows[700:]
+    
+    # Mask the goals in test data
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    masked_test = []
+    for row in test_data:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_test.append(new_row)
+        
+    results = guess(header, train_data, masked_test)
+    
+    print(f"Estimated tenure for the first 5 test cases:")
+    for i in range(min(5, len(results))):
+        print(f"Test Row {i}: {results[i]:.2f} years at company")
+```

@@ -1,0 +1,55 @@
+import csv
+
+def remember(header, rows):
+    """
+    Identifies rows where staff stay 'unusually long'.
+    'YearsAtCompany+' is a goal to maximize.
+    We calculate the 95th percentile of 'YearsAtCompany+' and return the indices
+    of rows that meet or exceed this threshold, limited to 5% of total rows.
+    """
+    idx_years = header.index('YearsAtCompany+')
+    
+    # Extract all values for the goal column
+    years = [row[idx_years] for row in rows]
+    
+    # Determine threshold for "unusually long" (top 5%)
+    sorted_years = sorted(years, reverse=True)
+    limit = max(1, len(rows) // 20)
+    threshold = sorted_years[limit - 1]
+    
+    # Find indices of rows that meet the threshold
+    best_indices = [i for i, val in enumerate(years) if val >= threshold]
+    
+    # Ensure we return at most 5% of the rows
+    return best_indices[:limit]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            # Convert numeric columns (starting with uppercase) to floats
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    indices = remember(header, rows)
+    
+    print(f"Found {len(indices)} staff records with unusually long tenure.")
+    print("Indices of top performers:", indices)
+    
+    # Displaying a summary of the working arrangements for these staff
+    idx_years = header.index('YearsAtCompany+')
+    idx_travel = header.index('businessTravel')
+    idx_overtime = header.index('overTime')
+    
+    print("\nSummary of working arrangements for these staff:")
+    for i in indices:
+        r = rows[i]
+        print(f"Row {i}: Tenure={r[idx_years]} years, Travel={r[idx_travel]}, Overtime={r[idx_overtime]}")

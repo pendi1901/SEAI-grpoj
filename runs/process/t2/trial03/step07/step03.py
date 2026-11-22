@@ -1,0 +1,62 @@
+import csv
+import math
+
+def certify(xs, ys):
+    """
+    Returns True if xs and ys are statistically similar (same distribution),
+    False if they differ significantly. Uses a simple A12 effect size check.
+    """
+    def a12(lst1, lst2):
+        m, n = len(lst1), len(lst2)
+        count = 0
+        for x in lst1:
+            for y in lst2:
+                if x > y: count += 1
+                elif x == y: count += 0.5
+        return count / (m * n)
+
+    # If A12 is between 0.44 and 0.56, they are effectively the same
+    score = a12(xs, ys)
+    return 0.44 <= score <= 0.56
+
+def analyze_teams(header, rows):
+    # Find indices for 'Team Size' and 'Cost-'
+    team_idx = header.index('Team Size')
+    cost_idx = header.index('Cost-')
+    
+    # Split into small and big teams based on median team size
+    team_sizes = [row[team_idx] for row in rows]
+    median = sum(team_sizes) / len(team_sizes)
+    
+    small_costs = [row[cost_idx] for row in rows if row[team_idx] < median]
+    big_costs = [row[cost_idx] for row in rows if row[team_idx] >= median]
+    
+    is_same = certify(small_costs, big_costs)
+    
+    return is_same, small_costs, big_costs
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', newline='') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) for val in row])
+        
+        is_same, small, big = analyze_teams(header, rows)
+        
+        print("Analysis: Are small-team setups cheaper than big-team ones?")
+        if is_same:
+            print("Result: The difference is likely due to noise (not statistically significant).")
+        else:
+            print("Result: There is a statistically significant difference in costs.")
+            avg_small = sum(small) / len(small)
+            avg_big = sum(big) / len(big)
+            print(f"Average cost (small teams): {avg_small:.4f}")
+            print(f"Average cost (big teams): {avg_big:.4f}")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

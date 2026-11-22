@@ -1,0 +1,75 @@
+import ezr
+import random
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column (MRE-) for test rows.
+    Uses a decision tree trained on the provided training data.
+    """
+    # Create a table from the training data to build the model
+    train_tbl = ezr.Tbl([header] + train)
+    
+    # Build a tree on the training data
+    # The tree nodes contain the mean ydist, but we need the mean of the 
+    # specific first goal column (MRE-).
+    # We will augment the tree nodes to store the mean of the first goal.
+    
+    # First, identify the index of the first goal column
+    goal_idx = 0 
+    
+    # Build the tree
+    root = ezr.tree(train_tbl, train_tbl.rows)
+    
+    # Pre-calculate the mean of the first goal for every leaf
+    def fill_leaf_means(node):
+        if not node.kids:
+            vals = [r[goal_idx] for r in node.rows]
+            node.first_goal_mean = sum(vals) / len(vals)
+        else:
+            for kid in node.kids:
+                fill_leaf_means(kid)
+    
+    fill_leaf_means(root)
+    
+    # For each test row, walk the tree to find the leaf and return its mean
+    predictions = []
+    for row in test:
+        node = ezr.leaf(root, row)
+        predictions.append(node.first_goal_mean)
+        
+    return predictions
+
+if __name__ == "__main__":
+    # Load the data
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    all_rows = data[1:]
+    
+    # Split into train and test (80/20)
+    random.seed(1234567891)
+    random.shuffle(all_rows)
+    split = int(len(all_rows) * 0.8)
+    train = all_rows[:split]
+    test_full = all_rows[split:]
+    
+    # Mask the goals in the test set to simulate the customer's request
+    test_masked = []
+    for row in test_full:
+        masked_row = list(row)
+        # Mask all goal columns (those ending in + or -)
+        for i, name in enumerate(header):
+            if name.endswith('+') or name.endswith('-'):
+                masked_row[i] = "?"
+        test_masked.append(masked_row)
+        
+    # Get predictions
+    preds = guess(header, train, test_masked)
+    
+    # Calculate simple error (Mean Absolute Error)
+    actuals = [r[0] for r in test_full]
+    mae = sum(abs(p - a) for p, a in zip(preds, actuals)) / len(actuals)
+    
+    print(f"Analysis complete.")
+    print(f"Estimated Mean Absolute Error for the first goal (MRE-): {mae:.4f}")
+    print(f"Sample prediction: {preds[0]:.4f} (Actual: {actuals[0]:.4f})")

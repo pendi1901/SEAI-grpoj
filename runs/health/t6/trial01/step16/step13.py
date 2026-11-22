@@ -1,0 +1,66 @@
+import ezr
+import step03
+import step07
+import random
+
+def certify(xs, ys):
+    """
+    Returns True if xs and ys are statistically indistinguishable,
+    False if they are significantly different.
+    """
+    return step03.certify(xs, ys)
+
+def compare_rules(header, rows):
+    """
+    Compares the 'acquire' rule (multi-objective) against a random selection rule.
+    We measure the performance (ydist) of the best row found by each strategy.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Define the two strategies
+    def strategy_acquire(tbl, rows):
+        # Use the logic from step07 to find the best row
+        def label(i): return rows[i]
+        # Mask goals for the input
+        masked_rows = []
+        for row in rows:
+            new_row = list(row)
+            for i, name in enumerate(header):
+                if name[-1] in "+-!": new_row[i] = "?"
+            masked_rows.append(new_row)
+        
+        best_idx = step07.choose(header, masked_rows, label)
+        return ezr.ydist(tbl, rows[best_idx])
+
+    def strategy_random(tbl, rows):
+        # Randomly sample 50 rows and pick the best
+        sample = random.sample(rows, 50)
+        return min(ezr.ydist(tbl, r) for r in sample)
+
+    # Run each strategy multiple times to get a distribution of results
+    acquire_results = [strategy_acquire(tbl, rows) for _ in range(10)]
+    random_results = [strategy_random(tbl, rows) for _ in range(10)]
+    
+    return acquire_results, random_results
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data_iter = ezr.csv(filename)
+    header = next(data_iter)
+    rows = list(data_iter)
+    
+    # Set seed for reproducibility
+    random.seed(1234567891)
+    
+    acquire_scores, random_scores = compare_rules(header, rows)
+    
+    is_same = certify(acquire_scores, random_scores)
+    
+    print(f"Comparing 'acquire' rule vs 'random' selection.")
+    print(f"Mean ydist (Acquire): {sum(acquire_scores)/len(acquire_scores):.4f}")
+    print(f"Mean ydist (Random): {sum(random_scores)/len(random_scores):.4f}")
+    
+    if is_same:
+        print("Conclusion: The choice of rule makes no real difference; the results are statistically indistinguishable.")
+    else:
+        print("Conclusion: The choice of rule makes a real difference; the 'acquire' strategy provides statistically superior results.")

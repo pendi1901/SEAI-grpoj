@@ -1,0 +1,56 @@
+import csv
+import pandas as pd
+from sklearn.ensemble import RandomForestRegressor
+
+def blame(header, rows):
+    """
+    Identifies the most important input columns for predicting 'Cost-'.
+    We use a Random Forest regressor to determine feature importance.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    
+    # Identify goal columns and input columns
+    goals = [c for c in header if c.endswith('-') or c.endswith('+')]
+    inputs = [c for c in header if c not in goals]
+    
+    # Train a Random Forest to predict 'Cost-'
+    # We use all available rows to determine general importance
+    rf = RandomForestRegressor(n_estimators=100, random_state=42)
+    rf.fit(df[inputs], df['Cost-'])
+    
+    # Get feature importances
+    importances = pd.Series(rf.feature_importances_, index=inputs)
+    
+    # Sort by importance
+    sorted_importances = importances.sort_values(ascending=False)
+    
+    # Return the top 2 as the ones that matter most
+    # The rest are those the customer can safely stop worrying about
+    return sorted_importances.index.tolist()[:2]
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed_row = []
+                for val in row:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        important_factors = blame(header, rows)
+        
+        print("Customer Inquiry: Which project facts matter most to cost?")
+        print(f"The most critical factors impacting 'Cost-' are: {', '.join(important_factors)}.")
+        print("You should focus your management attention on these two.")
+        print("All other input factors have significantly less impact on cost and can be monitored less frequently.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

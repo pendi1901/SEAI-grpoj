@@ -1,0 +1,58 @@
+import csv
+import numpy as np
+from scipy import stats
+from step01 import remember
+
+def certify(xs, ys):
+    """
+    Returns True if the difference between two distributions is likely noise,
+    False if they are statistically different. Uses Welch's t-test.
+    """
+    t_stat, p_value = stats.ttest_ind(xs, ys, equal_var=False)
+    # If p_value > 0.05, we fail to reject the null hypothesis (it's noise)
+    return p_value > 0.05
+
+def analyze_setup_size(header, rows):
+    """
+    Categorizes setups by 'N_estimators' (size) and compares accuracy (ACC+).
+    """
+    n_est_idx = header.index('N_estimators')
+    acc_idx = header.index('ACC+')
+    
+    # Split into 'big' and 'small' based on median N_estimators
+    n_estimators = [row[n_est_idx] for row in rows]
+    median_n = np.median(n_estimators)
+    
+    small_setups = [row[acc_idx] for row in rows if row[n_est_idx] <= median_n]
+    big_setups = [row[acc_idx] for row in rows if row[n_est_idx] > median_n]
+    
+    is_noise = certify(small_setups, big_setups)
+    
+    return is_noise, np.mean(small_setups), np.mean(big_setups)
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                # Numeric columns are those that are uppercase or specific known ones
+                if header[i].isupper() or header[i] in ['N_estimators', 'Min_sample_leaves', 'Min_impurity_decrease', 'Max_depth']:
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    is_noise, mean_small, mean_big = analyze_setup_size(header, rows)
+    
+    print(f"Analysis of setup size impact on ACC+:")
+    print(f"Mean ACC+ (Small): {mean_small:.4f}")
+    print(f"Mean ACC+ (Big):   {mean_big:.4f}")
+    
+    if is_noise:
+        print("Conclusion: The observed difference is likely noise.")
+    else:
+        print("Conclusion: The difference is statistically significant.")

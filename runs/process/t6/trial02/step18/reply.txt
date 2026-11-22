@@ -1,0 +1,82 @@
+```python
+import ezr
+import step01
+import step05
+import step08
+
+def fix(header, row, levers):
+    """
+    Suggests changes to levers to reduce 'Idle-' (index 11).
+    We identify factors that correlate with high 'Idle-' and suggest
+    moving those levers towards the values found in the best-performing rows.
+    """
+    # Load all data to understand the global distribution
+    filename = "pom3a.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    header_data = next(data_gen)
+    all_rows = list(data_gen)
+    
+    # Identify factors that correlate with poor performance (high ydist)
+    # This is a good proxy for general inefficiency.
+    bad_factors = step05.blame(header, all_rows)
+    
+    # Filter to only include levers the customer is allowed to change
+    candidates = [f for f in bad_factors if f in levers]
+    
+    # If no specific bad factor is found, default to all available levers
+    if not candidates:
+        candidates = list(levers.keys())
+
+    # Find the best rows to see what their values look like
+    best_indices = step01.remember(header, all_rows)
+    best_rows = [all_rows[i] for i in best_indices]
+
+    # Pick the most influential candidate lever
+    target_col = candidates[0]
+    col_idx = header.index(target_col)
+    
+    # Calculate the average value of this column in the best rows
+    best_vals = [r[col_idx] for r in best_rows if r[col_idx] != "?"]
+    avg_best = sum(best_vals) / len(best_vals) if best_vals else 0.5
+
+    # Apply the change based on lever type
+    suggestion = {}
+    allowed = levers[target_col]
+    
+    if isinstance(allowed, list):  # Symbolic
+        suggestion[target_col] = allowed[0]
+    else:  # Numeric (low, high)
+        low, high = allowed
+        # Clamp the average best value to the allowed range
+        suggestion[target_col] = max(low, min(high, avg_best))
+        
+    return suggestion
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    header = next(data_gen)
+    rows = list(data_gen)
+    
+    # Identify a "bad" row with high Idle- (index 11)
+    bad_row = max(rows, key=lambda r: r[11])
+    
+    # Define levers: numeric ranges based on the data
+    # Excluding 'Team Size' as the customer cannot hire/fire.
+    levers = {
+        "Culture": (0, 1),
+        "Criticality": (0, 1),
+        "Size": (0, 1),
+        "Plan": (0, 1),
+        "Dynamism": (0, 1)
+    }
+    
+    recommendation = fix(header, bad_row, levers)
+    
+    print("Optimization Recommendation to reduce Idle time:")
+    for col, val in recommendation.items():
+        print(f"- Adjust '{col}' to {val:.4f}")
+    print("These adjustments align your project with more efficient configurations.")
+    
+    exit(0)
+```

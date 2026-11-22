@@ -1,0 +1,59 @@
+```python
+import csv
+from step01 import remember
+
+def flow(header, row, seen):
+    """
+    Decides if a row needs a 'what would keep you here' conversation.
+    We define 'needing a conversation' as being in the top 5% of 
+    'YearsAtCompany+' (the retention goal). Since we cannot revisit 
+    the pile, we use the historical distribution from 'seen' rows 
+    to estimate if the current row is an outlier.
+    """
+    idx = header.index('YearsAtCompany+')
+    years_val = row[idx]
+    
+    # If this is the first row, we can't compare, so let it go
+    if not seen:
+        return False
+    
+    # Extract historical data from 'seen'
+    history = [r[idx] for r in seen]
+    
+    # Calculate the 95th percentile threshold from history
+    sorted_history = sorted(history, reverse=True)
+    limit = max(1, int(len(history) * 0.05))
+    threshold = sorted_history[limit - 1]
+    
+    # If the current employee has stayed longer than the threshold,
+    # they are a high-value asset worth keeping.
+    return years_val >= threshold
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    # Simulate the flow
+    seen = []
+    selected_count = 0
+    for row in rows:
+        if flow(header, row, seen):
+            selected_count += 1
+        seen.append(row)
+    
+    print(f"Analysis complete.")
+    print(f"Total employees processed: {len(rows)}")
+    print(f"Employees identified for 'what would keep you here' conversation: {selected_count}")
+    print("The logic identifies top-tier tenure employees based on historical distribution.")
+```

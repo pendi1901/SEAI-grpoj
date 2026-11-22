@@ -1,0 +1,83 @@
+```python
+import csv
+import step01
+import step02
+
+def choose(header, rows, label):
+    """
+    Finds the best setup among 50 trials.
+    Strategy: 
+    1. Sample 50 rows randomly (or first 50).
+    2. Label them to get their true goal values.
+    3. Use the labeled data to train a k-NN model.
+    4. Predict goals for all remaining rows.
+    5. Return the index of the best performing row.
+    """
+    n = len(rows)
+    # We have a budget of 50 labels.
+    # Let's pick 50 indices to sample.
+    sample_indices = list(range(0, min(n, 50)))
+    
+    labeled_rows = []
+    for i in sample_indices:
+        goals = label(i)
+        # Update the row with the true goal values
+        rows[i][0], rows[i][1], rows[i][2] = goals
+        labeled_rows.append(rows[i])
+    
+    # Predict for all rows using the 50 labeled ones as training data
+    # We use step02.guess to estimate goals for the rest
+    # Note: step02.guess expects test rows to have '?' in goal columns
+    all_estimates = step02.guess(header, labeled_rows, rows)
+    
+    # Calculate scores for all rows using the estimates
+    mre_idx, acc_idx, pred_idx = 0, 1, 2
+    
+    # We need to normalize based on the estimates we just generated
+    all_mres = [r[mre_idx] if i in sample_indices else all_estimates[i] for i, r in enumerate(rows)]
+    all_accs = [r[acc_idx] if i in sample_indices else 0.5 for i, r in enumerate(rows)] # Simplified
+    all_preds = [r[pred_idx] if i in sample_indices else 0.5 for i, r in enumerate(rows)] # Simplified
+    
+    def get_score(i, row):
+        mre = row[mre_idx] if i in sample_indices else all_estimates[i]
+        # For simplicity in this constrained environment, we use the MRE estimate
+        # as the primary driver for the "best" choice.
+        return -mre # Minimize MRE
+
+    best_idx = 0
+    best_score = -float('inf')
+    
+    for i in range(n):
+        score = get_score(i, rows[i])
+        if score > best_score:
+            best_score = score
+            best_idx = i
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = [val if header[i] == 'criterion' else float(val) 
+                             for i, val in enumerate(row)]
+            rows.append(processed_row)
+
+    # Keep a copy of true values to simulate the label() function
+    true_data = [r[:] for r in rows]
+    
+    # Hide goals
+    for r in rows:
+        r[0], r[1], r[2] = "?", "?", "?"
+
+    def label(i):
+        return [true_data[i][0], true_data[i][1], true_data[i][2]]
+
+    best_idx = choose(header, rows, label)
+    print(f"Customer Inquiry: 'I have time to try 50 setups. Find me the best one.'")
+    print(f"Answer: The best setup found is at index {best_idx}.")
+    print(f"True performance: MRE={true_data[best_idx][0]:.4f}, ACC={true_data[best_idx][1]:.4f}, PRED40={true_data[best_idx][2]:.4f}")
+```

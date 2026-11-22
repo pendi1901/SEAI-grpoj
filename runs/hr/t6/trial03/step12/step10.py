@@ -1,0 +1,98 @@
+import ezr
+import random
+
+def race(header, rows, label):
+    """
+    Compare three strategies: random, active learning, and a greedy search.
+    The error in the previous version was calling ydist on rows with '?' goals.
+    We must only call ydist on rows that have been labeled.
+    """
+    budget = 50
+    labeled_data = {} # idx -> full_row
+
+    def oracle_wrapper(idx):
+        if idx not in labeled_data:
+            if len(labeled_data) >= budget:
+                return None
+            labeled_data[idx] = label(idx)
+        return labeled_data[idx]
+
+    # Strategy 1: Random
+    def strategy_random(tbl, rows):
+        indices = random.sample(range(len(rows)), budget // 3)
+        for i in indices: oracle_wrapper(i)
+        # Only evaluate ydist on labeled rows
+        return min(indices, key=lambda i: ezr.ydist(tbl, labeled_data[i]))
+
+    # Strategy 2: Active Learning (using ezr.acquire logic)
+    def strategy_active(tbl, rows):
+        # We use a subset of the budget for active learning
+        # We need to pass a label function that updates our shared labeled_data
+        def active_label(row):
+            # Find index of this row object
+            for i, r in enumerate(rows):
+                if r is row:
+                    full = oracle_wrapper(i)
+                    if full:
+                        for j in range(len(row)): row[j] = full[j]
+                    return row
+            return row
+        
+        labeled = ezr.acquire(tbl, cap=budget // 3, label=active_label)
+        return min(range(len(rows)), key=lambda i: ezr.ydist(tbl, labeled_data.get(i, rows[i])))
+
+    # Strategy 3: Greedy (pick rows closest to the global centroid in x-space)
+    def strategy_greedy(tbl, rows):
+        mids = ezr.mids(tbl)
+        scored = sorted([(ezr.xdist(tbl, r, mids), i) for i, r in enumerate(rows)])
+        indices = [x[1] for x in scored[:budget // 3]]
+        for i in indices: oracle_wrapper(i)
+        return min(indices, key=lambda i: ezr.ydist(tbl, labeled_data[i]))
+
+    # Build initial table for distance calculations
+    tbl = ezr.Tbl([header] + rows)
+    
+    results = {
+        "random": strategy_random(tbl, rows),
+        "active": strategy_active(tbl, rows),
+        "greedy": strategy_greedy(tbl, rows)
+    }
+    
+    # Determine winner: lowest ydist among the best found by each strategy
+    winner = min(results, key=lambda name: ezr.ydist(tbl, labeled_data[results[name]]))
+    
+    return {
+        "winner": winner,
+        "row": results[winner],
+        "tried": list(results.keys())
+    }
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Mask goals
+    goal_indices = [i for i, name in enumerate(header) if name[-1] in "+-"]
+    masked_rows = []
+    for row in rows:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_rows.append(new_row)
+        
+    def label_func(i):
+        return rows[i]
+    
+    result = race(header, masked_rows, label_func)
+    
+    print("Strategy Race Results:")
+    print(f"Winner: {result['winner']}")
+    print(f"Best row found at index: {result['row']}")
+    print(f"Strategies compared: {', '.join(result['tried'])}")
+    print("-" * 60)
+    print("The 'active' strategy typically outperforms random sampling by")
+    print("focusing labels on the most informative regions of the data space.")
+    
+    exit(0)

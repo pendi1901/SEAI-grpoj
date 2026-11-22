@@ -1,0 +1,63 @@
+import csv
+
+def remember(header, rows):
+    """
+    Finds the 5% of employees most similar to the first employee (rows[0]).
+    Similarity is calculated using Euclidean distance on numeric input columns.
+    """
+    # Identify goal columns and input columns
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    input_indices = [i for i, name in enumerate(header) if name[0].isupper() and i not in goal_indices]
+    
+    # Target row is the first one
+    target = rows[0]
+    
+    # Calculate distances to all other rows
+    distances = []
+    for i in range(1, len(rows)):
+        dist = 0
+        for idx in input_indices:
+            # Normalize numeric inputs roughly by range if possible, 
+            # here we use simple squared difference
+            diff = (target[idx] - rows[i][idx])
+            dist += diff * diff
+        distances.append((dist, i))
+    
+    # Sort by distance (ascending)
+    distances.sort(key=lambda x: x[0])
+    
+    # Return top 5% (max 40 rows for 800)
+    limit = max(1, len(rows) // 20)
+    return [item[1] for item in distances[:limit]]
+
+def load_data(filename):
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    return header, rows
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    header, rows = load_data(filename)
+    
+    indices = remember(header, rows)
+    
+    yac_idx = header.index('YearsAtCompany+')
+    print(f"Employees most similar to the first record (Row 0):")
+    for i in indices:
+        print(f"- Row {i}: Stayed {rows[i][yac_idx]} years")
+    
+    print("\nStrategy: We calculated the Euclidean distance between the first employee's "
+          "numeric attributes and all others, returning the 5% closest matches.")

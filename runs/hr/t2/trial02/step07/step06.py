@@ -1,0 +1,58 @@
+import csv
+import step02
+
+def justify(header, rows, row):
+    """
+    Returns (p, reason): p is the fraction of rows that row is better than.
+    A row is better if its goal (YearsAtCompany+) is higher.
+    """
+    # Identify goal column
+    goal_idx = -1
+    for i, name in enumerate(header):
+        if name.endswith('+'):
+            goal_idx = i
+            break
+    
+    # Estimate the goal for the test row using the average from training
+    # We use step02's logic: average of the goal column
+    prediction = step02.guess(header, rows, [row])[0]
+    
+    # Count how many rows have a lower goal value than our prediction
+    better_than_count = 0
+    for r in rows:
+        if r[goal_idx] < prediction:
+            better_than_count += 1
+            
+    p = better_than_count / len(rows)
+    reason = (f"This arrangement ranks in the top {int((1-p)*100)}% of all teams "
+              f"because its estimated tenure of {prediction:.1f} years exceeds "
+              f"the tenure of {int(p*100)}% of the historical records.")
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            new_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        new_row.append(float(val))
+                    except ValueError:
+                        new_row.append(0.0)
+                else:
+                    new_row.append(val)
+            rows.append(new_row)
+            
+    # Test with a sample row (masking the goal column)
+    test_row = list(rows[0])
+    goal_idx = [i for i, h in enumerate(header) if h.endswith('+')][0]
+    test_row[goal_idx] = "?"
+    
+    p, reason = justify(header, rows, test_row)
+    print(f"Rank: {p:.4f}")
+    print(f"Reason: {reason}")
