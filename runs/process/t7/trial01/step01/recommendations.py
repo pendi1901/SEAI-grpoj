@@ -16,7 +16,7 @@ def allowed_changes(header, row, controls):
             if value!= current: 
                 yield{name: value}
 
-def suggested_changes(header, train, row, controls) : 
+def candidate_changes(header, train, row, controls):
     table  = ezr.Tbl([header] + train)
     def quality(training_rows) : 
         return ezr.ydist(table, training_rows)
@@ -53,9 +53,12 @@ def suggested_changes(header, train, row, controls) :
             if value!= row[position]: 
                 changes[name] = value
         if changes:
-            return changes
-    for change in allowed_changes(header, row, controls) : 
-        return change
+            yield changes
+    yield from allowed_changes(header, row, controls)
 
 
-    raise ValueError("no allowed changes are available")
+def suggested_changes(header, train, row, controls):
+    changes = next(candidate_changes(header, train, row, controls), None)
+    if changes is None:
+        raise ValueError("no allowed changes are available")
+    return changes
