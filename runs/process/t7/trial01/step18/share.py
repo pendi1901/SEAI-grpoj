@@ -3,6 +3,35 @@ from functools import partial
 import ezr 
 from neighbours import average_nearby_neighbours
 
+def run_race(header, rows, label, strategies):
+    if not rows:
+        raise ValueError("No rows available to search.")
+    copies, trial, tested = setup_trial(header, rows, label)
+    found_by = {}
+    tried = []
+    for name, search, allocation in strategies:
+        budget = min(allocation, 50 - len(tested))
+        for position in search(header, copies, trial, tested, budget):
+            found_by[position] = name
+        tried.append(name)
+    best = best_positions(header, tested)
+    return {"winner": found_by[best], "row": best, "tried": tried}
+
+
+def biggest_teams(header, rows, trial, tested, budget):
+    team = header.index("Team Size")
+
+    def team_size(position):
+        value = rows[position][team]
+        return float("-inf") if value == "?" else value
+
+    remaining = [i for i in range(len(rows)) if i not in tested]
+    selected = sorted(remaining, key=team_size, reverse=True)[:max(0, budget)]
+    for position in selected:
+        trial(rows[position])
+    return selected
+
+
 def setup_trial(header, rows, label, budget =50) : 
     copy = [row.copy() for row in rows]
     positions = {
