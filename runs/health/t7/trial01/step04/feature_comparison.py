@@ -1,6 +1,6 @@
 import ezr
 
-def differences(header, rows) : 
+def differences(header, rows, limit=3) : 
     def score(row): 
         return ezr.ydist(table, row)
     def gap_lambda(item): 
@@ -34,11 +34,11 @@ def differences(header, rows) :
                 gap+= abs(fraction_good - fraction_bad)
 
             gap = gap/2
-        if gap > 0 : 
+        if gap > 0 or limit is None : 
             diff.append((gap, column.txt))
 
     diff.sort(key=gap_lambda, reverse=True)
     peak_three = []
-    for gap, name in diff[:3]: 
+    for gap, name in diff[:limit]: 
         peak_three.append(name)
     return peak_three

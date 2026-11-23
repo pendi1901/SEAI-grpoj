@@ -32,6 +32,23 @@ def biggest_teams(header, rows, trial, tested, budget):
     return selected
 
 
+def biggest_raises(header, rows, trial, tested, budget):
+    pay = header.index("PercentSalaryHike")
+    experience = header.index("TotalWorkingYears")
+
+    def priority(position):
+        row = rows[position]
+        hike = float("-inf") if row[pay] == "?" else row[pay]
+        years = float("inf") if row[experience] == "?" else row[experience]
+        return -hike, years
+
+    remaining = [i for i in range(len(rows)) if i not in tested]
+    selected = sorted(remaining, key=priority)[:max(0, budget)]
+    for position in selected:
+        trial(rows[position])
+    return selected
+
+
 def setup_trial(header, rows, label, budget =50) : 
     copy = [row.copy() for row in rows]
     positions = {

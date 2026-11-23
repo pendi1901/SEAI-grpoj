@@ -24,7 +24,7 @@ step should shrink while quality holds.
 ## Results (ten trials, 20 asks)
 
 3,600 Gemini programs (10 trials x 3 domains x 6 treatments x 20 steps).
-The whole run cost about $15. T7 so far covers process and health.
+The whole run cost about $15. T7 covers all three domains.
 
 | treatment | function worked | new lines per step | quality (Z) |
 |---|--:|--:|--:|
@@ -34,18 +34,18 @@ The whole run cost about $15. T7 so far covers process and health.
 | T4 sklearn + reuse | 535/600 | 49 | 0.34 |
 | T5 ezr | 520/600 | 41 | -0.01 |
 | T6 ezr + reuse | 506/600 | 37 | -0.26 |
-| T7 by hand (process, health) | 40/40 | 23 | 0.79 |
+| T7 (process, health, HR) | 60/60 | 23 | 0.79 |
 
 ezr gives the smallest generated code but the lowest quality; most of its
 losses are crashes in choose and race, where the code mishandles ezr's
 rows. scikit-learn gives the best generated quality, on its own in the top
 rank. Asking the model to reuse earlier steps cut 4 to 7 lines per step for
 every library but never raised quality. T7's 23 lines per step leave out
-278 lines of shared helpers, and it took about 10 hours of human time;
-11 of the 20 health steps are copies of the process ones.
+278 lines of shared helpers, and it took about 12.5 hours of human time
+(process 8 h, health 2 h, HR 2.5 h); most health and HR steps are copies
+or small adaptations of the process ones.
 
 All tables and plots are in [results/report.md](results/report.md).
-T7 for HR is in progress.
 
 ## Running it
 
