@@ -21,31 +21,31 @@ step should shrink while quality holds.
   ([docs/assessment.md](docs/assessment.md)); treatments are compared with
   `same` from ezr ([docs/stats.md](docs/stats.md)).
 
-## Results (three trials, 20 asks)
+## Results (ten trials, 20 asks)
 
-1,080 Gemini programs (3 trials x 3 domains x 6 treatments x 20 steps).
-The whole run cost $4.55. T7 so far covers the process domain only.
+3,600 Gemini programs (10 trials x 3 domains x 6 treatments x 20 steps).
+The whole run cost about $15. T7 so far covers process and health.
 
 | treatment | function worked | new lines per step | quality (Z) |
 |---|--:|--:|--:|
-| T1 plain | 178/180 | 57 | 0.18 |
-| T2 plain + reuse | 179/180 | 50 | 0.32 |
-| T3 sklearn | 177/180 | 56 | 0.53 |
-| T4 sklearn + reuse | 158/180 | 49 | 0.38 |
-| T5 ezr | 154/180 | 41 | -0.11 |
-| T6 ezr + reuse | 153/180 | 37 | -0.11 |
-| T7 by hand (process) | 20/20 | 23 | 0.77 |
+| T1 plain | 592/600 | 56 | 0.29 |
+| T2 plain + reuse | 587/600 | 49 | 0.26 |
+| T3 sklearn | 569/600 | 55 | 0.46 |
+| T4 sklearn + reuse | 535/600 | 49 | 0.34 |
+| T5 ezr | 520/600 | 41 | -0.01 |
+| T6 ezr + reuse | 506/600 | 37 | -0.26 |
+| T7 by hand (process, health) | 40/40 | 23 | 0.79 |
 
 ezr gives the smallest generated code but the lowest quality; most of its
 losses are crashes in choose and race, where the code mishandles ezr's
-rows. scikit-learn gives the best generated quality. Asking the model to
-reuse earlier steps cut code for every library but did not raise quality.
-T7's 23 lines per step leave out 265 lines of shared helpers, and it took
-about 8 hours of human time. With three trials, `same` has little power,
-so treat the ranks as provisional.
+rows. scikit-learn gives the best generated quality, on its own in the top
+rank. Asking the model to reuse earlier steps cut 4 to 7 lines per step for
+every library but never raised quality. T7's 23 lines per step leave out
+278 lines of shared helpers, and it took about 10 hours of human time;
+11 of the 20 health steps are copies of the process ones.
 
 All tables and plots are in [results/report.md](results/report.md).
-T7 for health and HR is in progress.
+T7 for HR is in progress.
 
 ## Running it
 
