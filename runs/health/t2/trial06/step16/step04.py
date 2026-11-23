@@ -1,0 +1,59 @@
+import csv
+
+def flow(header, row, seen):
+    """
+    Decides if the current row is 'good enough' to ship.
+    We define 'good enough' as being in the top 5% of the expected distribution
+    based on the historical data provided in 'seen'.
+    """
+    if not seen:
+        return False
+
+    # Identify goal indices
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+
+    # Helper to calculate score for a row
+    def get_score(r, all_rows):
+        mres = [x[mre_idx] for x in all_rows]
+        accs = [x[acc_idx] for x in all_rows]
+        preds = [x[pred_idx] for x in all_rows]
+        
+        def norm(val, vals):
+            mn, mx = min(vals), max(vals)
+            return (val - mn) / (mx - mn) if mx > mn else 0
+        
+        return (1 - norm(r[mre_idx], mres)) + norm(r[acc_idx], accs) + norm(r[pred_idx], preds)
+
+    # Calculate score of current row relative to history
+    current_score = get_score(row, seen + [row])
+    
+    # Calculate scores of all seen rows
+    seen_scores = [get_score(r, seen + [row]) for r in seen]
+    
+    # Threshold: if current row is better than 95% of what we've seen
+    threshold = sorted(seen_scores, reverse=True)[max(0, len(seen_scores) // 20)]
+    
+    return current_score >= threshold
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            rows.append([val if header[i] == 'criterion' else float(val) for i, val in enumerate(row)])
+
+    seen = []
+    shipped = False
+    for i, row in enumerate(rows):
+        if flow(header, row, seen):
+            print(f"Shipped at row {i+1} (Index {i})")
+            shipped = True
+            break
+        seen.append(row)
+    
+    if not shipped:
+        print("No setup met the criteria for shipping.")

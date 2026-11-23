@@ -1,0 +1,67 @@
+import csv
+import numpy as np
+from sklearn.ensemble import IsolationForest
+from sklearn.preprocessing import LabelEncoder
+
+def spot(header, rows):
+    """
+    Identifies suspicious rows using Isolation Forest.
+    Rows that are outliers in the input space are considered 'wrong' or 'suspicious'.
+    Returns a list of row indices, most suspicious first.
+    """
+    # Prepare data for anomaly detection
+    X = []
+    input_indices = [i for i, name in enumerate(header) if not (name.endswith('+') or name.endswith('-'))]
+    
+    encoders = {}
+    for i in input_indices:
+        if not header[i][0].isupper():
+            le = LabelEncoder()
+            # Fit on all data to handle categories
+            le.fit([str(row[i]) for row in rows])
+            encoders[i] = le
+
+    for row in rows:
+        features = []
+        for i in input_indices:
+            if i in encoders:
+                features.append(encoders[i].transform([str(row[i])])[0])
+            else:
+                features.append(float(row[i]))
+        X.append(features)
+    
+    # Isolation Forest to find anomalies
+    # contamination is set to 0.05 as a heuristic for "a few" rows
+    clf = IsolationForest(n_estimators=100, contamination=0.05, random_state=42)
+    clf.fit(X)
+    scores = clf.decision_function(X)
+    
+    # Lower scores are more anomalous. Sort indices by score ascending.
+    suspicious_indices = np.argsort(scores)
+    
+    return suspicious_indices.tolist()
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    indices = spot(header, rows)
+    
+    print("Suspicious records identified (Top 10 most anomalous):")
+    print(f"{'Rank':<6} | {'Row Index':<10}")
+    print("-" * 20)
+    for i, idx in enumerate(indices[:10]):
+        print(f"{i+1:<6} | {idx:<10}")
+    
+    print("\nLogic: Used Isolation Forest to detect outliers in the input feature space.")

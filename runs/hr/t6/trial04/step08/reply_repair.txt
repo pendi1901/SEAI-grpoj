@@ -1,0 +1,71 @@
+```python
+import ezr
+import random
+
+def fix(header, row, levers):
+    """
+    Suggests a change to one of the provided levers to improve the row's ydist.
+    We use the global table statistics to evaluate the impact of changes.
+    """
+    # Load the full dataset to get accurate column distributions for normalization
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header_data = data[0]
+    rows_data = data[1:]
+    tbl = ezr.Tbl([header_data] + rows_data)
+    
+    best_ydist = ezr.ydist(tbl, row)
+    recommendation = {}
+
+    for col_name, allowed in levers.items():
+        if col_name not in header:
+            continue
+        idx = header.index(col_name)
+        
+        candidates = []
+        if isinstance(allowed, list):  # Symbolic
+            candidates = [v for v in allowed if v != row[idx]]
+        else:  # Numeric (low, high)
+            low, high = allowed
+            # Try discrete steps in the range
+            candidates = [low, (low + high) / 2, high]
+            candidates = [v for v in candidates if v != row[idx]]
+
+        for val in candidates:
+            test_row = list(row)
+            test_row[idx] = val
+            d = ezr.ydist(tbl, test_row)
+            if d < best_ydist:
+                best_ydist = d
+                recommendation = {col_name: val}
+                
+    return recommendation
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    levers = {
+        "businessTravel": ["Non-Travel", "Travel_Frequently", "Travel_Rarely"],
+        "overTime": ["No", "Yes"],
+        "TrainingTimesLastYear": (0, 6),
+        "PercentSalaryHike": (11, 25),
+        "StockOptionLevel": (0, 3)
+    }
+    
+    # Pick a "bad" row (high ydist)
+    tbl = ezr.Tbl([header] + rows)
+    scored = sorted([(ezr.ydist(tbl, r), r) for r in rows], key=lambda x: x[0])
+    bad_row = scored[-1][1]
+    
+    suggestion = fix(header, bad_row, levers)
+    
+    print("Analysis: Recommended changes for employee retention.")
+    if suggestion:
+        col, val = list(suggestion.items())[0]
+        print(f"Recommendation: Change '{col}' to '{val}'.")
+    else:
+        print("No improvement found.")
+```

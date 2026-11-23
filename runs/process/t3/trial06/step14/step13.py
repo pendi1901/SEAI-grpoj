@@ -1,0 +1,75 @@
+import csv
+from scipy import stats
+
+def certify(xs, ys):
+    """
+    Returns True if the difference between two distributions is statistically 
+    insignificant (likely noise), False if they are significantly different.
+    Uses Welch's t-test for independent samples with unequal variances.
+    """
+    if len(xs) < 2 or len(ys) < 2:
+        return True
+    
+    # Welch's t-test
+    t_stat, p_value = stats.ttest_ind(xs, ys, equal_var=False)
+    
+    # If p-value > 0.05, we fail to reject the null hypothesis (they are the same)
+    return p_value > 0.05
+
+def analyze_shift(header, rows):
+    """
+    Splits the data into two halves to compare performance before and after 
+    the change in team decision-making.
+    """
+    goal_indices = [i for i, h in enumerate(header) if h.endswith('-') or h.endswith('+')]
+    
+    # Calculate a composite score for each row (normalized)
+    # Since we don't have global min/max, we use the range of the current dataset
+    def get_score(row):
+        scores = []
+        for i in goal_indices:
+            val = row[i]
+            # Simple normalization based on min/max of the whole set
+            col_vals = [r[i] for r in rows]
+            min_v, max_v = min(col_vals), max(col_vals)
+            rng = max_v - min_v if max_v != min_v else 1
+            norm = (val - min_v) / rng
+            if header[i].endswith('-'):
+                scores.append(1.0 - norm)
+            else:
+                scores.append(norm)
+        return sum(scores) / len(scores)
+
+    mid = len(rows) // 2
+    before = [get_score(rows[i]) for i in range(mid)]
+    after = [get_score(rows[i]) for i in range(mid, len(rows))]
+    
+    is_same = certify(before, after)
+    return is_same, sum(before)/len(before), sum(after)/len(after)
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(x) for x in row])
+        
+        is_same, mean_before, mean_after = analyze_shift(header, rows)
+        
+        print("Customer Report: Did the results shift?")
+        print(f"Average Performance (Before): {mean_before:.4f}")
+        print(f"Average Performance (After): {mean_after:.4f}")
+        
+        if is_same:
+            print("Conclusion: The results are statistically the same.")
+            print("The change in how teams decide what to build has not resulted in a significant shift.")
+        else:
+            print("Conclusion: The results have shifted significantly.")
+            print("The change in team decision-making has had a measurable impact on project outcomes.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

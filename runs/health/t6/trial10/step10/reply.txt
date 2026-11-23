@@ -1,0 +1,105 @@
+```python
+import ezr
+import random
+
+def race(header, rows, label):
+    """
+    Compare three strategies for finding the best configuration:
+    1. random: Random sampling.
+    2. acquire: The intelligent acquisition function from ezr.
+    3. greedy: Picking rows that are closest to the current best-known configuration.
+    """
+    budget = 50
+    # Split budget equally among 3 strategies
+    per_strategy = budget // 3
+    
+    # Track labeled rows globally to respect the 50-label limit
+    labeled_cache = {}
+    def oracle_wrapper(i):
+        if i not in labeled_cache:
+            if len(labeled_cache) >= budget:
+                raise Exception("Budget exceeded")
+            labeled_cache[i] = label(i)
+        return labeled_cache[i]
+
+    # Strategy 1: Random
+    def strategy_random():
+        indices = random.sample(range(len(rows)), per_strategy)
+        for i in indices: oracle_wrapper(i)
+        return min(indices, key=lambda i: ezr.ydist(tbl, labeled_cache[i]))
+
+    # Strategy 2: Acquire (ezr's built-in)
+    def strategy_acquire():
+        # Create a local table for the acquire function
+        # We need to pass a function that labels rows by index
+        def local_label(row):
+            idx = rows.index(row)
+            vals = oracle_wrapper(idx)
+            for j, v in enumerate(vals): row[j] = v
+            return row
+        
+        # We use a subset of rows for the acquire function
+        subset = random.sample(rows, min(len(rows), 200))
+        labeled = ezr.acquire(ezr.Tbl([header] + subset), cap=per_strategy, label=local_label)
+        best_row = min(labeled, key=lambda r: ezr.ydist(tbl, r))
+        return rows.index(best_row)
+
+    # Strategy 3: Greedy (Nearest Neighbor to current best)
+    def strategy_greedy():
+        indices = random.sample(range(len(rows)), 1)
+        oracle_wrapper(indices[0])
+        current_best = indices[0]
+        
+        for _ in range(per_strategy - 1):
+            # Find unlabelled row closest to current_best
+            best_idx = -1
+            min_dist = 1e30
+            for i in range(len(rows)):
+                if i not in labeled_cache:
+                    d = ezr.xdist(tbl, rows[i], rows[current_best])
+                    if d < min_dist:
+                        min_dist = d
+                        best_idx = i
+            if best_idx != -1:
+                oracle_wrapper(best_idx)
+                if ezr.ydist(tbl, labeled_cache[best_idx]) < ezr.ydist(tbl, labeled_cache[current_best]):
+                    current_best = best_idx
+        return current_best
+
+    tbl = ezr.Tbl([header] + rows)
+    
+    results = {
+        "random": strategy_random(),
+        "acquire": strategy_acquire(),
+        "greedy": strategy_greedy()
+    }
+    
+    # Find the overall winner
+    winner = min(results, key=lambda name: ezr.ydist(tbl, labeled_cache[results[name]]))
+    
+    return {
+        "winner": winner,
+        "row": results[winner],
+        "tried": list(results.keys())
+    }
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    all_data = list(ezr.csv(filename))
+    header = all_data[0]
+    rows = all_data[1:]
+    
+    # Mask goals
+    goal_indices = [i for i, name in enumerate(header) if name[-1] in "+-"]
+    masked_rows = []
+    for row in rows:
+        new_row = list(row)
+        for idx in goal_indices: new_row[idx] = "?"
+        masked_rows.append(new_row)
+        
+    def label(i): return rows[i]
+    
+    res = race(header, masked_rows, label)
+    print(f"Race complete. Winner: {res['winner']} (found at index {res['row']})")
+    print(f"Strategies tried: {', '.join(res['tried'])}")
+```

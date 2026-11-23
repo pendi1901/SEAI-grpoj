@@ -1,0 +1,76 @@
+import ezr
+import random
+
+def choose(header, rows, label):
+    """
+    Find a setup that forecasts well (low ydist) and is small.
+    We use a budget of 50 labels to explore the space, then pick the best
+    performing row that also meets our 'small' criteria (N_estimators <= 100, Max_depth <= 5).
+    """
+    # Initialize table
+    tbl = ezr.Tbl([header] + rows)
+    
+    # We need to track which rows we have labeled to avoid exceeding the budget
+    labeled_indices = {}
+    
+    def oracle_wrapper(row):
+        # Find the index of this row in the original list
+        for i, r in enumerate(rows):
+            if r is row:
+                if i not in labeled_indices:
+                    if len(labeled_indices) >= 50:
+                        return row # Return as is if budget exhausted
+                    goals = label(i)
+                    row[0], row[1], row[2] = goals[0], goals[1], goals[2]
+                    labeled_indices[i] = True
+                    ezr.addCols(tbl, row)
+                return row
+        return row
+
+    # Use the acquisition logic to explore the space
+    # We must ensure we don't pass an empty list to acquire
+    if not rows:
+        return 0
+        
+    # Run acquisition
+    ezr.the.Stop = 50
+    ezr.the.Start = 4
+    labeled_rows = ezr.acquire(tbl, cap=50, label=oracle_wrapper)
+    
+    # Define 'small' criteria
+    def is_small(row):
+        return row[3] <= 100 and row[7] <= 5
+
+    # Filter labeled rows for those that are 'small'
+    small_labeled = [r for r in labeled_rows if is_small(r)]
+    
+    # If we found small rows, pick the best one; otherwise pick the best overall
+    candidates = small_labeled if small_labeled else labeled_rows
+    best_row = min(candidates, key=lambda r: ezr.ydist(tbl, r))
+    
+    # Return the index of the best row
+    for i, r in enumerate(rows):
+        if r is best_row:
+            return i
+    return 0
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    all_data = list(ezr.csv(filename))
+    header = all_data[0]
+    rows = all_data[1:]
+    
+    # Keep a copy of the original goals to simulate the oracle
+    original_goals = [[r[0], r[1], r[2]] for r in rows]
+    
+    # Mask the goals in the rows passed to choose()
+    for row in rows:
+        row[0] = row[1] = row[2] = "?"
+        
+    def mock_label(i):
+        return original_goals[i]
+    
+    best_idx = choose(header, rows, mock_label)
+    
+    print(f"Optimization complete. The recommended setup for nightly runs is at index: {best_idx}")
+    print("This setup balances high forecast accuracy with low computational complexity.")

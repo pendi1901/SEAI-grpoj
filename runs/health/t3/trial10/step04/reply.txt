@@ -1,0 +1,73 @@
+```python
+import csv
+
+def flow(header, row, seen):
+    """
+    Decides if the current row is 'good enough' to ship.
+    We define 'good enough' as being in the top 5% of the expected distribution
+    based on the historical data (seen).
+    """
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+
+    # If this is the first row, we have no baseline, so keep looking.
+    if not seen:
+        return False
+
+    # Extract goals from seen rows
+    mres = [r[mre_idx] for r in seen]
+    accs = [r[acc_idx] for r in seen]
+    preds = [r[pred_idx] for r in seen]
+
+    # Calculate current row's relative performance
+    # We use a simple heuristic: is this row better than 95% of what we've seen?
+    # A row is better if MRE is lower, ACC is higher, and PRED40 is higher.
+    
+    def is_better(r1, r2):
+        # Returns True if r1 is better than r2
+        return (r1[mre_idx] <= r2[mre_idx] and 
+                r1[acc_idx] >= r2[acc_idx] and 
+                r1[pred_idx] >= r2[pred_idx])
+
+    # Count how many seen rows are worse than the current row
+    better_count = sum(1 for s in seen if is_better(row, s))
+    
+    # If this row is better than 95% of the seen rows, ship it.
+    # We require at least 20 rows to have been seen to make a statistically 
+    # meaningful decision.
+    if len(seen) >= 20:
+        if better_count / len(seen) >= 0.95:
+            return True
+            
+    return False
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                try:
+                    processed_row.append(float(val))
+                except ValueError:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    seen = []
+    shipped = False
+    for i, row in enumerate(rows):
+        if flow(header, row, seen):
+            print(f"Shipment decision: Row {i+1} is good enough to ship.")
+            shipped = True
+            break
+        seen.append(row)
+    
+    if not shipped:
+        print("No setup met the criteria for shipping.")
+    
+    exit(0)
+```

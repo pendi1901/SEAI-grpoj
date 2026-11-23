@@ -1,0 +1,50 @@
+```python
+import csv
+import step03
+
+def certify(xs, ys):
+    """
+    Returns True if the two distributions are statistically similar 
+    (no significant difference), False if they differ.
+    Uses the logic from step03 to determine if training impacts tenure.
+    """
+    return step03.certify(xs, ys)
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Identify 'TrainingTimesLastYear' and 'YearsWithCurrManager+'
+    train_idx = header.index('TrainingTimesLastYear')
+    mgr_idx = header.index('YearsWithCurrManager+')
+    
+    # Split data into two groups: low training (0-2 days) vs high training (3-6 days)
+    low_training = [r[mgr_idx] for r in rows if r[train_idx] <= 2]
+    high_training = [r[mgr_idx] for r in rows if r[train_idx] > 2]
+    
+    is_noise = certify(low_training, high_training)
+    
+    print("Analysis: Do people with more training stay longer with their manager?")
+    if is_noise:
+        print("Result: The difference in tenure with manager is statistically insignificant (likely noise).")
+        print("Conclusion: More training does not appear to significantly change how long staff stay with their manager.")
+    else:
+        print("Result: There is a real, statistically significant difference in tenure with manager based on training.")
+        print("Conclusion: Training levels are a meaningful factor in staff retention with their manager.")
+```

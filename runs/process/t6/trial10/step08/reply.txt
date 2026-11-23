@@ -1,0 +1,82 @@
+```python
+import ezr
+import step05
+import random
+
+def fix(header, row, levers):
+    """
+    Finds the best adjustment to a bad row by identifying which levers
+    most effectively move the row toward the 'best' cluster.
+    """
+    # Identify the column indices for the levers
+    lever_indices = {name: i for i, name in enumerate(header) if name in levers}
+    
+    # We need a reference to what 'good' looks like.
+    # We use the logic from step05 to find the best rows.
+    # Since we don't have the full dataset here, we assume the harness
+    # provides a context or we use the row itself to find a local improvement.
+    # To keep it simple and effective: we try to move each lever toward
+    # the value that minimizes ydist.
+    
+    best_change = {}
+    best_ydist = float('inf')
+    
+    # Create a dummy table to use ydist
+    # We use a minimal table structure
+    tbl = ezr.Tbl([header])
+    
+    for name, bounds in levers.items():
+        idx = lever_indices[name]
+        original_val = row[idx]
+        
+        # Try a few points within the lever's range
+        if isinstance(bounds, tuple):  # Numeric
+            low, high = bounds
+            candidates = [low, (low + high) / 2, high]
+        else:  # Symbolic
+            candidates = bounds
+            
+        for val in candidates:
+            if val == original_val:
+                continue
+            
+            test_row = row[:]
+            test_row[idx] = val
+            
+            # Calculate ydist (using a simplified approach)
+            # We want to minimize ydist.
+            d = ezr.ydist(tbl, test_row)
+            
+            if d < best_ydist:
+                best_ydist = d
+                best_change = {name: val}
+                
+    return best_change
+
+if __name__ == "__main__":
+    file_path = "pom3a.n1000.train.csv"
+    rows_gen = ezr.csv(file_path)
+    header = next(rows_gen)
+    rows = list(rows_gen)
+    
+    # Identify a "bad" row (e.g., one with high ydist)
+    tbl = ezr.Tbl([header] + rows)
+    scored = sorted([(ezr.ydist(tbl, r), r) for r in rows], key=lambda x: x[0])
+    bad_row = scored[-1][1]
+    
+    # Define levers: numeric ranges based on the data
+    # We allow changing 'Size', 'Plan', and 'Team Size'
+    levers = {
+        "Size": (0.1, 0.9),
+        "Plan": (0.1, 0.9),
+        "Team Size": (0.1, 0.9)
+    }
+    
+    recommendation = fix(header, bad_row, levers)
+    
+    print("To rescue this project, we recommend the following adjustments:")
+    for col, val in recommendation.items():
+        print(f"- Adjust '{col}' to {val:.4f}")
+    
+    exit(0)
+```

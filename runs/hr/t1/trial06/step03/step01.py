@@ -1,0 +1,50 @@
+import csv
+
+def remember(header, rows):
+    """
+    Identifies staff who stay 'unusually long'.
+    We define 'staying long' as having high values in 'YearsAtCompany+' 
+    and 'YearsWithCurrManager+'.
+    """
+    # Identify indices for goal columns
+    # YearsAtCompany+ (index 31), YearsWithCurrManager+ (index 34)
+    idx_years_co = 31
+    idx_years_mgr = 34
+
+    # Calculate a score for each row: sum of normalized goals
+    # Since we want to maximize these, we just sum them.
+    scored_rows = []
+    for i, row in enumerate(rows):
+        score = row[idx_years_co] + row[idx_years_mgr]
+        scored_rows.append((score, i))
+
+    # Sort by score descending
+    scored_rows.sort(key=lambda x: x[0], reverse=True)
+
+    # Return top 5% (800 rows * 0.05 = 40 rows)
+    limit = max(1, int(len(rows) * 0.05))
+    return [item[1] for item in scored_rows[:limit]]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            # Convert numeric columns (starting with uppercase) to float
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    best_indices = remember(header, rows)
+    
+    print("Staff with unusually long tenure (Top 5%):")
+    print(f"{'Row':<6} | {'YearsAtCompany':<15} | {'YearsWithManager':<15}")
+    for idx in best_indices:
+        row = rows[idx]
+        print(f"{idx:<6} | {row[31]:<15} | {row[34]:<15}")

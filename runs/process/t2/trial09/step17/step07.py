@@ -1,0 +1,69 @@
+import csv
+import random
+from step01 import remember
+
+def choose(header, rows, label):
+    """
+    Selects the best row by sampling and labeling.
+    We use a simple strategy: sample 50 rows, label them, 
+    and return the index of the one with the best score.
+    """
+    goal_indices = [(i, name[-1]) for i, name in enumerate(header) 
+                    if name.endswith('-') or name.endswith('+')]
+    
+    def score_goals(goals):
+        total = 0
+        for i, (idx, op) in enumerate(goal_indices):
+            val = goals[i]
+            total += val if op == '-' else (1.0 - val)
+        return total
+
+    # Select 50 random indices to label
+    indices = list(range(len(rows)))
+    sample_size = min(50, len(indices))
+    sampled_indices = random.sample(indices, sample_size)
+    
+    best_score = float('inf')
+    best_idx = -1
+    
+    for i in sampled_indices:
+        # label(i) returns the true goal values for the row at index i
+        true_goals = label(i)
+        current_score = score_goals(true_goals)
+        
+        if current_score < best_score:
+            best_score = current_score
+            best_idx = i
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', newline='') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            true_data = []
+            for row in reader:
+                # Separate inputs and goals for the label function
+                numeric_row = [float(x) for x in row]
+                rows.append(numeric_row)
+                
+                # Extract goals for the label function
+                goals = [numeric_row[i] for i, name in enumerate(header) 
+                         if name.endswith(('-', '+'))]
+                true_data.append(goals)
+            
+            def label(i):
+                return true_data[i]
+            
+            best_idx = choose(header, rows, label)
+            
+            print(f"Customer Inquiry: Best setup found after 50 trials.")
+            print(f"The best row index is: {best_idx}")
+            print(f"Goals for this row: {true_data[best_idx]}")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

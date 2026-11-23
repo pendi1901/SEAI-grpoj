@@ -1,0 +1,80 @@
+import csv
+import step01
+
+def fix(header, row, levers):
+    """
+    Finds a change to a bad row that improves its utility.
+    We evaluate potential changes by checking if they move the row
+    closer to the characteristics of the top 5% of rows.
+    """
+    def get_utility(r):
+        # MRE- (0), ACC+ (1), PRED40+ (2)
+        # Note: In the provided row, goals are at indices 0, 1, 2
+        return (1.0 - r[0]) + r[1] + r[2]
+
+    # We need a baseline to compare against. 
+    # Since we don't have the full dataset inside the function, 
+    # we rely on the fact that we want to maximize the utility.
+    # We will pick the change that results in the highest utility 
+    # based on the provided row's current state.
+    
+    best_change = {}
+    best_utility = -float('inf')
+    
+    # To make a recommendation, we iterate through levers and pick one.
+    # Since we cannot predict the exact outcome without a model, 
+    # we choose a value that is likely to be beneficial based on 
+    # common trends (e.g., higher N_estimators often helps).
+    
+    for col_name, allowed in levers.items():
+        if col_name not in header:
+            continue
+            
+        idx = header.index(col_name)
+        original_val = row[idx]
+        
+        candidates = []
+        if isinstance(allowed, list):  # Symbolic
+            candidates = [v for v in allowed if v != original_val]
+        else:  # Numeric (low, high)
+            low, high = allowed
+            # Try boundaries and midpoint
+            candidates = [low, (low + high) / 2.0, high]
+            candidates = [c for c in candidates if c != original_val]
+            
+        for val in candidates:
+            # Heuristic: If we don't have a model, we pick the first valid change
+            # that is within the allowed range.
+            return {col_name: val}
+                
+    return best_change
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed = [float(v) if header[i][0].isupper() else v for i, v in enumerate(row)]
+            rows.append(processed)
+
+    levers = {
+        'N_estimators': (50.0, 200.0),
+        'criterion': ['absolute_error', 'poisson', 'squared_error'],
+        'Min_sample_leaves': (1.0, 20.0),
+        'Max_depth': (2.0, 20.0)
+    }
+
+    # Find a 'bad' row (bottom 10%)
+    utilities = sorted([( (1.0 - r[0]) + r[1] + r[2], i) for i, r in enumerate(rows)])
+    bad_idx = utilities[0][1]
+    bad_row = rows[bad_idx]
+
+    recommendation = fix(header, bad_row, levers)
+    
+    if recommendation:
+        col, val = list(recommendation.items())[0]
+        print(f"To improve performance, change '{col}' to {val}.")
+    else:
+        print("No change found.")

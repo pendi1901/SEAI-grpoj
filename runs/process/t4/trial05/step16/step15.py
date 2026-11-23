@@ -1,0 +1,56 @@
+import csv
+import pandas as pd
+from sklearn.ensemble import RandomForestRegressor
+
+def blame(header, rows):
+    """
+    Identifies the input columns that best explain the variance in 'Cost-'
+    for the worst-performing rows.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    
+    # Identify input columns (those not ending in - or +)
+    inputs = [c for c in header if not (c.endswith('-') or c.endswith('+'))]
+    
+    # Define 'worst' rows as those with the highest 'Cost-' values
+    # (Since 'Cost-' is a goal to minimize, high values are the worst)
+    worst_threshold = df['Cost-'].quantile(0.8)
+    worst_rows = df[df['Cost-'] >= worst_threshold]
+    
+    # Use a Random Forest to find feature importance for predicting 'Cost-'
+    # within the context of the worst setups
+    X = worst_rows[inputs]
+    y = worst_rows['Cost-']
+    
+    model = RandomForestRegressor(n_estimators=50, random_state=42)
+    model.fit(X, y)
+    
+    # Get feature importances
+    importances = model.feature_importances_
+    
+    # Pair features with their importance scores
+    feat_imp = sorted(zip(inputs, importances), key=lambda x: x[1], reverse=True)
+    
+    # Return the top 2 features that explain the 'Cost-' variance
+    return [feat[0] for feat in feat_imp[:2]]
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) for val in row])
+        
+        top_factors = blame(header, rows)
+        
+        print("Customer Inquiry: Which project facts matter most to cost?")
+        print(f"Analysis: The most critical factors impacting cost are: {', '.join(top_factors)}.")
+        print("You should focus your management attention on these variables.")
+        print("Other input factors have significantly less impact on cost variance in high-cost scenarios.")
+        
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

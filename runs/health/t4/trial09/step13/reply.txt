@@ -1,0 +1,73 @@
+```python
+import csv
+from scipy import stats
+from step01 import remember
+from step04 import flow
+
+def certify(xs, ys):
+    """
+    Returns True if the difference between two distributions is likely noise,
+    False if they are statistically different (using Welch's t-test).
+    """
+    # Welch's t-test: p-value > 0.05 means we fail to reject the null hypothesis (it's noise)
+    t_stat, p_value = stats.ttest_ind(xs, ys, equal_var=False)
+    return p_value > 0.05
+
+def compare_rules(header, rows):
+    """
+    Compares the utility distributions of the two rules:
+    Rule 1 (remember): Top 5% of rows based on utility.
+    Rule 2 (flow): Rows that meet the 95th percentile threshold.
+    """
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+
+    def get_utility(row):
+        return -row[mre_idx] + row[acc_idx] + row[pred_idx]
+
+    # Rule 1: remember() returns indices of top 5%
+    indices_remember = remember(header, rows)
+    utilities_remember = [get_utility(rows[i]) for i in indices_remember]
+
+    # Rule 2: flow() logic (rows that pass the 95th percentile threshold)
+    seen = []
+    utilities_flow = []
+    # We need to build the 'seen' history to determine the threshold
+    for row in rows:
+        if len(seen) > 0:
+            seen_utilities = [get_utility(s) for s in seen]
+            threshold = sorted(seen_utilities)[int(len(seen_utilities) * 0.95)]
+            if get_utility(row) >= threshold:
+                utilities_flow.append(get_utility(row))
+        seen.append(row)
+
+    is_noise = certify(utilities_remember, utilities_flow)
+    return is_noise, utilities_remember, utilities_flow
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i] in ['MRE-', 'ACC+', 'PRED40+', 'N_estimators', 
+                                 'Min_sample_leaves', 'Min_impurity_decrease', 'Max_depth']:
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    is_noise, u1, u2 = compare_rules(header, rows)
+    
+    print("Analysis: Does the choice between the two rules make a difference?")
+    if is_noise:
+        print("Conclusion: The difference between the two rules is statistically insignificant (noise).")
+        print("You can stop arguing about it; both rules yield comparable results.")
+    else:
+        print("Conclusion: The difference is statistically significant.")
+        print("The rules produce distinct performance outcomes; the choice matters.")
+```

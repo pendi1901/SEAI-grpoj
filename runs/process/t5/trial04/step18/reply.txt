@@ -1,0 +1,85 @@
+```python
+import ezr
+import random
+
+def fix(header, row, levers):
+    """
+    Recommends a change to a 'bad' row to reduce idle time.
+    We evaluate potential changes by calculating the ydist of the modified row.
+    Lower ydist indicates better performance (closer to ideal goals).
+    """
+    # Create a table to handle normalization and distance calculations
+    # We use the row as a single-row table to get the column definitions.
+    # The normalization (norm) relies on the column's mu/sd.
+    tbl = ezr.Tbl([header, row])
+    
+    best_ydist = ezr.ydist(tbl, row)
+    best_change = {}
+
+    # Try changing each lever to improve the row
+    for col_name, allowed in levers.items():
+        if col_name not in header:
+            continue
+        at = header.index(col_name)
+        
+        # Generate candidates based on lever type
+        candidates = []
+        if isinstance(allowed, (list, tuple)):  # Symbolic or range
+            if isinstance(allowed[0], str): # Symbolic
+                candidates = [v for v in allowed if v != row[at]]
+            else: # Numeric (low, high)
+                low, high = allowed
+                # Try a few points in the range to ensure we find an improvement
+                candidates = [low, (low + high) / 2, high]
+            
+        for val in candidates:
+            test_row = list(row)
+            test_row[at] = val
+            
+            # Calculate ydist for the modified row
+            current_ydist = ezr.ydist(tbl, test_row)
+            
+            if current_ydist < best_ydist:
+                best_ydist = current_ydist
+                best_change = {col_name: val}
+                
+    return best_change
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    header = next(data_gen)
+    rows = list(data_gen)
+    
+    # The customer cannot hire, so we exclude 'Team Size' from levers.
+    # We focus on other controllable inputs like 'Plan' and 'Culture'.
+    levers = {
+        "Plan": (0.0, 1.0),
+        "Culture": (0.0, 1.0),
+        "Initial Known": (0.0, 1.0),
+        "Inter-Dependency": (0.0, 1.0),
+        "Dynamism": (0.0, 1.0),
+        "Size": (0.0, 1.0)
+    }
+    
+    # Find a "bad" row (high ydist)
+    tbl = ezr.Tbl([header] + rows)
+    scored = sorted([(ezr.ydist(tbl, r), r) for r in rows], key=lambda x: x[0], reverse=True)
+    bad_row = scored[0][1]
+    
+    recommendation = fix(header, bad_row, levers)
+    
+    print("Optimization Recommendation (No Hiring Allowed)")
+    print("-" * 60)
+    if recommendation:
+        for col, val in recommendation.items():
+            val_str = f"{val:.4f}" if isinstance(val, (int, float)) else str(val)
+            print(f"To reduce idle time, adjust '{col}' to {val_str}.")
+    else:
+        print("No single lever change found to improve performance.")
+    print("-" * 60)
+    print("These recommendations focus on process and project parameters")
+    print("that can be adjusted without increasing team size.")
+    
+    exit(0)
+```

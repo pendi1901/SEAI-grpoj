@@ -1,0 +1,81 @@
+```python
+import ezr
+import step01
+import step05
+import random
+
+def fix(header, row, levers):
+    """
+    Recommends changes to a 'bad' row to improve its ydist (distance to ideal).
+    We try to move the row's levers to values that are more common in the 
+    'best' performing rows.
+    """
+    # Load all data to establish what 'best' looks like
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    all_rows = data[1:]
+    tbl = ezr.Tbl(data)
+    
+    # Identify 'best' rows to see what values we should aim for
+    sorted_rows = sorted(all_rows, key=lambda r: ezr.ydist(tbl, r))
+    best_rows = sorted_rows[:len(all_rows)//10]
+    
+    recommendations = {}
+    
+    # For each lever, find the value that appears most frequently in 'best' rows
+    for col_name, allowed in levers.items():
+        idx = header.index(col_name)
+        col = tbl.cols[idx]
+        
+        if isinstance(col, ezr.Sym):
+            # Find most common value in best rows
+            counts = {}
+            for r in best_rows:
+                val = r[idx]
+                counts[val] = counts.get(val, 0) + 1
+            best_val = max(counts, key=counts.get)
+            if best_val in allowed and best_val != row[idx]:
+                recommendations[col_name] = best_val
+        else:
+            # For numeric, aim for the mean of the best rows
+            mu_best = sum(r[idx] for r in best_rows) / len(best_rows)
+            low, high = allowed
+            # Clamp to allowed range
+            best_val = max(low, min(high, mu_best))
+            if abs(best_val - row[idx]) > 0.1:
+                recommendations[col_name] = round(best_val, 2)
+                
+    # Ensure we change at least one lever
+    if not recommendations:
+        # Pick the first lever and set to its best allowed value
+        first_key = list(levers.keys())[0]
+        recommendations[first_key] = levers[first_key][0] if isinstance(levers[first_key], list) else levers[first_key][0]
+        
+    return recommendations
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Define levers based on customer request
+    levers = {
+        "businessTravel": ["Non-Travel", "Travel_Frequently", "Travel_Rarely"],
+        "overTime": ["No", "Yes"],
+        "TrainingTimesLastYear": (0, 6),
+        "PercentSalaryHike": (11, 25),
+        "StockOptionLevel": (0, 3)
+    }
+    
+    # Pick a 'bad' row (high ydist) to fix
+    tbl = ezr.Tbl(data)
+    bad_row = max(rows, key=lambda r: ezr.ydist(tbl, r))
+    
+    changes = fix(header, bad_row, levers)
+    
+    print("Analysis: Recommended changes for staff retention:")
+    for col, val in changes.items():
+        print(f"- Change {col} to {val}")
+    print("\nThese changes are derived from the profiles of our most stable, long-term employees.")
+```

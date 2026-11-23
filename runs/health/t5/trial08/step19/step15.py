@@ -1,0 +1,54 @@
+import ezr
+
+def blame(header, rows):
+    """
+    Identifies input columns that have no statistically significant impact 
+    on performance (ydist). If the distribution of values in a column 
+    is the same for the 'best' and 'worst' rows, that setting can likely 
+    be left at default without hurting performance.
+    """
+    # Create a table to handle column metadata and normalization
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Sort rows by ydist (ascending: best to worst)
+    sorted_rows = sorted(rows, key=lambda r: ezr.ydist(tbl, r))
+    
+    # Define 'best' and 'worst' as the top and bottom 20%
+    n = len(sorted_rows) // 5
+    best = sorted_rows[:n]
+    worst = sorted_rows[-n:]
+    
+    # We look for input columns (x) where the distribution in 'worst' 
+    # is NOT significantly different from 'best'.
+    # If they are the same, the setting doesn't matter.
+    safe_settings = []
+    for col in tbl.x:
+        at = col.at
+        # Extract values for this column
+        vals_best = [r[at] for r in best if r[at] != "?"]
+        vals_worst = [r[at] for r in worst if r[at] != "?"]
+        
+        # If the distributions are the same, this column is safe to ignore
+        if ezr.same(vals_best, vals_worst):
+            safe_settings.append(header[at])
+            
+    return safe_settings
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data_iter = ezr.csv(filename)
+    header = next(data_iter)
+    rows = list(data_iter)
+    
+    # Identify the safe settings
+    safe = blame(header, rows)
+    
+    print("Customer Query: Which settings can I leave at the factory default without hurting anything?")
+    if safe:
+        print(f"Analysis: The following settings appear to have no significant impact on performance: {', '.join(safe)}.")
+        print("You can likely leave these at their default values without affecting your results.")
+    else:
+        print("Analysis: All input settings appear to have a statistically significant impact on performance.")
+        print("You should carefully tune all parameters to ensure optimal results.")
+    
+    exit(0)

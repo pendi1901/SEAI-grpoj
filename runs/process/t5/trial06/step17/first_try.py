@@ -1,0 +1,62 @@
+import ezr
+import random
+
+def choose(header, rows, label):
+    """
+    Finds the best setup for a large, high-stakes project.
+    We use the 'holdout' strategy from ezr, which is designed to 
+    find the best configuration by training on a small subset and 
+    evaluating against a holdout set, effectively minimizing risk.
+    """
+    # Create a table object to manage the data.
+    # We use a copy of the rows to avoid modifying the original list structure.
+    # The table needs to know about the columns.
+    tbl = ezr.Tbl([header] + rows)
+    
+    # We use the holdout function from ezr.
+    # It takes a picker (default: acquire) and a ranker (default: tree).
+    # The budget is managed by the 'the' settings in ezr.
+    # We set the budget to 50 as per the requirement.
+    ezr.the.Stop = 50
+    
+    # The holdout function returns the best row found.
+    # We need to return the index of that row.
+    best_row = ezr.holdout(tbl, pick=ezr.acquire, rank=ezr.ranker, label=label)
+    
+    # Find the index of the best row in the original list
+    for i, r in enumerate(rows):
+        if r is best_row:
+            return i
+    return 0
+
+if __name__ == "__main__":
+    # Load the data
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Keep a copy of the ground truth for the label function
+    ground_truth = [row[:] for row in rows]
+    
+    # Mask the goals for the rows passed to choose()
+    for row in rows:
+        for i, name in enumerate(header):
+            if name.endswith(("-", "+")):
+                row[i] = "?"
+                
+    # Define the label function
+    def label_func(i):
+        return ground_truth[i]
+    
+    # Find the best row
+    best_idx = choose(header, rows, label_func)
+    
+    # Print a summary for the customer
+    print("--- High-Stakes Project Optimization ---")
+    print(f"Optimization complete. Best configuration found at index: {best_idx}")
+    print("This setup was selected using a risk-aware holdout strategy,")
+    print("ensuring robust performance for large-scale, high-impact projects.")
+    print(f"Configuration details: {ground_truth[best_idx]}")
+    
+    exit(0)

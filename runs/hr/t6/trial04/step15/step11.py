@@ -1,0 +1,54 @@
+import ezr
+import step01
+
+def find_similar(header, rows, target_row, k=5):
+    """
+    Finds the k most similar rows to target_row based on x-column distance.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    # Calculate distance from target_row to all other rows
+    scored = []
+    for i, row in enumerate(rows):
+        # Skip comparing to self
+        if row == target_row:
+            continue
+        d = ezr.xdist(tbl, target_row, row)
+        scored.append((d, i))
+    
+    # Sort by distance (ascending)
+    scored.sort(key=lambda x: x[0])
+    return [item[1] for item in scored[:k]]
+
+def remember(header, rows):
+    """
+    Returns the indices of the top 5% of rows based on goal optimization.
+    """
+    return step01.remember(header, rows)
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Pick a target employee (e.g., the first one)
+    target_idx = 0
+    target_row = rows[target_idx]
+    
+    # Find similar people
+    similar_indices = find_similar(header, rows, target_row)
+    
+    # Identify goal columns to report stay duration
+    # YearsAtCompany+ is a goal to maximize
+    idx_yac = header.index("YearsAtCompany+")
+    
+    print(f"Target Employee (Index {target_idx}):")
+    print(f"  Years at Company: {target_row[idx_yac]}")
+    print("\nMost similar employees and their tenure:")
+    
+    for idx in similar_indices:
+        r = rows[idx]
+        print(f"  - Index {idx}: {r[idx_yac]} years at company")
+        
+    print("\nLogic: Similar employees were identified by minimizing the distance "
+          "in input (x) columns using the Euclidean distance of normalized values.")

@@ -1,0 +1,99 @@
+import csv
+import random
+
+def choose(header, rows, label):
+    """
+    Finds a setup that is both high-performing (multi-objective) and small 
+    (low N_estimators, low Max_depth) to ensure it runs quickly.
+    """
+    # Identify indices
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+    n_est_idx = header.index('N_estimators')
+    depth_idx = header.index('Max_depth')
+
+    # Budget: 50 labels
+    budget = 50
+    labeled = {}
+
+    def get_goals(i):
+        if i not in labeled:
+            if len(labeled) >= budget:
+                raise Exception("Budget exceeded")
+            labeled[i] = label(i)
+        return labeled[i]
+
+    # Sample 50 random rows to evaluate
+    n = len(rows)
+    sample_indices = random.sample(range(n), min(n, budget))
+    
+    best_idx = -1
+    best_score = -float('inf')
+
+    # Collect goals for normalization
+    all_goals = [get_goals(i) for i in sample_indices]
+    mres = [g[0] for g in all_goals]
+    accs = [g[1] for g in all_goals]
+    preds = [g[2] for g in all_goals]
+
+    def norm(val, vals):
+        mn, mx = min(vals), max(vals)
+        return (val - mn) / (mx - mn + 1e-9)
+
+    for i in sample_indices:
+        goals = get_goals(i)
+        row = rows[i]
+        
+        # Performance score (higher is better)
+        s_mre = 1 - norm(goals[0], mres)
+        s_acc = norm(goals[1], accs)
+        s_pred = norm(goals[2], preds)
+        perf = s_mre + s_acc + s_pred
+        
+        # Size penalty (lower N_estimators and Max_depth is better)
+        # Normalize inputs for penalty calculation
+        n_est = row[n_est_idx]
+        depth = row[depth_idx]
+        
+        # Simple penalty: lower is better. 
+        # We want to minimize size, so we subtract normalized size from performance.
+        size_penalty = (n_est / 200.0) * 0.5 + (depth / 20.0) * 0.5
+        
+        total_score = perf - size_penalty
+        
+        if total_score > best_score:
+            best_score = total_score
+            best_idx = i
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            full_data = []
+            for row in reader:
+                full_data.append([float(val) if header[i] not in ['criterion'] else val 
+                                  for i, val in enumerate(row)])
+        
+        masked_rows = [r[:] for r in full_data]
+        for r in masked_rows:
+            r[0] = r[1] = r[2] = "?"
+            
+        def label(i):
+            return [full_data[i][0], full_data[i][1], full_data[i][2]]
+            
+        best_idx = choose(header, masked_rows, label)
+        
+        row = full_data[best_idx]
+        print(f"Recommended setup (Row {best_idx}):")
+        print(f"MRE: {row[0]:.4f}, ACC: {row[1]:.4f}, PRED40: {row[2]:.4f}")
+        print(f"N_estimators: {row[3]}, Max_depth: {row[7]}")
+        print("This configuration balances high performance with a small footprint for nightly runs.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

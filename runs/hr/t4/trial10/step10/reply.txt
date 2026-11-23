@@ -1,0 +1,99 @@
+```python
+import csv
+import random
+from step02 import guess
+
+def race(header, rows, label):
+    """
+    Compares three strategies for finding the best employee row within a 50-label budget.
+    Strategies:
+    1. random: Picks 17 random rows.
+    2. top_tenure: Picks 17 rows with the highest 'Age' (proxy for experience).
+    3. model_based: Uses a Random Forest to predict 'YearsAtCompany+' and picks the top 16.
+    """
+    goal_indices = [i for i, h in enumerate(header) if h.endswith('+') or h.endswith('-')]
+    target_idx = goal_indices[0]
+    
+    # Budget management
+    budget = 50
+    labeled = {}
+
+    def get_val(i):
+        if i not in labeled:
+            if len(labeled) >= budget:
+                return -float('inf')
+            labeled[i] = label(i)[0]
+        return labeled[i]
+
+    # Strategy 1: Random
+    def strategy_random():
+        indices = random.sample(range(len(rows)), 17)
+        best_i = -1
+        best_v = -float('inf')
+        for i in indices:
+            v = get_val(i)
+            if v > best_v:
+                best_v, best_i = v, i
+        return best_i, best_v
+
+    # Strategy 2: Age-based (Heuristic)
+    def strategy_age():
+        age_idx = header.index('Age')
+        sorted_indices = sorted(range(len(rows)), key=lambda i: rows[i][age_idx], reverse=True)
+        best_i = -1
+        best_v = -float('inf')
+        for i in sorted_indices[:17]:
+            v = get_val(i)
+            if v > best_v:
+                best_v, best_i = v, i
+        return best_i, best_v
+
+    # Strategy 3: Model-based
+    def strategy_model():
+        # Use first 100 rows to train a quick model to guide selection
+        train_idx = list(range(100))
+        for i in train_idx: get_val(i)
+        
+        # Predict on remaining
+        preds = guess(header, [rows[i] for i in train_idx], [rows[i] for i in range(100, len(rows))])
+        best_pred_idx = 100 + preds.index(max(preds))
+        return best_pred_idx, get_val(best_pred_idx)
+
+    results = {
+        "random": strategy_random(),
+        "age_heuristic": strategy_age(),
+        "model_based": strategy_model()
+    }
+
+    winner = max(results, key=lambda k: results[k][1])
+    
+    return {
+        "winner": winner,
+        "row": results[winner][0],
+        "tried": ["random", "age_heuristic", "model_based"]
+    }
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = [float(val) if header[i][0].isupper() else val for i, val in enumerate(row)]
+            rows.append(processed_row)
+
+    # Mask goals
+    goal_indices = [i for i, h in enumerate(header) if h.endswith('+') or h.endswith('-')]
+    for row in rows:
+        for idx in goal_indices: row[idx] = "?"
+
+    def label(i):
+        # Real values are stored in the original rows before masking
+        # Since we need to simulate the label function, we access the original data
+        return [rows[i][idx] for idx in goal_indices]
+
+    result = race(header, rows, label)
+    print(f"Race complete. Winner: {result['winner']} (found at row {result['row']}).")
+    print(f"Strategies compared: {', '.join(result['tried'])}.")
+```

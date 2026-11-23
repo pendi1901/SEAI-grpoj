@@ -1,0 +1,73 @@
+```python
+import csv
+import random
+from step01 import remember
+from step02 import guess
+
+def choose(header, rows, label):
+    """
+    Find the best row by sampling 50 rows, labeling them,
+    and returning the index of the best one found.
+    """
+    # Identify indices of rows that are not yet labeled
+    # Since all goal cells are "?", we just pick 50 random indices
+    indices = list(range(len(rows)))
+    sample_indices = random.sample(indices, 50)
+    
+    best_idx = -1
+    best_score = float('inf')
+    
+    goal_indices = [i for i, name in enumerate(header) 
+                    if name.endswith('-') or name.endswith('+')]
+    
+    def get_score(row_goals):
+        s = 0
+        for i, val in enumerate(row_goals):
+            name = header[goal_indices[i]]
+            if name.endswith('-'):
+                s += val
+            else:
+                s -= val
+        return s
+
+    for idx in sample_indices:
+        # Get true values from the oracle
+        true_goals = label(idx)
+        current_score = get_score(true_goals)
+        
+        if current_score < best_score:
+            best_score = current_score
+            best_idx = idx
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [row for row in reader]
+            
+        # Create a local label function to simulate the harness
+        def label(i):
+            return [float(rows[i][j]) for j, name in enumerate(header) 
+                    if name.endswith('-') or name.endswith('+')]
+        
+        # Mask the rows for the choose function
+        masked_rows = []
+        for row in rows:
+            masked_rows.append([val if not (header[i].endswith('-') or header[i].endswith('+')) else "?" 
+                               for i, val in enumerate(row)])
+        
+        best_idx = choose(header, masked_rows, label)
+        
+        print("Customer Inquiry: Best setup from 50 trials")
+        print(f"Analysis: Sampled 50 configurations and evaluated their true performance.")
+        print(f"The best configuration found is at index {best_idx}.")
+        print("This setup provides the optimal balance of goals based on the limited trial budget.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

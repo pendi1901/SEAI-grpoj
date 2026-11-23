@@ -1,0 +1,63 @@
+```python
+import csv
+import step01
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column ('YearsAtCompany+') for test rows
+    by calculating the average value of that column from the training set.
+    """
+    # Find the first goal column (ends with + or -)
+    goal_col_name = None
+    for col in header:
+        if col.endswith('+') or col.endswith('-'):
+            goal_col_name = col
+            break
+    
+    if not goal_col_name:
+        return [0.0] * len(test)
+    
+    idx = header.index(goal_col_name)
+    
+    # Calculate the mean of the goal column from training data
+    values = [row[idx] for row in train if isinstance(row[idx], (int, float))]
+    avg_val = sum(values) / len(values) if values else 0.0
+    
+    # Return the average for every test row
+    return [float(avg_val)] * len(test)
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    # Use the first 10 rows as a mock test set
+    test_rows = [row[:] for row in rows[:10]]
+    for row in test_rows:
+        # Mask the goal column (first one ending in + or -)
+        for i, col in enumerate(header):
+            if col.endswith('+') or col.endswith('-'):
+                row[i] = "?"
+                break
+                
+    predictions = guess(header, rows, test_rows)
+    
+    print("Estimating 'YearsAtCompany+' for new hires:")
+    for i, pred in enumerate(predictions[:5]):
+        print(f"Test Row {i}: Estimated Tenure = {pred:.2f} years")
+```

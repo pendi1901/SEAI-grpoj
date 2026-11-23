@@ -1,0 +1,55 @@
+```python
+import csv
+import step03
+
+def certify(xs, ys):
+    """
+    Returns True if the two lists of numbers are statistically similar 
+    (i.e., they do not differ significantly), False otherwise.
+    Reuses the logic from step03.
+    """
+    return step03.certify(xs, ys)
+
+def analyze_training_impact(header, rows):
+    """
+    Compares 'YearsWithCurrManager+' for employees with high training 
+    vs low training.
+    """
+    train_idx = header.index('TrainingTimesLastYear')
+    mgr_idx = header.index('YearsWithCurrManager+')
+    
+    # Split into two groups: High training (>= 3) vs Low training (< 3)
+    high_train = [row[mgr_idx] for row in rows if row[train_idx] >= 3]
+    low_train = [row[mgr_idx] for row in rows if row[train_idx] < 3]
+    
+    is_similar = certify(high_train, low_train)
+    
+    return is_similar, len(high_train), len(low_train)
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    similar, count_high, count_low = analyze_training_impact(header, rows)
+    
+    print("Analysis: Do people with more training stay longer with their manager?")
+    if similar:
+        print("Result: No, the difference in stay duration is likely just noise.")
+    else:
+        print("Result: Yes, there is a statistically significant difference.")
+    print(f"(Based on {count_high} employees with high training vs {count_low} with low training)")
+```

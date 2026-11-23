@@ -1,0 +1,86 @@
+import csv
+from step02 import guess
+
+def justify(header, rows, row):
+    """
+    Estimates the performance of the given row and compares it against 
+    the historical dataset to determine its relative rank.
+    """
+    # 1. Estimate the goals for the input row
+    # We need to provide a full row with goals filled in for the guess function
+    # The guess function expects a list of rows where goals are "?"
+    # We use the existing rows to train the model
+    
+    # Prepare data for guess()
+    # guess() expects train and test as lists of rows
+    # We need to temporarily replace the "?" in the input row with dummy values
+    # or handle the prediction logic. Since guess() uses KNN, we can pass 
+    # the row as a single-item list.
+    
+    # Identify goal indices
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('-') or name.endswith('+')]
+    
+    # Create a copy of the row to fill in goals for the guess function
+    # We use the mean of the column as a placeholder for the guess function to work
+    test_row = list(row)
+    for i in goal_indices:
+        col_vals = [r[i] for r in rows if isinstance(r[i], (int, float))]
+        test_row[i] = sum(col_vals) / len(col_vals) if col_vals else 0.0
+        
+    # Get prediction for the row
+    # guess() returns a list of predictions for the first goal column (MRE-)
+    # We need to estimate all goals. For simplicity, we use the KNN logic 
+    # from step02 for the primary goal (MRE-) and assume others are average.
+    # Given the constraints, we focus on the primary goal (MRE-) for comparison.
+    pred_mre = guess(header, rows, [test_row])[0]
+    
+    # 2. Calculate utility for all rows and the target row
+    def get_utility(r):
+        # MRE- (minimize), ACC+ (maximize), PRED40+ (maximize)
+        mre = r[header.index('MRE-')]
+        acc = r[header.index('ACC+')]
+        pred = r[header.index('PRED40+')]
+        return -mre + acc + pred
+
+    # Calculate utilities for historical data
+    utilities = [get_utility(r) for r in rows]
+    
+    # Calculate utility for target row (using predicted MRE)
+    target_utility = -pred_mre + row[header.index('ACC+')] + row[header.index('PRED40+')]
+    
+    # 3. Calculate fraction of rows that are worse
+    worse_count = sum(1 for u in utilities if target_utility > u)
+    p = worse_count / len(rows)
+    
+    reason = f"This setup is estimated to outperform {p:.1%} of all historical configurations based on its predicted utility score."
+    
+    return (p, reason)
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    # Test with the last row as an example
+    test_row = list(rows[-1])
+    for i in range(len(header)):
+        if header[i].endswith('-') or header[i].endswith('+'):
+            test_row[i] = "?"
+            
+    p, reason = justify(header, rows[:-1], test_row)
+    print(f"Score: {p:.4f}")
+    print(f"Reason: {reason}")
+    exit(0)

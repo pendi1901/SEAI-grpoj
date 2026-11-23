@@ -1,0 +1,97 @@
+import csv
+import pandas as pd
+import numpy as np
+import random
+from step01 import remember
+from step07 import choose
+
+def race(header, rows, label):
+    """
+    Compares three strategies: random, greedy (based on initial sample), 
+    and active learning (from step07).
+    """
+    budget = 50
+    labeled = {}
+    
+    def get_true_goals(i):
+        if i not in labeled:
+            if len(labeled) >= budget:
+                raise Exception("Budget exceeded")
+            labeled[i] = label(i)
+        return labeled[i]
+
+    def get_score(i):
+        goals = get_true_goals(i)
+        # Normalize goals to [0, 1] for comparison
+        # Since we don't have global min/max, we use a simple heuristic
+        # Lower is better for '-', higher for '+'
+        score = 0
+        for j, col in enumerate([c for c in header if c.endswith(('-', '+'))]):
+            val = goals[j]
+            if col.endswith('-'):
+                score += (1 - val)
+            else:
+                score += val
+        return score / len([c for c in header if c.endswith(('-', '+'))])
+
+    # 1. Random Strategy
+    def strategy_random():
+        indices = random.sample(range(len(rows)), 16)
+        return max(indices, key=get_score)
+
+    # 2. Greedy Strategy (Sample first 16, pick best)
+    def strategy_greedy():
+        indices = list(range(16))
+        for i in indices: get_true_goals(i)
+        return max(indices, key=get_score)
+
+    # 3. Active Learning Strategy (using step07 logic)
+    def strategy_active():
+        # Reuse choose logic, but limit budget
+        return choose(header, rows, get_true_goals)
+
+    results = {
+        "random": strategy_random(),
+        "greedy": strategy_greedy(),
+        "active": strategy_active()
+    }
+    
+    best_strategy = max(results, key=lambda s: get_score(results[s]))
+    
+    return {
+        "winner": best_strategy,
+        "row": results[best_strategy],
+        "tried": ["random", "greedy", "active"]
+    }
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) if val.replace('.','',1).isdigit() or (val.startswith('-') and val[1:].replace('.','',1).isdigit()) else val for val in row])
+        
+        true_goals_map = {i: [row[header.index(g)] for g in header if g.endswith(('-', '+'))] for i, row in enumerate(rows)}
+        
+        masked_rows = []
+        for row in rows:
+            m_row = row[:]
+            for g in [c for c in header if c.endswith(('-', '+'))]:
+                m_row[header.index(g)] = "?"
+            masked_rows.append(m_row)
+            
+        def label(i):
+            return true_goals_map[i]
+            
+        result = race(header, masked_rows, label)
+        print("Customer Inquiry: Which consultant's strategy wins?")
+        print(f"  Winner: {result['winner']}")
+        print(f"  Best Row Index Found: {result['row']}")
+        print(f"  Strategies compared: {', '.join(result['tried'])}")
+        
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

@@ -1,0 +1,82 @@
+```python
+import csv
+import random
+
+def choose(header, rows, label):
+    """
+    Finds the best working arrangement for 'Laboratory Technician' staff.
+    We sample up to 50 rows, prioritizing those in the 'Laboratory Technician' role.
+    """
+    role_idx = header.index('jobRole')
+    goal_indices = [i for i, col in enumerate(header) if col.endswith('+') or col.endswith('-')]
+    
+    # Filter indices for Laboratory Technicians
+    lab_indices = [i for i, row in enumerate(rows) if row[role_idx] == 'Laboratory Technician']
+    
+    # We can label at most 50 rows.
+    n_samples = min(50, len(lab_indices))
+    indices = random.sample(lab_indices, n_samples)
+    
+    best_idx = -1
+    best_score = None
+    
+    for i in indices:
+        # Get true values for the goals
+        goals = label(i)
+        
+        # Calculate a normalized score for this row
+        # For '+', higher is better. For '-', lower is better.
+        current_score = 0
+        for j, goal_idx in enumerate(goal_indices):
+            val = goals[j]
+            if header[goal_idx].endswith('+'):
+                current_score += val
+            else:
+                current_score -= val
+        
+        if best_score is None or current_score > best_score:
+            best_score = current_score
+            best_idx = i
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = None
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        goal_indices = [i for i, col in enumerate(header) if col.endswith('+') or col.endswith('-')]
+        
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Keep true values for label function
+    true_data = [[row[idx] for idx in goal_indices] for row in rows]
+    
+    # Mask the goal columns for the choose function
+    for row in rows:
+        for idx in goal_indices:
+            row[idx] = "?"
+
+    def label(i):
+        return true_data[i]
+
+    best_idx = choose(header, rows, label)
+    
+    print("Laboratory Staff Optimization Analysis:")
+    print(f"The best working arrangement for a Laboratory Technician was found at row index: {best_idx}")
+    print("This selection was determined by evaluating a targeted sample of laboratory staff to maximize retention and tenure metrics.")
+    exit(0)
+```

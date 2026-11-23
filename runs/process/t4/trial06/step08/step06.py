@@ -1,0 +1,70 @@
+import csv
+import pandas as pd
+import numpy as np
+from sklearn.neighbors import KNeighborsRegressor
+from step01 import remember
+
+def justify(header, rows, row):
+    """
+    Estimates goal values for the target row, calculates its rank relative to 
+    all rows, and provides a justification string.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    input_cols = [col for col in header if not (col.endswith('-') or col.endswith('+'))]
+    goal_cols = [col for col in header if col.endswith(('-', '+'))]
+    
+    # Estimate goals for the target row using KNN
+    X_train = df[input_cols]
+    y_train = df[goal_cols]
+    model = KNeighborsRegressor(n_neighbors=5)
+    model.fit(X_train, y_train)
+    
+    # Predict goals for the target row
+    target_inputs = pd.DataFrame([row[:len(input_cols)]], columns=input_cols)
+    predicted_goals = model.predict(target_inputs)[0]
+    
+    # Create a combined dataset to calculate aggregate scores
+    all_data = df.copy()
+    # Add the predicted row to the dataset
+    predicted_row = list(target_inputs.iloc[0]) + list(predicted_goals)
+    all_data.loc[len(all_data)] = predicted_row
+    
+    # Calculate aggregate scores
+    scores = pd.DataFrame(index=all_data.index)
+    for goal in goal_cols:
+        col_data = all_data[goal].astype(float)
+        normalized = (col_data - col_data.min()) / (col_data.max() - col_data.min())
+        if goal.endswith('-'):
+            scores[goal] = 1 - normalized
+        else:
+            scores[goal] = normalized
+    
+    all_data['aggregate'] = scores.mean(axis=1)
+    
+    # Calculate rank (fraction of rows worse than target)
+    target_score = all_data['aggregate'].iloc[-1]
+    others = all_data['aggregate'].iloc[:-1]
+    p = (others < target_score).mean()
+    
+    reason = f"This setup is better than {p:.1%} of all configurations because its predicted performance metrics balance the goals more effectively than most alternatives."
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [[float(val) for val in row] for row in reader]
+        
+        # Pick a sample row to justify
+        test_row = rows[0][:9] + ["?"] * 3
+        p, reason = justify(header, rows, test_row)
+        
+        print(f"Rank: {p:.4f}")
+        print(f"Justification: {reason}")
+        exit(0)
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

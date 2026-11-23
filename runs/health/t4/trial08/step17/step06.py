@@ -1,0 +1,88 @@
+import csv
+from step02 import guess
+
+def justify(header, rows, row):
+    """
+    Estimates the performance of the given row and compares it against 
+    the historical dataset to determine its relative rank.
+    """
+    # Identify goal indices
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+    
+    # 1. Estimate the goals for the input row
+    # We need to estimate all three goals. Since guess() only estimates MRE-,
+    # we use a simple KNN approach for all goals.
+    def get_all_goals(target_row):
+        # We need to predict MRE-, ACC+, and PRED40+
+        # For simplicity, we use the average of the 5 nearest neighbors
+        # based on input features.
+        input_indices = [i for i, name in enumerate(header) if not (name.endswith('-') or name.endswith('+'))]
+        
+        # Helper to get features
+        def get_features(r):
+            mapping = {'absolute_error': 0, 'poisson': 1, 'squared_error': 2}
+            return [mapping.get(r[i], r[i]) if isinstance(r[i], str) else r[i] for i in input_indices]
+
+        target_feats = get_features(target_row)
+        
+        # Find distances to all rows
+        dists = []
+        for r in rows:
+            r_feats = get_features(r)
+            dist = sum((a - b)**2 for a, b in zip(target_feats, r_feats))
+            dists.append((dist, r))
+        
+        dists.sort(key=lambda x: x[0])
+        neighbors = [d[1] for d in dists[:5]]
+        
+        est_mre = sum(n[mre_idx] for n in neighbors) / 5
+        est_acc = sum(n[acc_idx] for n in neighbors) / 5
+        est_pred = sum(n[pred_idx] for n in neighbors) / 5
+        return est_mre, est_acc, est_pred
+
+    est_mre, est_acc, est_pred = get_all_goals(row)
+    
+    # 2. Calculate utility for all rows and the target row
+    def get_utility(mre, acc, pred):
+        return -mre + acc + pred
+
+    utilities = [get_utility(r[mre_idx], r[acc_idx], r[pred_idx]) for r in rows]
+    target_utility = get_utility(est_mre, est_acc, est_pred)
+    
+    # 3. Calculate fraction of rows that are worse
+    worse_count = sum(1 for u in utilities if target_utility > u)
+    p = worse_count / len(rows)
+    
+    reason = f"This setup is estimated to outperform {p:.1%} of all historical configurations based on its predicted utility score."
+    
+    return (p, reason)
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    test_row = list(rows[-1])
+    for i in range(len(header)):
+        if header[i].endswith('-') or header[i].endswith('+'):
+            test_row[i] = "?"
+            
+    p, reason = justify(header, rows[:-1], test_row)
+    print(f"Score: {p:.4f}")
+    print(f"Reason: {reason}")
+    exit(0)

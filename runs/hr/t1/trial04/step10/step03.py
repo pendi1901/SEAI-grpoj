@@ -1,0 +1,66 @@
+import csv
+
+def certify(xs, ys):
+    """
+    Performs a simple two-sample t-test (Welch's) to determine if two
+    distributions are significantly different.
+    Returns True if they are statistically similar (p > 0.05),
+    False if they are significantly different (p <= 0.05).
+    """
+    n1, n2 = len(xs), len(ys)
+    if n1 < 2 or n2 < 2:
+        return True
+    
+    m1, m2 = sum(xs) / n1, sum(ys) / n2
+    v1 = sum((x - m1) ** 2 for x in xs) / (n1 - 1)
+    v2 = sum((y - m2) ** 2 for y in ys) / (n2 - 1)
+    
+    # Standard error
+    se = ((v1 / n1) + (v2 / n2)) ** 0.5
+    if se == 0:
+        return m1 == m2
+    
+    # t-statistic
+    t_stat = abs(m1 - m2) / se
+    
+    # For a large sample size (n=800), a t-stat > 1.96 roughly corresponds to p < 0.05
+    return t_stat < 1.96
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Goal: YearsInCurrentRole+ (higher is better)
+    # Compare 'YearsInCurrentRole+' for those who work overtime vs those who don't
+    ot_idx = header.index('overTime')
+    role_idx = header.index('YearsInCurrentRole+')
+    
+    yes_ot = [r[role_idx] for r in rows if r[ot_idx] == 'Yes']
+    no_ot = [r[role_idx] for r in rows if r[ot_idx] == 'No']
+    
+    is_noise = certify(yes_ot, no_ot)
+    
+    print("Analysis: Does overtime affect tenure in current role?")
+    print(f"Average tenure (Overtime): {sum(yes_ot)/len(yes_ot):.2f} years")
+    print(f"Average tenure (No Overtime): {sum(no_ot)/len(no_ot):.2f} years")
+    
+    if is_noise:
+        print("Conclusion: The observed difference is likely just noise.")
+    else:
+        print("Conclusion: There is a statistically significant difference.")

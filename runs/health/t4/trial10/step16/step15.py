@@ -1,0 +1,44 @@
+import csv
+from step05 import blame as base_blame
+
+def blame(header, rows):
+    """
+    Identifies input columns that best explain poor performance.
+    Reuses the logic from step05.py.
+    """
+    return base_blame(header, rows)
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            for row in reader:
+                processed_row = []
+                for val in row:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        # The customer wants to know which settings can be left at factory defaults.
+        # Settings that have low importance in predicting 'bad' performance 
+        # are the ones that can be safely left at defaults.
+        # We identify the most important ones (the culprits) and infer the rest are safe.
+        
+        all_inputs = [name for name in header if not (name.endswith('-') or name.endswith('+'))]
+        culprits = blame(header, rows)
+        
+        safe_settings = [name for name in all_inputs if name not in culprits]
+        
+        print("Settings that can be left at factory defaults (low impact on performance):")
+        for setting in safe_settings:
+            print(f"- {setting}")
+            
+        exit(0)
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

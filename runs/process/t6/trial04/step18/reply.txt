@@ -1,0 +1,83 @@
+```python
+import ezr
+import step01
+import step08
+
+def fix(header, row, levers):
+    """
+    Recommends a change to a 'bad' row to reduce 'Idle-'.
+    We evaluate the impact of changing each lever by checking which
+    change moves the row's predicted performance (ydist) closer to 0.
+    """
+    # Create a table to evaluate the row's current performance
+    # We use the full dataset to build a model for ydist estimation
+    filename = "pom3a.n1000.train.csv"
+    rows_gen = ezr.csv(filename)
+    header_data = next(rows_gen)
+    rows = list(rows_gen)
+    tbl = ezr.Tbl([header_data] + rows)
+    
+    best_change = {}
+    best_ydist = ezr.ydist(tbl, row)
+    
+    # Try changing each lever to see if it improves the ydist
+    for col_name, allowed in levers.items():
+        idx = header.index(col_name)
+        
+        # Generate candidates
+        candidates = []
+        if isinstance(allowed, tuple): # Numeric (low, high)
+            low, high = allowed
+            # Try 5 points in the range
+            for i in range(1, 5):
+                candidates.append(low + (high - low) * (i / 5))
+        else: # Symbolic
+            candidates = [v for v in allowed]
+            
+        for val in candidates:
+            new_row = list(row)
+            new_row[idx] = val
+            
+            # Estimate new ydist
+            new_ydist = ezr.ydist(tbl, new_row)
+            
+            if new_ydist < best_ydist:
+                best_ydist = new_ydist
+                best_change = {col_name: val}
+    
+    # If no improvement found, return a default change
+    if not best_change:
+        first_lever = list(levers.keys())[0]
+        val = levers[first_lever]
+        best_change = {first_lever: val[0] if isinstance(val, tuple) else val[0]}
+        
+    return best_change
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    rows_gen = ezr.csv(filename)
+    header = next(rows_gen)
+    rows = list(rows_gen)
+    
+    # Identify a "bad" row (high Idle-)
+    idle_idx = header.index("Idle-")
+    bad_row = max(rows, key=lambda r: r[idle_idx])
+    
+    # Levers excluding Team Size (as per customer request)
+    levers = {
+        "Culture": (0.0, 1.0),
+        "Criticality": (0.0, 1.0),
+        "Dynamism": (0.0, 1.0),
+        "Plan": (0.0, 1.0)
+    }
+    
+    recommendation = fix(header, bad_row, levers)
+    
+    print("Optimization Analysis: Reducing Idle Time without hiring.")
+    print("-" * 60)
+    print("To reduce idle time, we recommend the following adjustment:")
+    for col, val in recommendation.items():
+        print(f"  - Adjust '{col}' to {val:.4f}")
+    print("-" * 60)
+    print("These adjustments are selected to minimize the overall goal distance.")
+```

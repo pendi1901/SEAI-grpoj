@@ -1,0 +1,81 @@
+import csv
+import step01
+import step05
+
+def fix(header, row, levers):
+    """
+    Identifies the best lever to change to reduce 'Idle-' by finding the 
+    input column that most strongly correlates with low 'Idle-' values 
+    and adjusting the current row's value towards the average of the 
+    best-performing historical setups.
+    """
+    filename = "pom3a.n1000.train.csv"
+    with open(filename, mode='r', newline='') as f:
+        reader = csv.reader(f)
+        header_file = next(reader)
+        rows = [r for r in reader]
+
+    # Find the best rows to learn from
+    best_indices = step01.remember(header_file, rows)
+    
+    # Identify the most effective lever to reduce Idle-
+    # We use the logic from step05 (blame analysis) to find the top driver
+    # but we look for the one that correlates with *low* idle time.
+    idle_idx = header.index("Idle-")
+    
+    # Find the best 10% of rows (lowest idle time)
+    sorted_rows = sorted(rows, key=lambda r: float(r[idle_idx]))
+    limit = max(1, len(rows) // 10)
+    best_idle = sorted_rows[:limit]
+    others = sorted_rows[limit:]
+    
+    best_levers = []
+    for col_name in levers.keys():
+        col_idx = header.index(col_name)
+        b_vals = [float(r[col_idx]) for r in best_idle]
+        o_vals = [float(r[col_idx]) for r in others]
+        diff = abs((sum(b_vals)/len(b_vals)) - (sum(o_vals)/len(o_vals)))
+        best_levers.append((diff, col_name))
+    
+    # Pick the lever with the highest impact
+    best_levers.sort(key=lambda x: x[0], reverse=True)
+    target_col = best_levers[0][1]
+    
+    # Calculate target value from best rows
+    col_idx = header.index(target_col)
+    best_vals = [float(rows[i][col_idx]) for i in best_indices]
+    target_val = sum(best_vals) / len(best_vals)
+    
+    # Clamp to allowed range
+    low, high = levers[target_col]
+    new_val = max(low, min(high, target_val))
+    
+    return {target_col: new_val}
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', newline='') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [row for row in reader]
+            
+            # Customer is not allowed to hire (Team Size is fixed)
+            # We allow changing Plan, Dynamism, and Size
+            levers = {
+                "Plan": (0.0, 1.0),
+                "Dynamism": (0.0, 1.0),
+                "Size": (0.0, 1.0)
+            }
+            
+            bad_row = rows[-1]
+            recommendation = fix(header, bad_row, levers)
+            
+            print("Customer Inquiry: I am not allowed to hire. What else can I change to cut idle time?")
+            for col, val in recommendation.items():
+                print(f"Recommendation: Adjust '{col}' to {val:.4f}.")
+            print("Analysis: This adjustment is based on historical data patterns that correlate with lower idle times.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

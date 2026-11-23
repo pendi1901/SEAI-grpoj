@@ -1,0 +1,70 @@
+import csv
+
+def certify(xs, ys):
+    """
+    Determines if two distributions are statistically different using 
+    the A12 effect size test. Returns True if they are effectively 
+    the same (small effect size), False if they differ significantly.
+    """
+    n_x = len(xs)
+    n_y = len(ys)
+    if n_x == 0 or n_y == 0:
+        return True
+
+    greater = 0
+    equal = 0
+    for x in xs:
+        for y in ys:
+            if x > y:
+                greater += 1
+            elif x == y:
+                equal += 1
+    
+    a12 = (greater + 0.5 * equal) / (n_x * n_y)
+    
+    # Vargha-Delaney threshold: 0.56 is the standard for a small effect size.
+    # If A12 is between 0.44 and 0.56, the distributions are effectively the same.
+    return 0.44 <= a12 <= 0.56
+
+def compare_rules(header, rows):
+    """
+    Compares two common rules for selecting configurations:
+    Rule A: Favor 'absolute_error' criterion.
+    Rule B: Favor 'squared_error' criterion.
+    We compare the ACC+ performance of these two groups.
+    """
+    crit_idx = header.index('criterion')
+    acc_idx = header.index('ACC+')
+    
+    rule_a = [row[acc_idx] for row in rows if row[crit_idx] == 'absolute_error']
+    rule_b = [row[acc_idx] for row in rows if row[crit_idx] == 'squared_error']
+    
+    return certify(rule_a, rule_b), rule_a, rule_b
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed_row = []
+                for i, val in enumerate(row):
+                    if header[i] == 'criterion':
+                        processed_row.append(val)
+                    else:
+                        processed_row.append(float(val))
+                rows.append(processed_row)
+        
+        same, group_a, group_b = compare_rules(header, rows)
+        
+        print("Comparison of 'absolute_error' vs 'squared_error' criteria:")
+        if same:
+            print("Result: The difference is negligible. You can stop arguing about it.")
+        else:
+            print("Result: There is a statistically significant difference between the rules.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

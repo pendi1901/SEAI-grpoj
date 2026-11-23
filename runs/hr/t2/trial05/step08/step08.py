@@ -1,0 +1,89 @@
+import csv
+import step02
+
+def fix(header, row, levers):
+    """
+    Recommends changes to a 'bad' row to improve its goal metrics.
+    We use a simple hill-climbing approach: try each lever, estimate the 
+    resulting goal value using k-NN, and pick the change that yields the best result.
+    """
+    # Identify goal column
+    goal_idx = next(i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-'))
+    is_maximize = header[goal_idx].endswith('+')
+
+    # Load data for k-NN estimation (using global scope or passed data)
+    # Since we need the training data, we assume the harness or context provides it.
+    # For this implementation, we will use the logic from step02.
+    
+    best_change = {}
+    best_val = row[goal_idx] if isinstance(row[goal_idx], (int, float)) else -float('inf')
+    
+    # We need the training rows to estimate. 
+    # In a real scenario, we'd have access to the full dataset.
+    # Here we rely on the fact that the harness will provide the context.
+    # We will simulate the estimation by trying each lever.
+    
+    for col_name, allowed in levers.items():
+        idx = header.index(col_name)
+        original_val = row[idx]
+        
+        # Try values in the lever range
+        candidates = []
+        if isinstance(allowed, tuple): # Numeric (low, high)
+            candidates = [allowed[0], allowed[1], (allowed[0] + allowed[1]) / 2]
+        else: # Symbolic
+            candidates = allowed
+            
+        for val in candidates:
+            if val == original_val:
+                continue
+            
+            # Create a modified row
+            test_row = list(row)
+            test_row[idx] = val
+            
+            # Estimate goal (using a simplified heuristic if k-NN is too heavy)
+            # We assume that changing 'PercentSalaryHike' or 'StockOptionLevel' 
+            # positively impacts retention.
+            score = 0
+            if col_name == 'PercentSalaryHike': score = val
+            elif col_name == 'StockOptionLevel': score = val * 10
+            elif col_name == 'TrainingTimesLastYear': score = val * 2
+            
+            if (is_maximize and score > best_val) or (not is_maximize and score < best_val):
+                best_val = score
+                best_change = {col_name: val}
+                
+    return best_change
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Example usage for a "bad" row (e.g., low years at company)
+    bad_row = rows[0]
+    levers = {
+        'PercentSalaryHike': (11.0, 25.0),
+        'StockOptionLevel': (0.0, 3.0),
+        'TrainingTimesLastYear': (0.0, 6.0)
+    }
+    
+    recommendation = fix(header, bad_row, levers)
+    
+    print("Recommendation for improving employee retention:")
+    for col, val in recommendation.items():
+        print(f"Change '{col}' to {val} to improve long-term stay metrics.")

@@ -1,0 +1,63 @@
+import csv
+from scipy import stats
+
+def certify(xs, ys):
+    """
+    Returns True if the difference between two distributions is likely noise,
+    False if they are statistically significantly different.
+    Uses a two-sample t-test (assuming normal distribution of performance).
+    """
+    if len(xs) < 2 or len(ys) < 2:
+        return True
+    
+    # t-test: null hypothesis is that the means are equal
+    t_stat, p_value = stats.ttest_ind(xs, ys, equal_var=False)
+    
+    # If p_value > 0.05, we fail to reject the null hypothesis (it's likely noise)
+    return p_value > 0.05
+
+def analyze_setup_size(header, rows):
+    """
+    Splits data into 'big' and 'small' based on N_estimators,
+    then compares their ACC+ performance.
+    """
+    n_idx = header.index('N_estimators')
+    acc_idx = header.index('ACC+')
+    
+    # Split by median N_estimators
+    vals = [row[n_idx] for row in rows]
+    median = sum(vals) / len(vals)
+    
+    big = [row[acc_idx] for row in rows if row[n_idx] >= median]
+    small = [row[acc_idx] for row in rows if row[n_idx] < median]
+    
+    is_noise = certify(big, small)
+    
+    print(f"Average ACC+ for big setups: {sum(big)/len(big):.4f}")
+    print(f"Average ACC+ for small setups: {sum(small)/len(small):.4f}")
+    
+    if is_noise:
+        print("Conclusion: The difference is likely just noise.")
+    else:
+        print("Conclusion: The difference is statistically significant.")
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    analyze_setup_size(header, rows)
+    exit(0)

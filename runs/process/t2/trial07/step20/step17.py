@@ -1,0 +1,77 @@
+import csv
+import step01
+import step07
+
+def choose(header, rows, label):
+    """
+    Finds the best setup for a large, high-criticality project.
+    We filter for rows where 'Size' and 'Criticality' are high,
+    then use the budget of 50 labels to find the best among them.
+    """
+    size_idx = header.index('Size')
+    crit_idx = header.index('Criticality')
+    
+    # Identify candidates that match the "large and high-criticality" description
+    # (Top 50% of Size and Criticality)
+    candidates = []
+    for i, row in enumerate(rows):
+        if row[size_idx] > 0.5 and row[crit_idx] > 0.5:
+            candidates.append(i)
+            
+    # If we have too many candidates, prioritize the ones with the highest combined score
+    # to make the best use of our 50-label budget.
+    candidates.sort(key=lambda i: rows[i][size_idx] + rows[i][crit_idx], reverse=True)
+    
+    budget = 50
+    best_idx = -1
+    best_score = float('inf')
+    
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    
+    # Label up to 50 candidates
+    for i in candidates[:budget]:
+        true_goals = label(i)
+        for j, g_idx in enumerate(goal_indices):
+            rows[i][g_idx] = true_goals[j]
+            
+        # Score the row
+        score = 0.0
+        for idx, name in enumerate(header):
+            if name.endswith('-'):
+                score += rows[i][idx]
+            elif name.endswith('+'):
+                score += (1.0 - rows[i][idx])
+        
+        if score < best_score:
+            best_score = score
+            best_idx = i
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            rows.append([float(x) for x in row])
+            
+    true_data = [list(r) for r in rows]
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    
+    # Mask rows
+    for row in rows:
+        for idx in goal_indices:
+            row[idx] = "?"
+            
+    def label(i):
+        return [true_data[i][idx] for idx in goal_indices]
+    
+    best_row_idx = choose(header, rows, label)
+    
+    print("Customer Inquiry: Best setup for a large, high-criticality project.")
+    print(f"Analysis: After evaluating high-impact candidates, the optimal configuration is at index {best_row_idx}.")
+    print(f"This setup minimizes risk and cost for your specific project constraints.")

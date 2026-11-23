@@ -1,0 +1,106 @@
+```python
+import csv
+import random
+import step01
+import step07
+
+def race(header, rows, label):
+    """
+    Compares three strategies: random, greedy (based on step07), 
+    and a 'first-best' approach.
+    """
+    goal_indices = [i for i, name in enumerate(header) 
+                    if name.endswith('-') or name.endswith('+')]
+    
+    def get_score(row_vals):
+        total = 0
+        for i, g_idx in enumerate(goal_indices):
+            val = float(row_vals[i])
+            total += (1.0 - val) if header[g_idx].endswith('-') else val
+        return total
+
+    # Shared budget of 50 labels
+    budget = 50
+    labeled = {}
+
+    def get_label(idx):
+        if idx not in labeled:
+            if len(labeled) >= budget:
+                raise Exception("Budget exceeded")
+            labeled[idx] = label(idx)
+        return labeled[idx]
+
+    # Strategy 1: Random
+    def strategy_random():
+        indices = random.sample(range(len(rows)), 16)
+        best_idx = -1
+        best_score = -1.0
+        for idx in indices:
+            score = get_score(get_label(idx))
+            if score > best_score:
+                best_score, best_idx = score, idx
+        return best_idx, best_score
+
+    # Strategy 2: Greedy (from step07 logic)
+    def strategy_greedy():
+        indices = [int(i * (len(rows) - 1) / 16) for i in range(17)]
+        best_idx = -1
+        best_score = -1.0
+        for idx in indices:
+            score = get_score(get_label(idx))
+            if score > best_score:
+                best_score, best_idx = score, idx
+        return best_idx, best_score
+
+    # Strategy 3: First-Best (Sample first 17)
+    def strategy_first():
+        best_idx = -1
+        best_score = -1.0
+        for idx in range(17):
+            score = get_score(get_label(idx))
+            if score > best_score:
+                best_score, best_idx = score, idx
+        return best_idx, best_score
+
+    strategies = {
+        "random": strategy_random,
+        "greedy": strategy_greedy,
+        "first": strategy_first
+    }
+
+    results = {}
+    for name, func in strategies.items():
+        idx, score = func()
+        results[name] = (idx, score)
+
+    winner = max(results, key=lambda k: results[k][1])
+    
+    return {
+        "winner": winner,
+        "row": results[winner][0],
+        "tried": list(strategies.keys())
+    }
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) for val in row])
+        
+        def label(i):
+            return [rows[i][col] for col, name in enumerate(header) 
+                    if name.endswith('-') or name.endswith('+')]
+        
+        outcome = race(header, rows, label)
+        print(f"The winning strategy is: {outcome['winner']}")
+        print(f"Best row found at index: {outcome['row']}")
+        print(f"Strategies compared: {', '.join(outcome['tried'])}")
+        
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
+```

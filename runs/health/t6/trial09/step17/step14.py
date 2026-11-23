@@ -1,0 +1,33 @@
+import ezr
+import step04
+
+def flow(header, row, seen):
+    """
+    Decide whether to stop at the current row.
+    We use the logic from step04, which compares the current row's ydist
+    against the 95th percentile of the distribution of rows seen so far.
+    If the current row is in the top 5%, we stop.
+    """
+    return step04.flow(header, row, seen)
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    seen = []
+    stopped = False
+    for i, row in enumerate(rows):
+        if flow(header, row, seen):
+            print(f"Stopped at record {i+1} (0-based index {i}).")
+            print("This setup met the criteria for a high-quality forecast, "
+                  "so we can stop paying for further runs.")
+            stopped = True
+            break
+        seen.append(row)
+        
+    if not stopped:
+        print("Processed all records without finding a setup meeting the criteria.")
+    
+    exit(0)

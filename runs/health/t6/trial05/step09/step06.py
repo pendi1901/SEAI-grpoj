@@ -1,0 +1,53 @@
+import ezr
+import step02
+
+def justify(header, rows, row):
+    """
+    Returns (p, reason): p is the fraction of rows that 'row' is better than,
+    and reason is a one-sentence explanation.
+    """
+    # Create a table to calculate ydist
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Estimate the goals for the target row using the tree-based guesser
+    # We need a training set; using all rows to build the model
+    estimates = step02.guess(header, rows, [row])
+    
+    # Create a copy of the row with estimated goals
+    # The guesser returns a list of estimates for the goals
+    # We map these back to the row structure
+    row_with_goals = list(row)
+    # Goals are columns 0, 1, 2
+    for i in range(3):
+        row_with_goals[i] = estimates[0]
+        
+    # Calculate ydist for the target row and all other rows
+    target_ydist = ezr.ydist(tbl, row_with_goals)
+    all_ydists = [ezr.ydist(tbl, r) for r in rows]
+    
+    # Calculate fraction of rows that are worse (have higher ydist)
+    # A row is better if its ydist is lower
+    better_than = [d for d in all_ydists if d > target_ydist]
+    p = len(better_than) / len(all_ydists)
+    
+    reason = (f"This configuration is better than {p:.1%} of all known setups "
+              f"because its predicted performance metrics result in a lower "
+              f"multi-objective distance to the ideal goal.")
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Pick a sample row to justify (e.g., the last one)
+    target_row = list(rows[-1])
+    # Mask the goals
+    target_row[0] = target_row[1] = target_row[2] = "?"
+    
+    p, reason = justify(header, rows, target_row)
+    
+    print(f"Justification result: p={p:.4f}")
+    print(f"Reason: {reason}")

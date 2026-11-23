@@ -1,0 +1,47 @@
+```python
+import csv
+import step09
+
+def spot(header, rows):
+    """
+    Identifies rows that are 'unlike anyone we have employed' by checking
+    if the incoming row is an outlier compared to the historical data.
+    We reuse the Z-score logic from step09, as it effectively identifies
+    rows that deviate significantly from the established norms.
+    """
+    return step09.spot(header, rows)
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                # Convert numeric columns (starting with uppercase)
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # The customer asks: "Tell me when your estimate for them cannot be trusted."
+    # We identify rows that are statistical outliers (Z-score > 3) compared to 
+    # the rest of the population. Estimates for these rows are less reliable.
+    suspects = spot(header, rows)
+    
+    print("Reliability Analysis: When estimates cannot be trusted.")
+    print("Our estimates are based on historical patterns. When a new hire is ")
+    print("statistically unlike anyone we have employed, our confidence drops.")
+    print(f"We have identified {len(suspects)} rows that are highly unusual.")
+    print("The most suspicious rows (where estimates are least reliable) are:")
+    for idx in suspects[:5]:
+        print(f"- Row {idx}")
+```

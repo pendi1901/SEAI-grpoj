@@ -1,0 +1,94 @@
+import ezr
+import random
+
+def fix(header, row, levers):
+    """
+    Given a bad row, suggest changes to levers to improve its goals.
+    We evaluate potential changes by checking which lever modification
+    results in the lowest ydist (distance from ideal goals).
+    """
+    # Create a table to calculate ydist
+    # We use the full dataset to establish the context of 'good' vs 'bad'
+    # but we only need the header and the row to evaluate changes.
+    
+    # We need a table to use the ezr.ydist function
+    # We'll create a minimal table with the row to calculate ydist
+    # Note: ezr.ydist uses the table's y-columns
+    
+    best_change = {}
+    min_ydist = float('inf')
+    
+    # Current row state
+    current_row = list(row)
+    
+    # We need a reference table to calculate ydist correctly
+    # Since we don't have the full dataset here, we rely on the 
+    # fact that the harness will provide the context.
+    # We'll use a dummy table for the ydist calculation.
+    # We need to load the data to get the column definitions.
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header_data = data[0]
+    rows_data = data[1:]
+    tbl = ezr.Tbl(data)
+    
+    for col_name, allowed in levers.items():
+        idx = header.index(col_name)
+        original_val = current_row[idx]
+        
+        options = []
+        if isinstance(allowed, list):  # Symbolic
+            options = allowed
+        else:  # Numeric (low, high)
+            low, high = allowed
+            # Try a few points in the range
+            options = [low, (low + high) / 2, high]
+            
+        for val in options:
+            if val == original_val:
+                continue
+                
+            # Create a modified row
+            test_row = list(current_row)
+            test_row[idx] = val
+            
+            # Calculate ydist for this change
+            score = ezr.ydist(tbl, test_row)
+            
+            if score < min_ydist:
+                min_ydist = score
+                best_change = {col_name: val}
+                
+    return best_change
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Define levers (excluding MonthlyIncome as requested)
+    levers = {
+        "businessTravel": ["Non-Travel", "Travel_Rarely", "Travel_Frequently"],
+        "overTime": ["No", "Yes"],
+        "TrainingTimesLastYear": (0, 6),
+        "StockOptionLevel": (0, 3),
+        "JobInvolvement": (1, 4),
+        "EnvironmentSatisfaction": (1, 4)
+    }
+    
+    # Pick a sample 'bad' row (e.g., low tenure)
+    idx_tenure = header.index('YearsAtCompany+')
+    bad_rows = [r for r in rows if r[idx_tenure] < 2]
+    sample_bad_row = bad_rows[0]
+    
+    recommendation = fix(header, sample_bad_row, levers)
+    
+    print("Retention Improvement Analysis (No Budget Increase)")
+    print("-" * 60)
+    print(f"Original Tenure: {sample_bad_row[idx_tenure]}")
+    print(f"Recommended Change: {recommendation}")
+    print("-" * 60)
+    print("Logic: Evaluated non-financial levers to maximize tenure.")
+    print("By adjusting work-life balance and engagement factors,")
+    print("we can improve retention without increasing salary.")

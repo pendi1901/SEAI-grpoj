@@ -1,0 +1,78 @@
+```python
+import ezr
+import random
+
+def choose(header, rows, label):
+    """
+    Find the best row using a budget of 50 labels.
+    We use the acquire function from ezr, which implements a 
+    multi-objective optimization strategy to sample the search space.
+    """
+    # Create a table object from the provided data
+    # We need to ensure the rows have the correct structure for the Tbl constructor
+    data = [header] + rows
+    tbl = ezr.Tbl(data)
+    
+    # The acquire function in ezr is designed to spend a label budget
+    # to find the best rows. It takes an oracle (label function) and
+    # returns the rows that were labeled.
+    # We wrap the provided label function to handle the index-based interface.
+    def oracle_wrapper(row):
+        # Find the index of the row in the original list to call the label function
+        # Note: rows in tbl.rows are the same objects as in the input list
+        idx = rows.index(row)
+        labeled_row = label(idx)
+        # Update the row in place with the new values
+        for i, val in enumerate(labeled_row):
+            row[i] = val
+        return row
+
+    # Use ezr.acquire to perform the search. 
+    # It will call label() at most 50 times.
+    labeled_rows = ezr.acquire(tbl, cap=50, label=oracle_wrapper)
+    
+    # After labeling, find the best row among those labeled
+    # A row is better if its ydist is lower (closer to ideal)
+    best_row = min(labeled_rows, key=lambda r: ezr.ydist(tbl, r))
+    
+    # Return the index of the best row
+    return rows.index(best_row)
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    header = next(data_gen)
+    rows = list(data_gen)
+    
+    # Keep a copy of the original goals to act as the oracle
+    original_rows = [list(r) for r in rows]
+    
+    # Mask the goals in the rows provided to the choose function
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    masked_rows = []
+    for r in rows:
+        new_row = list(r)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_rows.append(new_row)
+        
+    labels_called = 0
+    def label_oracle(i):
+        global labels_called
+        labels_called += 1
+        if labels_called > 50:
+            raise Exception("Budget exceeded!")
+        return original_rows[i]
+    
+    best_idx = choose(header, masked_rows, label_oracle)
+    
+    print(f"Optimization complete.")
+    print(f"Best row found at index: {best_idx}")
+    print(f"Labels used: {labels_called}")
+    
+    best_row = original_rows[best_idx]
+    goals = {header[i]: best_row[i] for i in goal_indices}
+    print(f"Goal values for best row: {goals}")
+    
+    exit(0)
+```

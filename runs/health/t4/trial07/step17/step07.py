@@ -1,0 +1,91 @@
+import csv
+import random
+import numpy as np
+from sklearn.neighbors import KNeighborsRegressor
+from sklearn.preprocessing import LabelEncoder
+
+def choose(header, rows, label):
+    """
+    Find the best row among 50 trials.
+    Strategy:
+    1. Randomly sample 10 rows to build a training set.
+    2. Use KNN to predict utility for all rows.
+    3. Iteratively label the best predicted rows until 50 labels are used.
+    """
+    n_rows = len(rows)
+    goal_indices = [0, 1, 2]  # MRE-, ACC+, PRED40+
+
+    def get_utility(row):
+        return (1.0 - row[0]) + row[1] + row[2]
+
+    def transform(row):
+        new_row = []
+        for i, val in enumerate(row):
+            if i in goal_indices:
+                continue
+            if isinstance(val, str):
+                new_row.append(float(hash(val) % 1000))
+            else:
+                new_row.append(float(val))
+        return new_row
+
+    labeled_indices = []
+    
+    # 1. Initial random sample
+    for i in random.sample(range(n_rows), 10):
+        label(i)
+        labeled_indices.append(i)
+
+    # 2. Iteratively pick best candidates
+    for _ in range(40):
+        # Train model on currently labeled rows
+        X_train = [transform(rows[i]) for i in labeled_indices]
+        y_train = [get_utility(rows[i]) for i in labeled_indices]
+        
+        model = KNeighborsRegressor(n_neighbors=min(len(labeled_indices), 5))
+        model.fit(X_train, y_train)
+        
+        # Predict for all unlabeled
+        best_u = -float('inf')
+        best_i = -1
+        
+        for i in range(n_rows):
+            if i not in labeled_indices:
+                u = model.predict([transform(rows[i])])[0]
+                if u > best_u:
+                    best_u = u
+                    best_i = i
+        
+        label(best_i)
+        labeled_indices.append(best_i)
+
+    # 3. Return best found
+    best_idx = max(labeled_indices, key=lambda i: get_utility(rows[i]))
+    return best_idx
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    true_rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed.append(float(val))
+                else:
+                    processed.append(val)
+            true_rows.append(processed)
+            masked = processed[:]
+            masked[0], masked[1], masked[2] = "?", "?", "?"
+            rows.append(masked)
+
+    def label(i):
+        rows[i] = true_rows[i]
+        return true_rows[i]
+
+    best_idx = choose(header, rows, label)
+    print(f"Best setup found at index {best_idx}.")
+    print(f"Goals: MRE={rows[best_idx][0]:.4f}, ACC={rows[best_idx][1]:.4f}, PRED={rows[best_idx][2]:.4f}")

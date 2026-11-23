@@ -1,0 +1,62 @@
+```python
+import ezr
+import random
+
+def spot(header, rows):
+    """
+    Identify rows that contain suspicious input values.
+    We use the distance of each row from the 'middle' of the population
+    as a proxy for how 'unusual' or 'mistyped' a row is.
+    Rows with high xdist from the median row are flagged as suspicious.
+    """
+    # Create a table to handle column statistics
+    data = [header] + rows
+    tbl = ezr.Tbl(data)
+    
+    # Calculate the median row (mids)
+    median_row = ezr.mids(tbl)
+    
+    # Calculate xdist for every row from the median
+    # Higher xdist means the row is more of an outlier
+    suspicious = []
+    for i, row in enumerate(rows):
+        d = ezr.xdist(tbl, row, median_row)
+        suspicious.append((d, i))
+    
+    # Sort by distance (descending, as higher distance is more suspicious)
+    suspicious.sort(key=lambda x: x[0], reverse=True)
+    
+    # Return the indices of the top 5% most suspicious rows
+    limit = max(1, len(rows) // 20)
+    return [item[1] for item in suspicious[:limit]]
+
+if __name__ == "__main__":
+    # Load the data
+    filename = "pom3a.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    header = next(data_gen)
+    rows = list(data_gen)
+    
+    # Identify suspicious rows
+    suspicious_indices = spot(header, rows)
+    
+    print("Outlier Detection Analysis")
+    print("-" * 60)
+    print(f"Identified {len(suspicious_indices)} rows that appear suspicious.")
+    print("These rows have input values that deviate significantly from the")
+    print("norm of the dataset, suggesting potential data entry errors.")
+    print("-" * 60)
+    print(f"{'Row Index':<12} | {'Suspicion Score (xdist)'}")
+    print("-" * 60)
+    
+    # Re-calculate distances for display
+    tbl = ezr.Tbl([header] + rows)
+    median_row = ezr.mids(tbl)
+    
+    for idx in suspicious_indices:
+        d = ezr.xdist(tbl, rows[idx], median_row)
+        print(f"{idx:<12} | {d:.4f}")
+        
+    print("-" * 60)
+    exit(0)
+```

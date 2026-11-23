@@ -1,0 +1,74 @@
+import csv
+
+def flow(header, row, seen):
+    """
+    Decides whether to stop at the current row.
+    We stop if the current row is significantly better than the best row 
+    seen so far, or if we have processed enough data that further 
+    improvement is statistically unlikely (diminishing returns).
+    """
+    if not seen:
+        return False
+
+    # Identify goal indices
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    
+    def get_score(r):
+        score = 0
+        for g_idx in goal_indices:
+            # We need to normalize based on the 'seen' data
+            col_vals = [s[g_idx] for s in seen]
+            min_v, max_v = min(col_vals), max(col_vals)
+            norm = (r[g_idx] - min_v) / (max_v - min_v + 1e-9)
+            if header[g_idx].endswith('-'):
+                score += (1.0 - norm)
+            else:
+                score += norm
+        return score / len(goal_indices)
+
+    # Calculate scores for all seen rows
+    seen_scores = [get_score(s) for s in seen]
+    best_seen = max(seen_scores)
+    current_score = get_score(row)
+    
+    # Stop if current row is in the top 1% of all seen so far
+    # or if we have seen enough rows (e.g., 200) and performance has plateaued
+    if current_score > best_seen * 1.05:
+        return True
+    
+    if len(seen) > 200 and current_score < best_seen * 0.95:
+        return True
+        
+    return False
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed = []
+                for i, val in enumerate(row):
+                    if header[i] == 'criterion':
+                        processed.append(val)
+                    else:
+                        processed.append(float(val))
+                rows.append(processed)
+
+        seen = []
+        stopped = False
+        for i, row in enumerate(rows):
+            if flow(header, row, seen):
+                print(f"Stopping at row {i}: Performance has plateaued or reached a peak.")
+                stopped = True
+                break
+            seen.append(row)
+        
+        if not stopped:
+            print("Processed all rows; no significant improvement plateau detected.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

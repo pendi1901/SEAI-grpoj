@@ -1,0 +1,44 @@
+import ezr
+import random
+
+def remember(header, rows):
+    """
+    Identify the top 5% of rows based on multi-objective optimization.
+    A row is better if its goals (ending in - or +) are closer to their ideal.
+    """
+    # Create a table object using the provided data
+    # We prepend the header to the rows to match the Tbl constructor expectation
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate ydist for every row. 
+    # ydist measures how far a row is from the ideal (0 for -, 1 for +).
+    # We want to minimize ydist.
+    scored_rows = []
+    for i, row in enumerate(rows):
+        score = ezr.ydist(tbl, row)
+        scored_rows.append((score, i))
+    
+    # Sort by score (ascending, since lower ydist is better)
+    scored_rows.sort(key=lambda x: x[0])
+    
+    # Return the top 5% of indices
+    limit = max(1, len(rows) // 20)
+    return [idx for score, idx in scored_rows[:limit]]
+
+if __name__ == "__main__":
+    # Load data
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Get best indices
+    best_indices = remember(header, rows)
+    
+    # Print results for the customer
+    print(f"Analysis complete. Found {len(best_indices)} top-performing setups.")
+    print(f"Top row indices: {best_indices}")
+    print("\nSample of top row (index " + str(best_indices[0]) + "):")
+    print(rows[best_indices[0]])
+    
+    exit(0)

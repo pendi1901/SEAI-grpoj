@@ -1,0 +1,59 @@
+import csv
+
+def certify(xs, ys):
+    """
+    Returns True if the difference between two distributions is likely noise,
+    False if they are statistically different. Uses the Vargha-Delaney A12 
+    effect size check. A12 > 0.56 or < 0.44 suggests a real difference.
+    """
+    n_x = len(xs)
+    n_y = len(ys)
+    if n_x == 0 or n_y == 0:
+        return True
+    
+    greater = 0
+    equal = 0
+    for x in xs:
+        for y in ys:
+            if x > y:
+                greater += 1
+            elif x == y:
+                equal += 1
+    
+    a12 = (greater + 0.5 * equal) / (n_x * n_y)
+    return 0.44 <= a12 <= 0.56
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i] == 'criterion':
+                    processed_row.append(val)
+                else:
+                    processed_row.append(float(val))
+            rows.append(processed_row)
+
+    # The customer asks about the "two built-in rules".
+    # In the context of this dataset, 'criterion' is the primary symbolic choice.
+    # We compare 'absolute_error' vs 'squared_error' (the two most common).
+    crit_idx = header.index('criterion')
+    acc_idx = header.index('ACC+')
+    
+    abs_err = [r[acc_idx] for r in rows if r[crit_idx] == 'absolute_error']
+    sq_err = [r[acc_idx] for r in rows if r[crit_idx] == 'squared_error']
+    
+    is_noise = certify(abs_err, sq_err)
+    
+    print("Analysis: Does the choice of 'criterion' make a real difference?")
+    print(f"Average ACC+ (absolute_error): {sum(abs_err)/len(abs_err):.4f}")
+    print(f"Average ACC+ (squared_error): {sum(sq_err)/len(sq_err):.4f}")
+    
+    if is_noise:
+        print("Conclusion: The difference is statistically insignificant (noise). You can stop arguing.")
+    else:
+        print("Conclusion: The difference is statistically significant. The choice matters.")

@@ -1,0 +1,75 @@
+import csv
+import random
+
+def fix(header, row, levers):
+    """
+    Recommends changes for a 'bad' row (low tenure) by adjusting levers
+    to move the employee toward a more stable profile.
+    """
+    recommendations = {}
+    
+    # We aim to improve 'YearsAtCompany+' (a + goal).
+    # Strategy: Increase numeric levers (pay, training) and optimize symbolic ones.
+    for col, allowed in levers.items():
+        idx = header.index(col)
+        current_val = row[idx]
+        
+        if isinstance(allowed, tuple):  # Numeric lever (low, high)
+            low, high = allowed
+            # If current is low, push towards high
+            if current_val < high:
+                recommendations[col] = min(high, current_val + (high - low) * 0.2)
+        
+        elif isinstance(allowed, list):  # Symbolic lever
+            # Simple heuristic: pick a value that isn't the current one
+            options = [val for val in allowed if val != current_val]
+            if options:
+                recommendations[col] = random.choice(options)
+                
+    # Ensure at least one change is made
+    if not recommendations:
+        col = list(levers.keys())[0]
+        if isinstance(levers[col], list):
+            recommendations[col] = levers[col][0]
+        else:
+            recommendations[col] = levers[col][1]
+            
+    return recommendations
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Define levers based on customer request
+    levers = {
+        'businessTravel': ['Non-Travel', 'Travel_Frequently', 'Travel_Rarely'],
+        'overTime': ['No', 'Yes'],
+        'TrainingTimesLastYear': (0.0, 6.0),
+        'PercentSalaryHike': (11.0, 25.0),
+        'StockOptionLevel': (0.0, 3.0)
+    }
+
+    # Identify a "bad" row (low tenure)
+    years_idx = header.index('YearsAtCompany+')
+    bad_rows = [r for r in rows if r[years_idx] < 2.0]
+    
+    if bad_rows:
+        sample_bad_row = bad_rows[0]
+        changes = fix(header, sample_bad_row, levers)
+        
+        print("Analysis: Recommended changes for employees with low tenure:")
+        for col, val in changes.items():
+            print(f"- Change '{col}' to: {val}")
+    else:
+        print("No employees with low tenure found to analyze.")

@@ -1,0 +1,76 @@
+```python
+import ezr
+import random
+
+def blame(header, rows):
+    """
+    Identify input columns that best explain why the worst rows are bad.
+    We define 'worst' as the rows with the highest ydist.
+    We compare the distribution of input values in the worst 25% 
+    against the rest, using the difference in means/modes as a proxy for blame.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate ydist for all rows
+    scored = [(ezr.ydist(tbl, r), r) for r in rows]
+    scored.sort(key=lambda x: x[0], reverse=True)
+    
+    # Split into worst 25% and the rest
+    n = len(rows) // 4
+    worst = [x[1] for x in scored[:n]]
+    others = [x[1] for x in scored[n:]]
+    
+    # Identify input columns (those not ending in - or +)
+    input_indices = [i for i, name in enumerate(header) 
+                     if not (name.endswith('-') or name.endswith('+'))]
+    
+    scores = []
+    for i in input_indices:
+        col = tbl.cols[i]
+        # Calculate difference in "mid" (mean for Num, mode for Sym)
+        # We normalize the difference to make them comparable
+        w_vals = [r[i] for r in worst if r[i] != "?"]
+        o_vals = [r[i] for r in others if r[i] != "?"]
+        
+        if not w_vals or not o_vals:
+            continue
+            
+        if isinstance(col, ezr.Num):
+            w_mid = sum(w_vals) / len(w_vals)
+            o_mid = sum(o_vals) / len(o_vals)
+            diff = abs(w_mid - o_mid)
+        else:
+            # For symbols, use simple frequency difference of the mode
+            w_mode = max(set(w_vals), key=w_vals.count)
+            o_mode = max(set(o_vals), key=o_vals.count)
+            diff = 1.0 if w_mode != o_mode else 0.0
+            
+        scores.append((header[i], diff))
+    
+    # Return names of top 3 columns that contribute most to the difference
+    scores.sort(key=lambda x: x[1], reverse=True)
+    return [name for name, score in scores[:3]]
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    try:
+        header = next(data_gen)
+        rows = list(data_gen)
+    except StopIteration:
+        exit(1)
+        
+    blame_cols = blame(header, rows)
+    
+    print("Analysis: Why do our worst setups leave people waiting?")
+    print("-" * 60)
+    print("The primary factors contributing to poor performance (high idle time/cost)")
+    print("are driven by the following input configurations:")
+    for i, col in enumerate(blame_cols, 1):
+        print(f"{i}. {col}")
+    print("-" * 60)
+    print("These columns show the greatest divergence between our best and worst")
+    print("performing setups, suggesting they are the key levers for improvement.")
+    
+    exit(0)
+```

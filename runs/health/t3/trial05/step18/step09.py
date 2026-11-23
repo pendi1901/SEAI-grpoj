@@ -1,0 +1,68 @@
+import csv
+
+def spot(header, rows):
+    """
+    Identifies suspicious rows (outliers) based on input values.
+    We use the Interquartile Range (IQR) method to detect anomalies in numeric
+    input columns. Rows with values significantly outside the expected range
+    for their column are flagged as suspicious.
+    """
+    input_indices = [i for i, h in enumerate(header) if not (h.endswith('-') or h.endswith('+'))]
+    numeric_inputs = [i for i in input_indices if isinstance(rows[0][i], (int, float))]
+    
+    suspicion_scores = [0.0] * len(rows)
+    
+    for i in numeric_inputs:
+        vals = [row[i] for row in rows if isinstance(row[i], (int, float))]
+        if not vals:
+            continue
+            
+        vals.sort()
+        q1 = vals[len(vals) // 4]
+        q3 = vals[3 * len(vals) // 4]
+        iqr = q3 - q1
+        
+        # Define bounds for outliers
+        lower_bound = q1 - 1.5 * iqr
+        upper_bound = q3 + 1.5 * iqr
+        
+        # Score rows based on how far they are from the bounds
+        for r_idx, row in enumerate(rows):
+            val = row[i]
+            if isinstance(val, (int, float)):
+                if val < lower_bound:
+                    suspicion_scores[r_idx] += (lower_bound - val) / (iqr + 1e-9)
+                elif val > upper_bound:
+                    suspicion_scores[r_idx] += (val - upper_bound) / (iqr + 1e-9)
+    
+    # Get indices sorted by suspicion score descending
+    indexed_scores = sorted(enumerate(suspicion_scores), key=lambda x: x[1], reverse=True)
+    
+    # Return only rows that have some suspicion score
+    return [idx for idx, score in indexed_scores if score > 0]
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            for row in reader:
+                processed_row = []
+                for i, val in enumerate(row):
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        suspicious = spot(header, rows)
+        
+        print(f"Analysis complete. Found {len(suspicious)} suspicious rows.")
+        if suspicious:
+            print(f"The 5 most suspicious row indices are: {suspicious[:5]}")
+        exit(0)
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

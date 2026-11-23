@@ -1,0 +1,59 @@
+```python
+import ezr
+import random
+
+def spot(header, rows):
+    """
+    Identify rows that look like failed runs. 
+    A failed run is defined as a row whose input settings are highly 
+    inconsistent with the rest of the dataset (outliers in input space).
+    We use the distance to the nearest neighbor in input space as a 
+    measure of 'suspiciousness'.
+    """
+    # Create a table to handle normalization and distance calculations
+    data = [header] + rows
+    tbl = ezr.Tbl(data)
+    
+    # Calculate the average distance of each row to its nearest neighbors.
+    # Rows that are very far from all other rows in input space are 
+    # likely to be anomalies or failed/corrupted entries.
+    suspiciousness = []
+    for i, row in enumerate(rows):
+        # Find distance to the nearest neighbor (excluding self)
+        min_d = 1e30
+        for j, other in enumerate(rows):
+            if i == j:
+                continue
+            d = ezr.xdist(tbl, row, other)
+            if d < min_d:
+                min_d = d
+        suspiciousness.append((min_d, i))
+    
+    # Sort by distance descending (the further from the crowd, the more suspicious)
+    suspiciousness.sort(key=lambda x: x[0], reverse=True)
+    
+    # Return the indices of the most suspicious rows
+    return [idx for _, idx in suspiciousness]
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    try:
+        data = list(ezr.csv(filename))
+        header = data[0]
+        rows = data[1:]
+        
+        # Get suspicious rows
+        indices = spot(header, rows)
+        
+        print("Analysis: Identifying potentially failed or corrupted runs.")
+        print(f"Found {len(indices)} rows. Top 5 most suspicious indices:")
+        for i in range(min(5, len(indices))):
+            idx = indices[i]
+            print(f"Row {idx}: {rows[idx]}")
+            
+        print("\nThese rows are the most distant from the rest of the dataset in input space.")
+        exit(0)
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
+```

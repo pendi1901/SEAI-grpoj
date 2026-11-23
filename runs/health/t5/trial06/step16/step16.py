@@ -1,0 +1,61 @@
+import ezr
+import random
+
+def justify(header, rows, row):
+    """
+    Estimates the performance of a 'big, deep' setup and compares it to the 
+    population to explain why 'bigger' is not always 'better'.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Use the tree-based ranker to estimate the performance of the target row.
+    # The ranker builds a tree and returns the mean ydist of the leaf node.
+    ranker = ezr.ranker(tbl)
+    estimated_ydist = ranker(row)
+    
+    # Calculate ydist for all known rows to establish the population distribution.
+    all_ydists = [ezr.ydist(tbl, r) for r in rows]
+    
+    # A row is better if its ydist is lower (closer to 0).
+    # Count how many rows are worse (have a higher ydist) than our estimated row.
+    worse_count = sum(1 for d in all_ydists if d > estimated_ydist)
+    p = worse_count / len(rows)
+    
+    # Formulate a reason:
+    # Explain that while the setup is 'big' (high N_estimators/depth), 
+    # it may suffer from overfitting or diminishing returns.
+    reason = (f"This large configuration is estimated to be better than {p:.2f} "
+              "of all known setups, suggesting that increasing complexity "
+              "beyond this point yields diminishing returns or risks overfitting.")
+             
+    return p, reason
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    
+    if not data:
+        print("No data found.")
+        exit(1)
+        
+    header = data[0]
+    rows = data[1:]
+    
+    # Define a "big, deep" setup: high N_estimators and high Max_depth
+    # N_estimators is index 3, Max_depth is index 7
+    # We pick a row that is in the top 10% for both to represent "big/deep"
+    big_row = [200.0, 0.5, 0.5, 200.0, 'squared_error', 2.0, 1.0, 20.0]
+    
+    # Mask the goals in the target row
+    target_row = list(big_row)
+    for i, col_name in enumerate(header):
+        if col_name[-1] in "+-":
+            target_row[i] = "?"
+            
+    p, reason = justify(header, rows, target_row)
+    
+    print("Analysis: Why not use the biggest, deepest setup?")
+    print(reason)
+    print(f"\nEstimated percentile rank: {p:.2%}")
+    
+    exit(0)

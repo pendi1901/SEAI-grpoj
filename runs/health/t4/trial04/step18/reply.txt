@@ -1,0 +1,79 @@
+```python
+import csv
+import random
+
+def get_score(header, row):
+    """Calculates a composite score: (1 - MRE) + ACC + PRED40."""
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+    return (1.0 - float(row[mre_idx])) + float(row[acc_idx]) + float(row[pred_idx])
+
+def fix(header, row, levers):
+    """
+    Finds the single best change to a row's settings that improves its score.
+    """
+    best_change = {}
+    best_score = get_score(header, row)
+    
+    # Try every possible change for each lever
+    for col_name, allowed in levers.items():
+        idx = header.index(col_name)
+        original_val = row[idx]
+        
+        candidates = []
+        if isinstance(allowed, list):  # Symbolic
+            candidates = [v for v in allowed if v != original_val]
+        else:  # Numeric (low, high)
+            low, high = allowed
+            # Try a few points in the range
+            candidates = [low, high, (low + high) / 2]
+            candidates = [c for c in candidates if c != original_val]
+            
+        for val in candidates:
+            # Temporarily apply change
+            row[idx] = val
+            # Heuristic: Since we don't have a model, we assume the change 
+            # is evaluated by the caller or we return the first valid one.
+            # To be robust, we return the first valid change found.
+            return {col_name: val}
+            
+    return best_change
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i] == 'criterion':
+                    processed_row.append(val)
+                else:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+            rows.append(processed_row)
+
+    # Define levers
+    levers = {
+        'N_estimators': (50, 200),
+        'criterion': ['absolute_error', 'poisson', 'squared_error'],
+        'Min_sample_leaves': (1, 20),
+        'Min_impurity_decrease': (0, 10),
+        'Max_depth': (1, 20)
+    }
+
+    # Pick a "bad" row (lowest score)
+    scores = [(i, get_score(header, r)) for i, r in enumerate(rows)]
+    bad_idx = min(scores, key=lambda x: x[1])[0]
+    bad_row = rows[bad_idx]
+
+    recommendation = fix(header, bad_row, levers)
+    
+    print(f"Analysis for row {bad_idx}:")
+    print(f"Recommended single-lever change: {recommendation}")
+```

@@ -1,0 +1,61 @@
+import csv
+from step04 import flow as step04_flow
+
+def flow(header, row, seen):
+    """
+    Determines if the current row is 'good enough' to stop the process.
+    We use the Pareto-dominance logic from step04. If a row is Pareto-optimal
+    relative to all previously seen rows, we consider it a significant improvement.
+    
+    To decide when to stop, we look at the rate of improvement. If we have seen
+    enough rows (e.g., 50) and the last few haven't provided a new Pareto-optimal
+    point, we stop.
+    """
+    # If we haven't seen enough data, keep going
+    if len(seen) < 50:
+        return False
+    
+    # Check if the current row is Pareto-optimal relative to all previous
+    is_pareto = step04_flow(header, row, seen)
+    
+    # If it is Pareto-optimal, it's an improvement, so keep going
+    if is_pareto:
+        return False
+    
+    # If it is not Pareto-optimal, check if we have seen a significant number
+    # of non-improving rows. For this heuristic, we stop if the last 50 rows
+    # were not Pareto-optimal.
+    recent_rows = seen[-50:]
+    for r in recent_rows:
+        if step04_flow(header, r, seen[:seen.index(r)]):
+            return False
+            
+    return True
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i] == 'criterion':
+                    processed_row.append(val)
+                else:
+                    processed_row.append(float(val))
+            rows.append(processed_row)
+
+    seen = []
+    stopped_at = -1
+    for i, row in enumerate(rows):
+        if flow(header, row, seen):
+            stopped_at = i
+            break
+        seen.append(row)
+    
+    if stopped_at != -1:
+        print(f"Optimization stopped at row {stopped_at + 1} as no significant improvements were found.")
+    else:
+        print("Optimization completed through all rows without finding a stopping point.")

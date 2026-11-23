@@ -1,0 +1,63 @@
+import csv
+import numpy as np
+from sklearn.ensemble import IsolationForest
+
+def spot(header, rows):
+    """
+    Identifies rows that look like failed runs (outliers) using IsolationForest.
+    We focus on input columns as these define the 'setup' of the run.
+    """
+    # Identify input columns (all columns except goals)
+    input_indices = [i for i, name in enumerate(header) 
+                     if not (name.endswith('-') or name.endswith('+'))]
+    
+    # Prepare X matrix for anomaly detection
+    X = []
+    for row in rows:
+        features = []
+        for i in input_indices:
+            val = row[i]
+            if isinstance(val, str):
+                # Consistent encoding with previous steps
+                mapping = {'absolute_error': 0, 'poisson': 1, 'squared_error': 2}
+                features.append(mapping.get(val, 0))
+            else:
+                features.append(val)
+        X.append(features)
+    
+    X = np.array(X)
+    
+    # IsolationForest is effective for detecting anomalies in high-dimensional space
+    # contamination='auto' lets the model decide the threshold
+    clf = IsolationForest(contamination=0.05, random_state=42)
+    scores = clf.decision_function(X)
+    
+    # Lower scores indicate more anomalous (suspicious) rows
+    # Return indices sorted by suspicion (lowest score first)
+    suspicious_indices = np.argsort(scores)
+    
+    return suspicious_indices.tolist()
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    suspicious = spot(header, rows)
+    
+    print("Analysis complete. Suspicious rows (most suspicious first):")
+    print(suspicious[:10])
+    exit(0)

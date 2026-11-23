@@ -1,0 +1,93 @@
+```python
+import csv
+import numpy as np
+import pandas as pd
+from sklearn.ensemble import RandomForestRegressor
+from step01 import remember
+
+def race(header, rows, label):
+    """
+    Compares three strategies: random, greedy (best predicted), and uncertainty (exploration).
+    Budget: 50 labels total.
+    """
+    inputs = [c for c in header if not (c.endswith(('-', '+')))]
+    goals = [c for c in header if c.endswith(('-', '+'))]
+    
+    budget = 50
+    queried = {} # index: true_goals
+
+    def get_score(row_goals):
+        # Normalize and aggregate
+        scores = []
+        for i, g in enumerate(goals):
+            # Use global min/max if possible, or local relative to current knowledge
+            val = row_goals[i]
+            if header[len(inputs) + i].endswith('-'):
+                scores.append(1 - val)
+            else:
+                scores.append(val)
+        return np.mean(scores)
+
+    def get_label(idx):
+        if idx not in queried:
+            if len(queried) >= budget:
+                raise Exception("Budget exceeded")
+            queried[idx] = label(idx)
+        return queried[idx]
+
+    # Strategy 1: Random
+    def strategy_random():
+        idx = np.random.choice(len(rows))
+        return idx, get_label(idx)
+
+    # Strategy 2: Greedy (Surrogate model)
+    def strategy_greedy():
+        if len(queried) < 10: return strategy_random()
+        df = pd.DataFrame([rows[i][:len(inputs)] + queried[i] for i in queried], columns=header)
+        model = RandomForestRegressor().fit(df[inputs], [get_score(queried[i]) for i in queried])
+        preds = model.predict([r[:len(inputs)] for r in rows])
+        idx = int(np.argmax(preds))
+        return idx, get_label(idx)
+
+    # Strategy 3: Uncertainty (Pick row with highest variance in forest)
+    def strategy_uncertain():
+        if len(queried) < 10: return strategy_random()
+        df = pd.DataFrame([rows[i][:len(inputs)] + queried[i] for i in queried], columns=header)
+        model = RandomForestRegressor().fit(df[inputs], [get_score(queried[i]) for i in queried])
+        # Variance of trees as uncertainty proxy
+        preds = np.array([tree.predict([r[:len(inputs)] for r in rows]) for tree in model.estimators_])
+        idx = int(np.argmax(np.var(preds, axis=0)))
+        return idx, get_label(idx)
+
+    strategies = {"random": strategy_random, "greedy": strategy_greedy, "uncertain": strategy_uncertain}
+    results = {name: {"best_score": -1, "best_idx": -1} for name in strategies}
+
+    # Run 50 trials total, split among strategies
+    for i in range(budget):
+        name = list(strategies.keys())[i % 3]
+        idx, g = strategies[name]()
+        score = get_score(g)
+        if score > results[name]["best_score"]:
+            results[name]["best_score"] = score
+            results[name]["best_idx"] = idx
+
+    winner = max(results, key=lambda n: results[n]["best_score"])
+    return {"winner": winner, "row": results[winner]["best_idx"], "tried": list(strategies.keys())}
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        data = [[float(val) for val in row] for row in reader]
+    
+    def label(i):
+        return [data[i][j] for j, col in enumerate(header) if col.endswith(('-', '+'))]
+    
+    masked = [r[:len(header)-3] + ['?'] * 3 for r in data]
+    
+    res = race(header, masked, label)
+    print(f"Race Results: The winner is '{res['winner']}' strategy.")
+    print(f"Best row found at index: {res['row']}")
+    print(f"Strategies compared: {', '.join(res['tried'])}")
+```

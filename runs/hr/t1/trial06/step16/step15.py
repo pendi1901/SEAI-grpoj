@@ -1,0 +1,76 @@
+import csv
+
+def blame(header, rows):
+    """
+    Identifies input columns that have the least correlation with the goal 
+    columns (tenure). Columns that show no significant difference between 
+    the 'best' and 'worst' performers are candidates for removal.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    input_indices = [i for i, name in enumerate(header) if not name.endswith('+') and not name.endswith('-')]
+    
+    # Define 'best' and 'worst' based on a simple aggregate of goal columns
+    def get_score(row):
+        score = 0
+        for idx in goal_indices:
+            val = row[idx]
+            if header[idx].endswith('+'):
+                score += val
+            else:
+                score -= val
+        return score
+
+    sorted_rows = sorted(rows, key=get_score)
+    worst = sorted_rows[:len(rows) // 5]
+    best = sorted_rows[-len(rows) // 5:]
+    
+    # For each input column, calculate the difference in means between best and worst
+    # If the difference is negligible, the column has little to do with the goal.
+    useless_cols = []
+    for i in input_indices:
+        col_data = [r[i] for r in rows if isinstance(r[i], (int, float))]
+        if not col_data:
+            continue
+            
+        worst_vals = [r[i] for r in worst if isinstance(r[i], (int, float))]
+        best_vals = [r[i] for r in best if isinstance(r[i], (int, float))]
+        
+        if not worst_vals or not best_vals:
+            continue
+            
+        w_avg = sum(worst_vals) / len(worst_vals)
+        b_avg = sum(best_vals) / len(best_vals)
+        
+        # Normalize difference by range
+        col_range = max(col_data) - min(col_data)
+        if col_range == 0:
+            useless_cols.append((0, header[i]))
+        else:
+            diff = abs(w_avg - b_avg) / col_range
+            useless_cols.append((diff, header[i]))
+            
+    # Sort by difference ascending (smallest difference = least impact)
+    useless_cols.sort(key=lambda x: x[0])
+    
+    # Return the names of the 5 columns with the least impact
+    return [item[1] for item in useless_cols[:5]]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    useless = blame(header, rows)
+    print("Columns that appear to have little impact on retention (candidates for removal):")
+    for col in useless:
+        print(f"- {col}")

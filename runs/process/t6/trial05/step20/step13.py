@@ -1,0 +1,46 @@
+import ezr
+import step03
+
+def certify(xs, ys):
+    """
+    Returns True if the distributions of xs and ys are statistically 
+    indistinguishable (same apart from noise), False otherwise.
+    Uses the same logic as step03.
+    """
+    return ezr.same(xs, ys)
+
+if __name__ == "__main__":
+    # Load data
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # The customer asks if results shifted after a change in decision-making.
+    # We simulate this by comparing the first half of the data (pre-change)
+    # against the second half (post-change).
+    mid = len(rows) // 2
+    pre_change = rows[:mid]
+    post_change = rows[mid:]
+    
+    # We evaluate the shift based on the primary goal column 'Cost-'
+    cost_idx = header.index("Cost-")
+    
+    xs = [r[cost_idx] for r in pre_change]
+    ys = [r[cost_idx] for r in post_change]
+    
+    # Check if they are statistically different
+    is_same = certify(xs, ys)
+    
+    print("Analysis: Did the team's decision-making change shift the results?")
+    if not is_same:
+        print("Result: The difference is statistically significant.")
+        print("Conclusion: The change in decision-making had a measurable impact.")
+    else:
+        print("Result: The difference is not statistically significant (likely just noise).")
+        print("Conclusion: The results are effectively the same as before.")
+    
+    print(f"Pre-change average cost:  {sum(xs)/len(xs):.3f}")
+    print(f"Post-change average cost: {sum(ys)/len(ys):.3f}")
+    
+    exit(0)

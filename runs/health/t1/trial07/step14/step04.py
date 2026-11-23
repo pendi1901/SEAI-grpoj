@@ -1,0 +1,65 @@
+import csv
+
+def flow(header, row, seen):
+    """
+    Decides whether to accept the current row based on whether it is 
+    better than all previously seen rows according to a multi-objective 
+    weighted score.
+    """
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+
+    def get_score(r):
+        # Goals: MRE- (minimize), ACC+ (maximize), PRED40+ (maximize)
+        # Since we don't have global min/max, we use the current row's 
+        # values as a baseline or relative comparison.
+        # A simple heuristic: lower MRE, higher ACC, higher PRED40.
+        return (-r[mre_idx] + r[acc_idx] + r[pred_idx])
+
+    current_score = get_score(row)
+    
+    # If this is the first row, we don't have a baseline, so we keep looking
+    if not seen:
+        return False
+    
+    # Compare against all previously seen rows
+    # We accept if this row is better than all previous ones (a "record breaker")
+    # or if we have seen enough to establish a high bar.
+    best_seen = max(get_score(r) for r in seen)
+    
+    # Threshold: If we have seen at least 50 rows, we become less picky
+    # to ensure we don't wait forever.
+    if len(seen) > 50 and current_score > (best_seen * 0.9):
+        return True
+        
+    return current_score > best_seen
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i] in ['MRE-', 'ACC+', 'PRED40+', 'N_estimators', 
+                                 'Min_sample_leaves', 'Min_impurity_decrease', 'Max_depth']:
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    seen = []
+    found = False
+    for i, row in enumerate(rows):
+        if flow(header, row, seen):
+            print(f"Decision: Ship setup at index {i}.")
+            print(f"Values: MRE={row[0]:.4f}, ACC={row[1]:.4f}, PRED40={row[2]:.4f}")
+            found = True
+            break
+        seen.append(row)
+    
+    if not found:
+        print("Decision: No setup met the criteria before the end of the stream.")

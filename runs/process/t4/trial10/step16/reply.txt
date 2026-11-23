@@ -1,0 +1,68 @@
+```python
+import csv
+import pandas as pd
+from sklearn.neighbors import KNeighborsRegressor
+from step01 import remember
+
+def justify(header, rows, row):
+    """
+    Estimates goals for the input row and compares its aggregate performance
+    against all known rows. Returns (p, reason).
+    """
+    inputs = [c for c in header if not (c.endswith('-') or c.endswith('+'))]
+    goals = [c for c in header if c.endswith(('-', '+'))]
+    
+    df_train = pd.DataFrame(rows, columns=header)
+    
+    # Estimate goals for the target row using KNN
+    estimates = {}
+    for goal in goals:
+        model = KNeighborsRegressor(n_neighbors=5)
+        model.fit(df_train[inputs], df_train[goal])
+        estimates[goal] = model.predict([row[:len(inputs)]])[0]
+    
+    # Calculate aggregate score for the target row
+    def get_agg(row_data):
+        scores = []
+        for goal in goals:
+            val = row_data[goal] if isinstance(row_data, dict) else row_data[header.index(goal)]
+            col_min = df_train[goal].min()
+            col_max = df_train[goal].max()
+            norm = (val - col_min) / (col_max - col_min + 1e-9)
+            scores.append(1 - norm if goal.endswith('-') else norm)
+        return sum(scores) / len(scores)
+    
+    target_agg = get_agg(estimates)
+    
+    # Calculate aggregate scores for all known rows
+    existing_aggs = [get_agg(r) for r in rows]
+    
+    # Fraction of rows that are worse than this row
+    p = sum(1 for agg in existing_aggs if agg < target_agg) / len(existing_aggs)
+    
+    reason = f"This setup is better than {p:.2f} of all known configurations based on its estimated performance."
+    return p, reason
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [[float(val) for val in row] for row in reader]
+        
+        # Example: Compare a specific setup (e.g., row 10) against the dataset
+        # The customer asks "Why not B?", so we justify a specific row B
+        target_idx = 10
+        target_row = rows[target_idx][:len(header)-3] + ['?'] * 3
+        
+        p, reason = justify(header, rows, target_row)
+        
+        print(f"Justification for setup at index {target_idx}:")
+        print(reason)
+        print(f"Performance percentile: {p}")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

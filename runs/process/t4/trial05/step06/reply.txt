@@ -1,0 +1,70 @@
+```python
+import csv
+import pandas as pd
+import numpy as np
+from sklearn.neighbors import KNeighborsRegressor
+from step01 import remember
+
+def justify(header, rows, row):
+    """
+    Estimates the performance of a row and returns its percentile rank 
+    and a justification string.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    inputs = [c for c in header if not (c.endswith('-') or c.endswith('+'))]
+    goals = [c for c in header if c.endswith('-') or c.endswith('+')]
+    
+    # 1. Estimate the missing goals for the input row
+    # We use KNN to predict each goal column independently
+    predictions = {}
+    for goal in goals:
+        model = KNeighborsRegressor(n_neighbors=5)
+        model.fit(df[inputs], df[goal])
+        predictions[goal] = model.predict([row[:len(inputs)]])[0]
+    
+    # 2. Calculate "goodness" score for all rows
+    # Normalize goals: 1 - (val - min)/(max - min) for '-', (val - min)/(max - min) for '+'
+    norm_df = pd.DataFrame(index=df.index)
+    for goal in goals:
+        col = df[goal].astype(float)
+        norm = (col - col.min()) / (col.max() - col.min())
+        norm_df[goal] = (1 - norm) if goal.endswith('-') else norm
+    scores = norm_df.prod(axis=1)
+    
+    # 3. Calculate "goodness" score for the input row
+    norm_row = []
+    for goal in goals:
+        col = df[goal].astype(float)
+        val = predictions[goal]
+        norm = (val - col.min()) / (col.max() - col.min())
+        norm_row.append((1 - norm) if goal.endswith('-') else norm)
+    row_score = np.prod(norm_row)
+    
+    # 4. Calculate percentile (fraction of rows that row is better than)
+    p = (scores < row_score).mean()
+    
+    reason = f"This setup is estimated to be better than {p:.1%} of all known configurations based on its predicted performance across all goal metrics."
+    return p, reason
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [[float(val) for val in row] for row in reader]
+        
+        # Pick a sample row to justify, masking its goals
+        test_row = rows[0]
+        masked_row = test_row[:len(header)-3] + ["?"] * 3
+        
+        p, reason = justify(header, rows, masked_row)
+        
+        print("Customer Inquiry: Why is this setup 'top tier'?")
+        print(f"Rank: {p:.4f}")
+        print(f"Justification: {reason}")
+        
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
+```

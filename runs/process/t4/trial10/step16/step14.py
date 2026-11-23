@@ -1,0 +1,55 @@
+import csv
+import pandas as pd
+from step01 import remember
+
+def flow(header, row, seen):
+    """
+    Returns True if the current row is 'good' (top 5% of all seen so far),
+    otherwise returns False. This acts as a monitor to warn the customer
+    when incoming data performance starts to degrade.
+    """
+    if not seen:
+        return True
+    
+    # Combine seen rows and current row to evaluate relative quality
+    all_rows = seen + [row]
+    
+    # Get indices of the best rows using the logic from step01
+    best_indices = remember(header, all_rows)
+    
+    # If the current row (last index) is in the top 5% of all seen so far,
+    # it is performing well. If it is not, it is "going bad".
+    return len(all_rows) - 1 in best_indices
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) for val in row])
+        
+        seen = []
+        bad_count = 0
+        total_count = 0
+        
+        print("Monitoring incoming project setups...")
+        for row in rows:
+            total_count += 1
+            # If flow returns False, the setup is not in the top 5%, 
+            # indicating it is performing poorly compared to history.
+            if not flow(header, row, seen):
+                bad_count += 1
+                if bad_count % 50 == 0:
+                    print(f"Warning: Setup {total_count} is performing poorly (below top 5% threshold).")
+            seen.append(row)
+            
+        print(f"Monitoring complete. Processed {total_count} setups.")
+        print(f"Total setups flagged as performing poorly: {bad_count}")
+        print("Strategy: Flagged any setup that failed to rank in the top 5% of all historical data.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

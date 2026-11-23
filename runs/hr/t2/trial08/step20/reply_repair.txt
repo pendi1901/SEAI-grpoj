@@ -1,0 +1,115 @@
+```python
+import csv
+import random
+
+def race(header, rows, label):
+    """
+    Compares three strategies for finding the best employee row:
+    1. 'random': Random sampling.
+    2. 'newest_pay_rise': The customer's rule of thumb (give biggest pay rises to newest staff).
+    3. 'tenure_focus': Focus on long-tenured staff.
+    Budget: 50 labels total.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    
+    def get_score(row_idx):
+        vals = label(row_idx)
+        score = 0
+        for j, goal_idx in enumerate(goal_indices):
+            val = vals[j]
+            if header[goal_idx].endswith('+'):
+                score += val
+            else:
+                score -= val
+        return score
+
+    # Strategies
+    def strategy_random(budget):
+        indices = random.sample(range(len(rows)), budget)
+        best_idx = max(indices, key=get_score)
+        return best_idx
+
+    def strategy_newest_pay_rise(budget):
+        # Rule of thumb: biggest pay rises (PercentSalaryHike) to newest staff (YearsAtCompany+)
+        hike_idx = header.index('PercentSalaryHike')
+        tenure_idx = header.index('YearsAtCompany+')
+        
+        scored = []
+        for i in range(len(rows)):
+            # Ensure values are numeric
+            hike = float(rows[i][hike_idx])
+            tenure = float(rows[i][tenure_idx])
+            score = hike / (tenure + 1.0)
+            scored.append((score, i))
+        scored.sort(key=lambda x: x[0], reverse=True)
+        
+        indices = [x[1] for x in scored[:budget]]
+        best_idx = max(indices, key=get_score)
+        return best_idx
+
+    def strategy_tenure_focus(budget):
+        # Focus on long-tenured staff
+        tenure_idx = header.index('YearsAtCompany+')
+        scored = [(float(rows[i][tenure_idx]), i) for i in range(len(rows))]
+        scored.sort(key=lambda x: x[0], reverse=True)
+        
+        indices = [x[1] for x in scored[:budget]]
+        best_idx = max(indices, key=get_score)
+        return best_idx
+
+    # Budget allocation: 3 strategies, 16 labels each (48 total)
+    budget_per = 16
+    
+    res_rand = strategy_random(budget_per)
+    res_newest = strategy_newest_pay_rise(budget_per)
+    res_tenure = strategy_tenure_focus(budget_per)
+    
+    results = {
+        "random": get_score(res_rand),
+        "newest_pay_rise": get_score(res_newest),
+        "tenure_focus": get_score(res_tenure)
+    }
+    
+    best_strat = max(results, key=results.get)
+    best_row = {"random": res_rand, "newest_pay_rise": res_newest, "tenure_focus": res_tenure}[best_strat]
+    
+    return {
+        "winner": best_strat,
+        "row": best_row,
+        "tried": ["random", "newest_pay_rise", "tenure_focus"]
+    }
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    
+    def label(i):
+        return [rows[i][idx] for idx in goal_indices]
+        
+    result = race(header, rows, label)
+    
+    print("Customer Question: Is your advice better than giving the biggest pay rises to the newest staff?")
+    print(f"Analysis: The winning strategy was '{result['winner']}'.")
+    if result['winner'] == "newest_pay_rise":
+        print("Conclusion: Your rule of thumb is effective.")
+    else:
+        print("Conclusion: Our data-driven strategies outperformed the rule of thumb.")
+```

@@ -1,0 +1,56 @@
+```python
+import ezr
+import random
+
+def certify(xs, ys):
+    """
+    Returns True if the distributions of xs and ys are statistically 
+    indistinguishable (noise), False if they are significantly different.
+    """
+    return ezr.same(xs, ys)
+
+if __name__ == "__main__":
+    # Load the data
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    all_data = list(ezr.csv(filename))
+    header = all_data[0]
+    rows = all_data[1:]
+    
+    # Identify columns
+    # N_estimators is at index 3
+    # MRE- is at index 0 (goal to minimize)
+    # ACC+ is at index 1 (goal to maximize)
+    # We define "big" as N_estimators > median
+    n_est_idx = 3
+    mre_idx = 0
+    acc_idx = 1
+    
+    n_ests = [r[n_est_idx] for r in rows]
+    median_n = sorted(n_ests)[len(n_ests) // 2]
+    
+    big_setups = []
+    small_setups = []
+    
+    for r in rows:
+        # Use ydist as a proxy for "accuracy" (lower is better)
+        # We need a temporary table to use ydist
+        tbl = ezr.Tbl([header] + [r])
+        score = ezr.ydist(tbl, r)
+        
+        if r[n_est_idx] > median_n:
+            big_setups.append(score)
+        else:
+            small_setups.append(score)
+            
+    # Compare the two distributions
+    is_same = certify(big_setups, small_setups)
+    
+    print("Analysis: Are big setups more accurate than small ones?")
+    if is_same:
+        print("Result: The difference is likely just noise.")
+    else:
+        print("Result: There is a statistically significant difference.")
+        avg_big = sum(big_setups) / len(big_setups)
+        avg_small = sum(small_setups) / len(small_setups)
+        print(f"Average ydist (lower is better): Big={avg_big:.4f}, Small={avg_small:.4f}")
+```

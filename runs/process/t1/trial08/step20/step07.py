@@ -1,0 +1,97 @@
+import csv
+import random
+
+def choose(header, rows, label):
+    """
+    Finds the best row by sampling and then exploring the neighborhood 
+    of the best-performing sample.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    
+    def get_score(row_goals):
+        s = 0
+        for i, val in enumerate(row_goals):
+            idx = goal_indices[i]
+            s += val if header[idx].endswith('-') else (1.0 - val)
+        return s
+
+    # 1. Initial sampling: Pick 25 random rows to establish a baseline
+    indices = list(range(len(rows)))
+    random.shuffle(indices)
+    
+    sampled_indices = indices[:25]
+    best_idx = -1
+    best_score = float('inf')
+    
+    for i in sampled_indices:
+        goals = label(i)
+        score = get_score(goals)
+        if score < best_score:
+            best_score = score
+            best_idx = i
+            
+    # 2. Targeted exploration: Pick 25 rows closest to the best found so far
+    def dist(r1_idx, r2_idx):
+        d = 0
+        for i, name in enumerate(header):
+            if not (name.endswith('-') or name.endswith('+')):
+                v1, v2 = rows[r1_idx][i], rows[r2_idx][i]
+                if isinstance(v1, float) and isinstance(v2, float):
+                    d += (v1 - v2) ** 2
+                else:
+                    d += 0 if v1 == v2 else 1
+        return d ** 0.5
+
+    # Find 25 nearest neighbors to the current best
+    others = [i for i in indices if i not in sampled_indices]
+    others.sort(key=lambda i: dist(i, best_idx))
+    
+    for i in others[:25]:
+        goals = label(i)
+        score = get_score(goals)
+        if score < best_score:
+            best_score = score
+            best_idx = i
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            true_goals = []
+            goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+            
+            for row in reader:
+                processed = []
+                goals = []
+                for i, val in enumerate(row):
+                    if i in goal_indices:
+                        goals.append(float(val))
+                        processed.append("?")
+                    else:
+                        try:
+                            processed.append(float(val))
+                        except ValueError:
+                            processed.append(val)
+                rows.append(processed)
+                true_goals.append(goals)
+        
+        labeled_count = 0
+        def label(i):
+            global labeled_count
+            labeled_count += 1
+            if labeled_count > 50:
+                raise Exception("Exceeded 50 labels!")
+            return true_goals[i]
+            
+        best_idx = choose(header, rows, label)
+        print(f"Analysis complete. Best row found at index {best_idx}.")
+        print(f"Total setups trialed: {labeled_count}")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

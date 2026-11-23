@@ -1,0 +1,84 @@
+```python
+import csv
+import random
+import step01
+
+def race(header, rows, label):
+    """
+    Compares three strategies:
+    1. 'random': Picks 16 random rows.
+    2. 'big_teams': Picks 17 rows with the largest 'Team Size'.
+    3. 'greedy': Picks 17 rows at random and selects the best one.
+    """
+    goal_indices = [(i, name[-1]) for i, name in enumerate(header) 
+                    if name.endswith('-') or name.endswith('+')]
+    team_idx = header.index("Team Size")
+    
+    def get_score(goals):
+        return sum(float(g) if op == '-' else -float(g) 
+                   for g, (idx, op) in zip(goals, goal_indices))
+
+    # Strategy 1: Random
+    def strategy_random(indices):
+        return random.sample(indices, 16)
+
+    # Strategy 2: Big Teams (Customer's current approach)
+    def strategy_big_teams(indices):
+        # Sort indices by Team Size descending
+        sorted_indices = sorted(indices, key=lambda i: float(rows[i][team_idx]), reverse=True)
+        return sorted_indices[:17]
+
+    # Strategy 3: Greedy
+    def strategy_greedy(indices):
+        return random.sample(indices, 17)
+
+    all_indices = list(range(len(rows)))
+    strategies = {
+        "random": strategy_random,
+        "big_teams": strategy_big_teams,
+        "greedy": strategy_greedy
+    }
+    
+    best_overall_score = float('inf')
+    winner = None
+    best_row_idx = -1
+    
+    # Execute strategies
+    for name, func in strategies.items():
+        sampled = func(all_indices)
+        for idx in sampled:
+            goals = label(idx)
+            score = get_score(goals)
+            if score < best_overall_score:
+                best_overall_score = score
+                winner = name
+                best_row_idx = idx
+            
+    return {"winner": winner, "row": best_row_idx, "tried": list(strategies.keys())}
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', newline='') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [row for row in reader]
+            
+            def label(i):
+                return [rows[i][j] for j, name in enumerate(header) 
+                        if name.endswith('-') or name.endswith('+')]
+            
+            result = race(header, rows, label)
+            print("Customer Inquiry: Is 'biggest teams' better than other search strategies?")
+            print(f"Winner: {result['winner']}")
+            print(f"Best row found at index: {result['row']}")
+            print(f"Strategies compared: {', '.join(result['tried'])}")
+            if result['winner'] == "big_teams":
+                print("Conclusion: Your current strategy of using the biggest teams is optimal.")
+            else:
+                print(f"Conclusion: No, '{result['winner']}' outperformed your current 'big_teams' strategy.")
+                
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

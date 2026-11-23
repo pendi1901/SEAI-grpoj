@@ -1,0 +1,65 @@
+import ezr
+
+def blame(header, rows):
+    """
+    Identifies which input columns best explain why the worst rows are bad.
+    We define 'bad' as having a high ydist (distance from the ideal).
+    We compare the distribution of input values in the worst 25% of rows
+    against the best 25% of rows. The column with the largest difference
+    in distribution (using the logic from ezr's tree splitting) is the culprit.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Rank all rows by ydist
+    ranked = sorted(rows, key=lambda r: ezr.ydist(tbl, r))
+    
+    # Compare the worst 25% to the best 25%
+    n = len(ranked) // 4
+    best = ranked[:n]
+    worst = ranked[-n:]
+    
+    # Score each input column by how much it separates best from worst
+    # We use the same logic as the tree 'cut' function:
+    # A good splitter for 'badness' is one that minimizes the variance 
+    # of the 'badness' (ydist) on either side of the split.
+    scores = []
+    for col in tbl.x:
+        # Try all candidate splits for this column
+        best_col_score = 1e30
+        for v, go in ezr.candidates(col, rows):
+            # Calculate ydist variance for the two groups created by this split
+            a_ys = [ezr.ydist(tbl, r) for r in rows if go(r)]
+            b_ys = [ezr.ydist(tbl, r) for r in rows if not go(r)]
+            
+            if len(a_ys) < 5 or len(b_ys) < 5:
+                continue
+                
+            a_num = ezr.adds(a_ys)
+            b_num = ezr.adds(b_ys)
+            
+            # Weighted average of standard deviation
+            score = (ezr.div(a_num) * a_num.n + ezr.div(b_num) * b_num.n) / (a_num.n + b_num.n)
+            if score < best_col_score:
+                best_col_score = score
+        
+        scores.append((best_col_score, col.txt))
+    
+    # Return names of columns sorted by their ability to explain the variance
+    # (Lower score means better at explaining the split between good and bad)
+    scores.sort()
+    return [name for score, name in scores]
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data_iter = ezr.csv(filename)
+    header = next(data_iter)
+    rows = list(data_iter)
+    
+    culprits = blame(header, rows)
+    
+    print("--- Analysis: What causes bad setups? ---")
+    print("The following input settings are most strongly associated with poor performance,")
+    print("ranked by their impact on the multi-objective goal distance:")
+    for i, name in enumerate(culprits[:3], 1):
+        print(f"{i}. {name}")
+    print("\nThese settings create the most significant 'damage' to the optimization goals.")

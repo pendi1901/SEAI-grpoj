@@ -1,0 +1,55 @@
+import ezr
+import random
+
+def remember(header, rows):
+    """
+    Finds the 5% of rows most similar to the first row in the dataset,
+    based on the input (x) columns.
+    """
+    # Create a table to handle column roles (x vs y)
+    tbl = ezr.Tbl([header] + rows)
+    
+    # The target is the first row
+    target = rows[0]
+    
+    # Calculate distance from target for all rows
+    # We use xdist to compare input characteristics
+    distances = []
+    for i, row in enumerate(rows):
+        # Distance to self is 0, which is fine
+        d = ezr.xdist(tbl, target, row)
+        distances.append((i, d))
+    
+    # Sort by distance (ascending)
+    distances.sort(key=lambda x: x[1])
+    
+    # Return the top 5% of rows (excluding the target itself at index 0)
+    limit = max(1, len(rows) // 20)
+    return [idx for idx, d in distances[1:limit+1]]
+
+if __name__ == "__main__":
+    file_path = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(file_path))
+    header = data[0]
+    rows = data[1:]
+    
+    # Find similar employees
+    similar_indices = remember(header, rows)
+    
+    # Identify the goal column for tenure
+    tenure_col = "YearsAtCompany+"
+    tenure_idx = header.index(tenure_col)
+    
+    print(f"Analysis: Employees most similar to the first record (Row 0).")
+    print(f"Found {len(similar_indices)} similar employees.")
+    
+    total_tenure = 0
+    for idx in similar_indices:
+        tenure = rows[idx][tenure_idx]
+        total_tenure += tenure
+        print(f"  Row {idx}: {tenure_col} = {tenure}")
+        
+    avg_tenure = total_tenure / len(similar_indices)
+    print("-" * 40)
+    print(f"Average tenure of similar employees: {avg_tenure:.2f} years.")
+    print("Strategy: Identified peers using xdist (input column similarity).")

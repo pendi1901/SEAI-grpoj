@@ -1,0 +1,96 @@
+import csv
+import step01
+
+def choose(header, rows, label):
+    """
+    Finds the best setup by sampling 50 rows, labeling them, 
+    and returning the index of the one with the highest composite score.
+    """
+    # We have 800 rows. We can label 50.
+    # To get a good spread, we pick 50 indices evenly spaced.
+    n = len(rows)
+    step = n // 50
+    indices_to_label = [i * step for i in range(50)]
+    
+    best_idx = -1
+    best_score = -1.0
+    
+    # We need to normalize scores across the 50 sampled rows.
+    # First, collect all labeled data.
+    labeled_data = []
+    for i in indices_to_label:
+        goals = label(i)
+        # Reconstruct row with goals
+        row = list(rows[i])
+        for j, h in enumerate(header):
+            if h.endswith('-') or h.endswith('+'):
+                row[j] = goals[j]
+        labeled_data.append((i, row))
+    
+    # Use step01 logic to score these 50 rows
+    # Extract goals from the labeled rows
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+    
+    mres = [r[1][mre_idx] for r in labeled_data]
+    accs = [r[1][acc_idx] for r in labeled_data]
+    preds = [r[1][pred_idx] for r in labeled_data]
+    
+    min_mre, max_mre = min(mres), max(mres)
+    min_acc, max_acc = min(accs), max(accs)
+    min_pred, max_pred = min(preds), max(preds)
+    
+    def normalize(val, min_v, max_v, reverse=False):
+        if max_v == min_v: return 0.5
+        norm = (val - min_v) / (max_v - min_v)
+        return 1 - norm if reverse else norm
+
+    for i, row in labeled_data:
+        s1 = normalize(row[mre_idx], min_mre, max_mre, reverse=True)
+        s2 = normalize(row[acc_idx], min_acc, max_acc)
+        s3 = normalize(row[pred_idx], min_pred, max_pred)
+        score = (s1 + s2 + s3) / 3
+        
+        if score > best_score:
+            best_score = score
+            best_idx = i
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    header = []
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            for row in reader:
+                processed = [float(val) if header[i] not in ['criterion'] else val 
+                             for i, val in enumerate(row)]
+                # Mask goals
+                for i, h in enumerate(header):
+                    if h.endswith('-') or h.endswith('+'):
+                        processed[i] = "?"
+                rows.append(processed)
+        
+        # Define label function for the harness
+        true_data = []
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            next(reader)
+            for row in reader:
+                true_data.append([float(val) if header[i] not in ['criterion'] else val 
+                                  for i, val in enumerate(row)])
+        
+        def label(i):
+            row = true_data[i]
+            return [row[j] for j, h in enumerate(header) if h.endswith('-') or h.endswith('+')]
+        
+        best_idx = choose(header, rows, label)
+        print(f"The best setup found is at row index {best_idx}.")
+        
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

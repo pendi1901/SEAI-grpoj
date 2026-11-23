@@ -1,0 +1,60 @@
+```python
+import csv
+import step01
+
+def flow(header, row, seen):
+    """
+    Decides if the current row is a candidate for a 'what would keep you here' 
+    conversation. We define this as an employee who has stayed 'unusually long' 
+    (top 5% by YearsAtCompany+) and is currently working overtime, 
+    as these are high-value, potentially burnt-out employees.
+    """
+    # Identify indices
+    try:
+        years_idx = header.index('YearsAtCompany+')
+        overtime_idx = header.index('overTime')
+    except ValueError:
+        return False
+
+    # Calculate threshold based on seen data + current row
+    all_rows = seen + [row]
+    
+    # Use step01 logic to find top 5% threshold
+    # We sort all seen rows + current row to see if current row is in the top 5%
+    indexed_data = sorted([(r[years_idx], i) for i, r in enumerate(all_rows)], 
+                          key=lambda x: x[0], reverse=True)
+    
+    limit = max(1, len(all_rows) // 20)
+    top_indices = [item[1] for item in indexed_data[:limit]]
+    
+    # Current row index is len(seen)
+    is_top_performer = len(seen) in top_indices
+    is_overworked = row[overtime_idx] == 'Yes'
+    
+    return is_top_performer and is_overworked
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    seen = []
+    count = 0
+    for row in rows:
+        if flow(header, row, seen):
+            count += 1
+        seen.append(row)
+    
+    print(f"Analysis complete. Identified {count} employees for 'what would keep you here' conversations.")
+    print("Criteria: Top 5% tenure (YearsAtCompany+) AND currently working overtime.")
+```

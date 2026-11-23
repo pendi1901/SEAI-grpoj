@@ -1,0 +1,67 @@
+import csv
+
+def guess(header, train, test):
+    """
+    Estimates the first goal (MRE-) for test rows using a K-Nearest Neighbors 
+    approach based on the input columns (N_estimators, criterion, 
+    Min_sample_leaves, Min_impurity_decrease, Max_depth).
+    """
+    # Identify indices
+    goal_idx = 0  # MRE-
+    input_indices = [i for i, name in enumerate(header) if name not in ['MRE-', 'ACC+', 'PRED40+']]
+    
+    def distance(row1, row2):
+        d = 0
+        for i in input_indices:
+            val1, val2 = row1[i], row2[i]
+            if isinstance(val1, str):
+                d += 0 if val1 == val2 else 1
+            else:
+                # Normalize numeric inputs roughly by range (assuming standard scales)
+                d += abs(val1 - val2) / 100.0
+        return d
+
+    predictions = []
+    for t_row in test:
+        # Find 3 nearest neighbors in training data
+        neighbors = sorted(train, key=lambda r: distance(r, t_row))[:3]
+        # Average the MRE- of the neighbors
+        avg_mre = sum(n[goal_idx] for n in neighbors) / len(neighbors)
+        predictions.append(avg_mre)
+        
+    return predictions
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    rows = []
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            for row in reader:
+                processed_row = []
+                for i, val in enumerate(row):
+                    if header[i] == 'criterion':
+                        processed_row.append(val)
+                    else:
+                        processed_row.append(float(val))
+                rows.append(processed_row)
+        
+        # Split: use last 10% as a test set to demonstrate
+        split = int(len(rows) * 0.9)
+        train_data = rows[:split]
+        test_data = [row[:] for row in rows[split:]]
+        
+        # Mask the goals in test data
+        for row in test_data:
+            row[0] = row[1] = row[2] = "?"
+            
+        results = guess(header, train_data, test_data)
+        
+        print("Forecasts for the first 5 test rows (MRE-):")
+        for i in range(min(5, len(results))):
+            print(f"Test Row {i}: Estimated MRE = {results[i]:.4f}")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

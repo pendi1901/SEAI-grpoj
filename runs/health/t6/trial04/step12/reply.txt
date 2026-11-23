@@ -1,0 +1,66 @@
+```python
+import ezr
+import step02
+import step03
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column for each test row.
+    Uses the tree-based ranker from ezr to find the leaf node 
+    corresponding to the test row and returns the mean of the 
+    first goal column in that leaf.
+    """
+    return step02.guess(header, train, test)
+
+def compare_forecasters(header, rows):
+    """
+    Compares full-size forecaster vs halved-size forecaster.
+    We simulate 'halving' by reducing the tree depth or leaf size.
+    Here, we use the 'Leaf' parameter in ezr.the to control tree complexity.
+    """
+    # Split data
+    split_idx = int(len(rows) * 0.8)
+    train = rows[:split_idx]
+    test_full = rows[split_idx:]
+    
+    # Mask goals
+    goal_indices = [i for i, name in enumerate(header) if name[-1] in "+-"]
+    test = []
+    for row in test_full:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        test.append(new_row)
+    
+    # Full size: default Leaf=4
+    ezr.the.Leaf = 4
+    full_preds = guess(header, train, test)
+    
+    # Halved size: increase Leaf to make trees smaller/shallower
+    ezr.the.Leaf = 8
+    half_preds = guess(header, train, test)
+    
+    # Compare using statistical test
+    is_same = step03.certify(full_preds, half_preds)
+    
+    return full_preds, half_preds, is_same
+
+if __name__ == "__main__":
+    file_path = "Health-ClosedIssues0000.n1000.train.csv"
+    all_data = list(ezr.csv(file_path))
+    header = all_data[0]
+    rows = all_data[1:]
+    
+    full_preds, half_preds, is_same = compare_forecasters(header, rows)
+    
+    print("Impact of halving the forecaster size on prediction accuracy:")
+    if is_same:
+        print("Result: The difference in forecasts is statistically insignificant.")
+    else:
+        print("Result: The difference in forecasts is statistically significant.")
+    
+    mean_full = sum(full_preds) / len(full_preds)
+    mean_half = sum(half_preds) / len(half_preds)
+    print(f"Mean prediction (Full): {mean_full:.4f}")
+    print(f"Mean prediction (Half): {mean_half:.4f}")
+```

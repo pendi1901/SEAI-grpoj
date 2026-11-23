@@ -1,0 +1,74 @@
+```python
+import csv
+
+def blame(header, rows):
+    """
+    Identifies input columns that have the least correlation with the goal 
+    'YearsAtCompany+'. We define columns that 'have nothing to do with' 
+    retention as those with the lowest variance in distribution between 
+    the 'worst' performers (bottom 20%) and the 'rest' of the staff.
+    """
+    # Identify goal column
+    goal_idx = next(i for i, name in enumerate(header) if name.endswith('+'))
+    
+    # Identify input columns (exclude goals)
+    input_indices = [i for i, name in enumerate(header) if not (name.endswith('+') or name.endswith('-'))]
+    
+    # Sort rows by tenure to find the "worst" (shortest stays)
+    sorted_rows = sorted(rows, key=lambda r: r[goal_idx])
+    cutoff = max(1, len(rows) // 5)
+    worst = sorted_rows[:cutoff]
+    rest = sorted_rows[cutoff:]
+    
+    # Calculate "irrelevance score": lower difference between worst and rest means less impact
+    scores = []
+    for i in input_indices:
+        col_data = [r[i] for r in rows if not isinstance(r[i], str) or r[i] != "?"]
+        if not col_data:
+            continue
+            
+        worst_vals = [r[i] for r in worst if r[i] != "?"]
+        rest_vals = [r[i] for r in rest if r[i] != "?"]
+        
+        if not worst_vals or not rest_vals:
+            continue
+            
+        # For numeric, compare means. For symbolic, compare frequency of most common value.
+        if isinstance(worst_vals[0], (int, float)):
+            diff = abs((sum(worst_vals)/len(worst_vals)) - (sum(rest_vals)/len(rest_vals)))
+            rng = max(col_data) - min(col_data)
+            scores.append((header[i], diff / (rng + 1e-9)))
+        else:
+            mode_worst = max(set(worst_vals), key=worst_vals.count)
+            freq_worst = worst_vals.count(mode_worst) / len(worst_vals)
+            freq_rest = rest_vals.count(mode_worst) / len(rest_vals)
+            scores.append((header[i], abs(freq_worst - freq_rest)))
+            
+    # Return columns with the lowest scores (least difference between groups)
+    scores.sort(key=lambda x: x[1])
+    return [s[0] for s in scores[:5]]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    irrelevant_factors = blame(header, rows)
+    print("Analysis: Columns with minimal impact on employee retention (YearsAtCompany+):")
+    for f in irrelevant_factors:
+        print(f"- {f}")
+    print("\nThese columns show the least variance between short-tenure employees and the rest of the staff, suggesting they may be candidates for removal from data collection.")
+```

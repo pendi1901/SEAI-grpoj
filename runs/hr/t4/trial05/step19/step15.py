@@ -1,0 +1,65 @@
+import csv
+from sklearn.ensemble import RandomForestRegressor
+
+def blame(header, rows):
+    """
+    Identifies input columns that have the least impact on the goal columns.
+    We use Random Forest feature importance to rank all inputs, then return
+    the names of the columns that have the lowest importance scores.
+    """
+    # Identify goal columns (ending in + or -)
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    input_indices = [i for i in range(len(header)) if i not in goal_indices]
+    
+    # Prepare data: encode symbolic columns to numeric
+    encoded_rows = []
+    for row in rows:
+        new_row = []
+        for i, val in enumerate(row):
+            if isinstance(val, str):
+                new_row.append(float(hash(val) % 1000))
+            else:
+                new_row.append(float(val))
+        encoded_rows.append(new_row)
+    
+    # We aggregate importance across all goal columns
+    total_importances = [0.0] * len(input_indices)
+    
+    for g_idx in goal_indices:
+        X = [[r[i] for i in input_indices] for r in encoded_rows]
+        y = [r[g_idx] for r in encoded_rows]
+        
+        model = RandomForestRegressor(n_estimators=50, random_state=42)
+        model.fit(X, y)
+        
+        for i, imp in enumerate(model.feature_importances_):
+            total_importances[i] += imp
+            
+    # Normalize and rank
+    feature_names = [header[i] for i in input_indices]
+    ranked = sorted(zip(feature_names, total_importances), key=lambda x: x[1])
+    
+    # Return the bottom 5 columns that have the least influence
+    return [name for name, score in ranked[:5]]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    useless_columns = blame(header, rows)
+    
+    print("Analysis: Which columns have the least impact on employee retention?")
+    print("You can likely stop collecting these columns as they have minimal predictive power:")
+    for col in useless_columns:
+        print(f" - {col}")

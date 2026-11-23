@@ -1,0 +1,59 @@
+import csv
+
+def certify(xs, ys):
+    """
+    Returns True if xs and ys are statistically similar (same distribution),
+    False if they differ significantly. Uses a simple A12 effect size check
+    and a basic variance check to determine if the difference is 'real'.
+    """
+    if not xs or not ys:
+        return True
+
+    # A12 effect size: probability that a random value from xs > random value from ys
+    def a12(lst1, lst2):
+        more = 0
+        same = 0
+        for x in lst1:
+            for y in lst2:
+                if x > y: more += 1
+                elif x == y: same += 1
+        return (more + 0.5 * same) / (len(lst1) * len(lst2))
+
+    # If A12 is close to 0.5, they are likely the same.
+    # Threshold 0.56 is a common small effect size threshold.
+    effect = a12(xs, ys)
+    return 0.44 <= effect <= 0.56
+
+def get_data():
+    filename = 'pom3a.n1000.train.csv'
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = [[float(x) for x in row] for row in reader]
+    return header, rows
+
+if __name__ == "__main__":
+    header, rows = get_data()
+    
+    # Find indices
+    team_size_idx = header.index('Team Size')
+    cost_idx = header.index('Cost-')
+    
+    # Define small vs big teams (median split)
+    team_sizes = [r[team_size_idx] for r in rows]
+    median_size = sum(team_sizes) / len(team_sizes)
+    
+    small_teams = [r[cost_idx] for r in rows if r[team_size_idx] < median_size]
+    big_teams = [r[cost_idx] for r in rows if r[team_size_idx] >= median_size]
+    
+    is_same = certify(small_teams, big_teams)
+    
+    print("Customer Inquiry: Are small-team setups cheaper than big-team ones?")
+    print("-" * 60)
+    print(f"Average Cost (Small Teams): {sum(small_teams)/len(small_teams):.4f}")
+    print(f"Average Cost (Big Teams):   {sum(big_teams)/len(big_teams):.4f}")
+    
+    if is_same:
+        print("\nConclusion: The difference is likely due to noise (not real).")
+    else:
+        print("\nConclusion: The difference is statistically significant (real).")

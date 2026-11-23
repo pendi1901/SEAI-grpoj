@@ -1,0 +1,67 @@
+import csv
+
+def flow(header, row, seen):
+    """
+    Warns the user if a project starts to go bad.
+    We define "going bad" as a significant drop in performance compared to 
+    the historical baseline. We use the median performance of the 'seen' 
+    rows as the baseline. If the current row's score is significantly 
+    worse (e.g., 2 standard deviations worse) than the median, we flag it.
+    """
+    goal_indices = []
+    for i, name in enumerate(header):
+        if name.endswith('-') or name.endswith('+'):
+            goal_indices.append((i, name[-1]))
+
+    def score(r):
+        s = 0
+        for idx, op in goal_indices:
+            val = float(r[idx])
+            s += val if op == '-' else (1.0 - val)
+        return s
+
+    if not seen:
+        return False
+
+    # Calculate scores of all seen rows
+    scores = [score(r) for r in seen]
+    
+    # Calculate median and standard deviation of seen scores
+    scores.sort()
+    median = scores[len(scores) // 2]
+    
+    # Calculate standard deviation
+    variance = sum((x - median) ** 2 for x in scores) / len(scores)
+    std_dev = variance ** 0.5
+    
+    # If the current row is significantly worse than the median (e.g., > 2 std devs),
+    # we consider it "going bad".
+    current_score = score(row)
+    if current_score > (median + 2 * std_dev):
+        return True
+        
+    return False
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [[float(x) for x in row] for row in reader]
+        
+        seen = []
+        alerted = False
+        for i, row in enumerate(rows):
+            if flow(header, row, seen):
+                print(f"ALERT: Row {i} is performing significantly worse than previous trends.")
+                alerted = True
+                break
+            seen.append(row)
+        
+        if not alerted:
+            print("Monitoring complete: No significant performance degradation detected.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

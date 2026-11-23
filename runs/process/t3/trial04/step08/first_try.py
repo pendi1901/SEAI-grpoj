@@ -1,0 +1,76 @@
+import csv
+
+def fix(header, row, levers):
+    """
+    Recommends changes to 'Plan' and 'Team Size' to improve 'Cost-' and 'Idle-'.
+    We perform a local search by testing small perturbations within the allowed
+    lever ranges to find a configuration that minimizes the goal values.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    
+    def get_score(r):
+        # Lower is better for both Cost- and Idle-
+        score = 0
+        for i in goal_indices:
+            score += r[i]
+        return score
+
+    best_change = {}
+    best_score = get_score(row)
+    
+    # Try small adjustments to the levers
+    for col_name, bounds in levers.items():
+        idx = header.index(col_name)
+        original_val = row[idx]
+        
+        # Test 5 points within the allowed range
+        low, high = bounds
+        for i in range(5):
+            test_val = low + (high - low) * (i / 4.0)
+            
+            # Create a candidate row
+            candidate = list(row)
+            candidate[idx] = test_val
+            
+            # Evaluate
+            if get_score(candidate) < best_score:
+                best_score = get_score(candidate)
+                best_change = {col_name: test_val}
+                
+    return best_change
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) for val in row])
+        
+        # Identify a "bad" row (high cost and high idle)
+        # We define bad as being in the top 10% of cost + idle
+        def badness(r):
+            return r[header.index('Cost-')] + r[header.index('Idle-')]
+        
+        bad_row = max(rows, key=badness)
+        
+        # Define levers based on the problem context
+        levers = {
+            'Plan': (0.0, 1.0),
+            'Team Size': (0.0, 1.0)
+        }
+        
+        recommendation = fix(header, bad_row, levers)
+        
+        print("Customer Inquiry Analysis: Rescue Strategy")
+        print("To reduce project cost and idle time, we recommend the following adjustments:")
+        for col, val in recommendation.items():
+            print(f"- Adjust '{col}' to {val:.4f}")
+        print("\nThese changes are calculated to shift your project configuration toward")
+        print("a more efficient resource utilization profile.")
+        
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        exit(1)

@@ -1,0 +1,78 @@
+import ezr
+import random
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column for each row in test.
+    We use the tree-based ranker to predict the outcome.
+    """
+    # Create a table object for the training data
+    train_tbl = ezr.Tbl([header] + train)
+    
+    # Build a tree on the training data to learn the relationship
+    # between inputs and the goal columns (ydist)
+    node = ezr.tree(train_tbl, train_tbl.rows)
+    
+    # The first goal column is the one that determines the target value.
+    goal_idx = -1
+    for i, name in enumerate(header):
+        if name.endswith('+') or name.endswith('-'):
+            goal_idx = i
+            break
+            
+    # Map each leaf to the average of the goal column
+    leaf_means = {}
+    for leaf in ezr.leafs(node):
+        vals = [r[goal_idx] for r in leaf.rows if r[goal_idx] != "?"]
+        leaf_means[id(leaf)] = (sum(vals) / len(vals)) if vals else 0
+        
+    # For each test row, find its leaf and return the mean
+    results = []
+    for row in test:
+        leaf = ezr.leaf(node, row)
+        results.append(leaf_means[id(leaf)])
+        
+    return results
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Identify indices
+    dept_idx = header.index('department')
+    overtime_idx = header.index('overTime')
+    goal_idx = next(i for i, h in enumerate(header) if h.endswith('+') or h.endswith('-'))
+    
+    # Filter for Sales department
+    sales_rows = [r for r in rows if r[dept_idx] == 'Sales']
+    
+    # Create two test sets: one with Overtime, one without
+    test_with_ot = []
+    test_without_ot = []
+    for r in sales_rows:
+        row_no_ot = list(r)
+        row_no_ot[overtime_idx] = 'No'
+        row_no_ot[goal_idx] = '?'
+        test_without_ot.append(row_no_ot)
+        
+        row_with_ot = list(r)
+        row_with_ot[overtime_idx] = 'Yes'
+        row_with_ot[goal_idx] = '?'
+        test_with_ot.append(row_with_ot)
+        
+    # Predict
+    preds_no = guess(header, rows, test_without_ot)
+    preds_yes = guess(header, rows, test_with_ot)
+    
+    avg_no = sum(preds_no) / len(preds_no)
+    avg_yes = sum(preds_yes) / len(preds_yes)
+    
+    print("Analysis: If we cut overtime across Sales, what happens to how long people stay?")
+    print(f"  Average predicted stay (with Overtime): {avg_yes:.2f} years")
+    print(f"  Average predicted stay (without Overtime): {avg_no:.2f} years")
+    print(f"  Difference: {avg_no - avg_yes:.2f} years")
+    print("Conclusion: Cutting overtime in Sales is predicted to change the average stay duration.")
+    
+    exit(0)

@@ -1,0 +1,48 @@
+import ezr
+
+def remember(header, rows):
+    """
+    Identifies the top 5% of rows based on multi-objective optimization.
+    Uses the ydist metric from ezr to rank rows by their proximity to the 
+    ideal goal values.
+    """
+    # Create a table object to leverage ezr's column handling and ydist
+    data = [header] + rows
+    tbl = ezr.Tbl(data)
+    
+    # Calculate ydist for every row. Lower ydist is better.
+    # ydist measures how far a row's goals are from the best possible.
+    indexed_rows = []
+    for i, row in enumerate(rows):
+        indexed_rows.append((i, ezr.ydist(tbl, row)))
+    
+    # Sort by ydist ascending
+    indexed_rows.sort(key=lambda x: x[1])
+    
+    # Return the top 5% of rows (800 rows * 0.05 = 40 rows)
+    limit = max(1, int(len(rows) * 0.05))
+    return [item[0] for item in indexed_rows[:limit]]
+
+if __name__ == "__main__":
+    # Load the data
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data_iter = ezr.csv(filename)
+    
+    # Extract header and rows
+    header = next(data_iter)
+    rows = list(data_iter)
+    
+    # Get the best indices
+    best_indices = remember(header, rows)
+    
+    # Print a summary for the customer
+    print("--- Analysis: Top Performing Setups ---")
+    print(f"Found {len(best_indices)} setups that are closest to the ideal multi-objective goals.")
+    print("Top 5 indices (0-based):", best_indices[:5])
+    
+    # Display the scores of the top 5
+    tbl = ezr.Tbl([header] + rows)
+    print("\nScores (ydist) for the top 5:")
+    for idx in best_indices[:5]:
+        score = ezr.ydist(tbl, rows[idx])
+        print(f"Index {idx}: {score:.4f}")

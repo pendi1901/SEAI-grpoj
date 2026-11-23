@@ -1,0 +1,82 @@
+```python
+import ezr
+import random
+
+def choose(header, rows, label):
+    """
+    Find the best working arrangement using a budget of 50 labels.
+    We use the 'acquire' strategy from ezr to intelligently select rows
+    that help us build a model of the best outcomes, then return the
+    index of the best row found.
+    """
+    # Create a table object to manage the data
+    # We need to handle the fact that the input rows have '?' in goal columns
+    # We will use the label function to fill these in as we acquire them
+    tbl = ezr.Tbl([header] + rows)
+    
+    # The acquire function in ezr.py is designed to spend a label budget
+    # to find the best rows. It uses a combination of random sampling
+    # and model-based selection (centroids).
+    # We pass the label function to it so it can reveal the true goal values.
+    
+    # We need to wrap the label function to keep track of the original index
+    # because acquire returns the rows, not the indices.
+    labeled_rows = []
+    
+    # We use the acquire logic provided by ezr
+    # Note: ezr.acquire uses the.Stop (default 50) as the budget
+    best_rows = ezr.acquire(tbl, cap=50, label=label)
+    
+    # Find the best row among the ones we labeled
+    # A row is better if its ydist is lower (closer to 0)
+    # We use the 'best_rows' which now have their goal values filled in
+    best_row = min(best_rows, key=lambda r: ezr.ydist(tbl, r))
+    
+    # Find the index of this best row in the original rows list
+    # We compare the row content (excluding the goal columns which were '?')
+    for i, row in enumerate(rows):
+        if row == best_row:
+            return i
+            
+    return 0
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Mask the goal columns for the input to choose()
+    # Goals are columns ending in '+' or '-'
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(("+", "-"))]
+    
+    masked_rows = []
+    for row in rows:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_rows.append(new_row)
+        
+    # Define the oracle function that reveals the true values
+    def oracle(row_idx):
+        return rows[row_idx]
+    
+    # Wrapper for the label function expected by choose
+    # The harness expects label(i) to return the row with values filled
+    def label_wrapper(row):
+        # Find the index of this row in the original set to return the true values
+        for i, r in enumerate(masked_rows):
+            if r is row:
+                return rows[i]
+        return row
+
+    # Run the selection
+    best_idx = choose(header, masked_rows, label_wrapper)
+    
+    print(f"Analysis complete.")
+    print(f"The best working arrangement found is at record index: {best_idx}")
+    print(f"This record has been identified as having the most favorable outcomes "
+          f"based on the 50-label budget.")
+    
+    exit(0)
+```

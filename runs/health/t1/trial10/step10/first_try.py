@@ -1,0 +1,104 @@
+import csv
+import random
+
+def race(header, rows, label):
+    """
+    Compares three strategies: random, greedy (hill climbing), and 
+    a simple heuristic-based search. Budget is 50 labels total.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    
+    def get_score(goals):
+        # Normalize goals: MRE- (min), ACC+ (max), PRED40+ (max)
+        # We use a simple scoring: (1 - MRE) + ACC + PRED
+        # Since we don't have global min/max, we assume goals are [0,1]
+        score = (1.0 - goals[0]) + goals[1] + goals[2]
+        return score
+
+    labeled = {}
+    def get_label(i):
+        if i not in labeled:
+            if len(labeled) >= 50:
+                raise Exception("Budget exceeded")
+            labeled[i] = label(i)
+        return labeled[i]
+
+    # 1. Random Strategy
+    def strategy_random():
+        best_idx, best_score = -1, -1
+        for _ in range(16): # 16 labels
+            i = random.randint(0, len(rows) - 1)
+            score = get_score(get_label(i))
+            if score > best_score:
+                best_score, best_idx = score, i
+        return best_idx, best_score
+
+    # 2. Greedy Strategy (Hill Climbing)
+    def strategy_greedy():
+        curr = random.randint(0, len(rows) - 1)
+        best_idx, best_score = curr, get_score(get_label(curr))
+        for _ in range(15): # 16 labels total
+            # Look at 5 neighbors
+            for _ in range(5):
+                nxt = random.randint(0, len(rows) - 1)
+                score = get_score(get_label(nxt))
+                if score > best_score:
+                    best_score, best_idx = score, nxt
+        return best_idx, best_score
+
+    # 3. Heuristic Strategy (Focus on N_estimators)
+    def strategy_heuristic():
+        # Focus on rows with high N_estimators
+        n_idx = header.index('N_estimators')
+        candidates = sorted(range(len(rows)), key=lambda i: rows[i][n_idx], reverse=True)[:18]
+        best_idx, best_score = -1, -1
+        for i in candidates:
+            score = get_score(get_label(i))
+            if score > best_score:
+                best_score, best_idx = score, i
+        return best_idx, best_score
+
+    strategies = {
+        "random": strategy_random,
+        "greedy": strategy_greedy,
+        "heuristic": strategy_heuristic
+    }
+
+    results = {}
+    for name, func in strategies.items():
+        idx, score = func()
+        results[name] = (idx, score)
+
+    winner = max(results, key=lambda n: results[n][1])
+    return {
+        "winner": winner,
+        "row": results[winner][0],
+        "tried": list(strategies.keys())
+    }
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            true_goals = []
+            for row in reader:
+                processed = [float(val) if header[i] not in ['criterion'] else val 
+                             for i, val in enumerate(row)]
+                goals = [processed[i] for i, name in enumerate(header) if name.endswith(('-', '+'))]
+                true_goals.append(goals)
+                masked = [val if not name.endswith(('-', '+')) else "?" for name, val in zip(header, processed)]
+                rows.append(masked)
+
+        def label(i):
+            return true_goals[i]
+
+        result = race(header, rows, label)
+        print(f"Winner: {result['winner']}")
+        print(f"Best row index found: {result['row']}")
+        print(f"Strategies tried: {', '.join(result['tried'])}")
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

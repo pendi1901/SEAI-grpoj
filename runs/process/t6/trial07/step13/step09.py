@@ -1,0 +1,57 @@
+import ezr
+import step01
+
+def spot(header, rows):
+    """
+    Identify rows that do not fit the data distribution.
+    We use the tree-based model to identify rows that are outliers
+    relative to their predicted ydist (performance).
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Build a tree to model the expected performance (ydist) based on inputs
+    root = ezr.tree(tbl, rows)
+    
+    # Calculate the residual: the difference between actual ydist and 
+    # the mean ydist of the leaf the row falls into.
+    # A large residual indicates the row does not fit the local pattern.
+    residuals = []
+    for i, row in enumerate(rows):
+        actual = ezr.ydist(tbl, row)
+        leaf_node = ezr.leaf(root, row)
+        # Residual is the absolute difference from the leaf mean
+        residual = abs(actual - leaf_node.mu)
+        residuals.append((residual, i))
+    
+    # Sort by residual descending (most suspicious first)
+    residuals.sort(key=lambda x: x[0], reverse=True)
+    
+    # Return the indices of the top 10 most suspicious rows
+    return [item[1] for item in residuals[:10]]
+
+if __name__ == "__main__":
+    file_path = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(file_path))
+    header = data[0]
+    rows = data[1:]
+    
+    suspicious_indices = spot(header, rows)
+    
+    print("Analysis: Identifying potentially mistyped or anomalous records.")
+    print(f"Found {len(suspicious_indices)} most suspicious rows:")
+    print("-" * 40)
+    print(f"{'Row Index':<12} | {'Suspicion Score (Residual)'}")
+    print("-" * 40)
+    
+    tbl = ezr.Tbl([header] + rows)
+    root = ezr.tree(tbl, rows)
+    
+    for idx in suspicious_indices:
+        row = rows[idx]
+        actual = ezr.ydist(tbl, row)
+        leaf_mu = ezr.leaf(root, row).mu
+        residual = abs(actual - leaf_mu)
+        print(f"{idx:<12} | {residual:.4f}")
+        
+    print("\nThese rows deviate significantly from the performance patterns of their neighbors.")
+    exit(0)

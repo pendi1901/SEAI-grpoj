@@ -1,0 +1,94 @@
+import csv
+import random
+
+def race(header, rows, label):
+    """
+    Compares three strategies: random, greedy (hill climbing), and 
+    a simple 'smart' sampler that avoids previously seen areas.
+    """
+    budget = 50
+    labeled = {}
+
+    def get_goals(i):
+        if i not in labeled:
+            if len(labeled) >= budget:
+                raise Exception("Budget exceeded")
+            labeled[i] = label(i)
+        return labeled[i]
+
+    def score(row_idx):
+        goals = get_goals(row_idx)
+        mre, acc, pred = goals
+        # Normalize goals: MRE (min), ACC (max), PRED40 (max)
+        # Since we don't have global min/max, we use relative improvement
+        # or simple weighted sum.
+        return -mre + acc + pred
+
+    # Strategy 1: Random
+    def strategy_random():
+        best_idx = -1
+        best_val = -float('inf')
+        for _ in range(16): # 16 labels
+            idx = random.randint(0, len(rows) - 1)
+            s = score(idx)
+            if s > best_val:
+                best_val, best_idx = s, idx
+        return best_idx
+
+    # Strategy 2: Greedy (Hill Climbing)
+    def strategy_greedy():
+        curr = random.randint(0, len(rows) - 1)
+        for _ in range(16): # 16 labels
+            neighbors = random.sample(range(len(rows)), 5)
+            best_n = max(neighbors, key=score)
+            if score(best_n) > score(curr):
+                curr = best_n
+        return curr
+
+    # Strategy 3: Exploration (Sample and pick best)
+    def strategy_explore():
+        indices = random.sample(range(len(rows)), 18) # 18 labels
+        return max(indices, key=score)
+
+    results = {
+        "random": strategy_random(),
+        "greedy": strategy_greedy(),
+        "explore": strategy_explore()
+    }
+
+    best_strategy = max(results, key=lambda k: score(results[k]))
+    
+    return {
+        "winner": best_strategy,
+        "row": results[best_strategy],
+        "tried": ["random", "greedy", "explore"]
+    }
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            full_data = []
+            for row in reader:
+                full_data.append([float(val) if header[i] not in ['criterion'] else val 
+                                  for i, val in enumerate(row)])
+        
+        masked_rows = [r[:] for r in full_data]
+        for r in masked_rows:
+            r[0] = r[1] = r[2] = "?"
+            
+        def label(i):
+            return [full_data[i][0], full_data[i][1], full_data[i][2]]
+            
+        result = race(header, masked_rows, label)
+        
+        print(f"Race Results:")
+        print(f"Winner: {result['winner']}")
+        print(f"Best row found: {result['row']}")
+        print(f"Strategies compared: {', '.join(result['tried'])}")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

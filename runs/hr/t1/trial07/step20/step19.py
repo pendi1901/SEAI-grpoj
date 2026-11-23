@@ -1,0 +1,68 @@
+import csv
+
+def spot(header, rows):
+    """
+    Identifies rows that are 'unlike anyone we have employed' by calculating
+    the distance of each row to the nearest neighbor in the dataset.
+    Rows with a very large distance to their nearest neighbor are 'outliers'
+    and thus our estimates for them cannot be trusted.
+    """
+    # Identify numeric input columns (excluding goals)
+    goal_indices = [i for i, h in enumerate(header) if h.endswith('+') or h.endswith('-')]
+    input_indices = [i for i, h in enumerate(header) if i not in goal_indices and header[i][0].isupper()]
+    
+    # Normalize numeric inputs for distance calculation
+    mins = [min(row[i] for row in rows) for i in input_indices]
+    maxs = [max(row[i] for row in rows) for i in input_indices]
+    ranges = [maxs[j] - mins[j] if maxs[j] != mins[j] else 1.0 for j in range(len(input_indices))]
+    
+    def get_dist(r1, r2):
+        d = 0.0
+        for j, idx in enumerate(input_indices):
+            d += ((r1[idx] - r2[idx]) / ranges[j])**2
+        return d**0.5
+
+    # For each row, find the distance to its nearest neighbor
+    outlier_scores = []
+    for i, row in enumerate(rows):
+        min_dist = float('inf')
+        for j, other in enumerate(rows):
+            if i == j:
+                continue
+            d = get_dist(row, other)
+            if d < min_dist:
+                min_dist = d
+        outlier_scores.append((i, min_dist))
+    
+    # Sort by distance descending (most suspicious/unique first)
+    outlier_scores.sort(key=lambda x: x[1], reverse=True)
+    
+    return [item[0] for item in outlier_scores]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    suspicious_indices = spot(header, rows)
+    
+    print("Trust Analysis: Identifying records that are unlike existing employees.")
+    print("Our estimates are least reliable for these rows (most unique/outlier profiles):")
+    for idx in suspicious_indices[:5]:
+        print(f"- Row {idx}: High profile uniqueness (distance to nearest neighbor is extreme).")
+    print("\nWhen a new hire's profile matches these, our predictive models cannot be trusted.")

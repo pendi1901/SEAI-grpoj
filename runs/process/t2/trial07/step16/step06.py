@@ -1,0 +1,68 @@
+import csv
+import step01
+
+def estimate_goals(header, rows, row):
+    """
+    Estimates the goal values for a row with '?' by using the average 
+    of the best-performing rows from the dataset.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    best_indices = step01.remember(header, rows)
+    
+    estimated_row = list(row)
+    for idx in goal_indices:
+        avg_val = sum(rows[i][idx] for i in best_indices) / len(best_indices)
+        estimated_row[idx] = avg_val
+    return estimated_row
+
+def justify(header, rows, row):
+    """
+    Returns the percentile rank of the row and a justification string.
+    """
+    # 1. Estimate the missing goal values
+    est_row = estimate_goals(header, rows, row)
+    
+    # 2. Score the estimated row
+    goal_indices = []
+    for i, name in enumerate(header):
+        if name.endswith('-') or name.endswith('+'):
+            goal_indices.append((i, name[-1]))
+
+    def score(r):
+        total = 0.0
+        for idx, op in goal_indices:
+            val = float(r[idx])
+            total += val if op == '-' else (1.0 - val)
+        return total
+
+    est_score = score(est_row)
+    
+    # 3. Compare against all rows
+    better_count = 0
+    for r in rows:
+        if score(r) < est_score:
+            better_count += 1
+            
+    p = better_count / len(rows)
+    reason = f"This setup is better than {int(p * 100)}% of all known configurations based on its projected performance."
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            rows.append([float(x) for x in row])
+            
+    # Take a sample row and hide its goals to test the justify function
+    test_row = list(rows[0])
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    for idx in goal_indices:
+        test_row[idx] = "?"
+        
+    p, reason = justify(header, rows, test_row)
+    print(f"Justification: {reason}")
+    print(f"Rank percentile: {p:.4f}")

@@ -1,0 +1,82 @@
+```python
+import csv
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import LabelEncoder
+
+def blame(header, rows):
+    """
+    Identifies input columns that have the least impact on 'YearsAtCompany+'.
+    We train a Random Forest to predict the goal and identify features with
+    the lowest importance scores. These are the columns that have 'nothing to do'
+    with the goal.
+    """
+    goal_idx = next(i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-'))
+    input_indices = [i for i, name in enumerate(header) if not (name.endswith('+') or name.endswith('-'))]
+    
+    X = []
+    y = []
+    encoders = {}
+    
+    # Encode symbolic columns
+    for i in input_indices:
+        if isinstance(rows[0][i], str):
+            encoders[i] = LabelEncoder()
+            col_data = [row[i] for row in rows]
+            encoders[i].fit(col_data)
+            
+    for row in rows:
+        processed = []
+        for i in input_indices:
+            val = row[i]
+            if i in encoders:
+                processed.append(encoders[i].transform([val])[0])
+            else:
+                processed.append(val)
+        X.append(processed)
+        y.append(row[goal_idx])
+        
+    # Train regressor to find feature importance
+    model = RandomForestRegressor(n_estimators=50, random_state=42)
+    model.fit(X, y)
+    
+    # Get feature importances
+    importances = model.feature_importances_
+    
+    # Map importances back to column names
+    feature_scores = []
+    for i, idx in enumerate(input_indices):
+        feature_scores.append((header[idx], importances[i]))
+        
+    # Sort by importance ascending (least important first)
+    feature_scores.sort(key=lambda x: x[1])
+    
+    # Return the names of the columns with the lowest impact (bottom 5)
+    return [name for name, score in feature_scores[:5]]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    unimportant_factors = blame(header, rows)
+    
+    print("Analysis: Columns with the least impact on tenure (candidates for removal):")
+    for factor in unimportant_factors:
+        print(f"- {factor}")
+    print("\nThese columns have the lowest predictive power regarding 'YearsAtCompany+'.")
+```

@@ -1,0 +1,65 @@
+import csv
+import numpy as np
+from scipy import stats
+import step03
+
+def certify(xs, ys):
+    """
+    Returns True if the difference between two sets of data is likely noise,
+    False if they are statistically different. Uses a Welch's t-test.
+    """
+    return step03.certify(xs, ys)
+
+def compare_rules(header, rows):
+    """
+    Compares two hypothetical rules (e.g., small vs large setups) 
+    to see if they result in statistically different performance.
+    """
+    # Use N_estimators as a proxy for the two "rules" or configurations
+    n_idx = header.index('N_estimators')
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+
+    # Define two groups based on a split in the data
+    n_vals = [r[n_idx] for r in rows]
+    median_n = np.median(n_vals)
+    
+    group1 = [r for r in rows if r[n_idx] <= median_n]
+    group2 = [r for r in rows if r[n_idx] > median_n]
+    
+    # Calculate utility for both groups
+    def get_utility(r):
+        return (1.0 - r[mre_idx]) + r[acc_idx] + r[pred_idx]
+    
+    u1 = [get_utility(r) for r in group1]
+    u2 = [get_utility(r) for r in group2]
+    
+    return certify(u1, u2), np.mean(u1), np.mean(u2)
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    is_noise, mean1, mean2 = compare_rules(header, rows)
+    
+    print("Analysis of rule difference:")
+    if is_noise:
+        print("The difference between the two rules is statistically insignificant.")
+        print("You can stop arguing; the choice does not make a real difference.")
+    else:
+        print("There is a statistically significant difference between the two rules.")
+        print(f"Mean utility for Rule 1: {mean1:.4f}")
+        print(f"Mean utility for Rule 2: {mean2:.4f}")
+        print("The choice of rule does matter for performance.")

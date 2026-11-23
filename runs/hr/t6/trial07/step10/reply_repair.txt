@@ -1,0 +1,100 @@
+```python
+import ezr
+import random
+
+def race(header, rows, label):
+    """
+    Compares three strategies for finding the best employee record:
+    1. 'random': Picks rows at random.
+    2. 'acquire': Uses the model-based acquisition.
+    3. 'grabs': Uses the straw man random grabber.
+    """
+    budget = 50
+    labeled_indices = {}
+    
+    # We need a stable way to map rows to indices for the oracle
+    # Since rows are lists, we use their position in the input list
+    row_map = {id(r): i for i, r in enumerate(rows)}
+    
+    def oracle_wrapper(row):
+        idx = row_map[id(row)]
+        if idx not in labeled_indices:
+            if len(labeled_indices) >= budget:
+                raise Exception("Budget exceeded!")
+            true_goals = label(idx)
+            goal_indices = [i for i, h in enumerate(header) if h.endswith(("+", "-"))]
+            for i, val in zip(goal_indices, true_goals):
+                row[i] = val
+            labeled_indices[idx] = row
+        return labeled_indices[idx]
+
+    # Create a base table to handle normalization
+    # We use a copy of rows to avoid mutating the input
+    tbl = ezr.Tbl([header] + [list(r) for r in rows])
+    
+    # Strategy 1: Random
+    def run_random():
+        indices = random.sample(range(len(rows)), 16)
+        best_idx, min_ydist = -1, 1e30
+        for i in indices:
+            r = oracle_wrapper(rows[i])
+            d = ezr.ydist(tbl, r)
+            if d < min_ydist:
+                min_ydist, best_idx = d, i
+        return best_idx, min_ydist
+
+    # Strategy 2: Acquire
+    def run_acquire():
+        # Acquire needs a table with some labeled data
+        # We use 17 labels for this strategy
+        labeled = ezr.acquire(tbl, cap=17, label=oracle_wrapper)
+        best_r = min(labeled, key=lambda r: ezr.ydist(tbl, r))
+        return row_map[id(best_r)], ezr.ydist(tbl, best_r)
+
+    # Strategy 3: Grabs
+    def run_grabs():
+        indices = random.sample(range(len(rows)), 17)
+        best_idx, min_ydist = -1, 1e30
+        for i in indices:
+            r = oracle_wrapper(rows[i])
+            d = ezr.ydist(tbl, r)
+            if d < min_ydist:
+                min_ydist, best_idx = d, i
+        return best_idx, min_ydist
+
+    results = {
+        "random": run_random(),
+        "acquire": run_acquire(),
+        "grabs": run_grabs()
+    }
+
+    winner = min(results, key=lambda k: results[k][1])
+    return {
+        "winner": winner,
+        "row": results[winner][0],
+        "tried": ["random", "acquire", "grabs"]
+    }
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    all_rows = data[1:]
+    
+    goal_indices = [i for i, h in enumerate(header) if h.endswith(("+", "-"))]
+    
+    def label(i):
+        return [all_rows[i][idx] for idx in goal_indices]
+    
+    masked_rows = []
+    for row in all_rows:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_rows.append(new_row)
+        
+    result = race(header, masked_rows, label)
+    print(f"Race Results: The winner is '{result['winner']}' strategy.")
+    print(f"Best row found at index: {result['row']}")
+    print(f"Strategies compared: {', '.join(result['tried'])}")
+```

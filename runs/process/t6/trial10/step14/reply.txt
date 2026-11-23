@@ -1,0 +1,66 @@
+```python
+import ezr
+import step01
+import step13
+
+def flow(header, row, seen):
+    """
+    Warn the customer if the performance of incoming rows starts to degrade.
+    We compare the distribution of the current 'seen' window against the 
+    historical baseline (the first half of the data) using statistical tests.
+    If the performance (ydist) of the recent window is significantly worse 
+    than the baseline, we return True to flag the potential issue.
+    """
+    if len(seen) < 50:
+        return False
+    
+    # Create a table to calculate ydist
+    # We use the 'seen' rows to build a context for the current performance
+    tbl = ezr.Tbl([header] + seen)
+    
+    # Calculate ydist for the recent window (last 50 rows)
+    recent_ydists = [ezr.ydist(tbl, r) for r in seen[-50:]]
+    
+    # Compare against the historical baseline (first half of 'seen')
+    # If the recent performance is significantly worse than the baseline,
+    # we return True to warn the user.
+    mid = len(seen) // 2
+    baseline_ydists = [ezr.ydist(tbl, r) for r in seen[:mid]]
+    
+    # Use the statistical certification from step13
+    # If they are NOT the same, it means a significant shift occurred.
+    # We check if the recent mean is higher (worse) than the baseline mean.
+    is_same = step13.certify(baseline_ydists, recent_ydists)
+    
+    if not is_same:
+        recent_mu = sum(recent_ydists) / len(recent_ydists)
+        baseline_mu = sum(baseline_ydists) / len(baseline_ydists)
+        if recent_mu > baseline_mu:
+            return True
+            
+    return False
+
+if __name__ == "__main__":
+    file_path = "pom3a.n1000.train.csv"
+    rows_gen = ezr.csv(file_path)
+    try:
+        header = next(rows_gen)
+        all_rows = list(rows_gen)
+        
+        seen = []
+        warned = False
+        for i, row in enumerate(all_rows):
+            if flow(header, row, seen):
+                print(f"Warning: Performance degradation detected at row {i}!")
+                warned = True
+                break
+            seen.append(row)
+            
+        if not warned:
+            print("No significant performance degradation detected.")
+            
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
+    exit(0)
+```

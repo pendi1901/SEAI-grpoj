@@ -1,0 +1,66 @@
+```python
+import ezr
+import random
+
+def justify(header, rows, row):
+    """
+    Returns (p, reason): p is the fraction of rows that 'row' is better than,
+    and a sentence explaining why the user should believe this result.
+    """
+    # Create a table to handle normalization and distance calculations
+    tbl = ezr.Tbl([header] + rows)
+    
+    # To estimate the goals for the input 'row', we use the nearest neighbor
+    # approach: find the row in the dataset that is most similar in input space.
+    # We use xdist to find the closest row.
+    best_match = None
+    min_dist = 1e30
+    
+    for r in rows:
+        d = ezr.xdist(tbl, row, r)
+        if d < min_dist:
+            min_dist = d
+            best_match = r
+            
+    # The estimated quality of 'row' is the ydist of its nearest neighbor
+    estimated_ydist = ezr.ydist(tbl, best_match)
+    
+    # Calculate how many rows are worse than this estimated quality
+    # A row is better if its ydist is lower.
+    # We want to know the fraction of rows that have a higher ydist than ours.
+    all_ydists = [ezr.ydist(tbl, r) for r in rows]
+    better_than_count = sum(1 for y in all_ydists if y > estimated_ydist)
+    p = better_than_count / len(rows)
+    
+    reason = (f"This configuration is estimated to outperform {int(p * 100)}% of all possible setups "
+              f"because its input settings closely match historical data that achieved a "
+              f"low distance to the ideal multi-objective goals.")
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    try:
+        data = list(ezr.csv(filename))
+        header = data[0]
+        rows = data[1:]
+        
+        # Pick a sample row and mask its goals to test the function
+        target_row = list(rows[random.randint(0, len(rows) - 1)])
+        masked_row = [
+            "?" if header[i][-1] in "+-" else target_row[i] 
+            for i in range(len(header))
+        ]
+        
+        p, reason = justify(header, rows, masked_row)
+        
+        print(f"Justification Analysis:")
+        print(f"Performance Rank: {p:.4f}")
+        print(f"Reasoning: {reason}")
+        
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
+    
+    exit(0)
+```

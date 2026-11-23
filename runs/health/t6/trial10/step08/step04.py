@@ -1,0 +1,50 @@
+import ezr
+import step01
+
+def flow(header, row, seen):
+    """
+    Decide if the current row is 'good enough' to ship.
+    We define 'good enough' as being in the top 5% of the distribution 
+    of all possible rows, estimated by the current history.
+    """
+    # If this is the first row, we can't compare it yet
+    if not seen:
+        return False
+    
+    # Create a table from the history to establish the distribution
+    # We use the header and the rows seen so far
+    data = [header] + seen
+    tbl = ezr.Tbl(data)
+    
+    # Calculate the ydist of the current row relative to the history
+    # Note: row is the new arrival, seen is the history
+    current_ydist = ezr.ydist(tbl, row)
+    
+    # Calculate ydist for all seen rows
+    seen_ydists = [ezr.ydist(tbl, r) for r in seen]
+    
+    # A row is 'good enough' if its ydist is better (lower) than 
+    # the 5th percentile of the history seen so far.
+    # We use a threshold of 5% (0.05) as a heuristic for 'good enough'.
+    threshold = sorted(seen_ydists)[max(0, int(len(seen_ydists) * 0.05))]
+    
+    return current_ydist <= threshold
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    all_rows = list(ezr.csv(filename))
+    header = all_rows[0]
+    rows = all_rows[1:]
+    
+    seen = []
+    found = False
+    for i, row in enumerate(rows):
+        if flow(header, row, seen):
+            print(f"Decision: Ship row {i}!")
+            print(f"Details: {row}")
+            found = True
+            break
+        seen.append(row)
+    
+    if not found:
+        print("No row met the criteria for shipping.")

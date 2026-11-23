@@ -1,0 +1,53 @@
+import ezr
+import random
+
+def flow(header, row, seen):
+    """
+    Decide whether to accept a row based on whether it is significantly 
+    better than the current 'best' seen so far.
+    """
+    # Create a table to handle column definitions and normalization
+    data = [header] + (seen if seen else [row])
+    tbl = ezr.Tbl(data)
+    
+    # If this is the first row, we have no baseline, so we accept it
+    if not seen:
+        return True
+    
+    # Calculate the ydist (distance from ideal goals) for the new row
+    # and the best row seen so far.
+    current_ydist = ezr.ydist(tbl, row)
+    best_ydist = min(ezr.ydist(tbl, r) for r in seen)
+    
+    # We accept the row if it is better than the current best.
+    # Since ydist measures distance from ideal, lower is better.
+    # We use a small threshold to ensure we only stop for meaningful improvements.
+    if current_ydist < best_ydist * 0.95:
+        return True
+    
+    return False
+
+if __name__ == "__main__":
+    file_path = "pom3a.n1000.train.csv"
+    rows_gen = ezr.csv(file_path)
+    header = next(rows_gen)
+    all_rows = list(rows_gen)
+    
+    # Shuffle to simulate random arrival order
+    random.seed(1234567891)
+    random.shuffle(all_rows)
+    
+    seen = []
+    accepted = None
+    
+    for row in all_rows:
+        if flow(header, row, seen):
+            accepted = row
+            break
+        seen.append(row)
+    
+    if accepted:
+        print("Decision: Approved the current proposal.")
+        print(f"Row details: {accepted}")
+    else:
+        print("Decision: No proposal met the criteria.")

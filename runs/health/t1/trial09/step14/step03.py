@@ -1,0 +1,75 @@
+import csv
+
+def certify(xs, ys):
+    """
+    Determines if two distributions are statistically different using 
+    a simple A12 effect size test. Returns True if they are effectively 
+    the same (small effect size), False if they differ significantly.
+    """
+    n_x = len(xs)
+    n_y = len(ys)
+    if n_x == 0 or n_y == 0:
+        return True
+
+    # A12 test: probability that a random value from xs is greater than ys
+    greater = 0
+    equal = 0
+    for x in xs:
+        for y in ys:
+            if x > y:
+                greater += 1
+            elif x == y:
+                equal += 1
+    
+    a12 = (greater + 0.5 * equal) / (n_x * n_y)
+    
+    # If A12 is close to 0.5, they are the same. 
+    # Thresholds for small effect size (Vargha-Delaney) are typically 0.56.
+    return 0.44 <= a12 <= 0.56
+
+def analyze_setup_size(header, rows):
+    """
+    Splits data into 'big' (high N_estimators) and 'small' (low N_estimators)
+    and compares their ACC+ performance.
+    """
+    n_idx = header.index('N_estimators')
+    acc_idx = header.index('ACC+')
+    
+    # Calculate median to split into big/small
+    estimators = [row[n_idx] for row in rows]
+    median = sum(estimators) / len(estimators)
+    
+    small = [row[acc_idx] for row in rows if row[n_idx] <= median]
+    big = [row[acc_idx] for row in rows if row[n_idx] > median]
+    
+    is_same = certify(small, big)
+    
+    return is_same, len(small), len(big)
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    rows = []
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            for row in reader:
+                processed_row = []
+                for i, val in enumerate(row):
+                    if header[i] == 'criterion':
+                        processed_row.append(val)
+                    else:
+                        processed_row.append(float(val))
+                rows.append(processed_row)
+        
+        same, n_small, n_big = analyze_setup_size(header, rows)
+        
+        print("Analysis: Are 'big' setups significantly more accurate than 'small' ones?")
+        if same:
+            print(f"Result: The difference is likely just noise (A12 test indicates no significant effect).")
+        else:
+            print(f"Result: There is a statistically significant difference between setup sizes.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

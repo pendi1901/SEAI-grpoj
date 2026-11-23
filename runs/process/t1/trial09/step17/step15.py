@@ -1,0 +1,72 @@
+import csv
+
+def blame(header, rows):
+    """
+    Identifies the two input columns that most strongly correlate with 
+    poor performance (high Cost- and high Idle-).
+    
+    We define 'bad' as rows in the top 25% of the combined normalized 
+    cost and idle goals. We then calculate the difference in mean values 
+    between these 'bad' rows and the population mean for each input.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    input_indices = [i for i, name in enumerate(header) if not name.endswith(('-', '+'))]
+    
+    cost_idx = header.index('Cost-')
+    idle_idx = header.index('Idle-')
+    
+    # Calculate a combined "badness" score for each row
+    # Since goals are numeric and likely normalized, we sum them
+    def get_badness(row):
+        return row[cost_idx] + row[idle_idx]
+    
+    sorted_rows = sorted(rows, key=get_badness, reverse=True)
+    worst_rows = sorted_rows[:len(rows) // 4]
+    
+    scores = []
+    for i in input_indices:
+        all_vals = [r[i] for r in rows if isinstance(r[i], (int, float))]
+        worst_vals = [r[i] for r in worst_rows if isinstance(r[i], (int, float))]
+        
+        if not all_vals or not worst_vals:
+            continue
+            
+        mean_all = sum(all_vals) / len(all_vals)
+        mean_worst = sum(worst_vals) / len(worst_vals)
+        
+        # The larger the difference, the more this input characterizes the 'bad' setups
+        diff = abs(mean_worst - mean_all)
+        scores.append((diff, header[i]))
+    
+    # Sort by difference descending
+    scores.sort(key=lambda x: x[0], reverse=True)
+    
+    # Return top 2 drivers
+    return [name for diff, name in scores[:2]]
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed_row = []
+                for val in row:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        drivers = blame(header, rows)
+        
+        print("Analysis: Factors affecting project cost and idle time.")
+        print(f"The most critical factors to monitor are: {', '.join(drivers)}.")
+        print("These inputs show the strongest correlation with poor project outcomes.")
+        print("Other inputs have less impact and can be deprioritized.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

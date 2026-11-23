@@ -1,0 +1,58 @@
+import csv
+
+def spot(header, rows):
+    """
+    Identifies rows that are 'suspicious' by detecting outliers in the input space.
+    A row is considered suspicious if its input values are statistically 
+    distant from the median of the rest of the dataset.
+    """
+    # Identify input columns (all except goals)
+    goal_names = ['MRE-', 'ACC+', 'PRED40+']
+    input_indices = [i for i, name in enumerate(header) if name not in goal_names]
+    
+    # Calculate medians for numeric inputs to detect outliers
+    numeric_indices = [i for i in input_indices if not isinstance(rows[0][i], str)]
+    medians = {}
+    for i in numeric_indices:
+        vals = sorted([r[i] for r in rows])
+        medians[i] = vals[len(vals) // 2]
+    
+    # Calculate a 'suspicion score' for each row
+    # Score = sum of normalized deviations from the median
+    scores = []
+    for idx, row in enumerate(rows):
+        suspicion = 0
+        for i in numeric_indices:
+            # Simple deviation: distance from median
+            # We use absolute difference
+            suspicion += abs(row[i] - medians[i])
+        scores.append((suspicion, idx))
+    
+    # Sort by suspicion descending
+    scores.sort(key=lambda x: x[0], reverse=True)
+    
+    # Return the indices of the most suspicious rows
+    return [item[1] for item in scores]
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i] == 'criterion':
+                    processed_row.append(val)
+                else:
+                    processed_row.append(float(val))
+            rows.append(processed_row)
+    
+    suspicious_indices = spot(header, rows)
+    
+    print("Top 10 most suspicious rows (potential failed runs):")
+    for idx in suspicious_indices[:10]:
+        print(f"Row index: {idx}")
+    
+    exit(0)

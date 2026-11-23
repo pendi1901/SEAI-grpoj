@@ -1,0 +1,61 @@
+import csv
+
+def spot(header, rows):
+    """
+    Identifies rows that contain input values far outside the range of 
+    what has been seen in the training data.
+    
+    We define 'suspicious' as any input value that is more than 3 standard 
+    deviations away from the mean of that column.
+    """
+    # Identify input columns (those not ending in - or +)
+    input_indices = [
+        i for i, h in enumerate(header) 
+        if not (h.endswith('-') or h.endswith('+')) 
+        and isinstance(rows[0][i], (int, float))
+    ]
+    
+    suspicion_scores = [0.0] * len(rows)
+    
+    for i in input_indices:
+        col_vals = [r[i] for r in rows]
+        mean = sum(col_vals) / len(col_vals)
+        variance = sum((x - mean) ** 2 for x in col_vals) / len(col_vals)
+        std = variance ** 0.5
+        
+        # If std is 0, all values are the same; no outliers possible
+        if std > 0:
+            for row_idx, row in enumerate(rows):
+                # Calculate Z-score
+                z_score = abs(row[i] - mean) / std
+                # If a value is more than 3 standard deviations away, flag it
+                if z_score > 3:
+                    suspicion_scores[row_idx] += z_score
+                    
+    # Collect indices of rows with suspicion scores > 0
+    results = [(suspicion_scores[i], i) for i in range(len(rows)) if suspicion_scores[i] > 0]
+    
+    # Sort by score descending (most suspicious first)
+    results.sort(key=lambda x: x[0], reverse=True)
+    
+    return [idx for score, idx in results]
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = [val if header[i] == 'criterion' else float(val) 
+                             for i, val in enumerate(row)]
+            rows.append(processed_row)
+            
+    suspicious_indices = spot(header, rows)
+    
+    print(f"Analysis complete. Found {len(suspicious_indices)} rows with settings far outside the norm.")
+    if suspicious_indices:
+        print("The most suspicious row indices (most extreme values first):")
+        print(suspicious_indices[:10])
+    else:
+        print("No suspicious rows found.")

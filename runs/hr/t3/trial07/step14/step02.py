@@ -1,0 +1,95 @@
+import csv
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import LabelEncoder
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column ('YearsAtCompany+') for test rows
+    using a Random Forest Regressor.
+    """
+    # Identify goal column (first column ending in '+' or '-')
+    goal_idx = -1
+    for i, name in enumerate(header):
+        if name.endswith('+') or name.endswith('-'):
+            goal_idx = i
+            break
+    
+    # Prepare training data
+    # We only use input columns (those not ending in + or -)
+    input_indices = [i for i, name in enumerate(header) 
+                     if not (name.endswith('+') or name.endswith('-'))]
+    
+    X_train = []
+    y_train = []
+    
+    # Label encode symbolic columns
+    encoders = {}
+    for i in input_indices:
+        if isinstance(train[0][i], str):
+            encoders[i] = LabelEncoder()
+            col_data = [row[i] for row in train] + [row[i] for row in test if row[i] != '?']
+            encoders[i].fit(col_data)
+            
+    for row in train:
+        processed = []
+        for i in input_indices:
+            val = row[i]
+            if i in encoders:
+                processed.append(encoders[i].transform([val])[0])
+            else:
+                processed.append(val)
+        X_train.append(processed)
+        y_train.append(row[goal_idx])
+        
+    # Prepare test data
+    X_test = []
+    for row in test:
+        processed = []
+        for i in input_indices:
+            val = row[i]
+            if i in encoders:
+                processed.append(encoders[i].transform([val])[0])
+            else:
+                processed.append(val)
+        X_test.append(processed)
+        
+    # Train model
+    model = RandomForestRegressor(n_estimators=100, random_state=42)
+    model.fit(X_train, y_train)
+    
+    return model.predict(X_test).tolist()
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    # Split data: use first 700 for training, next 100 for testing
+    train_data = rows[:700]
+    test_data = rows[700:800]
+    
+    # Mask the goal column in test data
+    goal_idx = next(i for i, name in enumerate(header) if name.endswith('+'))
+    masked_test = []
+    for row in test_data:
+        new_row = list(row)
+        new_row[goal_idx] = "?"
+        masked_test.append(new_row)
+        
+    predictions = guess(header, train_data, masked_test)
+    
+    print("Estimation of 'YearsAtCompany+' for new hires:")
+    print(f"{'Actual':<10} | {'Predicted':<10}")
+    print("-" * 25)
+    for i in range(5): # Print first 5 as sample
+        print(f"{test_data[i][goal_idx]:<10.2f} | {predictions[i]:<10.2f}")

@@ -1,0 +1,66 @@
+```python
+import csv
+import pandas as pd
+import numpy as np
+from sklearn.ensemble import IsolationForest
+
+def spot(header, rows):
+    """
+    Identifies rows that are outliers in the input space using Isolation Forest.
+    Returns the indices of the rows, sorted by their anomaly score (most suspicious first).
+    """
+    df = pd.DataFrame(rows, columns=header)
+    
+    # Identify input columns (those not ending in - or +)
+    input_cols = [c for c in header if not (c.endswith('-') or c.endswith('+'))]
+    
+    # Use Isolation Forest to detect anomalies.
+    # We use a small contamination factor to flag only the most extreme cases.
+    model = IsolationForest(n_estimators=100, contamination=0.02, random_state=42)
+    
+    # Fit the model on input columns.
+    # decision_function returns the anomaly score (lower is more abnormal).
+    scores = model.fit(df[input_cols]).decision_function(df[input_cols])
+    
+    # Get indices of rows sorted by anomaly score (ascending, so lowest scores first).
+    # The lower the score, the more "suspicious" the row is.
+    suspicious_indices = np.argsort(scores)
+    
+    # Return the indices of the rows that are flagged as anomalies (score < 0).
+    flagged = [int(i) for i in suspicious_indices if scores[i] < 0]
+    
+    return flagged
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                # Convert numeric columns to floats
+                processed_row = []
+                for val in row:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        suspicious = spot(header, rows)
+        
+        print("Customer Inquiry: A new team lead proposes a setup unlike anything we have run. Tell me when I am asking you about something you have never seen.")
+        print(f"Analysis: We identified {len(suspicious)} configurations that are significantly different from your historical data.")
+        if suspicious:
+            print("The most suspicious row indices (most anomalous first) are:")
+            print(suspicious[:10])
+            print("These setups represent configurations that fall outside your typical operational patterns.")
+        else:
+            print("No highly unusual configurations were detected.")
+            
+        exit(0)
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
+```

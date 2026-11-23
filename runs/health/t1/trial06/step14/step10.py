@@ -1,0 +1,112 @@
+import csv
+import random
+
+def race(header, rows, label):
+    """
+    Compares three strategies:
+    1. 'random': Picks 16 random rows.
+    2. 'greedy': Picks 17 rows by exploring the neighborhood of the best found so far.
+    3. 'smart': Picks 17 rows by sampling and focusing on the most promising region.
+    Total budget: 50 labels.
+    """
+    budget = 50
+    tried = ["random", "greedy", "smart"]
+    
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    
+    def get_score(goals):
+        score = 0
+        for i, g_idx in enumerate(goal_indices):
+            val = goals[i]
+            # Normalize based on a rough global estimate (0 to 1)
+            # Since we don't have full data, we use a heuristic range
+            if header[g_idx].endswith('-'):
+                score += (1.0 - min(1.0, max(0.0, val)))
+            else:
+                score += min(1.0, max(0.0, val))
+        return score / len(goal_indices)
+
+    results = {}
+    labeled = {}
+
+    def get_label(i):
+        if i not in labeled:
+            if len(labeled) >= budget:
+                raise Exception("Budget exceeded")
+            labeled[i] = label(i)
+        return labeled[i]
+
+    # Strategy 1: Random
+    best_r = {"idx": -1, "score": -1}
+    for _ in range(16):
+        i = random.randint(0, len(rows) - 1)
+        s = get_score(get_label(i))
+        if s > best_r["score"]:
+            best_r = {"idx": i, "score": s}
+    results["random"] = best_r
+
+    # Strategy 2: Greedy (Local search)
+    best_g = {"idx": random.randint(0, len(rows) - 1), "score": -1}
+    for _ in range(17):
+        s = get_score(get_label(best_g["idx"]))
+        best_g["score"] = s
+        # Look at neighbors
+        for _ in range(3):
+            neighbor = (best_g["idx"] + random.randint(-5, 5)) % len(rows)
+            ns = get_score(get_label(neighbor))
+            if ns > best_g["score"]:
+                best_g = {"idx": neighbor, "score": ns}
+    results["greedy"] = best_g
+
+    # Strategy 3: Smart (Sample and focus)
+    samples = random.sample(range(len(rows)), 10)
+    best_s = {"idx": -1, "score": -1}
+    for i in samples:
+        s = get_score(get_label(i))
+        if s > best_s["score"]:
+            best_s = {"idx": i, "score": s}
+    # Explore around the best sample
+    for _ in range(7):
+        neighbor = (best_s["idx"] + random.randint(-10, 10)) % len(rows)
+        ns = get_score(get_label(neighbor))
+        if ns > best_s["score"]:
+            best_s = {"idx": neighbor, "score": ns}
+    results["smart"] = best_s
+
+    winner = max(results, key=lambda k: results[k]["score"])
+    return {"winner": winner, "row": results[winner]["idx"], "tried": tried}
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            true_goals = []
+            for row in reader:
+                processed = []
+                goals = []
+                for i, val in enumerate(row):
+                    if header[i].endswith(('-', '+')):
+                        goals.append(float(val))
+                        processed.append("?")
+                    elif header[i] == 'criterion':
+                        processed.append(val)
+                    else:
+                        processed.append(float(val))
+                rows.append(processed)
+                true_goals.append(goals)
+        
+        def label(i):
+            return true_goals[i]
+            
+        outcome = race(header, rows, label)
+        print(f"Race Results:")
+        print(f"Winner: {outcome['winner']}")
+        print(f"Best Row Index Found: {outcome['row']}")
+        print(f"Strategies Tried: {', '.join(outcome['tried'])}")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

@@ -1,0 +1,61 @@
+import ezr
+import step01
+
+def flow(header, row, seen):
+    """
+    Returns True if the current row is significantly better than the 
+    best seen so far, indicating we have reached a point of diminishing 
+    returns and should stop paying for further runs.
+    """
+    if not seen:
+        return False
+    
+    # Create a table to use the ydist metric
+    # We use the current row and all seen rows to establish the context
+    data = [header] + seen + [row]
+    tbl = ezr.Tbl(data)
+    
+    # Calculate ydist for the current row and all seen rows
+    # Lower ydist is better (closer to ideal goals)
+    current_ydist = ezr.ydist(tbl, row)
+    seen_ydists = [ezr.ydist(tbl, r) for r in seen]
+    best_seen = min(seen_ydists)
+    
+    # Stop if the current row is the best we've ever seen, 
+    # but only after a reasonable burn-in period (e.g., 50 rows)
+    # to avoid stopping on early, noisy data.
+    if len(seen) > 50:
+        if current_ydist < best_seen:
+            # Check if the improvement is substantial (e.g., 10% better than best)
+            # This prevents stopping for negligible gains.
+            if current_ydist < (best_seen * 0.9):
+                return True
+            
+    return False
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    
+    try:
+        header = next(data_gen)
+        rows = list(data_gen)
+        
+        seen = []
+        found = False
+        for i, row in enumerate(rows):
+            if flow(header, row, seen):
+                print(f"Stopping criteria met at row {i}.")
+                print(f"Best configuration found: {row}")
+                found = True
+                break
+            seen.append(row)
+            
+        if not found:
+            print("No configuration met the stopping criteria; processed all rows.")
+            
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
+    
+    exit(0)

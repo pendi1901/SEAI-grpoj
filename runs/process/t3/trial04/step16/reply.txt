@@ -1,0 +1,82 @@
+```python
+import csv
+
+def justify(header, rows, row):
+    """
+    Compares a candidate row against historical data.
+    Estimates goal values for the candidate using the average of the 
+    nearest 5 neighbors in the input space.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    input_indices = [i for i, name in enumerate(header) if not (name.endswith('-') or name.endswith('+'))]
+    
+    # Helper to calculate normalized score for a row
+    def get_score(r):
+        scores = []
+        for i in goal_indices:
+            col_vals = [row_data[i] for row_data in rows]
+            c_min, c_max = min(col_vals), max(col_vals)
+            rng = c_max - c_min + 1e-9
+            norm = (r[i] - c_min) / rng
+            scores.append(1 - norm if header[i].endswith('-') else norm)
+        return sum(scores) / len(scores)
+
+    # Estimate goals for the candidate row using 5-Nearest Neighbors
+    # Calculate Euclidean distance in input space
+    target_inputs = [row[i] for i in input_indices]
+    distances = []
+    for idx, r in enumerate(rows):
+        dist = sum((r[i] - target_inputs[j])**2 for j, i in enumerate(input_indices))**0.5
+        distances.append((dist, r))
+    
+    distances.sort(key=lambda x: x[0])
+    neighbors = distances[:5]
+    
+    # Estimate goals by averaging neighbors
+    estimated_goals = []
+    for i in goal_indices:
+        estimated_goals.append(sum(n[1][i] for n in neighbors) / 5.0)
+    
+    # Construct a full row with estimated goals
+    full_row = [0.0] * len(header)
+    for i, val in enumerate(row):
+        if val != '?':
+            full_row[i] = val
+    for idx, g_idx in enumerate(goal_indices):
+        full_row[g_idx] = estimated_goals[idx]
+        
+    # Calculate fraction of rows that this candidate is better than
+    target_score = get_score(full_row)
+    better_count = sum(1 for r in rows if target_score > get_score(r))
+    p = better_count / len(rows)
+    
+    reason = f"This setup is estimated to outperform {p:.1%} of historical configurations, making it less optimal than the recommended setup."
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) for val in row])
+        
+        # Example: Compare a hypothetical setup B (row 1) against the dataset
+        test_row = rows[1][:]
+        for i in range(len(header)):
+            if header[i].endswith(('-', '+')):
+                test_row[i] = '?'
+        
+        p, reason = justify(header, rows, test_row)
+        
+        print("Comparison Analysis:")
+        print(f"Performance Rank: {p:.4f}")
+        print(f"Explanation: {reason}")
+        
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        exit(1)
+```

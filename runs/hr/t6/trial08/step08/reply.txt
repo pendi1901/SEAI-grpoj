@@ -1,0 +1,82 @@
+```python
+import ezr
+import random
+
+def fix(header, row, levers):
+    """
+    Suggests changes to a 'bad' row to improve its goal outcomes.
+    We simulate potential changes by testing which lever move results 
+    in the lowest ydist (closest to ideal goals).
+    """
+    # Create a dummy table to use ydist
+    # We need to ensure the row is in a format that works with ezr.ydist
+    # We use a minimal table with just this row to calculate relative improvement
+    tbl = ezr.Tbl([header, row])
+    
+    best_change = {}
+    best_ydist = ezr.ydist(tbl, row)
+    
+    # Try each lever
+    for col_name, allowed in levers.items():
+        col_idx = header.index(col_name)
+        original_val = row[col_idx]
+        
+        # Generate candidates based on type
+        candidates = []
+        if isinstance(allowed, list):  # Symbolic
+            candidates = [v for v in allowed if v != original_val]
+        else:  # Numeric (low, high)
+            low, high = allowed
+            # Try a few points in the range
+            candidates = [low, (low + high) / 2, high]
+            
+        for val in candidates:
+            # Create a copy and apply change
+            new_row = list(row)
+            new_row[col_idx] = val
+            
+            # Calculate new ydist
+            new_ydist = ezr.ydist(tbl, new_row)
+            
+            if new_ydist < best_ydist:
+                best_ydist = new_ydist
+                best_change = {col_name: val}
+                
+    return best_change
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Define levers
+    levers = {
+        "businessTravel": ["Non-Travel", "Travel_Frequently", "Travel_Rarely"],
+        "overTime": ["No", "Yes"],
+        "TrainingTimesLastYear": (0, 6),
+        "PercentSalaryHike": (11, 25),
+        "StockOptionLevel": (0, 3)
+    }
+    
+    # Pick a 'bad' row (e.g., one with high ydist)
+    tbl = ezr.Tbl([header] + rows)
+    worst_rows = sorted(rows, key=lambda r: ezr.ydist(tbl, r), reverse=True)
+    bad_row = worst_rows[0]
+    
+    suggestion = fix(header, bad_row, levers)
+    
+    print("Retention Improvement Analysis")
+    print("-" * 30)
+    print(f"Original row goal distance: {ezr.ydist(tbl, bad_row):.2f}")
+    print(f"Recommended change: {suggestion}")
+    
+    # Verify improvement
+    if suggestion:
+        col_name, val = list(suggestion.items())[0]
+        new_row = list(bad_row)
+        new_row[header.index(col_name)] = val
+        print(f"New row goal distance: {ezr.ydist(tbl, new_row):.2f}")
+    else:
+        print("No beneficial changes found.")
+```

@@ -1,0 +1,44 @@
+import csv
+import numpy as np
+from step09 import spot as step09_spot
+
+def spot(header, rows):
+    """
+    Identifies rows containing input values that are far outside the 
+    observed distribution (outliers), indicating potential entry errors.
+    Reuses the robust anomaly detection logic from step09.
+    """
+    return step09_spot(header, rows)
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i] == 'criterion':
+                    processed_row.append(val)
+                else:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+            rows.append(processed_row)
+
+    suspicious_indices = spot(header, rows)
+    
+    print("Anomaly Detection Report:")
+    if not suspicious_indices:
+        print("No suspicious configurations found.")
+    else:
+        print(f"Detected {len(suspicious_indices)} configurations that contain values")
+        print("far outside the normal range of our historical data.")
+        print("These are likely entry errors or settings we have never seen before.")
+        print("\nTop 5 most suspicious row indices (0-indexed):")
+        for idx in suspicious_indices[:5]:
+            print(f"- Row {idx}")

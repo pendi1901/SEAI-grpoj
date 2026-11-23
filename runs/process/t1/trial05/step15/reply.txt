@@ -1,0 +1,69 @@
+```python
+import csv
+
+def blame(header, rows):
+    """
+    Identifies the input columns that most strongly correlate with high costs.
+    We define 'worst' as rows with high 'Cost-' values.
+    """
+    # Identify goal indices and input indices
+    goal_indices = {name: i for i, name in enumerate(header) if name.endswith('-') or name.endswith('+')}
+    input_indices = [i for i, name in enumerate(header) if not (name.endswith('-') or name.endswith('+'))]
+    
+    cost_idx = goal_indices['Cost-']
+    
+    # Sort rows by 'Cost-' to find the worst ones (highest cost)
+    sorted_rows = sorted(rows, key=lambda r: float(r[cost_idx]), reverse=True)
+    
+    # Take the worst 20%
+    worst_rows = sorted_rows[:max(1, len(rows) // 5)]
+    
+    # Calculate correlation: difference between mean of worst rows and global mean
+    # A high positive difference suggests the input feature drives the cost
+    correlations = []
+    for i in input_indices:
+        col_vals = [float(r[i]) for r in rows]
+        mean_all = sum(col_vals) / len(col_vals)
+        
+        worst_vals = [float(r[i]) for r in worst_rows]
+        mean_worst = sum(worst_vals) / len(worst_vals)
+        
+        # We look for features that are significantly higher in the worst rows
+        diff = mean_worst - mean_all
+        correlations.append((diff, header[i]))
+    
+    # Sort by correlation strength (descending)
+    correlations.sort(key=lambda x: x[0], reverse=True)
+    
+    # Return the top 2 input columns that correlate with high cost
+    return [name for diff, name in correlations[:2]]
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [row for row in reader]
+        
+        important_features = blame(header, rows)
+        
+        # Identify all input columns to determine what can be ignored
+        input_cols = [name for name in header if not (name.endswith('-') or name.endswith('+'))]
+        ignored_features = [f for f in input_cols if f not in important_features]
+        
+        print("Customer Inquiry: What matters most for project cost?")
+        print("-" * 60)
+        print("Analysis: The following factors are the primary drivers of high costs:")
+        for i, feature in enumerate(important_features, 1):
+            print(f"  {i}. {feature}")
+            
+        print("\nRecommendation: You can safely focus your management attention on these.")
+        print("The following factors have the least impact on cost and can be deprioritized:")
+        for feature in ignored_features[:3]: # Show a few examples
+            print(f"  - {feature}")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

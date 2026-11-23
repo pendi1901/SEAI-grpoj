@@ -1,0 +1,62 @@
+```python
+import csv
+import random
+import step01
+
+def choose(header, rows, label):
+    """
+    Finds the best setup for a large, high-criticality project by sampling.
+    We filter for rows where 'Size' and 'Criticality' are high (>= 0.7),
+    then sample up to 50 of these candidates to find the best performer.
+    """
+    size_idx = header.index("Size")
+    crit_idx = header.index("Criticality")
+    goal_indices = [(i, name[-1]) for i, name in enumerate(header) 
+                    if name.endswith('-') or name.endswith('+')]
+
+    # Filter for "large and high-criticality" projects
+    candidates = [i for i, row in enumerate(rows) 
+                  if float(row[size_idx]) >= 0.7 and float(row[crit_idx]) >= 0.7]
+    
+    # If we have too many, sample 50; if too few, use all
+    sample_size = min(50, len(candidates))
+    trials = random.sample(candidates, sample_size)
+    
+    best_idx = -1
+    best_score = float('inf')
+    
+    for i in trials:
+        goals = label(i)
+        # Score: minimize '-' and negate '+'
+        score = sum(float(g) if op == '-' else -float(g) 
+                    for g, (idx, op) in zip(goals, goal_indices))
+        
+        if score < best_score:
+            best_score = score
+            best_idx = i
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', newline='') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [row for row in reader]
+            
+            def label(i):
+                return [rows[i][j] for j, name in enumerate(header) 
+                        if name.endswith('-') or name.endswith('+')]
+            
+            best_idx = choose(header, rows, label)
+            
+            print("Customer Inquiry: Best setup for large, high-criticality projects.")
+            print(f"Recommended row index: {best_idx}")
+            print(f"Row data: {rows[best_idx]}")
+            print("Strategy: Filtered for high-size/high-criticality projects and sampled for best performance.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

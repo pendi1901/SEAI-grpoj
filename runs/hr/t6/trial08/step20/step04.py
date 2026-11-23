@@ -1,0 +1,50 @@
+import ezr
+import random
+
+def flow(header, row, seen):
+    """
+    Decide if the current row is 'worth keeping' (needs a retention conversation).
+    We use the 'wins' logic from ezr: if the row is in the top tier of 
+    expected performance/tenure compared to what we have seen, we flag it.
+    """
+    if not seen:
+        return True
+    
+    # Create a temporary table of what we have seen to establish a baseline
+    # We use the header to define the goals
+    tbl = ezr.Tbl([header] + seen)
+    
+    # The 'wins' function returns a score where 100 is best, 0 is average.
+    # We flag the row if it scores above 50 (better than average).
+    scorer = ezr.wins(tbl)
+    score = scorer(row)
+    
+    return score > 50
+
+if __name__ == "__main__":
+    # Load data
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Simulate the arrival process
+    random.seed(1234567891)
+    random.shuffle(rows)
+    
+    seen = []
+    flagged_count = 0
+    
+    # Process rows one by one
+    for row in rows:
+        if flow(header, row, seen):
+            flagged_count += 1
+        seen.append(row)
+    
+    print("Retention Analysis Report")
+    print("-" * 30)
+    print(f"Total employees processed: {len(rows)}")
+    print(f"Employees flagged for retention conversation: {flagged_count}")
+    print("-" * 30)
+    print("The system flags employees who demonstrate high potential or")
+    print("tenure stability based on the incoming stream of data.")

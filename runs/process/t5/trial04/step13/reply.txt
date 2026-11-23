@@ -1,0 +1,49 @@
+```python
+import ezr
+import random
+
+def certify(xs, ys):
+    """
+    Returns True if xs and ys are statistically indistinguishable,
+    False if they differ significantly.
+    Uses ezr.same which performs cliffs, ks, and cohen tests.
+    """
+    # We use the default effect size (0.35 for cohen, 0.197 for cliffs).
+    # If the tests return True, the distributions are effectively the same.
+    return ezr.same(xs, ys, eps=0.35)
+
+if __name__ == "__main__":
+    # Load data
+    filename = "pom3a.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    header = next(data_gen)
+    rows = list(data_gen)
+    
+    # The customer asks if results shifted after a change in team decision-making.
+    # We assume the data is ordered chronologically.
+    # We compare the first half (before the change) vs the second half (after).
+    # We use 'Cost-' as the primary metric for "results".
+    cost_idx = header.index("Cost-")
+    
+    mid = len(rows) // 2
+    before_change = [r[cost_idx] for r in rows[:mid]]
+    after_change = [r[cost_idx] for r in rows[mid:]]
+    
+    # Perform certification
+    is_same = certify(before_change, after_change)
+    
+    print("Certification: Did the results shift after the team decision change?")
+    print("-" * 60)
+    print(f"Before change (n={len(before_change)}), Avg Cost: {sum(before_change)/len(before_change):.4f}")
+    print(f"After change  (n={len(after_change)}), Avg Cost: {sum(after_change)/len(after_change):.4f}")
+    print("-" * 60)
+    
+    if is_same:
+        print("Result: The difference is statistically insignificant.")
+        print("Conclusion: The results are effectively the same as before.")
+    else:
+        print("Result: The difference is statistically significant.")
+        print("Conclusion: The results have genuinely shifted.")
+        
+    exit(0)
+```

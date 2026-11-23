@@ -1,0 +1,67 @@
+```python
+import csv
+
+def certify(xs, ys):
+    """
+    Returns True if the distributions of xs and ys are statistically 
+    indistinguishable (the difference is noise), False otherwise.
+    Uses a simple A12 effect size test (Vargha-Delaney).
+    """
+    n_x = len(xs)
+    n_y = len(ys)
+    if n_x == 0 or n_y == 0:
+        return True
+
+    # Count how many times x > y, x < y, and x == y
+    greater = 0
+    less = 0
+    for x in xs:
+        for y in ys:
+            if x > y:
+                greater += 1
+            elif x < y:
+                less += 1
+    
+    # A12 = (greater + 0.5 * equal) / (n_x * n_y)
+    equal = (n_x * n_y) - greater - less
+    a12 = (greater + 0.5 * equal) / (n_x * n_y)
+    
+    # If A12 is close to 0.5, the difference is likely noise.
+    # Thresholds for small/medium/large effect sizes are typically 0.56, 0.64, 0.71.
+    # We return False if the effect size is significant (e.g., > 0.6 or < 0.4).
+    return 0.4 <= a12 <= 0.6
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    rows = []
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            for row in reader:
+                processed_row = [val if header[i] == 'criterion' else float(val) 
+                                 for i, val in enumerate(row)]
+                rows.append(processed_row)
+        
+        # "Big setups" defined by N_estimators (index 3)
+        # Compare ACC+ (index 1) for large vs small N_estimators
+        n_est_idx = header.index('N_estimators')
+        acc_idx = header.index('ACC+')
+        
+        median_n = sum(r[n_est_idx] for r in rows) / len(rows)
+        
+        small_setups = [r[acc_idx] for r in rows if r[n_est_idx] <= median_n]
+        big_setups = [r[acc_idx] for r in rows if r[n_est_idx] > median_n]
+        
+        is_noise = certify(small_setups, big_setups)
+        
+        print("Analysis: Is the difference between big and small setups just noise?")
+        if is_noise:
+            print("Answer: Yes, the observed difference is likely just noise.")
+        else:
+            print("Answer: No, there is a statistically significant difference.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

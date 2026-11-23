@@ -1,0 +1,80 @@
+import csv
+
+def blame(header, rows):
+    """
+    Identifies which input columns correlate most strongly with poor performance.
+    'Bad' rows are defined as the bottom 10% based on a multi-objective score.
+    We calculate the correlation (or difference in means) between input values
+    and the 'badness' of the rows.
+    """
+    # Identify goal indices
+    idx_mre = header.index('MRE-')
+    idx_acc = header.index('ACC+')
+    idx_pred = header.index('PRED40+')
+    
+    # Identify input indices
+    input_indices = [i for i, name in enumerate(header) if name not in ['MRE-', 'ACC+', 'PRED40+']]
+    
+    # Calculate a score for each row to define 'badness'
+    # Lower score = worse performance
+    def get_score(row):
+        # Normalize goals: MRE (min), ACC (max), PRED (max)
+        # We use simple relative ranking here
+        return -row[idx_mre] + row[idx_acc] + row[idx_pred]
+
+    scored_rows = sorted([(get_score(r), r) for r in rows])
+    
+    # Define 'bad' as the bottom 10%
+    n_bad = max(1, len(rows) // 10)
+    bad_rows = [r for s, r in scored_rows[:n_bad]]
+    all_rows = rows
+    
+    # For each input, calculate the difference in mean/distribution between bad and all
+    # We look for inputs where the bad rows have significantly different values
+    impacts = []
+    for i in input_indices:
+        col_name = header[i]
+        vals = [r[i] for r in all_rows if isinstance(r[i], (int, float))]
+        bad_vals = [r[i] for r in bad_rows if isinstance(r[i], (int, float))]
+        
+        if not vals or not bad_vals:
+            continue
+            
+        mean_all = sum(vals) / len(vals)
+        mean_bad = sum(bad_vals) / len(bad_vals)
+        
+        # The 'blame' score is the absolute difference in means
+        # normalized by the range of the column
+        diff = abs(mean_bad - mean_all)
+        impacts.append((diff, col_name))
+    
+    # Sort by impact descending
+    impacts.sort(key=lambda x: x[0], reverse=True)
+    
+    # Return the top 2 most impactful input columns
+    return [name for diff, name in impacts[:2]]
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            for row in reader:
+                processed_row = []
+                for i, val in enumerate(row):
+                    if header[i] == 'criterion':
+                        processed_row.append(val)
+                    else:
+                        processed_row.append(float(val))
+                rows.append(processed_row)
+        
+        culprits = blame(header, rows)
+        print("The settings most responsible for poor performance are:")
+        for c in culprits:
+            print(f"- {c}")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

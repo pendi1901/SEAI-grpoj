@@ -1,0 +1,72 @@
+```python
+import csv
+
+def blame(header, rows):
+    """
+    Identifies input columns that correlate with low 'YearsAtCompany+' 
+    (the goal to maximize). We define 'worst' as the bottom 20% of 
+    tenure and compare their feature distributions to the rest.
+    """
+    # Identify goal column
+    goal_idx = next(i for i, name in enumerate(header) if name.endswith('+'))
+    
+    # Identify input columns (exclude goals)
+    input_indices = [i for i, name in enumerate(header) if not (name.endswith('+') or name.endswith('-'))]
+    
+    # Sort rows by tenure to find the "worst" (shortest stays)
+    sorted_rows = sorted(rows, key=lambda r: r[goal_idx])
+    cutoff = max(1, len(rows) // 5)
+    worst = sorted_rows[:cutoff]
+    rest = sorted_rows[cutoff:]
+    
+    # Calculate simple importance: difference in mean/mode between worst and rest
+    scores = []
+    for i in input_indices:
+        col_data = [r[i] for r in rows if not isinstance(r[i], str) or r[i] != "?"]
+        if not col_data:
+            continue
+            
+        worst_vals = [r[i] for r in worst if r[i] != "?"]
+        rest_vals = [r[i] for r in rest if r[i] != "?"]
+        
+        if not worst_vals or not rest_vals:
+            continue
+            
+        # For numeric, compare means. For symbolic, compare frequency of most common value.
+        if isinstance(worst_vals[0], (int, float)):
+            diff = abs((sum(worst_vals)/len(worst_vals)) - (sum(rest_vals)/len(rest_vals)))
+            # Normalize by range
+            rng = max(col_data) - min(col_data)
+            scores.append((header[i], diff / (rng + 1e-9)))
+        else:
+            # Symbolic: compare frequency of the most common value in 'worst'
+            mode_worst = max(set(worst_vals), key=worst_vals.count)
+            freq_worst = worst_vals.count(mode_worst) / len(worst_vals)
+            freq_rest = rest_vals.count(mode_worst) / len(rest_vals)
+            scores.append((header[i], abs(freq_worst - freq_rest)))
+            
+    # Return top 3 columns that differentiate the worst performers
+    scores.sort(key=lambda x: x[1], reverse=True)
+    return [s[0] for s in scores[:3]]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    factors = blame(header, rows)
+    print("Analysis: Factors explaining short stays (low YearsAtCompany+):")
+    for f in factors:
+        print(f"- {f}")
+    print("\nThese columns show the greatest variance between short-tenure employees and the rest of the staff.")
+```

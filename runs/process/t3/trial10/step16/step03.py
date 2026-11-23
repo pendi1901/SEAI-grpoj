@@ -1,0 +1,64 @@
+import csv
+import pandas as pd
+import numpy as np
+from scipy import stats
+
+def certify(xs, ys):
+    """
+    Returns True if the difference between two distributions is statistically 
+    insignificant (likely noise), False if they are significantly different.
+    Uses Welch's t-test for independent samples.
+    """
+    # If samples are too small, we cannot reliably reject the null hypothesis
+    if len(xs) < 2 or len(ys) < 2:
+        return True
+    
+    # Perform Welch's t-test (does not assume equal variance)
+    t_stat, p_value = stats.ttest_ind(xs, ys, equal_var=False)
+    
+    # If p-value > 0.05, we fail to reject the null hypothesis (they are the same)
+    return p_value > 0.05
+
+def analyze_team_size_impact(header, rows):
+    df = pd.DataFrame(rows, columns=header)
+    
+    # Identify 'Team Size' column and 'Cost-' column
+    # 'Team Size' is numeric, 'Cost-' is the goal to minimize
+    team_col = 'Team Size'
+    cost_col = 'Cost-'
+    
+    # Split into small and big teams based on the median team size
+    median_size = df[team_col].median()
+    small_teams = df[df[team_col] <= median_size][cost_col]
+    big_teams = df[df[team_col] > median_size][cost_col]
+    
+    is_same = certify(small_teams.tolist(), big_teams.tolist())
+    
+    return is_same, small_teams.mean(), big_teams.mean()
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) for val in row])
+        
+        is_same, avg_small, avg_big = analyze_team_size_impact(header, rows)
+        
+        print("Customer Inquiry Analysis:")
+        print(f"Small team average cost: {avg_small:.4f}")
+        print(f"Big team average cost: {avg_big:.4f}")
+        
+        if is_same:
+            print("Conclusion: The observed difference is statistically insignificant.")
+            print("It is likely just noise/luck, not a real trend.")
+        else:
+            print("Conclusion: The difference is statistically significant.")
+            print("The team size does have a real impact on project costs.")
+            
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        exit(1)

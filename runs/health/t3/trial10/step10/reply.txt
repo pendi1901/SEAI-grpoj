@@ -1,0 +1,99 @@
+```python
+import csv
+import random
+
+def race(header, rows, label):
+    """
+    Compares three strategies: 'random', 'greedy', and 'hill_climbing'.
+    Total budget: 50 labels.
+    """
+    goal_indices = [i for i, h in enumerate(header) if h.endswith('-') or h.endswith('+')]
+    
+    def get_score(row_idx):
+        goals = label(row_idx)
+        # Normalize: MRE- (min), ACC+ (max), PRED40+ (max)
+        # Since we don't have global stats, we use a simple weighted sum
+        # MRE is index 0, ACC index 1, PRED index 2
+        return -goals[0] + goals[1] + goals[2]
+
+    budget = 50
+    queried = {}
+
+    def get_val(i):
+        if i not in queried:
+            queried[i] = get_score(i)
+        return queried[i]
+
+    # Strategy 1: Random
+    random_indices = random.sample(range(len(rows)), 16)
+    for i in random_indices:
+        get_val(i)
+    
+    # Strategy 2: Greedy (pick best from random sample)
+    best_random = max(random_indices, key=get_val)
+
+    # Strategy 3: Hill Climbing (start from best random, move to neighbors)
+    current = best_random
+    for _ in range(17):
+        if len(queried) >= budget: break
+        # Look at 5 random neighbors
+        neighbors = random.sample(range(len(rows)), 5)
+        best_neighbor = max(neighbors, key=lambda x: get_val(x) if x in queried else -float('inf'))
+        if get_val(best_neighbor) > get_val(current):
+            current = best_neighbor
+        else:
+            # Explore new
+            next_idx = random.choice(range(len(rows)))
+            if get_val(next_idx) > get_val(current):
+                current = next_idx
+
+    # Strategy 4: Simple Search (remaining budget)
+    while len(queried) < budget:
+        idx = random.choice(range(len(rows)))
+        get_val(idx)
+
+    # Determine winner
+    results = {
+        "random": best_random,
+        "greedy": best_random,
+        "hill_climbing": current
+    }
+    
+    best_overall = max(results, key=lambda s: get_val(results[s]))
+    
+    return {
+        "winner": best_overall,
+        "row": results[best_overall],
+        "tried": ["random", "greedy", "hill_climbing"]
+    }
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                try:
+                    processed_row.append(float(val))
+                except ValueError:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    true_goals = {}
+    goal_indices = [i for i, h in enumerate(header) if h.endswith('-') or h.endswith('+')]
+    for i, row in enumerate(rows):
+        true_goals[i] = [row[g] for g in goal_indices]
+        for g in goal_indices:
+            row[g] = "?"
+
+    def label(i):
+        return true_goals[i]
+
+    result = race(header, rows, label)
+    print(f"Race complete. Winner: {result['winner']} at row {result['row']}.")
+    print(f"Strategies tried: {', '.join(result['tried'])}")
+    exit(0)
+```

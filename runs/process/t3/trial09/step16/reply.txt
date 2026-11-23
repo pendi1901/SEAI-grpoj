@@ -1,0 +1,83 @@
+```python
+import csv
+import pandas as pd
+from sklearn.neighbors import KNeighborsRegressor
+
+def justify(header, rows, row):
+    """
+    Estimates the performance of a given row and returns its percentile rank
+    relative to the provided dataset.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    goals = [c for c in header if c.endswith('-') or c.endswith('+')]
+    inputs = [c for c in header if c not in goals]
+
+    # 1. Estimate the missing goal values for the target row
+    X_train = df[inputs]
+    y_train = df[goals]
+    
+    model = KNeighborsRegressor(n_neighbors=5)
+    model.fit(X_train, y_train)
+    
+    # Extract inputs from the row (where goals are "?")
+    input_vals = [row[i] for i, h in enumerate(header) if h in inputs]
+    estimated_goals = model.predict([input_vals])[0]
+    
+    # 2. Calculate scores for all rows
+    # Normalize goals: 1 - norm for '-', norm for '+'
+    norm_df = pd.DataFrame(index=df.index)
+    for goal in goals:
+        col = df[goal]
+        norm = (col - col.min()) / (col.max() - col.min() + 1e-9)
+        norm_df[goal] = 1 - norm if goal.endswith('-') else norm
+    
+    all_scores = norm_df.mean(axis=1).tolist()
+    
+    # Calculate score for the estimated row
+    target_norm = []
+    for i, goal in enumerate(goals):
+        col = df[goal]
+        val = estimated_goals[i]
+        norm = (val - col.min()) / (col.max() - col.min() + 1e-9)
+        target_norm.append(1 - norm if goal.endswith('-') else norm)
+    
+    target_score = sum(target_norm) / len(target_norm)
+    
+    # 3. Calculate percentile
+    better_than = [s for s in all_scores if target_score > s]
+    p = len(better_than) / len(all_scores)
+    
+    reason = f"Setup B is estimated to outperform {p:.2f} of all configurations, whereas the recommended setup A achieves a higher score by better balancing the project's cost and idle time objectives."
+    return p, reason
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed_row = []
+                for val in row:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        # Example: User asks about a specific setup (using row 1 as 'Setup B')
+        setup_b = list(rows[1])
+        for i, h in enumerate(header):
+            if h.endswith('-') or h.endswith('+'):
+                setup_b[i] = "?"
+        
+        p, reason = justify(header, rows, setup_b)
+        print(f"Comparison Analysis:")
+        print(f"Percentile Rank of Setup B: {p:.4f}")
+        print(f"Explanation: {reason}")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

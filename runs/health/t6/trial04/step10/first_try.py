@@ -1,0 +1,90 @@
+import ezr
+import random
+
+def race(header, rows, label):
+    """
+    Compares three strategies for finding the best row within a 50-label budget.
+    Strategies:
+    1. random: Picks rows at random.
+    2. greedy: Picks rows based on the best current centroid.
+    3. explore: Picks rows based on the best current centroid but with 
+       a slight bias towards exploration (using the acquire logic).
+    """
+    budget = 50
+    labeled_indices = set()
+    
+    def oracle_wrapper(i):
+        if i not in labeled_indices:
+            if len(labeled_indices) >= budget:
+                raise Exception("Budget exceeded")
+            labeled_indices.add(i)
+        return label(i)
+
+    # Strategy 1: Random
+    def strategy_random(tbl, budget_left):
+        indices = random.sample(range(len(rows)), budget_left)
+        for i in indices: oracle_wrapper(i)
+        return min(range(len(rows)), key=lambda i: ezr.ydist(tbl, rows[i]))
+
+    # Strategy 2: Greedy (using the acquire logic but restricted)
+    def strategy_greedy(tbl, budget_left):
+        # Simplified greedy: pick the best row found so far, then pick its neighbors
+        # We use the existing acquire logic which is inherently greedy
+        labeled = ezr.acquire(tbl, cap=budget_left, label=lambda r: oracle_wrapper(rows.index(r)))
+        return rows.index(min(labeled, key=lambda r: ezr.ydist(tbl, r)))
+
+    # Strategy 3: Explore (using the straw man grabs logic)
+    def strategy_explore(tbl, budget_left):
+        # Grabs is a random-based approach, let's use a variation: 
+        # pick the best from a random sample of the remaining space
+        labeled = ezr.grabs(tbl, cap=budget_left, label=lambda r: oracle_wrapper(rows.index(r)))
+        return rows.index(min(labeled, key=lambda r: ezr.ydist(tbl, r)))
+
+    # Setup
+    tbl = ezr.Tbl([header] + rows)
+    strategies = {
+        "random": strategy_random,
+        "greedy": strategy_greedy,
+        "explore": strategy_explore
+    }
+    
+    results = {}
+    for name, func in strategies.items():
+        # Reset budget tracking for each strategy run
+        labeled_indices.clear()
+        best_idx = func(tbl, budget)
+        results[name] = (best_idx, ezr.ydist(tbl, rows[best_idx]))
+
+    # Determine winner (lowest ydist)
+    winner = min(results, key=lambda n: results[n][1])
+    
+    return {
+        "winner": winner,
+        "row": results[winner][0],
+        "tried": list(strategies.keys())
+    }
+
+if __name__ == "__main__":
+    file_path = "Health-ClosedIssues0000.n1000.train.csv"
+    all_data = list(ezr.csv(file_path))
+    header = all_data[0]
+    rows = all_data[1:]
+    
+    original_rows = [list(r) for r in rows]
+    masked_rows = []
+    goal_indices = [i for i, name in enumerate(header) if name[-1] in "+-"]
+    for row in rows:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_rows.append(new_row)
+        
+    def label(i):
+        return original_rows[i]
+    
+    result = race(header, masked_rows, label)
+    
+    print("Race results for 50-label budget:")
+    print(f"Winner: {result['winner']}")
+    print(f"Best row index found: {result['row']}")
+    print(f"Strategies compared: {', '.join(result['tried'])}")

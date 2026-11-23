@@ -1,0 +1,98 @@
+import ezr
+import random
+import step01
+import step07
+
+def race(header, rows, label):
+    """
+    Compares three strategies: random, greedy (nearest neighbor), and tree-based.
+    Budget: 50 labels total.
+    """
+    budget = 50
+    used_indices = set()
+
+    def get_label(i):
+        if i not in used_indices:
+            if len(used_indices) >= budget:
+                raise Exception("Budget exceeded")
+            used_indices.add(i)
+        return label(i)
+
+    def strategy_random(tbl, rows):
+        indices = random.sample(range(len(rows)), budget // 3)
+        for i in indices:
+            goals = get_label(i)
+            for j, val in enumerate(goals):
+                rows[i][9 + j] = val
+        return rows
+
+    def strategy_greedy(tbl, rows):
+        # Simple greedy: pick row, label, move to nearest unlabelled
+        curr = random.randint(0, len(rows) - 1)
+        for _ in range(budget // 3):
+            goals = get_label(curr)
+            for j, val in enumerate(goals):
+                rows[curr][9 + j] = val
+            # Find nearest unlabelled
+            best_d, best_i = 1e30, -1
+            for i in range(len(rows)):
+                if i not in used_indices:
+                    d = ezr.xdist(tbl, rows[curr], rows[i])
+                    if d < best_d:
+                        best_d, best_i = d, i
+            if best_i == -1: break
+            curr = best_i
+        return rows
+
+    def strategy_tree(tbl, rows):
+        # Use the acquire logic from ezr
+        labeled = ezr.acquire(tbl, cap=budget // 3, label=lambda r: get_label(rows.index(r)))
+        return rows
+
+    strategies = {
+        "random": strategy_random,
+        "greedy": strategy_greedy,
+        "tree": strategy_tree
+    }
+
+    results = {}
+    for name, func in strategies.items():
+        # Reset rows for each strategy
+        temp_rows = [list(r) for r in rows]
+        tbl = ezr.Tbl([header] + temp_rows)
+        func(tbl, temp_rows)
+        
+        # Find best row found by this strategy
+        best_ydist = 1e30
+        best_idx = -1
+        for i, r in enumerate(temp_rows):
+            if "?" not in r[9:]:
+                d = ezr.ydist(tbl, r)
+                if d < best_ydist:
+                    best_ydist, best_idx = d, i
+        results[name] = (best_ydist, best_idx)
+
+    winner = min(results, key=lambda k: results[k][0])
+    return {"winner": winner, "row": results[winner][1], "tried": list(strategies.keys())}
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Mask goals
+    for r in rows:
+        r[9] = r[10] = r[11] = "?"
+        
+    def label_func(i):
+        # Access original data for simulation
+        full_data = list(ezr.csv(filename))
+        full_rows = full_data[1:]
+        return [full_rows[i][9], full_rows[i][10], full_rows[i][11]]
+    
+    res = race(header, rows, label_func)
+    print(f"Race Results: The winner is '{res['winner']}' strategy.")
+    print(f"Best row found at index: {res['row']}")
+    print(f"Strategies compared: {', '.join(res['tried'])}")
+    exit(0)

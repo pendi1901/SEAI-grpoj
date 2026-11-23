@@ -1,0 +1,64 @@
+import csv
+import random
+from step02 import guess
+
+def choose(header, rows, label):
+    """
+    Finds the best working arrangement by sampling 50 rows, 
+    labeling them to get true values, and using a Random Forest 
+    to predict the best row among all candidates.
+    """
+    # Identify goal column
+    goal_idx = next(i for i, h in enumerate(header) if h.endswith('+') or h.endswith('-'))
+    is_maximize = header[goal_idx].endswith('+')
+    
+    # Select 50 random indices to label
+    indices_to_label = random.sample(range(len(rows)), min(50, len(rows)))
+    
+    # Label the selected rows
+    train_rows = []
+    for i in indices_to_label:
+        row = list(rows[i])
+        row[goal_idx] = label(i)[0]
+        train_rows.append(row)
+        
+    # Prepare test set (all rows)
+    # We use the guess function from step02 to predict values for all rows
+    # based on the 50 labeled samples.
+    predictions = guess(header, train_rows, rows)
+    
+    # Find the index with the best predicted value
+    if is_maximize:
+        best_idx = max(range(len(predictions)), key=lambda i: predictions[i])
+    else:
+        best_idx = min(range(len(predictions)), key=lambda i: predictions[i])
+        
+    return best_idx
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = [float(val) if header[i][0].isupper() else val for i, val in enumerate(row)]
+            rows.append(processed_row)
+            
+    # Mock label function for the test harness
+    goal_idx = next(i for i, h in enumerate(header) if h.endswith('+') or h.endswith('-'))
+    
+    def label(i):
+        return [rows[i][goal_idx]]
+    
+    # Mask the goal column for the choose function
+    masked_rows = []
+    for row in rows:
+        r = list(row)
+        r[goal_idx] = "?"
+        masked_rows.append(r)
+        
+    best_idx = choose(header, masked_rows, label)
+    
+    print(f"The best working arrangement found is at row index: {best_idx}")
+    print(f"Goal column '{header[goal_idx]}' value: {rows[best_idx][goal_idx]}")

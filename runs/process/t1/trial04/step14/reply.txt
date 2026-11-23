@@ -1,0 +1,71 @@
+```python
+import csv
+
+def flow(header, row, seen):
+    """
+    Detects if a project is 'going bad' by comparing the current row's
+    performance to the historical baseline.
+    
+    A project is considered 'going bad' if its performance score is 
+    significantly worse than the average of the previously seen rows.
+    """
+    # Identify goal indices and directions
+    goals = []
+    for i, name in enumerate(header):
+        if name.endswith('-') or name.endswith('+'):
+            goals.append((i, name.endswith('-')))
+
+    def get_score(r):
+        # Calculate a normalized penalty score (lower is better)
+        total = 0
+        for col_idx, is_min in goals:
+            val = float(r[col_idx])
+            total += val if is_min else (1.0 - val)
+        return total
+
+    # We need a baseline to determine what 'bad' means.
+    # Wait for at least 50 rows to establish a stable baseline.
+    if len(seen) < 50:
+        return False
+
+    # Calculate the average score of all previously seen rows
+    seen_scores = [get_score(r) for r in seen]
+    avg_score = sum(seen_scores) / len(seen_scores)
+    
+    # Calculate standard deviation to define a threshold for 'bad'
+    variance = sum((s - avg_score) ** 2 for s in seen_scores) / len(seen_scores)
+    std_dev = variance ** 0.5
+    
+    # If the current row's score is more than 2 standard deviations 
+    # worse than the average, we flag it as 'going bad'.
+    current_score = get_score(row)
+    if current_score > (avg_score + 2 * std_dev):
+        return True
+    
+    return False
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) for val in row])
+        
+        bad_rows_found = 0
+        seen = []
+        for row in rows:
+            if flow(header, row, seen):
+                bad_rows_found += 1
+            seen.append(row)
+            
+        print(f"Monitoring complete. Detected {bad_rows_found} instances where project performance degraded significantly.")
+        print("The system flags rows that deviate more than 2 standard deviations from the historical average.")
+        exit(0)
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

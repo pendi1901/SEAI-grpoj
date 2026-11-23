@@ -1,0 +1,87 @@
+import csv
+import random
+from step02 import guess
+from step01 import remember
+
+def race(header, rows, label):
+    """
+    Compares three strategies: random, greedy (model-based), and a hybrid approach.
+    Budget: 50 labels total.
+    """
+    budget = 50
+    tried_indices = set()
+    
+    def get_true_row(idx):
+        if idx not in tried_indices:
+            if len(tried_indices) >= budget:
+                raise Exception("Budget exceeded")
+            tried_indices.add(idx)
+            goals = label(idx)
+            goal_cols = [i for i, h in enumerate(header) if h.endswith(('-', '+'))]
+            for i, g_idx in enumerate(goal_cols):
+                rows[idx][g_idx] = goals[i]
+        return rows[idx]
+
+    def strategy_random():
+        idx = random.choice(range(len(rows)))
+        return idx, get_true_row(idx)
+
+    def strategy_greedy():
+        labeled = [i for i in range(len(rows)) if not isinstance(rows[i][0], str) and rows[i][0] != "?"]
+        if len(labeled) < 10: return strategy_random()
+        
+        train = [rows[i] for i in labeled]
+        test = [rows[i] for i in range(len(rows)) if i not in tried_indices]
+        if not test: return strategy_random()
+        
+        preds = guess(header, train, test)
+        # Minimize MRE- (index 0)
+        best_pred_idx = preds.index(min(preds))
+        actual_idx = [i for i in range(len(rows)) if i not in tried_indices][best_pred_idx]
+        return actual_idx, get_true_row(actual_idx)
+
+    def strategy_hybrid():
+        # Explore first 20, then exploit
+        if len(tried_indices) < 20: return strategy_random()
+        return strategy_greedy()
+
+    strategies = {"random": strategy_random, "greedy": strategy_greedy, "hybrid": strategy_hybrid}
+    results = {}
+    
+    for name in strategies:
+        idx, row = strategies[name]()
+        results[name] = (idx, row[0]) # MRE- is index 0
+
+    # Winner is the one with the lowest MRE-
+    winner = min(results, key=lambda k: results[k][1])
+    
+    return {
+        "winner": winner, 
+        "row": results[winner][0], 
+        "tried": list(strategies.keys())
+    }
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed = [val if header[i] == 'criterion' else (float(val) if val != "?" else "?") for i, val in enumerate(row)]
+            rows.append(processed)
+
+    original_rows = [list(r) for r in rows]
+    def label(i):
+        return [original_rows[i][j] for j, h in enumerate(header) if h.endswith(('-', '+'))]
+
+    # Hide goals
+    for r in rows:
+        for j, h in enumerate(header):
+            if h.endswith(('-', '+')): r[j] = "?"
+
+    result = race(header, rows, label)
+    print(f"Strategy Comparison Results:")
+    print(f"The winning strategy was: {result['winner']}")
+    print(f"Best configuration found at index: {result['row']}")
+    print(f"Strategies evaluated: {', '.join(result['tried'])}")

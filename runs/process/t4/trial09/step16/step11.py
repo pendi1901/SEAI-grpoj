@@ -1,0 +1,67 @@
+import csv
+import pandas as pd
+import numpy as np
+from sklearn.neighbors import NearestNeighbors
+from step01 import remember as step01_remember
+
+def find_similar(header, rows, target_row, n=5):
+    """
+    Finds the n most similar rows to the target_row using Euclidean distance
+    on input columns.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    input_cols = [col for col in header if not (col.endswith('-') or col.endswith('+'))]
+    
+    # Extract numeric input data
+    X = df[input_cols].values
+    
+    # Find nearest neighbors
+    nn = NearestNeighbors(n_neighbors=n)
+    nn.fit(X)
+    
+    # Target row inputs
+    target_inputs = np.array([target_row[i] for i, col in enumerate(header) if col in input_cols]).reshape(1, -1)
+    
+    distances, indices = nn.kneighbors(target_inputs)
+    return indices[0].tolist()
+
+def remember(header, rows):
+    """
+    Returns the indices of the best rows (top 5%).
+    """
+    return step01_remember(header, rows)
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) for val in row])
+        
+        # Example: Customer proposes the last row as their setup
+        target_row = rows[-1]
+        
+        # 1. Find similar past setups
+        similar_indices = find_similar(header, rows[:-1], target_row, n=3)
+        
+        # 2. Show how they turned out (goal values)
+        goal_cols = [i for i, h in enumerate(header) if h.endswith(('-', '+'))]
+        
+        print("Customer Inquiry: Similar past setups and their outcomes.")
+        print(f"Proposed setup inputs: {target_row[:len(header)-len(goal_cols)]}")
+        print("\nMost similar past setups found:")
+        for idx in similar_indices:
+            outcomes = [f"{header[g]}: {rows[idx][g]:.4f}" for g in goal_cols]
+            print(f"  Row {idx}: {', '.join(outcomes)}")
+            
+        # 3. Provide best setups for context
+        best_indices = remember(header, rows)
+        print(f"\nFor comparison, here are the indices of the best-performing setups in our history:")
+        print(best_indices[:10], "...")
+        
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

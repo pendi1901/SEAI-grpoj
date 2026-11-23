@@ -1,0 +1,26 @@
+
+--- stderr ---
+Traceback (most recent call last):
+  File "<repo>\runs\hr\t6\trial09\step16\step16.py", line 55, in <module>
+    p, reason = justify(header, rows, test_row)
+                ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<repo>\runs\hr\t6\trial09\step16\step16.py", line 28, in justify
+    recommendation = step08.fix(header, test_row, levers)
+  File "<repo>\runs\hr\t6\trial09\step16\step08.py", line 15, in fix
+    best_ydist = ezr.ydist(tbl, row)
+  File "<repo>\runs\hr\t6\trial09\step16\ezr.py", line 180, in ydist
+    return dist((abs(norm(c, row[c.at]) - c.goal)
+                      for c in tbl.y), len(tbl.y))
+  File "<repo>\runs\hr\t6\trial09\step16\ezr.py", line 176, in dist
+    return sqrt(sum(v*v for v in vs) / n)
+                ~~~^^^^^^^^^^^^^^^^^
+  File "<repo>\runs\hr\t6\trial09\step16\ezr.py", line 176, in <genexpr>
+    return sqrt(sum(v*v for v in vs) / n)
+                                 ^^
+  File "<repo>\runs\hr\t6\trial09\step16\ezr.py", line 180, in <genexpr>
+    return dist((abs(norm(c, row[c.at]) - c.goal)
+                     ~~~~^^^^^^^^^^^^^^
+  File "<repo>\runs\hr\t6\trial09\step16\ezr.py", line 138, in norm
+    z = max(-3, min(3, (v - col.mu) / (1e-32 + div(col))))
+                        ~~^~~~~~~~
+TypeError: unsupported operand type(s) for -: 'str' and 'float'

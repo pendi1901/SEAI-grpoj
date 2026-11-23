@@ -1,0 +1,47 @@
+```python
+import ezr
+import step07
+
+def choose(header, rows, label):
+    """
+    Finds the best setup for a high-stakes project by using the acquire strategy
+    from ezr. This strategy is designed to find optimal configurations with 
+    minimal labeling (budget of 50).
+    """
+    # We reuse the logic from step07, which correctly implements the 
+    # acquire-based selection process using the provided label function.
+    return step07.choose(header, rows, label)
+
+if __name__ == "__main__":
+    file_path = "pom3a.n1000.train.csv"
+    rows_gen = ezr.csv(file_path)
+    try:
+        header = next(rows_gen)
+        all_rows = list(rows_gen)
+        
+        # Mask goals for the input to choose()
+        masked_rows = []
+        for row in all_rows:
+            new_row = row[:]
+            for i, name in enumerate(header):
+                if name.endswith("-") or name.endswith("+"):
+                    new_row[i] = "?"
+            masked_rows.append(new_row)
+            
+        # Define the label function for the harness
+        def label(i):
+            # Return the true goal values from the original data
+            return [all_rows[i][idx] for idx, name in enumerate(header) 
+                    if name.endswith("-") or name.endswith("+")]
+        
+        best_idx = choose(header, masked_rows, label)
+        
+        print(f"For high-stakes projects, the recommended setup is at index: {best_idx}")
+        print(f"Row data: {all_rows[best_idx]}")
+        
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
+        
+    exit(0)
+```

@@ -1,0 +1,38 @@
+```python
+import ezr
+import step05
+
+def blame(header, rows):
+    """
+    Identify input columns that do not significantly contribute to performance
+    differences. These are the settings that can be left at factory defaults
+    without hurting anything.
+    
+    We use the logic from step05 to find 'culprits' (columns that matter).
+    The columns that are NOT culprits are the ones that can be left at defaults.
+    """
+    # Get all input column names
+    input_cols = [h for h in header if h[-1] not in "+-!"]
+    
+    # Get the list of columns that actually matter (culprits)
+    culprits = step05.blame(header, rows)
+    
+    # The columns that can be left at defaults are those in input_cols
+    # but not in the list of culprits.
+    return [col for col in input_cols if col not in culprits]
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    all_data = list(ezr.csv(filename))
+    header = all_data[0]
+    rows = all_data[1:]
+    
+    safe_settings = blame(header, rows)
+    
+    print("Analysis of factory default settings:")
+    if safe_settings:
+        print(f"You can safely leave the following settings at their factory defaults: {', '.join(safe_settings)}")
+        print("These settings do not show a statistically significant impact on performance.")
+    else:
+        print("All input settings appear to have a significant impact on performance.")
+```

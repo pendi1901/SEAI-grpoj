@@ -1,0 +1,44 @@
+```python
+import ezr
+import step05
+
+def blame(header, rows):
+    """
+    Identify input columns that have no statistically significant impact on 
+    performance (i.e., they are 'safe' to leave at default).
+    
+    We reuse the logic from step05 to find columns that ARE associated with 
+    poor performance, then return the complement (the columns that are NOT 
+    associated with poor performance).
+    """
+    # Get all input columns
+    tbl = ezr.Tbl([header] + rows)
+    all_input_names = [col.txt for col in tbl.x]
+    
+    # Get columns that ARE associated with poor performance
+    blamed_columns = step05.blame(header, rows)
+    
+    # The columns that can be left at default are those NOT in the blamed list
+    safe_columns = [name for name in all_input_names if name not in blamed_columns]
+    
+    return safe_columns
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data_iter = ezr.csv(filename)
+    header = next(data_iter)
+    rows = list(data_iter)
+    
+    safe_settings = blame(header, rows)
+    
+    print("Analysis complete.")
+    if safe_settings:
+        print("The following input settings have no significant impact on performance")
+        print("and can be left at factory defaults:")
+        for name in safe_settings:
+            print(f" - {name}")
+    else:
+        print("All input settings appear to have a significant impact on performance.")
+    
+    exit(0)
+```

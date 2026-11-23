@@ -1,0 +1,77 @@
+import csv
+import random
+
+def choose(header, rows, label):
+    """
+    Finds the best row by sampling and labeling.
+    We use a simple strategy:
+    1. Label 50 random rows.
+    2. Identify the best one based on Pareto dominance.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    
+    def get_score(goals):
+        # Normalize goals to [0, 1] and aggregate
+        # Since we don't know the range, we assume 0-1 based on problem context
+        score = 0
+        for i, val in enumerate(goals):
+            name = header[goal_indices[i]]
+            if name.endswith('-'):
+                score += val
+            else:
+                score += (1 - val)
+        return score
+
+    # Sample 50 indices
+    indices = random.sample(range(len(rows)), min(50, len(rows)))
+    
+    best_idx = -1
+    best_score = float('inf')
+    
+    for i in indices:
+        goals = label(i)
+        score = get_score(goals)
+        if score < best_score:
+            best_score = score
+            best_idx = i
+            
+    return best_idx
+
+def load_data(filename):
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = []
+        for row in reader:
+            processed = []
+            for i, val in enumerate(row):
+                try:
+                    processed.append(float(val))
+                except ValueError:
+                    processed.append(val)
+            rows.append(processed)
+    return header, rows
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    header, rows = load_data(filename)
+    
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    
+    # Define the label function for the harness
+    def label(i):
+        return [rows[i][idx] for idx in goal_indices]
+    
+    # Mask the rows for the choose function
+    masked_rows = []
+    for r in rows:
+        new_row = list(r)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_rows.append(new_row)
+        
+    best_idx = choose(header, masked_rows, label)
+    
+    print(f"Analysis complete. The best configuration found is at index {best_idx}.")
+    print("Goal values for this configuration:")
+    print(dict(zip([header[i] for i in goal_indices], label(best_idx))))

@@ -1,0 +1,115 @@
+```python
+import csv
+import random
+
+def race(header, rows, label):
+    """
+    Compares three strategies for finding the best employee (maximizing tenure).
+    Budget: 50 total labels.
+    Strategies:
+    1. 'random': Picks 16 random employees.
+    2. 'newest_pay_rise': The customer's rule of thumb (prioritizing newest staff).
+    3. 'tenure_focus': Our strategy (prioritizing experienced staff).
+    """
+    goal_indices = [i for i, h in enumerate(header) if h.endswith('+') or h.endswith('-')]
+    tenure_idx = header.index('YearsAtCompany+')
+    age_idx = header.index('Age')
+    
+    # Track labels used
+    labeled = {}
+    def get_label(i):
+        if i not in labeled:
+            labeled[i] = label(i)
+        return labeled[i]
+
+    def get_tenure(i):
+        goals = get_label(i)
+        for pos, g_idx in enumerate(goal_indices):
+            if g_idx == tenure_idx:
+                return goals[pos]
+        return 0.0
+
+    # Strategy 1: Random
+    def random_strat():
+        indices = random.sample(range(len(rows)), 16)
+        best_i = indices[0]
+        for i in indices:
+            if get_tenure(i) > get_tenure(best_i):
+                best_i = i
+        return best_i
+
+    # Strategy 2: Customer's Rule (Newest staff = lowest Age or lowest tenure, 
+    # assuming newest hires are youngest)
+    def newest_pay_rise_strat():
+        # Sort by Age ascending (youngest first)
+        indices = sorted(range(len(rows)), key=lambda i: rows[i][age_idx])[:17]
+        best_i = indices[0]
+        for i in indices:
+            if get_tenure(i) > get_tenure(best_i):
+                best_i = i
+        return best_i
+
+    # Strategy 3: Our Strategy (Experienced staff = highest Age)
+    def tenure_focus_strat():
+        # Sort by Age descending (oldest/most experienced first)
+        indices = sorted(range(len(rows)), key=lambda i: rows[i][age_idx], reverse=True)[:17]
+        best_i = indices[0]
+        for i in indices:
+            if get_tenure(i) > get_tenure(best_i):
+                best_i = i
+        return best_i
+
+    strategies = {
+        "random": random_strat,
+        "newest_pay_rise": newest_pay_rise_strat,
+        "tenure_focus": tenure_focus_strat
+    }
+
+    results = {}
+    for name, func in strategies.items():
+        results[name] = func()
+
+    winner = max(results, key=lambda n: get_tenure(results[n]))
+    
+    return {
+        "winner": winner,
+        "row": results[winner],
+        "tried": list(strategies.keys())
+    }
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    goal_indices = [i for i, h in enumerate(header) if h.endswith('+') or h.endswith('-')]
+    
+    def label(i):
+        return [rows[i][idx] for idx in goal_indices]
+
+    # Mask goals
+    for row in rows:
+        for idx in goal_indices:
+            row[idx] = "?"
+
+    outcome = race(header, rows, label)
+    print("Comparison of Retention Strategies:")
+    print(f"The winning strategy was: {outcome['winner']}")
+    if outcome['winner'] == 'tenure_focus':
+        print("Our data-driven approach of targeting experienced staff outperformed the rule of thumb.")
+    else:
+        print("The rule of thumb performed competitively in this sample.")
+```

@@ -1,0 +1,82 @@
+```python
+import csv
+import random
+
+def choose(header, rows, label):
+    """
+    Finds a setup that forecasts well (performance) and is small (N_estimators).
+    We define 'small' as having a low N_estimators value.
+    We use a multi-objective score: maximize performance, minimize N_estimators.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('-') or name.endswith('+')]
+    n_est_idx = header.index('N_estimators')
+    
+    # Normalize N_estimators to a 0-1 range for balancing
+    all_n_est = [row[n_est_idx] for row in rows]
+    min_n, max_n = min(all_n_est), max(all_n_est)
+    
+    def get_score(idx, goals):
+        # Performance score (higher is better)
+        perf = 0
+        for i, val in enumerate(goals):
+            col_idx = goal_indices[i]
+            if header[col_idx].endswith('-'):
+                perf -= val
+            else:
+                perf += val
+        
+        # Size score (lower is better, so we subtract normalized size)
+        norm_size = (rows[idx][n_est_idx] - min_n) / (max_n - min_n + 1e-9)
+        
+        # Balance: 70% performance, 30% size efficiency
+        return (0.7 * perf) - (0.3 * norm_size)
+
+    # Sample 50 rows to find the best balance
+    indices = random.sample(range(len(rows)), min(50, len(rows)))
+    
+    best_idx = -1
+    best_score = float('-inf')
+    
+    for idx in indices:
+        goals = label(idx)
+        score = get_score(idx, goals)
+        if score > best_score:
+            best_score = score
+            best_idx = idx
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed = []
+            for i, val in enumerate(row):
+                try:
+                    processed.append(float(val))
+                except ValueError:
+                    processed.append(val)
+            rows.append(processed)
+            
+    # Mask goals for the choose function
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('-') or name.endswith('+')]
+    masked_rows = []
+    for row in rows:
+        m = row[:]
+        for idx in goal_indices:
+            m[idx] = "?"
+        masked_rows.append(m)
+        
+    def label(i):
+        return [rows[i][idx] for idx in goal_indices]
+    
+    best_idx = choose(header, masked_rows, label)
+    
+    print(f"Optimization complete. The best setup for both performance and size is at index {best_idx}.")
+    print("This configuration was selected by balancing forecast accuracy with computational efficiency.")
+```

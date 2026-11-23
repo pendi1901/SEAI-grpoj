@@ -1,0 +1,67 @@
+import csv
+import step05
+
+def blame(header, rows):
+    """
+    Identifies input columns that have 'nothing to do' with how long people stay.
+    We define these as columns with the lowest correlation (difference in means)
+    between the worst performers and the rest.
+    """
+    tenure_idx = header.index('YearsAtCompany+')
+    
+    # Sort rows by tenure to find the bottom 20%
+    sorted_rows = sorted(rows, key=lambda r: r[tenure_idx])
+    limit = len(rows) // 5
+    worst = sorted_rows[:limit]
+    others = sorted_rows[limit:]
+    
+    # Identify input columns (not goals)
+    input_indices = [
+        i for i, name in enumerate(header) 
+        if not (name.endswith('+') or name.endswith('-'))
+    ]
+    
+    scores = []
+    for i in input_indices:
+        col_name = header[i]
+        w_vals = [r[i] for r in worst if isinstance(r[i], (int, float))]
+        o_vals = [r[i] for r in others if isinstance(r[i], (int, float))]
+        
+        if not w_vals or not o_vals:
+            # If we can't calculate a difference, it's a candidate for removal
+            scores.append((0, col_name))
+            continue
+            
+        # Correlation: difference in means. 
+        # Low difference means the column doesn't distinguish the worst performers.
+        diff = abs((sum(w_vals) / len(w_vals)) - (sum(o_vals) / len(o_vals)))
+        scores.append((diff, col_name))
+    
+    # Return the 5 columns with the lowest difference (least explanatory power)
+    scores.sort(key=lambda x: x[0])
+    return [s[1] for s in scores[:5]]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    useless_factors = blame(header, rows)
+    print("Columns that have little to no impact on tenure (candidates for removal):")
+    for factor in useless_factors:
+        print(f"- {factor}")

@@ -1,0 +1,64 @@
+```python
+import csv
+
+def certify(xs, ys):
+    """
+    Returns True if the distributions of xs and ys are statistically 
+    indistinguishable (the same apart from noise), False otherwise.
+    Uses a simple A12 effect size test (Vargha-Delaney).
+    """
+    if not xs or not ys:
+        return True
+
+    def a12(lst1, lst2):
+        m, n = len(lst1), len(lst2)
+        lst1 = sorted(lst1)
+        lst2 = sorted(lst2)
+        
+        r1 = 0
+        for x in lst1:
+            for y in lst2:
+                if x > y: r1 += 1
+                elif x == y: r1 += 0.5
+        
+        return abs((r1 / (m * n)) - 0.5) > 0.147  # Threshold for small effect
+
+    return not a12(xs, ys)
+
+def analyze(header, rows):
+    # Find index for 'Team Size' and 'Cost-'
+    try:
+        team_idx = header.index('Team Size')
+        cost_idx = header.index('Cost-')
+    except ValueError:
+        return "Could not find required columns."
+
+    # Split into small teams (below median) and big teams (above median)
+    team_sizes = [float(row[team_idx]) for row in rows]
+    median_team = sum(team_sizes) / len(team_sizes)
+    
+    small_team_costs = [float(row[cost_idx]) for row in rows if float(row[team_idx]) < median_team]
+    big_team_costs = [float(row[cost_idx]) for row in rows if float(row[team_idx]) >= median_team]
+    
+    is_same = certify(small_team_costs, big_team_costs)
+    
+    avg_small = sum(small_team_costs) / len(small_team_costs)
+    avg_big = sum(big_team_costs) / len(big_team_costs)
+    
+    result = "real" if not is_same else "luck"
+    return (f"Small team average cost: {avg_small:.4f}, Big team average cost: {avg_big:.4f}. "
+            f"The difference is likely {result}.")
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [row for row in reader]
+            
+        print(analyze(header, rows))
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

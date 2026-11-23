@@ -1,0 +1,62 @@
+import csv
+import step01
+
+def certify(xs, ys):
+    """
+    Returns True if the two distributions are statistically similar 
+    (no significant difference), False if they differ.
+    Uses a simple mean comparison relative to the standard deviation.
+    """
+    if not xs or not ys:
+        return True
+    
+    mean_x = sum(xs) / len(xs)
+    mean_y = sum(ys) / len(ys)
+    
+    # Combined standard deviation
+    combined = xs + ys
+    mean_all = sum(combined) / len(combined)
+    var = sum((x - mean_all) ** 2 for x in combined) / len(combined)
+    std = var ** 0.5
+    
+    # If the difference in means is less than 0.5 standard deviations, 
+    # we consider it noise.
+    if std == 0:
+        return mean_x == mean_y
+    return abs(mean_x - mean_y) < (0.5 * std)
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Identify 'overTime' column and 'YearsAtCompany+' (tenure)
+    ot_idx = header.index('overTime')
+    tenure_idx = header.index('YearsAtCompany+')
+    
+    # Split tenure by overtime status
+    overtime_yes = [r[tenure_idx] for r in rows if r[ot_idx] == 'Yes']
+    overtime_no = [r[tenure_idx] for r in rows if r[ot_idx] == 'No']
+    
+    is_noise = certify(overtime_yes, overtime_no)
+    
+    print("Analysis: Do people who work overtime leave sooner?")
+    if is_noise:
+        print("Result: The difference in tenure is statistically insignificant (likely noise).")
+    else:
+        print("Result: There is a real, statistically significant difference in tenure based on overtime.")

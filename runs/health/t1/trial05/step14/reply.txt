@@ -1,0 +1,75 @@
+```python
+import csv
+
+def flow(header, row, seen):
+    """
+    Decides whether to stop at the current row. We stop if the current row
+    is significantly better than the best row seen so far, or if we have
+    exhausted a reasonable search space without improvement.
+    """
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+
+    def get_score(r):
+        # Normalize goals to [0, 1] based on the data seen so far
+        # Since we don't have global min/max, we use the current row's 
+        # relative performance against the 'seen' set.
+        if not seen:
+            return 0.0
+        
+        mres = [s[mre_idx] for s in seen] + [r[mre_idx]]
+        accs = [s[acc_idx] for s in seen] + [r[acc_idx]]
+        preds = [s[pred_idx] for s in seen] + [r[pred_idx]]
+        
+        def norm(val, vals, reverse=False):
+            min_v, max_v = min(vals), max(vals)
+            if max_v == min_v: return 0.0
+            n = (val - min_v) / (max_v - min_v)
+            return 1.0 - n if reverse else n
+        
+        s1 = norm(r[mre_idx], mres, reverse=True)
+        s2 = norm(r[acc_idx], accs)
+        s3 = norm(r[pred_idx], preds)
+        return (s1 + s2 + s3) / 3.0
+
+    if not seen:
+        return False
+
+    current_score = get_score(row)
+    best_seen_score = max(get_score(s) for s in seen)
+
+    # Stop if we have seen enough data (e.g., 50 rows) and the current
+    # row is the best we have encountered so far.
+    if len(seen) >= 50 and current_score > best_seen_score:
+        return True
+    
+    return False
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([val if header[i] == 'criterion' else float(val) 
+                             for i, val in enumerate(row)])
+        
+        seen = []
+        stopped = False
+        for i, row in enumerate(rows):
+            if flow(header, row, seen):
+                print(f"Optimization stopped at row {i+1}. A high-performing configuration was found.")
+                stopped = True
+                break
+            seen.append(row)
+        
+        if not stopped:
+            print("Reached the end of the data. No significantly better configuration was found to trigger an early stop.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

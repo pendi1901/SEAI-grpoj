@@ -1,0 +1,52 @@
+import ezr
+import random
+
+def certify(xs, ys):
+    """
+    Returns True if the distributions of xs and ys are statistically 
+    indistinguishable (the same apart from noise), False otherwise.
+    Uses the statistical tests provided in ezr.
+    """
+    # The ezr.same function performs cliffs delta and KS tests.
+    # We use eps=0.35 as a standard effect size for Cohen's d.
+    return ezr.same(xs, ys, eps=0.35)
+
+if __name__ == "__main__":
+    # Load the data
+    filename = "pom3a.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    header = next(data_gen)
+    rows = list(data_gen)
+    
+    # Identify indices
+    # 'Team Size' is the input column, 'Cost-' is the goal column
+    team_size_idx = header.index('Team Size')
+    cost_idx = header.index('Cost-')
+    
+    # Split data into small-team and big-team groups
+    # Using the median of Team Size as the threshold
+    team_sizes = [r[team_size_idx] for r in rows]
+    median_size = sorted(team_sizes)[len(team_sizes) // 2]
+    
+    small_team_costs = [r[cost_idx] for r in rows if r[team_size_idx] <= median_size]
+    big_team_costs = [r[cost_idx] for r in rows if r[team_size_idx] > median_size]
+    
+    # Perform certification
+    is_same = certify(small_team_costs, big_team_costs)
+    
+    print("Statistical Analysis: Small Teams vs Big Teams (Cost-)")
+    print("-" * 50)
+    print(f"Small team count: {len(small_team_costs)}")
+    print(f"Big team count:   {len(big_team_costs)}")
+    print(f"Small team mean cost: {sum(small_team_costs)/len(small_team_costs):.4f}")
+    print(f"Big team mean cost:   {sum(big_team_costs)/len(big_team_costs):.4f}")
+    print("-" * 50)
+    
+    if is_same:
+        print("Result: The difference in costs is statistically insignificant.")
+        print("Conclusion: The observed difference was likely due to luck/noise.")
+    else:
+        print("Result: The difference in costs is statistically significant.")
+        print("Conclusion: The difference is real.")
+        
+    exit(0)

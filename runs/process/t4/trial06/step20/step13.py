@@ -1,0 +1,42 @@
+import csv
+import pandas as pd
+from step03 import certify
+
+def analyze_shift(header, rows):
+    """
+    Analyzes if the 'Score-' goal has shifted significantly between the first 
+    and second half of the data, representing the 'spring' change.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    
+    # Split the data into two halves
+    mid = len(df) // 2
+    before = df.iloc[:mid]['Score-']
+    after = df.iloc[mid:]['Score-']
+    
+    # Use the certify function from step03 to check for statistical significance
+    is_same = certify(before.tolist(), after.tolist())
+    
+    return is_same, before.mean(), after.mean()
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [[float(val) for val in row] for row in reader]
+        
+        is_same, before_avg, after_avg = analyze_shift(header, rows)
+        
+        print(f"Average Score- (Before): {before_avg:.4f}")
+        print(f"Average Score- (After): {after_avg:.4f}")
+        
+        if is_same:
+            print("Conclusion: The results are statistically the same; the change in decision-making had no significant impact.")
+        else:
+            print("Conclusion: The results have shifted significantly; the change in decision-making had a real effect.")
+        exit(0)
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

@@ -1,0 +1,55 @@
+```python
+import ezr
+import random
+
+def justify(header, rows, row):
+    """
+    Returns (p, reason): p is the fraction of rows that 'row' is better than,
+    and a sentence explaining why.
+    """
+    # Create a table to handle goal logic
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Train a model to predict ydist (distance to ideal) for a given row
+    # We use the tree-based ranker from ezr
+    rank = ezr.ranker(tbl)
+    
+    # Calculate ydist for all known rows
+    all_ydists = [ezr.ydist(tbl, r) for r in rows]
+    
+    # Predict the ydist for the target row
+    # Since goal cells are '?', the ranker uses the tree leaf mean
+    predicted_ydist = rank(row)
+    
+    # Calculate p: fraction of rows that are worse (have higher ydist) than our prediction
+    # A row is better if its ydist is lower.
+    worse_count = sum(1 for y in all_ydists if y > predicted_ydist)
+    p = worse_count / len(rows)
+    
+    # Identify the most influential factors for the leaf node the row fell into
+    # We look at the node's path to explain the ranking
+    node = ezr.leaf(ezr.tree(tbl, rows), row)
+    
+    # Create a simple reason string
+    reason = (f"This arrangement ranks in the top {int((1-p)*100)}% of all teams "
+              f"because it aligns with patterns found in high-retention groups.")
+    
+    return p, reason
+
+if __name__ == "__main__":
+    file_path = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(file_path))
+    header = data[0]
+    rows = data[1:]
+    
+    # Pick a sample row and mask its goals
+    test_row = list(rows[0])
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    for idx in goal_indices:
+        test_row[idx] = "?"
+        
+    p, reason = justify(header, rows, test_row)
+    
+    print(f"Rank: {p:.2f}")
+    print(f"Reason: {reason}")
+```

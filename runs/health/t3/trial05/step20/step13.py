@@ -1,0 +1,80 @@
+import csv
+from scipy.stats import ttest_ind
+
+def certify(xs, ys):
+    """
+    Returns True if the difference between two groups is statistically 
+    insignificant (noise), False if they are significantly different.
+    Uses a standard t-test with a 0.05 alpha level.
+    """
+    if len(xs) < 2 or len(ys) < 2:
+        return True
+    
+    # Use Welch's t-test (equal_var=False)
+    t_stat, p_value = ttest_ind(xs, ys, equal_var=False)
+    
+    # If p_value > 0.05, we fail to reject the null hypothesis (they are the same)
+    return p_value > 0.05
+
+def analyze_rules(header, rows):
+    """
+    Groups setups by the 'criterion' symbolic column and compares the 
+    performance (MRE-) of the different rules.
+    """
+    crit_idx = header.index('criterion')
+    mre_idx = header.index('MRE-')
+    
+    # Group MRE- values by criterion
+    groups = {}
+    for row in rows:
+        crit = row[crit_idx]
+        if crit not in groups:
+            groups[crit] = []
+        groups[crit].append(row[mre_idx])
+    
+    # Compare pairs of rules
+    keys = list(groups.keys())
+    results = []
+    for i in range(len(keys)):
+        for j in range(i + 1, len(keys)):
+            k1, k2 = keys[i], keys[j]
+            is_noise = certify(groups[k1], groups[k2])
+            results.append((k1, k2, is_noise))
+            
+    return results
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            for row in reader:
+                processed_row = []
+                for i, val in enumerate(row):
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        comparisons = analyze_rules(header, rows)
+        
+        print("Analysis of rule differences (criterion):")
+        all_noise = True
+        for k1, k2, is_noise in comparisons:
+            status = "statistically indistinguishable" if is_noise else "significantly different"
+            print(f"- {k1} vs {k2}: {status}")
+            if not is_noise:
+                all_noise = False
+        
+        if all_noise:
+            print("\nConclusion: The choice of rule makes no real difference. You can stop arguing.")
+        else:
+            print("\nConclusion: There are significant differences between some rules. The argument is justified.")
+        
+        exit(0)
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

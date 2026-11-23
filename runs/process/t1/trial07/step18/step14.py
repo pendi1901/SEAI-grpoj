@@ -1,0 +1,71 @@
+import csv
+
+def flow(header, row, seen):
+    """
+    Warns the user if a new row is significantly worse than the historical trend.
+    Returns True if the row is 'bad' (a warning), False otherwise.
+    
+    A row is considered 'bad' if its goal performance is significantly worse 
+    than the average performance of the rows seen so far.
+    """
+    goal_indices = [i for i, name in enumerate(header) 
+                    if name.endswith('-') or name.endswith('+')]
+    
+    def get_score(r):
+        score = 0.0
+        for i in goal_indices:
+            val = r[i]
+            # Normalize: '-' minimized, '+' maximized
+            if header[i].endswith('-'):
+                score += val
+            else:
+                score += (1.0 - val)
+        return score
+
+    if not seen:
+        return False
+
+    # Calculate the average score of all previously seen rows
+    seen_scores = [get_score(r) for r in seen]
+    avg_seen_score = sum(seen_scores) / len(seen_scores)
+    
+    # Calculate standard deviation to define a "bad" threshold
+    variance = sum((s - avg_seen_score) ** 2 for s in seen_scores) / len(seen_scores)
+    std_dev = variance ** 0.5
+    
+    # If the current row's score is more than 1 standard deviation worse 
+    # than the average, we warn the user.
+    current_score = get_score(row)
+    
+    # Threshold: if score is significantly higher than average (worse)
+    if current_score > (avg_seen_score + std_dev):
+        return True
+    
+    return False
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [[float(x) for x in row] for row in reader]
+        
+        seen = []
+        warnings = 0
+        for row in rows:
+            if flow(header, row, seen):
+                warnings += 1
+            seen.append(row)
+            
+        print("Customer Inquiry: Performance Degradation Warning System")
+        print("-" * 60)
+        print(f"Total records processed: {len(rows)}")
+        print(f"Number of 'bad' performance warnings triggered: {warnings}")
+        print("\nStrategy: A warning is issued when a new configuration's")
+        print("goal score deviates significantly ( > 1 std dev) from the")
+        print("historical average of previously seen setups.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

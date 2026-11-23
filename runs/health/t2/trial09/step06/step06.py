@@ -1,0 +1,48 @@
+import csv
+from step01 import remember
+from step02 import guess
+
+def justify(header, rows, row):
+    """
+    Estimates the performance of 'row' and compares it against all 'rows'.
+    Returns (p, reason) where p is the fraction of rows outperformed by 'row'.
+    """
+    # 1. Estimate the goals for the target row
+    # guess() returns a list of MRE estimates; we need all goals.
+    # Since we only have MRE- as a goal in step02, we estimate MRE- 
+    # and use the average of the inputs to proxy the others or simply 
+    # rank based on the estimated MRE- relative to the training set.
+    mre_idx = header.index('MRE-')
+    estimated_mre = guess(header, rows, [row])[0]
+    
+    # 2. Calculate how many rows are worse than this estimate
+    # A row is better if its MRE is lower (since it's MRE-)
+    worse_count = sum(1 for r in rows if r[mre_idx] > estimated_mre)
+    p = worse_count / len(rows)
+    
+    reason = (f"This setup is estimated to perform better than {p:.1%} of all "
+              "available configurations based on its predicted error rate.")
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = [val if header[i] == 'criterion' else float(val) 
+                             for i, val in enumerate(row)]
+            rows.append(processed_row)
+
+    # Pick a sample row to justify (e.g., the last one)
+    test_row = rows[-1][:]
+    # Mask goals
+    for i, h in enumerate(header):
+        if h.endswith('-') or h.endswith('+'):
+            test_row[i] = "?"
+            
+    p, reason = justify(header, rows[:-1], test_row)
+    print(f"Performance justification: {reason}")
+    print(f"Relative rank: {p:.4f}")

@@ -1,0 +1,64 @@
+```python
+import ezr
+import random
+
+def flow(header, row, seen):
+    """
+    Decide if the current row is 'good enough' to stop searching.
+    We define 'good enough' as being in the top 5% of the expected 
+    distribution of quality (ydist) based on the history seen so far.
+    """
+    # If this is the first row, we can't judge it yet
+    if not seen:
+        return False
+    
+    # Create a table to handle column roles and normalization
+    # We use the current row and all seen rows to build the context
+    data = [header] + seen + [row]
+    tbl = ezr.Tbl(data)
+    
+    # Calculate ydist for the current row
+    # ydist is 0 at the ideal, 1 at the worst
+    current_ydist = ezr.ydist(tbl, row)
+    
+    # Calculate ydist for all previously seen rows
+    seen_ydists = [ezr.ydist(tbl, r) for r in seen]
+    
+    # We define 'good enough' as being better than 95% of what we've seen
+    # or if we have seen enough to establish a baseline, being in the top 5%
+    # of the overall potential distribution.
+    threshold = sorted(seen_ydists)[max(0, int(len(seen_ydists) * 0.05))]
+    
+    # If the current row is better (lower ydist) than our threshold, stop.
+    return current_ydist <= threshold
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    try:
+        data = list(ezr.csv(filename))
+        header = data[0]
+        rows = data[1:]
+        
+        # Shuffle to simulate random arrival order
+        random.seed(1234567891)
+        random.shuffle(rows)
+        
+        seen = []
+        found = False
+        for i, row in enumerate(rows):
+            if flow(header, row, seen):
+                print(f"Stopped at row {i+1} (0-indexed).")
+                print(f"Selected row: {row}")
+                found = True
+                break
+            seen.append(row)
+            
+        if not found:
+            print("No row met the criteria within the provided dataset.")
+            
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
+    
+    exit(0)
+```

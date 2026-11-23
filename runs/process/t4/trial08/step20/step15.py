@@ -1,0 +1,51 @@
+import csv
+import pandas as pd
+import numpy as np
+from sklearn.ensemble import RandomForestRegressor
+
+def blame(header, rows):
+    """
+    Identifies the most influential input columns regarding 'Cost-'.
+    Returns the top two most important features and the least important feature.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    
+    # Identify input columns (those not ending in - or +)
+    inputs = [col for col in header if not (col.endswith('-') or col.endswith('+'))]
+    target = 'Cost-'
+    
+    # Train a Random Forest to find feature importance regarding 'Cost-'
+    rf = RandomForestRegressor(n_estimators=100, random_state=42)
+    rf.fit(df[inputs], df[target])
+    
+    # Get feature importances
+    importances = rf.feature_importances_
+    
+    # Pair inputs with their importance scores
+    feat_imp = sorted(zip(inputs, importances), key=lambda x: x[1], reverse=True)
+    
+    # Return the top 2 most influential and the least influential
+    # The customer asked what matters most (top 2) and what to stop worrying about (least)
+    return [feat_imp[0][0], feat_imp[1][0], feat_imp[-1][0]]
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) for val in row])
+        
+        factors = blame(header, rows)
+        
+        print("Customer Inquiry: What matters most to project cost?")
+        print(f"Analysis: Based on feature importance modeling for 'Cost-':")
+        print(f"1. The most critical factors to monitor are: {factors[0]} and {factors[1]}.")
+        print(f"2. You can safely deprioritize: {factors[2]}.")
+        print("Conclusion: Focus your management efforts on the primary drivers to control costs effectively.")
+        
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

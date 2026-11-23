@@ -1,0 +1,81 @@
+```python
+import csv
+import pandas as pd
+import numpy as np
+from sklearn.neighbors import KNeighborsRegressor
+
+def choose(header, rows, label):
+    """
+    Finds the best setup for a large, high-risk project by sampling 
+    rows using an acquisition strategy that prioritizes exploration 
+    and exploitation within a 50-label budget.
+    """
+    n_rows = len(rows)
+    inputs = [c for c in header if not (c.endswith('-') or c.endswith('+'))]
+    goals = [c for c in header if c.endswith(('-', '+'))]
+    
+    labeled = {}
+    
+    def get_agg(row_goals):
+        # Normalize goals: minimize '-' (1-norm), maximize '+' (norm)
+        scores = []
+        for i, goal in enumerate(goals):
+            # Use global min/max if available, else local
+            val = row_goals[i]
+            scores.append(1 - val if goal.endswith('-') else val)
+        return sum(scores) / len(scores)
+
+    # 1. Initial random sample to understand the space
+    indices = np.random.choice(n_rows, 10, replace=False).tolist()
+    for i in indices:
+        labeled[i] = label(i)
+        
+    # 2. Iterative selection (40 more labels)
+    for _ in range(40):
+        # Train surrogate model on currently labeled data
+        X_train = np.array([rows[i][:len(inputs)] for i in labeled])
+        y_train = np.array([labeled[i] for i in labeled])
+        
+        model = KNeighborsRegressor(n_neighbors=3)
+        model.fit(X_train, y_train)
+        
+        # Predict for all unlabeled rows
+        unlabeled = [i for i in range(n_rows) if i not in labeled]
+        X_unlabeled = np.array([rows[i][:len(inputs)] for i in unlabeled])
+        preds = model.predict(X_unlabeled)
+        
+        # Acquisition: Pick the one with the best predicted aggregate score
+        best_idx_in_unlabeled = np.argmax([get_agg(p) for p in preds])
+        idx = unlabeled[best_idx_in_unlabeled]
+        
+        labeled[idx] = label(idx)
+        
+    # Return the index of the best row found
+    best_idx = max(labeled, key=lambda i: get_agg(labeled[i]))
+    return best_idx
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            # Hide goals
+            data = [[float(x) for x in row[:len(header)-3]] + ['?'] * 3 for row in reader]
+            
+        # Re-read for true labels
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            next(reader)
+            true_data = [[float(x) for x in row] for row in reader]
+            
+        def label(i):
+            return true_data[i][len(header)-3:]
+            
+        best_idx = choose(header, data, label)
+        print(f"Analysis complete. The best setup for a high-risk project is at index {best_idx}.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

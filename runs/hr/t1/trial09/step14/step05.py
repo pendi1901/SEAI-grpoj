@@ -1,0 +1,74 @@
+import csv
+
+def blame(header, rows):
+    """
+    Identifies input columns that correlate with short tenure.
+    We define 'bad' rows as those in the bottom 25% of the tenure score.
+    We then compare the distribution of input values in these 'bad' rows
+    against the rest of the dataset to find the most influential factors.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    input_indices = [i for i, name in enumerate(header) if not (name.endswith('+') or name.endswith('-'))]
+
+    def get_score(row):
+        score = 0
+        for i in goal_indices:
+            val = row[i]
+            if header[i].endswith('+'):
+                score += val
+            else:
+                score -= val
+        return score
+
+    # Sort rows by tenure score
+    scored = sorted(rows, key=get_score)
+    worst = scored[:len(rows) // 4]
+    rest = scored[len(rows) // 4:]
+
+    # Calculate "blame" score: how much more frequent a value appears in 'worst' vs 'rest'
+    # For numeric, we look at the difference in means. For symbolic, difference in mode frequency.
+    influences = []
+    for i in input_indices:
+        col_name = header[i]
+        if isinstance(worst[0][i], float):
+            m_worst = sum(r[i] for r in worst) / len(worst)
+            m_rest = sum(r[i] for r in rest) / len(rest)
+            diff = abs(m_worst - m_rest)
+            influences.append((diff, col_name))
+        else:
+            # Symbolic: check if a specific category is over-represented in 'worst'
+            categories = set(r[i] for r in rows)
+            max_diff = 0
+            for cat in categories:
+                p_worst = sum(1 for r in worst if r[i] == cat) / len(worst)
+                p_rest = sum(1 for r in rest if r[i] == cat) / len(rest)
+                max_diff = max(max_diff, p_worst - p_rest)
+            influences.append((max_diff, col_name))
+
+    influences.sort(key=lambda x: x[0], reverse=True)
+    return [name for score, name in influences[:3]]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for line in reader:
+            processed_row = []
+            for i, val in enumerate(line):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    top_blame = blame(header, rows)
+    
+    print("Analysis: Factors contributing to short employee tenure:")
+    for i, col in enumerate(top_blame, 1):
+        print(f"{i}. {col}")
+    
+    print("\nThese columns show the strongest correlation with employees who leave early.")

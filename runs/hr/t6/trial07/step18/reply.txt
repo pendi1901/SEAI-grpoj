@@ -1,0 +1,48 @@
+```python
+import ezr
+import step08
+
+def fix(header, row, levers):
+    """
+    Recommends changes to a 'bad' row to improve its ydist (distance to ideal).
+    We use the logic from step08 to identify the best values for the provided levers
+    based on the top-performing rows in the dataset.
+    """
+    return step08.fix(header, row, levers)
+
+if __name__ == "__main__":
+    # Load data
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Define levers excluding MonthlyIncome (as per customer request: "no money for pay")
+    # We focus on structural and work-life balance levers.
+    levers = {
+        "businessTravel": ["Non-Travel", "Travel_Frequently", "Travel_Rarely"],
+        "overTime": ["No", "Yes"],
+        "TrainingTimesLastYear": (0, 6),
+        "WorkLifeBalance": (1, 4),
+        "StockOptionLevel": (0, 3),
+        "YearsSinceLastPromotion": (0, 15)
+    }
+    
+    # Identify a 'bad' row (high ydist) to demonstrate the fix
+    tbl = ezr.Tbl(data)
+    bad_row = max(rows, key=lambda r: ezr.ydist(tbl, r))
+    
+    # Get recommendations
+    changes = fix(header, bad_row, levers)
+    
+    print("Customer Ask: There is no money for pay this year. What else can we change?")
+    print("\nAnalysis: We identified structural levers that correlate with higher retention "
+          "and better performance outcomes, excluding salary adjustments.")
+    print("\nRecommended changes for the identified high-attrition profile:")
+    for col, val in changes.items():
+        print(f"- Change {col} to {val}")
+        
+    print("\nThese recommendations are derived from the profiles of our most stable, "
+          "long-term employees. By adjusting these non-monetary factors, we can "
+          "improve employee outcomes without increasing payroll costs.")
+```

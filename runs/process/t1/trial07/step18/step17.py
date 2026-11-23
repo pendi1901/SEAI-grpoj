@@ -1,0 +1,77 @@
+import csv
+import random
+
+def choose(header, rows, label):
+    """
+    Finds the best setup for a large, high-criticality project.
+    'Large' implies high 'Size', 'High-criticality' implies high 'Criticality'.
+    We filter for these, then use a small budget to find the best among them.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('-') or name.endswith('+')]
+    
+    def get_score(row_goals):
+        score = 0.0
+        for i, val in enumerate(row_goals):
+            name = header[goal_indices[i]]
+            if name.endswith('-'):
+                score += val
+            else:
+                score += (1.0 - val)
+        return score
+
+    # 1. Filter for "large" and "high criticality" projects
+    # We look for rows where Size > 0.7 and Criticality > 0.7
+    size_idx = header.index('Size')
+    crit_idx = header.index('Criticality')
+    
+    candidates = [i for i, r in enumerate(rows) 
+                  if r[size_idx] > 0.7 and r[crit_idx] > 0.7]
+    
+    # 2. If we don't have enough candidates, fallback to all rows
+    if not candidates:
+        candidates = list(range(len(rows)))
+        
+    # 3. Sample up to 50 candidates to find the best one
+    sample_size = min(len(candidates), 50)
+    to_test = random.sample(candidates, sample_size)
+    
+    best_idx = -1
+    best_score = float('inf')
+    
+    for i in to_test:
+        goals = label(i)
+        score = get_score(goals)
+        if score < best_score:
+            best_score = score
+            best_idx = i
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            full_rows = []
+            for row in reader:
+                full_rows.append([float(x) for x in row])
+        
+        # Mock label function
+        def label(i):
+            goal_indices = [idx for idx, name in enumerate(header) 
+                            if name.endswith('-') or name.endswith('+')]
+            return [full_rows[i][idx] for idx in goal_indices]
+        
+        best_index = choose(header, full_rows, label)
+        
+        print("Customer Inquiry: Best Setup for Large, High-Criticality Projects")
+        print("-" * 65)
+        print(f"The best configuration found for your specific needs is at index: {best_index}")
+        print(f"Data for this row: {full_rows[best_index]}")
+        print("\nThis setup was selected by prioritizing high-size and high-criticality")
+        print("records and evaluating the top candidates within a limited trial budget.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

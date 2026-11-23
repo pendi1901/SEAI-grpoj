@@ -1,0 +1,73 @@
+import ezr
+import step07
+import step01
+
+def choose(header, rows, label):
+    """
+    Find a setup that forecasts well (low ydist) and is small (low N_estimators).
+    We use the acquire logic to find good rows, then select the one that
+    balances performance (ydist) and size (N_estimators).
+    """
+    # Create a table to handle the data
+    tbl = ezr.Tbl([header] + rows)
+    
+    # We need to find the best row within 50 labels.
+    # We reuse the logic from step07 to label the data.
+    def oracle_wrapper(idx):
+        labeled_row = label(idx)
+        # Update the row in the table/rows list
+        for i, val in enumerate(labeled_row):
+            rows[idx][i] = val
+        return rows[idx]
+
+    # Use the acquire function to spend the budget of 50 labels
+    # We pass a wrapper that handles the index-based labeling
+    labeled_rows = ezr.acquire(tbl, cap=50, label=lambda r: oracle_wrapper(rows.index(r)))
+    
+    # Now we have a set of labeled rows. We want to pick the best one.
+    # A row is "good" if it has low ydist AND low N_estimators (index 3).
+    # We normalize N_estimators to 0..1 to balance it with ydist.
+    n_est_idx = 3
+    
+    def score(row):
+        # ydist is already 0..1
+        yd = ezr.ydist(tbl, row)
+        # Normalize N_estimators (assuming range 50-200 based on data)
+        n_est = row[n_est_idx]
+        norm_n = (n_est - 50) / (200 - 50)
+        # We want to minimize both, so we sum them
+        return yd + (0.5 * norm_n) # Weight size slightly less than performance
+
+    best_row = min(labeled_rows, key=score)
+    return rows.index(best_row)
+
+if __name__ == "__main__":
+    file_path = "Health-ClosedIssues0000.n1000.train.csv"
+    all_data = list(ezr.csv(file_path))
+    header = all_data[0]
+    rows = all_data[1:]
+    
+    # Keep a copy of the original rows to provide the true labels
+    original_rows = [list(r) for r in rows]
+    
+    # Mask the goals for the rows passed to the function
+    masked_rows = []
+    goal_indices = [i for i, name in enumerate(header) if name[-1] in "+-"]
+    for row in rows:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_rows.append(new_row)
+        
+    # Define the label function
+    def label(i):
+        return original_rows[i]
+    
+    # Run the selection
+    best_idx = choose(header, masked_rows, label)
+    
+    print(f"Optimization complete.")
+    print(f"The best configuration found (balancing performance and size) is at index {best_idx}.")
+    print(f"Values: {original_rows[best_idx]}")
+    
+    exit(0)

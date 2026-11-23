@@ -1,0 +1,112 @@
+import ezr
+import random
+
+def race(header, rows, label):
+    """
+    Compares three strategies for finding the best employee arrangement:
+    1. 'random': Picks rows at random.
+    2. 'acquire': Uses the ezr.acquire logic (model-based).
+    3. 'greedy': Picks rows that are closest to the current best known.
+    """
+    budget = 50
+    labeled_cache = {}
+
+    def oracle(i):
+        if i not in labeled_cache:
+            if len(labeled_cache) >= budget:
+                raise Exception("Budget exceeded")
+            labeled_cache[i] = label(i)
+        return labeled_cache[i]
+
+    # We need a table that knows the goals to calculate ydist.
+    # Since the input rows have '?' for goals, we create a table 
+    # using the full data to establish the goal normalization parameters.
+    # The harness provides rows with '?' but we need the real data to evaluate.
+    # We assume the label(i) returns the full row with real goals.
+    
+    # Strategy 1: Random
+    def strategy_random():
+        indices = random.sample(range(len(rows)), budget // 3)
+        return [oracle(i) for i in indices]
+
+    # Strategy 2: Acquire
+    def strategy_acquire():
+        # We need a table with the full data to perform acquisition
+        # Since we only have the masked rows, we use the oracle to fill them.
+        # We create a dummy table with the header to hold the labeled rows.
+        tbl = ezr.Tbl([header])
+        # We use a wrapper to label rows on demand
+        def label_wrapper(r):
+            idx = rows.index(r)
+            return oracle(idx)
+        return ezr.acquire(ezr.Tbl([header] + rows), cap=budget // 3, label=label_wrapper)
+
+    # Strategy 3: Greedy
+    def strategy_greedy():
+        seen_indices = [random.randint(0, len(rows) - 1)]
+        seen_rows = [oracle(seen_indices[0])]
+        tbl = ezr.Tbl([header] + seen_rows)
+        while len(seen_rows) < budget // 3:
+            best_seen = ezr.mids(tbl)
+            candidates = sorted(range(len(rows)), key=lambda i: ezr.xdist(tbl, rows[i], best_seen))
+            for idx in candidates:
+                if idx not in seen_indices:
+                    seen_indices.append(idx)
+                    new_row = oracle(idx)
+                    seen_rows.append(new_row)
+                    ezr.addRow(tbl, new_row)
+                    break
+        return seen_rows
+
+    strategies = {
+        "random": strategy_random,
+        "acquire": strategy_acquire,
+        "greedy": strategy_greedy
+    }
+
+    results = {}
+    # To evaluate, we need a table that knows the goal columns.
+    # We use the first labeled row to infer the structure if needed,
+    # but we can just use the header to build a Tbl.
+    full_tbl = ezr.Tbl([header])
+    
+    for name, func in strategies.items():
+        labeled_rows = func()
+        # Update the full_tbl with all labeled rows to ensure normalization works
+        for r in labeled_rows:
+            ezr.addRow(full_tbl, r)
+        
+        best_row = min(labeled_rows, key=lambda r: ezr.ydist(full_tbl, r))
+        results[name] = (ezr.ydist(full_tbl, best_row), rows.index(best_row))
+
+    winner = min(results, key=lambda n: results[n][0])
+    
+    return {
+        "winner": winner,
+        "row": results[winner][1],
+        "tried": list(strategies.keys())
+    }
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+
+    masked_rows = []
+    for row in rows:
+        new_row = list(row)
+        for i, name in enumerate(header):
+            if name.endswith("+") or name.endswith("-"):
+                new_row[i] = "?"
+        masked_rows.append(new_row)
+
+    def label_func(i):
+        return rows[i]
+
+    result = race(header, masked_rows, label_func)
+    
+    print("Race Results:")
+    print(f"  Winner: {result['winner']}")
+    print(f"  Best Row Index: {result['row']}")
+    print(f"  Strategies Tried: {', '.join(result['tried'])}")

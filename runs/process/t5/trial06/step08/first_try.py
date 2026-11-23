@@ -1,0 +1,93 @@
+import ezr
+import random
+
+def fix(header, row, levers):
+    """
+    Finds the best change to a 'bad' row by testing all levers.
+    For each lever, we try a value that moves the row towards the 
+    global median of the best-performing rows.
+    """
+    # 1. Identify the best rows to define a 'target'
+    # We use the top 10% of rows as our target for improvement
+    data = list(ezr.csv("pom3a.n1000.train.csv"))
+    header_data = data[0]
+    rows_data = data[1:]
+    tbl = ezr.Tbl(data)
+    
+    # Sort rows by ydist to find the best
+    sorted_rows = sorted(rows_data, key=lambda r: ezr.ydist(tbl, r))
+    best_rows = sorted_rows[:len(rows_data) // 10]
+    
+    # 2. Calculate the target values (midpoint of best rows)
+    targets = {}
+    for col in tbl.x:
+        vals = [r[col.at] for r in best_rows]
+        if isinstance(col, ezr.Num):
+            targets[col.txt] = sum(vals) / len(vals)
+        else:
+            # For symbols, use the most frequent value
+            targets[col.txt] = max(set(vals), key=vals.count)
+            
+    # 3. Evaluate each lever
+    best_change = {}
+    min_ydist = ezr.ydist(tbl, row)
+    
+    for col_name, allowed in levers.items():
+        idx = header.index(col_name)
+        original_val = row[idx]
+        
+        # Try to move the lever towards the target
+        if isinstance(allowed, tuple): # Numeric
+            low, high = allowed
+            target = targets[col_name]
+            # Clamp target to allowed range
+            new_val = max(low, min(high, target))
+        else: # Symbolic
+            new_val = targets[col_name]
+            if new_val not in allowed:
+                new_val = allowed[0]
+        
+        # Test the change
+        row[idx] = new_val
+        current_ydist = ezr.ydist(tbl, row)
+        
+        if current_ydist < min_ydist:
+            min_ydist = current_ydist
+            best_change = {col_name: new_val}
+            
+        # Reset row
+        row[idx] = original_val
+        
+    return best_change
+
+if __name__ == "__main__":
+    # Load data
+    data = list(ezr.csv("pom3a.n1000.train.csv"))
+    header = data[0]
+    rows = data[1:]
+    tbl = ezr.Tbl(data)
+    
+    # Pick a "bad" row (worst 10%)
+    sorted_rows = sorted(rows, key=lambda r: ezr.ydist(tbl, r), reverse=True)
+    bad_row = sorted_rows[0]
+    
+    # Define levers: numeric columns are (0, 1) range, symbolic are lists
+    levers = {
+        "Culture": (0, 1),
+        "Criticality": (0, 1),
+        "Initial Known": (0, 1),
+        "Inter-Dependency": (0, 1),
+        "Dynamism": (0, 1),
+        "Size": (0, 1),
+        "Plan": (0, 1),
+        "Team Size": (0, 1)
+    }
+    
+    recommendation = fix(header, bad_row, levers)
+    
+    print("--- Optimization Recommendation ---")
+    print(f"Bad row identified. Recommended change to rescue performance:")
+    for col, val in recommendation.items():
+        print(f"Set '{col}' to {val:.4f}")
+    
+    exit(0)

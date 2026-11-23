@@ -1,0 +1,62 @@
+import csv
+from sklearn.neighbors import NearestNeighbors
+import numpy as np
+
+def remember(header, rows):
+    """
+    Finds the 5% of employees most similar to the first employee (index 0).
+    Similarity is based on input columns (excluding goal columns).
+    """
+    goal_indices = [i for i, h in enumerate(header) if h.endswith('+') or h.endswith('-')]
+    input_indices = [i for i in range(len(header)) if i not in goal_indices]
+    
+    def encode(data):
+        encoded = []
+        for row in data:
+            new_row = []
+            for i, val in enumerate(row):
+                if isinstance(val, str):
+                    new_row.append(hash(val) % 1000)
+                else:
+                    new_row.append(val)
+            encoded.append(new_row)
+        return np.array(encoded)
+
+    X = encode([ [row[i] for i in input_indices] for row in rows ])
+    
+    # Find 5% of rows (excluding the target itself)
+    n_neighbors = max(1, int(len(rows) * 0.05))
+    
+    # Use NearestNeighbors to find similar rows
+    nn = NearestNeighbors(n_neighbors=n_neighbors + 1)
+    nn.fit(X)
+    
+    # Find neighbors for the first row
+    distances, indices = nn.kneighbors([X[0]])
+    
+    # Return indices of neighbors (excluding the first one, which is the row itself)
+    return indices[0][1:].tolist()
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    indices = remember(header, rows)
+    years_idx = header.index('YearsAtCompany+')
+    
+    print("Employees most similar to the first record:")
+    print(f"{'Index':<10} | {'YearsAtCompany+'}")
+    print("-" * 30)
+    for idx in indices:
+        print(f"{idx:<10} | {rows[idx][years_idx]}")

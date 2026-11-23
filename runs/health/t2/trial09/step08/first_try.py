@@ -1,0 +1,77 @@
+import csv
+from step01 import remember
+
+def fix(header, row, levers):
+    """
+    Finds the smallest change to a 'bad' row that improves its score.
+    'Smallest' is defined as the change that results in the highest 
+    composite score improvement while staying within lever constraints.
+    """
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+
+    def get_score(r):
+        # We use the logic from step01 to evaluate a single row
+        # Since we don't have the full dataset here, we use a simple 
+        # heuristic: minimize MRE, maximize ACC, maximize PRED40.
+        # Normalized score: (1-MRE) + ACC + PRED40
+        return (1 - r[mre_idx]) + r[acc_idx] + r[pred_idx]
+
+    best_change = {}
+    best_score = get_score(row)
+
+    for col_name, allowed in levers.items():
+        idx = header.index(col_name)
+        original_val = row[idx]
+        
+        candidates = []
+        if isinstance(allowed, list):  # Symbolic
+            candidates = [v for v in allowed if v != original_val]
+        else:  # Numeric (low, high)
+            low, high = allowed
+            # Try a small step or boundary
+            candidates = [low, high]
+
+        for val in candidates:
+            new_row = list(row)
+            new_row[idx] = val
+            new_score = get_score(new_row)
+            if new_score > best_score:
+                best_score = new_score
+                best_change = {col_name: val}
+                
+    return best_change
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            rows.append([val if header[i] == 'criterion' else float(val) 
+                         for i, val in enumerate(row)])
+
+    # Identify a 'bad' row (bottom 5%)
+    top_indices = remember(header, rows)
+    all_indices = set(range(len(rows)))
+    bad_indices = list(all_indices - set(top_indices))
+    bad_row = rows[bad_indices[0]]
+
+    # Define levers based on column types
+    levers = {
+        'criterion': ['absolute_error', 'poisson', 'squared_error'],
+        'N_estimators': (10, 200),
+        'Min_sample_leaves': (1, 20),
+        'Max_depth': (1, 20)
+    }
+
+    recommendation = fix(header, bad_row, levers)
+    
+    print("Optimization recommendation for the current setup:")
+    if recommendation:
+        for col, val in recommendation.items():
+            print(f"Change '{col}' to {val} to improve performance.")
+    else:
+        print("No single lever change found to improve performance.")

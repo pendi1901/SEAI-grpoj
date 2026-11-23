@@ -1,0 +1,63 @@
+```python
+import csv
+
+def certify(xs, ys):
+    """
+    Returns True if xs and ys are statistically similar (same distribution),
+    False if they differ significantly. Uses the A12 effect size check.
+    """
+    if not xs or not ys:
+        return True
+
+    def a12(lst1, lst2):
+        more = 0
+        same = 0
+        for x in lst1:
+            for y in lst2:
+                if x > y:
+                    more += 1
+                elif x == y:
+                    same += 1
+        return (more + 0.5 * same) / (len(lst1) * len(lst2))
+
+    # A12 threshold: 0.56 is a small effect size.
+    # If the probability that a value from one group is greater than the other
+    # is between 0.44 and 0.56, they are considered statistically similar.
+    effect = a12(xs, ys)
+    return 0.44 <= effect <= 0.56
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [[float(x) for x in row] for row in reader]
+
+        # The customer asks if results shifted after a change in decision-making.
+        # We simulate this by comparing the first half of the data (before)
+        # to the second half (after). We use the 'Score-' goal as the metric.
+        score_idx = header.index('Score-')
+        
+        mid = len(rows) // 2
+        before = [r[score_idx] for r in rows[:mid]]
+        after = [r[score_idx] for r in rows[mid:]]
+        
+        is_same = certify(before, after)
+        
+        print("Customer Inquiry: Did the decision-making change shift results?")
+        print("-" * 60)
+        print(f"Average Score (Before): {sum(before)/len(before):.4f}")
+        print(f"Average Score (After):  {sum(after)/len(after):.4f}")
+        
+        if is_same:
+            print("\nConclusion: The results are statistically similar.")
+            print("The change in decision-making did not produce a significant shift.")
+        else:
+            print("\nConclusion: The results are statistically different.")
+            print("The change in decision-making has had a real impact on performance.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

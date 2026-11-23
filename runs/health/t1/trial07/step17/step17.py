@@ -1,0 +1,98 @@
+import csv
+import random
+
+def choose(header, rows, label):
+    """
+    Finds a setup that balances performance (MRE-, ACC+, PRED40+) 
+    with efficiency (small N_estimators).
+    """
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+    n_est_idx = header.index('N_estimators')
+    
+    # We have a budget of 50 labels.
+    # Strategy: Sample 50 rows, prioritize those with low N_estimators 
+    # and high performance potential.
+    
+    # Sort indices by N_estimators to favor smaller models
+    indices_by_size = sorted(range(len(rows)), key=lambda i: rows[i][n_est_idx])
+    
+    # Sample 50 rows: 25 from the smallest models, 25 random
+    sample_indices = indices_by_size[:25] + random.sample(range(len(rows)), 25)
+    sample_indices = list(set(sample_indices)) # Unique
+    
+    labeled_data = []
+    for i in sample_indices:
+        goals = label(i)
+        labeled_data.append((goals, i))
+    
+    # Normalize goals
+    mres = [d[0][0] for d in labeled_data]
+    accs = [d[0][1] for d in labeled_data]
+    preds = [d[0][2] for d in labeled_data]
+    n_ests = [rows[d[1]][n_est_idx] for d in labeled_data]
+    
+    min_mre, max_mre = min(mres), max(mres)
+    min_acc, max_acc = min(accs), max(accs)
+    min_pred, max_pred = min(preds), max(preds)
+    min_n, max_n = min(n_ests), max(n_ests)
+    
+    def normalize(val, min_v, max_v, reverse=False):
+        if max_v == min_v: return 0.5
+        norm = (val - min_v) / (max_v - min_v)
+        return (1 - norm) if reverse else norm
+
+    best_idx = -1
+    best_score = -float('inf')
+    
+    for goals, i in labeled_data:
+        # Score = (Performance - SizePenalty)
+        # Performance: average of normalized goals
+        perf = (normalize(goals[0], min_mre, max_mre, True) +
+                normalize(goals[1], min_acc, max_acc) +
+                normalize(goals[2], min_pred, max_pred)) / 3
+        
+        # Size penalty: smaller is better (normalize N_estimators)
+        size_penalty = normalize(rows[i][n_est_idx], min_n, max_n, False)
+        
+        # Balance performance and size (weight performance higher)
+        score = (0.7 * perf) - (0.3 * size_penalty)
+        
+        if score > best_score:
+            best_score = score
+            best_idx = i
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    full_data = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed = []
+            for i, val in enumerate(row):
+                if header[i] in ['MRE-', 'ACC+', 'PRED40+', 'N_estimators', 
+                                 'Min_sample_leaves', 'Min_impurity_decrease', 'Max_depth']:
+                    processed.append(float(val))
+                else:
+                    processed.append(val)
+            full_data.append(processed)
+            
+    rows = []
+    for r in full_data:
+        masked = list(r)
+        masked[0] = masked[1] = masked[2] = "?"
+        rows.append(masked)
+
+    def label(i):
+        return [full_data[i][0], full_data[i][1], full_data[i][2]]
+
+    best_idx = choose(header, rows, label)
+    
+    print("Optimization Result: Found a high-performance, efficient setup.")
+    print(f"Best setup index: {best_idx}")
+    print(f"Metrics: MRE={full_data[best_idx][0]:.4f}, ACC={full_data[best_idx][1]:.4f}, PRED40={full_data[best_idx][2]:.4f}")
+    print(f"Model Size (N_estimators): {full_data[best_idx][3]}")

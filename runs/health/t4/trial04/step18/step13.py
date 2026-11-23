@@ -1,0 +1,58 @@
+import csv
+import numpy as np
+from scipy import stats
+from step03 import certify
+
+def compare_criteria(header, rows):
+    """
+    Groups rows by the 'criterion' column and compares their performance
+    using the scoring metric: (1 - MRE) + ACC + PRED40.
+    """
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+    crit_idx = header.index('criterion')
+    
+    def get_score(row):
+        return (1.0 - float(row[mre_idx])) + float(row[acc_idx]) + float(row[pred_idx])
+    
+    # Group scores by criterion
+    groups = {}
+    for row in rows:
+        crit = row[crit_idx]
+        if crit not in groups:
+            groups[crit] = []
+        groups[crit].append(get_score(row))
+    
+    # Compare the two most common criteria (e.g., absolute_error vs squared_error)
+    # or all pairs if needed. Here we compare the two main ones.
+    c1, c2 = 'absolute_error', 'squared_error'
+    if c1 in groups and c2 in groups:
+        is_noise = certify(groups[c1], groups[c2])
+        return is_noise, c1, c2, groups[c1], groups[c2]
+    return None, None, None, None, None
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i] == 'criterion':
+                    processed_row.append(val)
+                else:
+                    processed_row.append(float(val))
+            rows.append(processed_row)
+            
+    is_noise, c1, c2, s1, s2 = compare_criteria(header, rows)
+    
+    print(f"Comparing '{c1}' vs '{c2}':")
+    if is_noise:
+        print("The difference is statistically insignificant (likely noise).")
+        print("Conclusion: You can stop arguing about it; the choice makes no real difference.")
+    else:
+        print("The difference is statistically significant.")
+        print("Conclusion: The choice of criterion does impact performance.")

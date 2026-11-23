@@ -1,0 +1,82 @@
+```python
+import ezr
+import random
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column for each test row.
+    Uses the tree-based ranker from ezr to find similar rows in the training set
+    and returns the mean of the first goal column from those similar rows.
+    """
+    # Create a table from the training data
+    train_tbl = ezr.Tbl([header] + train)
+    
+    # Build a tree to partition the space
+    node = ezr.tree(train_tbl, train_tbl.rows)
+    
+    # Identify the first goal column index
+    # The first goal is the first column in the 'y' list
+    first_goal_at = train_tbl.y[0].at
+    
+    results = []
+    for row in test:
+        # Walk the tree to find the leaf containing similar rows
+        leaf_node = ezr.leaf(node, row)
+        
+        # Calculate the mean of the first goal in this leaf
+        # If the leaf has rows, average the first goal column
+        if leaf_node.rows:
+            vals = [r[first_goal_at] for r in leaf_node.rows]
+            estimate = sum(vals) / len(vals)
+        else:
+            # Fallback to global mean if leaf is empty (should not happen with tree logic)
+            all_vals = [r[first_goal_at] for r in train_tbl.rows]
+            estimate = sum(all_vals) / len(all_vals)
+            
+        results.append(float(estimate))
+        
+    return results
+
+if __name__ == "__main__":
+    # Load data
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    
+    try:
+        header = next(data_gen)
+        all_rows = list(data_gen)
+    except StopIteration:
+        exit(0)
+        
+    # Split data: 80% train, 20% test
+    random.seed(1234567891)
+    random.shuffle(all_rows)
+    split_idx = int(len(all_rows) * 0.8)
+    train = all_rows[:split_idx]
+    test_raw = all_rows[split_idx:]
+    
+    # Mask the goals in the test set to simulate "unknown"
+    # The goals are the columns in the header that end in + or -
+    goal_indices = [i for i, name in enumerate(header) if name[-1] in "+-"]
+    
+    test = []
+    for row in test_raw:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        test.append(new_row)
+        
+    # Get estimates
+    estimates = guess(header, train, test)
+    
+    # Calculate average error for demonstration
+    actuals = [row[goal_indices[0]] for row in test_raw]
+    errors = [abs(e - a) for e, a in zip(estimates, actuals)]
+    avg_error = sum(errors) / len(errors)
+    
+    print(f"Analysis complete on {len(all_rows)} records.")
+    print(f"Estimated the first goal ('{header[goal_indices[0]]}') for {len(test)} test cases.")
+    print(f"Average absolute error of estimates: {avg_error:.4f}")
+    
+    exit(0)
+```

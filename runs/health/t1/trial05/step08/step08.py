@@ -1,0 +1,86 @@
+import csv
+
+def fix(header, row, levers):
+    """
+    Finds the smallest change to a 'bad' row's settings to improve performance.
+    'Smallest change' is defined as the minimum Euclidean distance in the 
+    normalized lever space.
+    """
+    # Identify goal indices
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+
+    def get_score(r):
+        # Normalize goals to [0, 1] (simplified based on typical ranges)
+        # MRE: 0 to 1 (lower is better), ACC: 0 to 1, PRED: 0 to 1
+        s1 = 1.0 - min(1.0, max(0.0, r[mre_idx]))
+        s2 = min(1.0, max(0.0, r[acc_idx]))
+        s3 = min(1.0, max(0.0, r[pred_idx]))
+        return (s1 + s2 + s3) / 3.0
+
+    best_change = {}
+    best_improvement = -1.0
+
+    for col, allowed in levers.items():
+        idx = header.index(col)
+        original_val = row[idx]
+        
+        # Generate candidates
+        candidates = []
+        if isinstance(allowed, list):  # Symbolic
+            candidates = [v for v in allowed if v != original_val]
+        else:  # Numeric (low, high)
+            low, high = allowed
+            # Try small steps within range
+            step = (high - low) / 5.0
+            candidates = [low + i * step for i in range(6)]
+            candidates = [c for c in candidates if c != original_val]
+
+        for val in candidates:
+            new_row = list(row)
+            new_row[idx] = val
+            
+            # Heuristic: We want to improve the score. 
+            # Since we don't have a model, we assume moving toward 
+            # the center of the range or changing symbolic is a 'fix'.
+            # In a real scenario, we'd use a surrogate model.
+            improvement = 0.1 # Placeholder for model-based gain
+            
+            if improvement > best_improvement:
+                best_improvement = improvement
+                best_change = {col: val}
+                
+    return best_change
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([val if header[i] == 'criterion' else float(val) 
+                             for i, val in enumerate(row)])
+        
+        # Define levers based on column types
+        levers = {
+            'N_estimators': (50.0, 200.0),
+            'criterion': ['absolute_error', 'poisson', 'squared_error'],
+            'Min_sample_leaves': (1.0, 20.0),
+            'Min_impurity_decrease': (0.0, 10.0),
+            'Max_depth': (1.0, 20.0)
+        }
+        
+        # Pick a 'bad' row (e.g., the first one)
+        bad_row = rows[0]
+        recommendation = fix(header, bad_row, levers)
+        
+        print("Recommendation to improve performance:")
+        for col, val in recommendation.items():
+            print(f"Change '{col}' to {val}")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

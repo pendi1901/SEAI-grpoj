@@ -1,0 +1,70 @@
+import csv
+
+def spot(header, rows):
+    """
+    Identifies rows that contain outliers. We use the Interquartile Range (IQR)
+    method on each input column to detect values that are statistically 
+    unlikely (outside 1.5 * IQR). Rows with the highest count of such 
+    outliers are returned as most suspicious.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    input_indices = [i for i in range(len(header)) if i not in goal_indices]
+    
+    # Track outlier counts per row
+    outlier_counts = [0] * len(rows)
+    
+    for i in input_indices:
+        col_vals = sorted([row[i] for row in rows])
+        n = len(col_vals)
+        q1 = col_vals[n // 4]
+        q3 = col_vals[(3 * n) // 4]
+        iqr = q3 - q1
+        low_bound = q1 - 1.5 * iqr
+        high_bound = q3 + 1.5 * iqr
+        
+        for r_idx, row in enumerate(rows):
+            val = row[i]
+            if val < low_bound or val > high_bound:
+                outlier_counts[r_idx] += 1
+                
+    # Create list of (count, index) and sort by count descending
+    suspicious = []
+    for r_idx, count in enumerate(outlier_counts):
+        if count > 0:
+            suspicious.append((count, r_idx))
+            
+    suspicious.sort(key=lambda x: x[0], reverse=True)
+    
+    return [item[1] for item in suspicious]
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                # Convert numeric columns to float
+                processed_row = []
+                for val in row:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        suspicious_indices = spot(header, rows)
+        
+        print("Analysis: Identifying potentially mistyped or anomalous records.")
+        if not suspicious_indices:
+            print("No suspicious records found.")
+        else:
+            print(f"Found {len(suspicious_indices)} suspicious rows.")
+            print("Top 10 most suspicious row indices:")
+            for idx in suspicious_indices[:10]:
+                print(f"Row {idx}")
+                
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

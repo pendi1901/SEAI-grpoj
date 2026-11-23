@@ -1,0 +1,69 @@
+```python
+import csv
+
+def flow(header, row, seen):
+    """
+    Decides when to stop based on the 'best so far'.
+    We stop if the current row is not significantly better than the best 
+    seen so far, using a patience-based approach (early stopping).
+    """
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+
+    def get_score(r):
+        # Normalize goals: MRE- (min), ACC+ (max), PRED40+ (max)
+        # Since we don't have global stats, we use the row values directly.
+        # We want to maximize: -MRE + ACC + PRED
+        return -r[mre_idx] + r[acc_idx] + r[pred_idx]
+
+    if not seen:
+        return False
+
+    # Track the best score seen so far
+    best_score = max(get_score(s) for s in seen)
+    current_score = get_score(row)
+
+    # If we have seen enough data (e.g., 50 rows), check for improvement.
+    # If the current row is worse than the best seen for a long time, stop.
+    # Here, we stop if we haven't seen an improvement in the last 50 rows.
+    patience = 50
+    if len(seen) > patience:
+        recent_rows = seen[-patience:]
+        best_recent = max(get_score(s) for s in recent_rows)
+        
+        # If the best score hasn't improved in the last 50 rows, stop.
+        if best_score > best_recent:
+            return True
+
+    return False
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                try:
+                    processed_row.append(float(val))
+                except ValueError:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    seen = []
+    stopped = False
+    for i, row in enumerate(rows):
+        if flow(header, row, seen):
+            print(f"Stopping early: No significant improvement found after row {i+1}.")
+            stopped = True
+            break
+        seen.append(row)
+    
+    if not stopped:
+        print("Processed all rows without finding a reason to stop early.")
+    
+    exit(0)
+```

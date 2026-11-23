@@ -1,0 +1,56 @@
+```python
+import ezr
+import random
+
+def remember(header, rows):
+    """
+    Identify the top 5% of rows that perform best across all goals.
+    Goals ending in '-' are minimized, '+' are maximized.
+    """
+    # Create a table object to use ezr's utility functions
+    # We construct the table using the provided header and rows
+    data = [header] + rows
+    tbl = ezr.Tbl(data)
+    
+    # Calculate ydist for every row. 
+    # ydist measures how far a row is from the ideal goal values.
+    # Lower ydist is better.
+    scored_rows = []
+    for i, row in enumerate(rows):
+        d = ezr.ydist(tbl, row)
+        scored_rows.append((d, i))
+    
+    # Sort by distance (ascending, as lower is better)
+    scored_rows.sort(key=lambda x: x[0])
+    
+    # Return the top 5% of rows (or at least one)
+    limit = max(1, int(len(rows) * 0.05))
+    return [idx for _, idx in scored_rows[:limit]]
+
+if __name__ == "__main__":
+    # Load the data
+    filename = "pom3a.n1000.train.csv"
+    data_iter = ezr.csv(filename)
+    
+    try:
+        header = next(data_iter)
+        rows = list(data_iter)
+    except StopIteration:
+        exit(0)
+        
+    # Get the best indices
+    best_indices = remember(header, rows)
+    
+    # Print results for the customer
+    print(f"Found {len(best_indices)} top-performing configurations.")
+    print(f"{'Index':<10} | {'Goal Distance (ydist)':<20}")
+    print("-" * 35)
+    
+    # Re-calculate table for display purposes
+    tbl = ezr.Tbl([header] + rows)
+    for idx in best_indices:
+        dist = ezr.ydist(tbl, rows[idx])
+        print(f"{idx:<10} | {dist:.4f}")
+        
+    exit(0)
+```

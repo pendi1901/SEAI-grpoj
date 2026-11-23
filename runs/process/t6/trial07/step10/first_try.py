@@ -1,0 +1,78 @@
+import ezr
+import random
+
+def race(header, rows, label):
+    """
+    Compare three strategies: random, greedy (acquire), and local search.
+    Budget is 50 labels total.
+    """
+    budget = 50
+    labeled_indices = {}
+
+    def get_label(i):
+        if i not in labeled_indices:
+            if len(labeled_indices) >= budget:
+                raise Exception("Budget exceeded")
+            labeled_indices[i] = label(i)
+        return labeled_indices[i]
+
+    # Strategy 1: Random
+    def strategy_random():
+        indices = random.sample(range(len(rows)), budget // 3)
+        for i in indices: get_label(i)
+        return min(indices, key=lambda i: ezr.ydist(ezr.Tbl([header] + [get_label(idx) for idx in labeled_indices]), get_label(i)))
+
+    # Strategy 2: Acquire (from ezr)
+    def strategy_acquire():
+        tbl = ezr.Tbl([header] + rows)
+        # We use a subset of the budget
+        subset = ezr.acquire(tbl, cap=budget // 3, label=lambda r: get_label(rows.index(r)))
+        return rows.index(min(subset, key=lambda r: ezr.ydist(tbl, r)))
+
+    # Strategy 3: Local Search (Hill Climbing)
+    def strategy_hill():
+        curr = random.randint(0, len(rows) - 1)
+        for _ in range(budget // 3):
+            get_label(curr)
+            # Look at neighbors
+            neighbors = random.sample(range(len(rows)), 5)
+            best_n = min(neighbors, key=lambda n: ezr.ydist(ezr.Tbl([header] + [get_label(curr)]), get_label(n)))
+            if ezr.ydist(ezr.Tbl([header] + [get_label(curr)]), get_label(best_n)) < ezr.ydist(ezr.Tbl([header] + [get_label(curr)]), get_label(curr)):
+                curr = best_n
+        return curr
+
+    results = {
+        "random": strategy_random(),
+        "acquire": strategy_acquire(),
+        "hill": strategy_hill()
+    }
+
+    # Evaluate winners based on true ydist
+    tbl = ezr.Tbl([header] + rows)
+    winner = min(results, key=lambda name: ezr.ydist(tbl, rows[results[name]]))
+    
+    return {"winner": winner, "row": results[winner], "tried": list(results.keys())}
+
+if __name__ == "__main__":
+    file_path = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(file_path))
+    header = data[0]
+    rows = data[1:]
+    
+    # Mask goals
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    masked_rows = []
+    for row in rows:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_rows.append(new_row)
+    
+    def label_func(i):
+        return rows[i]
+    
+    result = race(header, masked_rows, label_func)
+    print(f"Race Results: The winner is '{result['winner']}' strategy.")
+    print(f"Best row found at index: {result['row']}")
+    print(f"Strategies tried: {', '.join(result['tried'])}")
+    exit(0)

@@ -1,0 +1,64 @@
+import csv
+import step01
+import math
+
+def certify(xs, ys):
+    """
+    Returns True if xs and ys are statistically similar (null hypothesis),
+    False if they differ significantly. Uses a simple t-test approach.
+    """
+    def mean(data):
+        return sum(data) / len(data)
+
+    def variance(data):
+        m = mean(data)
+        return sum((x - m) ** 2 for x in data) / (len(data) - 1)
+
+    n1, n2 = len(xs), len(ys)
+    m1, m2 = mean(xs), mean(ys)
+    v1, v2 = variance(xs), variance(ys)
+
+    # Standard error of the difference
+    se = math.sqrt((v1 / n1) + (v2 / n2))
+    if se == 0:
+        return True
+    
+    t_stat = abs(m1 - m2) / se
+    # For a 95% confidence level, critical t-value is approx 1.96
+    return t_stat < 1.96
+
+def analyze_teams(header, rows):
+    # Find indices for Team Size and Cost-
+    team_idx = header.index("Team Size")
+    cost_idx = header.index("Cost-")
+    
+    # Split into small (<= 0.5) and big (> 0.5) teams
+    small_teams = [float(row[cost_idx]) for row in rows if float(row[team_idx]) <= 0.5]
+    big_teams = [float(row[cost_idx]) for row in rows if float(row[team_idx]) > 0.5]
+    
+    is_same = certify(small_teams, big_teams)
+    
+    return small_teams, big_teams, is_same
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', newline='') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [row for row in reader]
+            
+            small, big, is_same = analyze_teams(header, rows)
+            
+            print("Customer Inquiry: Are small-team setups cheaper than big-team ones?")
+            print(f"Average cost for small teams: {sum(small)/len(small):.4f}")
+            print(f"Average cost for big teams: {sum(big)/len(big):.4f}")
+            
+            if is_same:
+                print("Conclusion: The difference is statistically insignificant. It was likely luck.")
+            else:
+                print("Conclusion: The difference is statistically significant. Small teams are genuinely cheaper.")
+                
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

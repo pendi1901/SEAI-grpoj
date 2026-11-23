@@ -1,0 +1,71 @@
+```python
+import ezr
+import random
+
+def guess(header, train, test):
+    """
+    Estimates the value of the first goal column for each test row.
+    Uses a tree-based approach to find the leaf node containing similar
+    training rows and returns the mean of the goal column in that leaf.
+    """
+    # Create a table from training data to build the model
+    tbl = ezr.Tbl([header] + train)
+    
+    # Build a decision tree based on the training data
+    node = ezr.tree(tbl, tbl.rows)
+    
+    # Identify the index of the first goal column
+    # Goals are columns ending in '+' or '-'
+    goal_idx = -1
+    for i, name in enumerate(header):
+        if name.endswith('+') or name.endswith('-'):
+            goal_idx = i
+            break
+            
+    results = []
+    for row in test:
+        # Walk the tree to find the leaf node for this test row
+        leaf = ezr.leaf(node, row)
+        
+        # Calculate the mean of the goal column for all rows in this leaf
+        vals = [r[goal_idx] for r in leaf.rows if r[goal_idx] != "?"]
+        if vals:
+            results.append(sum(vals) / len(vals))
+        else:
+            # Fallback to global mean if leaf is empty or has no valid goal data
+            all_vals = [r[goal_idx] for r in train if r[goal_idx] != "?"]
+            results.append(sum(all_vals) / len(all_vals))
+            
+    return results
+
+if __name__ == "__main__":
+    # Load the data
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Split data: 80% train, 20% test
+    random.seed(1234567891)
+    random.shuffle(rows)
+    split = int(len(rows) * 0.8)
+    train = rows[:split]
+    test_full = rows[split:]
+    
+    # Mask the goals in the test set to simulate "day one" knowledge
+    test_masked = []
+    for row in test_full:
+        new_row = list(row)
+        for i, name in enumerate(header):
+            if name.endswith('+') or name.endswith('-'):
+                new_row[i] = "?"
+        test_masked.append(new_row)
+        
+    # Get estimates
+    estimates = guess(header, train, test_masked)
+    
+    # Print summary
+    print(f"Estimated tenure for {len(test_masked)} new hires:")
+    print(f"Average predicted 'YearsAtCompany+': {sum(estimates)/len(estimates):.2f} years.")
+    print("These estimates are based on patterns found in existing employee records.")
+```

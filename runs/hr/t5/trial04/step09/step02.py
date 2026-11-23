@@ -1,0 +1,68 @@
+import ezr
+import random
+
+def guess(header, train, test):
+    """
+    Estimates the value of the first goal column for each test row.
+    Uses a tree-based approach to find the leaf node containing similar
+    historical data and returns the mean of the goal column in that leaf.
+    """
+    # Create table from training data
+    tbl = ezr.Tbl([header] + train)
+    
+    # Build a decision tree based on the training data
+    # The tree splits rows to minimize ydist (distance to goals)
+    root = ezr.tree(tbl, tbl.rows)
+    
+    # Identify the first goal column index
+    # Goals are columns ending in '+' or '-'
+    goal_idx = -1
+    for i, name in enumerate(header):
+        if name.endswith('+') or name.endswith('-'):
+            goal_idx = i
+            break
+            
+    results = []
+    for row in test:
+        # Walk the tree to find the leaf node for this test row
+        leaf_node = ezr.leaf(root, row)
+        
+        # Calculate the mean of the first goal column in this leaf
+        # We use the training rows that ended up in this leaf
+        vals = [r[goal_idx] for r in leaf_node.rows if r[goal_idx] != "?"]
+        if vals:
+            results.append(sum(vals) / len(vals))
+        else:
+            # Fallback to global mean if leaf is empty or has no goal data
+            all_vals = [r[goal_idx] for r in train if r[goal_idx] != "?"]
+            results.append(sum(all_vals) / len(all_vals))
+            
+    return results
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Split into train and test for demonstration
+    random.seed(1234567891)
+    random.shuffle(rows)
+    train = rows[:600]
+    test = rows[600:605]
+    
+    # Mask the goals in the test set
+    test_masked = []
+    for row in test:
+        new_row = list(row)
+        for i, name in enumerate(header):
+            if name.endswith('+') or name.endswith('-'):
+                new_row[i] = "?"
+        test_masked.append(new_row)
+        
+    estimates = guess(header, train, test_masked)
+    
+    print("Estimation of 'YearsAtCompany+' (first goal column) for new hires:")
+    for i, est in enumerate(estimates):
+        actual = test[i][31] # Index 31 is YearsAtCompany+
+        print(f"Hire {i+1}: Estimated {est:.2f} years, Actual {actual} years")

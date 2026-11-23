@@ -1,0 +1,106 @@
+You are writing one Python file, step01.py.
+
+The data is the csv file Health-ClosedIssues0000.n1000.train.csv in the current directory. Column names starting in upper case are numeric, lower case are symbolic. A name ending in - is a goal to minimise, in + a goal to maximise; all other columns are inputs. It has 800 data rows after the header. Any count the customer quotes describes their full records, not this file: never hard-code a row count, read the file to the end. Its first lines:
+
+MRE-,ACC+,PRED40+,N_estimators,criterion,Min_sample_leaves,Min_impurity_decrease,Max_depth
+0.883063328,0.40756167894905476,0,180,absolute_error,11,9.75,11
+0.26612665684830633,0.681512336,0.5714285714285714,110,squared_error,2,2,2
+0.23902798232695144,0.6843960269144505,0.8571428571428571,120,squared_error,2,7.75,7
+
+Your function receives rows already parsed. The header and the first two rows look like this in Python:
+
+header = ['MRE-', 'ACC+', 'PRED40+', 'N_estimators', 'criterion', 'Min_sample_leaves', 'Min_impurity_decrease', 'Max_depth']
+row = [0.883063328, 0.40756167894905476, 0.0, 180.0, 'absolute_error', 11.0, 9.75, 11.0]
+row = [0.26612665684830633, 0.681512336, 0.5714285714285714, 110.0, 'squared_error', 2.0, 2.0, 2.0]
+
+These columns hold text, not numbers: criterion (absolute_error, poisson, squared_error).
+
+You may use scikit-learn, numpy and pandas.
+
+The customer asks:
+
+  Out of the 10,000 setups already tried, show me the handful whose forecasts were unusually trustworthy.
+
+Write step01.py to answer that ask on this data.
+
+A test harness will import your file and call this function, so you must define it exactly:
+
+def remember(header, rows)
+  Returns a list of ints.   Return the positions (0-based) in `rows` of the rows you judge best. Return at least one and at most 5% of the rows.
+
+Rules the harness enforces: Returning no rows, or more than 5% of the rows, scores zero.
+
+Conventions: `header` is the list of column names. `rows` is a list of rows; each row is a list of cells in header order, floats for numeric columns and strings for symbolic ones. A cell shown as "?" is hidden from you. A row is better when its goals are closer to their best (low for names ending in -, high for names ending in +).
+
+Keep everything that prints or reads the csv file under `if __name__ == "__main__":` so that importing the file prints nothing. Plain built-in types are all you need: do not import anything from `typing`.
+
+Running `python step01.py` must load the csv, call your function, print a short answer a customer could read, and exit with status 0. Reply with the complete file in one ```python fenced block and nothing else.
+
+--- your previous step01.py ---
+import csv
+
+def remember(header, rows):
+    """
+    Identifies the best rows based on multi-objective optimization.
+    Goals: MRE- (minimize), ACC+ (maximize), PRED40+ (maximize).
+    We use a simple Pareto-based approach or weighted normalization.
+    Given the constraints, we normalize the goals and pick the top 5% (40 rows).
+    """
+    # Identify column indices
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+
+    # Extract goals and normalize
+    # MRE is minimize, so we invert it: (max - val) / (max - min)
+    # ACC and PRED are maximize: (val - min) / (max - min)
+    
+    scores = []
+    for i, row in enumerate(rows):
+        scores.append((row[mre_idx], row[acc_idx], row[pred_idx], i))
+
+    # Simple heuristic: maximize (ACC + PRED) - MRE
+    # Since they are on different scales, we use rank-based scoring
+    mre_sorted = sorted(scores, key=lambda x: x[0])
+    acc_sorted = sorted(scores, key=lambda x: x[1], reverse=True)
+    pred_sorted = sorted(scores, key=lambda x: x[2], reverse=True)
+
+    ranks = {s[3]: 0 for s in scores}
+    for r, s in enumerate(mre_sorted): ranks[s[3]] += r
+    for r, s in enumerate(acc_sorted): ranks[s[3]] += r
+    for r, s in enumerate(pred_sorted): ranks[s[3]] += r
+
+    # Return top 5% (40 rows out of 800)
+    best_indices = sorted(ranks, key=ranks.get)[:40]
+    return best_indices
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            # Convert numeric columns
+            processed_row = []
+            for i, val in enumerate(row):
+                try:
+                    processed_row.append(float(val))
+                except ValueError:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    best_indices = remember(header, rows)
+    
+    print(f"Analysis complete. Found {len(best_indices)} trustworthy setups.")
+    print("Top 5 indices:", best_indices[:5])
+    exit(0)
+
+
+A test harness imported that file and called `remember` on a sample of the training data in Health-ClosedIssues0000.n1000.train.csv. It failed:
+
+Rule broken: must return 1 row to 5% of rows
+
+Fix the file. Keep the same function name and arguments and follow every rule above. Reply with the complete corrected file in one ```python fenced block and nothing else.

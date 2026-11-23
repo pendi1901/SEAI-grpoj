@@ -1,0 +1,52 @@
+import ezr
+import step01
+
+def remember(header, rows):
+    """
+    Find the top 5% of rows that are most similar to the 'best' setup 
+    (the one with the lowest ydist).
+    """
+    # Build a table to calculate ydist and xdist
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Identify the best setup (the one with the lowest ydist)
+    # We use the logic from step01 to find the best row
+    scored = sorted([(ezr.ydist(tbl, r), i) for i, r in enumerate(rows)])
+    best_row = rows[scored[0][1]]
+    
+    # Find rows most similar to the best_row in the input space (xdist)
+    # We calculate xdist between every row and the best_row
+    similarities = []
+    for i, row in enumerate(rows):
+        d = ezr.xdist(tbl, row, best_row)
+        similarities.append((d, i))
+    
+    # Sort by distance ascending (most similar first)
+    similarities.sort(key=lambda x: x[0])
+    
+    # Return the top 5% of rows (800 rows * 0.05 = 40 rows)
+    limit = max(1, int(len(rows) * 0.05))
+    return [idx for dist, idx in similarities[:limit]]
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data_iter = ezr.csv(filename)
+    header = next(data_iter)
+    rows = list(data_iter)
+    
+    # Get the indices of the most similar setups
+    indices = remember(header, rows)
+    
+    # Print summary
+    tbl = ezr.Tbl([header] + rows)
+    print(f"Analysis complete on {len(rows)} records.")
+    print(f"Identified {len(indices)} setups most similar to the best configuration.")
+    print("Top 5 indices (0-based):", indices[:5])
+    
+    # Show scores for these setups
+    print("\nScores (ydist) for the top 5 most similar setups:")
+    for idx in indices[:5]:
+        score = ezr.ydist(tbl, rows[idx])
+        print(f" - Index {idx}: {score:.4f}")
+    
+    exit(0)

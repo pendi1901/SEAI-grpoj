@@ -1,0 +1,61 @@
+import ezr
+import random
+
+def certify(xs, ys):
+    """
+    Returns True if xs and ys are statistically indistinguishable,
+    False if they differ significantly.
+    """
+    # Use ezr.same which combines cliffs, ks, and cohen tests.
+    # We use a standard effect size threshold (0.35) for cohen's d.
+    return ezr.same(xs, ys, eps=0.35)
+
+def analyze_shift(header, rows):
+    """
+    Compare the performance (ydist) of the first half of the data
+    vs the second half to see if results shifted over time.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate ydist for all rows
+    all_ydists = [ezr.ydist(tbl, r) for r in rows]
+    
+    # Split into two halves
+    mid = len(all_ydists) // 2
+    first_half = all_ydists[:mid]
+    second_half = all_ydists[mid:]
+    
+    # Perform statistical test
+    is_same = certify(first_half, second_half)
+    
+    return first_half, second_half, is_same
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    
+    try:
+        header = next(data_gen)
+        rows = list(data_gen)
+    except StopIteration:
+        print("Error: File is empty or missing.")
+        exit(1)
+        
+    # Perform the analysis
+    first, second, is_same = analyze_shift(header, rows)
+    
+    avg_first = sum(first) / len(first)
+    avg_second = sum(second) / len(second)
+    
+    print("Analysis: Did results shift after the change in team decision-making?")
+    print(f"  First half (n={len(first)}): avg ydist = {avg_first:.4f}")
+    print(f"  Second half (n={len(second)}): avg ydist = {avg_second:.4f}")
+    
+    if is_same:
+        print("\nConclusion: The results are statistically indistinguishable.")
+        print("The observed differences are likely due to noise, not the change in process.")
+    else:
+        print("\nConclusion: The results have shifted significantly.")
+        print("The change in team decision-making has had a measurable impact on performance.")
+        
+    exit(0)

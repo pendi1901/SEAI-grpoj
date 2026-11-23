@@ -1,0 +1,60 @@
+```python
+import ezr
+
+def justify(header, rows, row):
+    """
+    Estimates the performance of a given configuration and compares it to 
+    the population to answer why 'bigger/deeper' isn't always better.
+    """
+    # Create a table to handle normalization and distance calculations
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Grow a tree to rank the rows based on input settings
+    ranker = ezr.ranker(tbl)
+    
+    # Estimate the ydist of the target row
+    estimated_ydist = ranker(row)
+    
+    # Calculate ydist for all known rows
+    all_ydists = [ezr.ydist(tbl, r) for r in rows]
+    
+    # p is the fraction of rows that 'row' is better than (lower ydist is better)
+    better_than_count = sum(1 for d in all_ydists if d > estimated_ydist)
+    p = better_than_count / len(rows)
+    
+    # Reason: Explain that complexity (depth/size) often leads to overfitting 
+    # or diminishing returns, which is why the model predicts this specific 
+    # performance level.
+    reason = (f"While larger setups increase complexity, this configuration is "
+              f"estimated to outperform {int(p*100)}% of all evaluated setups, "
+              f"suggesting that simpler models often capture the underlying "
+              f"patterns more effectively than the largest possible configuration.")
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data_iter = ezr.csv(filename)
+    header = next(data_iter)
+    rows = list(data_iter)
+    
+    # Pick a row that represents a "large/deep" setup to justify
+    # We look for high Max_depth and N_estimators
+    depth_idx = header.index("Max_depth")
+    est_idx = header.index("N_estimators")
+    
+    # Find a row with high depth and high estimators
+    sorted_by_complexity = sorted(rows, key=lambda r: r[depth_idx] + r[est_idx], reverse=True)
+    target_row = list(sorted_by_complexity[0])
+    
+    # Mask the goals to simulate the "unknown" scenario
+    masked_row = ["?" if i < 3 else val for i, val in enumerate(target_row)]
+    
+    p, reason = justify(header, rows, masked_row)
+    
+    print("Customer Query: Why not simply use the biggest, deepest setup the machine can hold?")
+    print(f"Result: {reason}")
+    print(f"Confidence score (p): {p:.4f}")
+    
+    exit(0)
+```

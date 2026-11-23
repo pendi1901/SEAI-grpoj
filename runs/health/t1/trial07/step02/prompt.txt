@@ -1,0 +1,109 @@
+You are writing one Python file, step02.py.
+
+The data is the csv file Health-ClosedIssues0000.n1000.train.csv in the current directory. Column names starting in upper case are numeric, lower case are symbolic. A name ending in - is a goal to minimise, in + a goal to maximise; all other columns are inputs. It has 800 data rows after the header. Any count the customer quotes describes their full records, not this file: never hard-code a row count, read the file to the end. Its first lines:
+
+MRE-,ACC+,PRED40+,N_estimators,criterion,Min_sample_leaves,Min_impurity_decrease,Max_depth
+0.883063328,0.40756167894905476,0,180,absolute_error,11,9.75,11
+0.26612665684830633,0.681512336,0.5714285714285714,110,squared_error,2,2,2
+0.23902798232695144,0.6843960269144505,0.8571428571428571,120,squared_error,2,7.75,7
+
+Your function receives rows already parsed. The header and the first two rows look like this in Python:
+
+header = ['MRE-', 'ACC+', 'PRED40+', 'N_estimators', 'criterion', 'Min_sample_leaves', 'Min_impurity_decrease', 'Max_depth']
+row = [0.883063328, 0.40756167894905476, 0.0, 180.0, 'absolute_error', 11.0, 9.75, 11.0]
+row = [0.26612665684830633, 0.681512336, 0.5714285714285714, 110.0, 'squared_error', 2.0, 2.0, 2.0]
+
+These columns hold text, not numbers: criterion (absolute_error, poisson, squared_error).
+
+Use only the Python standard library.
+
+These files, written earlier, are in the same directory:
+
+--- step01.py ---
+import csv
+
+def remember(header, rows):
+    """
+    Identifies the top 5% of rows based on multi-objective optimization.
+    Goals: MRE- (minimize), ACC+ (maximize), PRED40+ (maximize).
+    We normalize values to [0, 1] and calculate a score.
+    """
+    # Identify column indices
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+
+    # Collect data for normalization
+    mres = [r[mre_idx] for r in rows]
+    accs = [r[acc_idx] for r in rows]
+    preds = [r[pred_idx] for r in rows]
+
+    min_mre, max_mre = min(mres), max(mres)
+    min_acc, max_acc = min(accs), max(accs)
+    min_pred, max_pred = min(preds), max(preds)
+
+    def normalize(val, min_v, max_v, reverse=False):
+        if max_v == min_v: return 0.5
+        norm = (val - min_v) / (max_v - min_v)
+        return (1 - norm) if reverse else norm
+
+    scores = []
+    for i, row in enumerate(rows):
+        # Score = average of normalized goals
+        s = (normalize(row[mre_idx], min_mre, max_mre, True) +
+             normalize(row[acc_idx], min_acc, max_acc) +
+             normalize(row[pred_idx], min_pred, max_pred)) / 3
+        scores.append((s, i))
+
+    # Sort by score descending
+    scores.sort(key=lambda x: x[0], reverse=True)
+    
+    # Return top 5% (max 40 rows for 800 input rows)
+    limit = max(1, len(rows) // 20)
+    return [item[1] for item in scores[:limit]]
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            # Convert numeric columns to floats
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i] in ['MRE-', 'ACC+', 'PRED40+', 'N_estimators', 
+                                 'Min_sample_leaves', 'Min_impurity_decrease', 'Max_depth']:
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    best_indices = remember(header, rows)
+    
+    print(f"Analysis complete. Found {len(best_indices)} highly trustworthy setups.")
+    print("Top performing row indices:", best_indices)
+    print("\nSample of best row values (MRE, ACC, PRED40):")
+    for idx in best_indices[:3]:
+        r = rows[idx]
+        print(f"Row {idx}: {r[0]:.4f}, {r[1]:.4f}, {r[2]:.4f}")
+
+
+The customer asks:
+
+  Before I spend an hour running a setup, tell me roughly how far off its forecasts will be.
+
+Write step02.py to answer that ask on this data.
+
+A test harness will import your file and call this function, so you must define it exactly:
+
+def guess(header, train, test)
+  Returns a list of floats.   `train` rows are complete. In `test` rows every goal cell is "?". Return one number per test row: your estimate of the FIRST goal column for that row.
+
+Rules the harness enforces: Return exactly one number per test row, in the same order.
+
+Conventions: `header` is the list of column names. `rows` is a list of rows; each row is a list of cells in header order, floats for numeric columns and strings for symbolic ones. A cell shown as "?" is hidden from you. A row is better when its goals are closer to their best (low for names ending in -, high for names ending in +).
+
+Keep everything that prints or reads the csv file under `if __name__ == "__main__":` so that importing the file prints nothing. Plain built-in types are all you need: do not import anything from `typing`.
+
+Running `python step02.py` must load the csv, call your function, print a short answer a customer could read, and exit with status 0. Reply with the complete file in one ```python fenced block and nothing else.

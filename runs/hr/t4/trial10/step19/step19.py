@@ -1,0 +1,59 @@
+import csv
+from sklearn.neighbors import NearestNeighbors
+import numpy as np
+
+def spot(header, rows):
+    """
+    Identifies rows that are 'unlike anyone we have employed'.
+    We use Nearest Neighbors to find the distance to the closest existing employee.
+    Rows with a large distance to their nearest neighbor are considered 'unlike'
+    and thus their estimates cannot be trusted.
+    """
+    goal_indices = [i for i, h in enumerate(header) if h.endswith('+') or h.endswith('-')]
+    input_indices = [i for i in range(len(header)) if i not in goal_indices]
+    
+    def encode(data):
+        encoded = []
+        for row in data:
+            new_row = []
+            for i, val in enumerate(row):
+                if isinstance(val, str):
+                    new_row.append(hash(val) % 1000)
+                else:
+                    new_row.append(val)
+            encoded.append(new_row)
+        return np.array(encoded)
+
+    X = encode([[row[i] for i in input_indices] for row in rows])
+    
+    # Find the distance to the nearest neighbor for every row
+    # We use n_neighbors=2 because the closest neighbor is the row itself (dist=0)
+    nn = NearestNeighbors(n_neighbors=2)
+    nn.fit(X)
+    distances, _ = nn.kneighbors(X)
+    
+    # The second column of distances is the distance to the nearest *other* row
+    neighbor_distances = distances[:, 1]
+    
+    # Identify indices of rows sorted by distance (most suspicious/unlike first)
+    indices = np.argsort(neighbor_distances)[::-1]
+    
+    return indices.tolist()
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = [float(val) if header[i][0].isupper() else val for i, val in enumerate(row)]
+            rows.append(processed_row)
+
+    suspects = spot(header, rows)
+    
+    print("Analysis: Identifying hires unlike anyone we have employed.")
+    print("These employees are outliers in our data, so our estimates for them may be unreliable.")
+    print("Top 5 most 'unlike' row indices:")
+    for idx in suspects[:5]:
+        print(f"- Row {idx}")

@@ -1,0 +1,74 @@
+import csv
+import pandas as pd
+import numpy as np
+from sklearn.neighbors import NearestNeighbors
+
+def remember(header, rows):
+    """
+    Finds the 5% of rows most similar to the 'best' performing rows 
+    in the dataset, using Euclidean distance on input columns.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    goals = [col for col in header if col.endswith(('-', '+'))]
+    inputs = [col for col in header if col not in goals]
+    
+    # Calculate performance score for all rows
+    scores = pd.DataFrame(index=df.index)
+    for goal in goals:
+        col_min, col_max = df[goal].min(), df[goal].max()
+        rng = col_max - col_min if col_max != col_min else 1.0
+        norm = (df[goal] - col_min) / rng
+        scores[goal] = (1 - norm) if goal.endswith('-') else norm
+    
+    # Identify the top 5% of rows based on performance
+    num_to_select = max(1, int(len(rows) * 0.05))
+    best_indices = scores.prod(axis=1).nlargest(num_to_select).index.tolist()
+    
+    return sorted(best_indices)
+
+def find_similar(header, rows, target_row):
+    """
+    Finds the 5 most similar historical rows to the target_row 
+    based on input features.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    goals = [col for col in header if col.endswith(('-', '+'))]
+    inputs = [col for col in header if col not in goals]
+    
+    # Use KNN to find nearest neighbors in input space
+    nn = NearestNeighbors(n_neighbors=5)
+    nn.fit(df[inputs])
+    
+    target_df = pd.DataFrame([target_row], columns=header)
+    distances, indices = nn.kneighbors(target_df[inputs])
+    
+    return indices[0].tolist()
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [[float(val) for val in row] for row in reader]
+        
+        # Example: User proposes the first row as their setup
+        target_row = rows[0]
+        
+        # Find similar past setups
+        similar_indices = find_similar(header, rows, target_row)
+        
+        print("Customer Inquiry: Here is the setup I am about to propose. Show me the past ones most like it, and how they turned out.")
+        print(f"\nFound {len(similar_indices)} similar historical setups:")
+        
+        goals = [col for col in header if col.endswith(('-', '+'))]
+        for idx in similar_indices:
+            row = rows[idx]
+            goal_vals = {g: row[header.index(g)] for g in goals}
+            print(f"  Row {idx}: {goal_vals}")
+            
+        print("\nThese setups represent the closest historical matches to your proposal.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

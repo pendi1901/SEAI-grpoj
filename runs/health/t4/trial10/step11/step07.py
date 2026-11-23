@@ -1,0 +1,75 @@
+import csv
+import random
+from step01 import remember
+from step02 import guess
+
+def choose(header, rows, label):
+    """
+    Finds the best setup by sampling 50 rows, labeling them to get their
+    true goal values, and then using the remember logic to rank them.
+    """
+    # Identify indices of goal columns
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    
+    # We have a budget of 50 labels.
+    # We will sample 50 random rows to estimate the landscape.
+    indices = list(range(len(rows)))
+    sample_indices = random.sample(indices, min(50, len(rows)))
+    
+    # Label the sampled rows
+    labeled_rows = []
+    for idx in sample_indices:
+        true_goals = label(idx)
+        # Create a copy of the row and fill in the true goals
+        row_copy = list(rows[idx])
+        for i, g_idx in enumerate(goal_indices):
+            row_copy[g_idx] = true_goals[i]
+        labeled_rows.append((idx, row_copy))
+    
+    # Use the logic from step01 to rank these labeled rows
+    # We extract just the rows for the remember function
+    just_rows = [r[1] for r in labeled_rows]
+    best_local_indices = remember(header, just_rows)
+    
+    # Return the original index of the best row found
+    best_idx_in_labeled = best_local_indices[0]
+    return labeled_rows[best_idx_in_labeled][0]
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    header = []
+    
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            for row in reader:
+                processed_row = []
+                for val in row:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        # Define the label function for the harness
+        def label(i):
+            # Return the true goal values for the row
+            return [rows[i][j] for j, name in enumerate(header) if name.endswith(('-', '+'))]
+        
+        # Mask the rows as per instructions
+        masked_rows = []
+        for r in rows:
+            new_row = list(r)
+            for j, name in enumerate(header):
+                if name.endswith(('-', '+')):
+                    new_row[j] = '?'
+            masked_rows.append(new_row)
+            
+        best_idx = choose(header, masked_rows, label)
+        print(f"The best setup found within the 50-row budget is at index: {best_idx}")
+        exit(0)
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

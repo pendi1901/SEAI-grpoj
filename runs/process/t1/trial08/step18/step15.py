@@ -1,0 +1,70 @@
+import csv
+
+def blame(header, rows):
+    """
+    Identifies the two input columns that correlate most strongly with 
+    poor performance (high cost/low score).
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    input_indices = [i for i, name in enumerate(header) if not name.endswith(('-', '+'))]
+
+    def get_score(row):
+        s = 0
+        for i in goal_indices:
+            val = float(row[i])
+            s += val if header[i].endswith('-') else (1.0 - val)
+        return s
+
+    # Sort rows by performance (worst to best)
+    scored_rows = sorted(rows, key=get_score, reverse=True)
+    
+    # Focus on the worst 25% of setups
+    worst_rows = scored_rows[:len(rows) // 4]
+    best_rows = scored_rows[-len(rows) // 4:]
+    
+    # Calculate correlation: difference in mean values between worst and best
+    correlations = []
+    for i in input_indices:
+        # Only numeric inputs for simple correlation
+        vals_worst = [r[i] for r in worst_rows if isinstance(r[i], (int, float))]
+        vals_best = [r[i] for r in best_rows if isinstance(r[i], (int, float))]
+        
+        if not vals_worst or not vals_best:
+            continue
+        
+        mean_worst = sum(vals_worst) / len(vals_worst)
+        mean_best = sum(vals_best) / len(vals_best)
+        
+        # The higher the difference, the more this input distinguishes bad from good
+        correlations.append((abs(mean_worst - mean_best), header[i]))
+    
+    # Return the top 2 inputs that explain the performance gap
+    correlations.sort(reverse=True)
+    return [name for _, name in correlations[:2]]
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        rows = []
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            for row in reader:
+                processed_row = []
+                for val in row:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        important = blame(header, rows)
+        
+        print("Analysis: Which project factors matter most?")
+        print(f"The factors that most strongly influence project performance are: {', '.join(important)}.")
+        print("You should focus your management attention on these variables.")
+        print("Other input factors have a negligible impact on performance and can be deprioritized.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

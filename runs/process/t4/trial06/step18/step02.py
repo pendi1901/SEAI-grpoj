@@ -1,0 +1,56 @@
+import csv
+import pandas as pd
+import numpy as np
+from sklearn.neighbors import KNeighborsRegressor
+from step01 import remember
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column for test rows using K-Nearest Neighbors.
+    """
+    df_train = pd.DataFrame(train, columns=header)
+    df_test = pd.DataFrame(test, columns=header)
+    
+    # Identify input columns (non-goal columns)
+    input_cols = [col for col in header if not (col.endswith('-') or col.endswith('+'))]
+    
+    # Target is the first goal column
+    goal_cols = [col for col in header if col.endswith(('-', '+'))]
+    target_col = goal_cols[0]
+    
+    # Prepare data
+    X_train = df_train[input_cols]
+    y_train = df_train[target_col]
+    X_test = df_test[input_cols]
+    
+    # Use KNN to predict the target
+    # Using n_neighbors=5 as a standard heuristic for small datasets
+    model = KNeighborsRegressor(n_neighbors=5)
+    model.fit(X_train, y_train)
+    
+    return model.predict(X_test).tolist()
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) for val in row])
+        
+        # Split data: 80% train, 20% test
+        split_idx = int(len(rows) * 0.8)
+        train_data = rows[:split_idx]
+        test_data = [row[:9] + ["?"] * 3 for row in rows[split_idx:]]
+        
+        predictions = guess(header, train_data, test_data)
+        
+        avg_cost = sum(predictions) / len(predictions)
+        print(f"Analysis complete.")
+        print(f"Estimated average cost for the provided setups: {avg_cost:.4f}")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

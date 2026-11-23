@@ -1,0 +1,47 @@
+import ezr
+import step04
+
+def flow(header, row, seen):
+    """
+    Warn the customer the moment a project starts to go bad.
+    We define 'going bad' as a significant degradation in performance
+    compared to the historical baseline of 'seen' configurations.
+    
+    We use the logic from step04 to evaluate if a row is 'good',
+    but here we invert the logic to detect if a row is 'bad' (a warning).
+    """
+    if not seen:
+        return False
+
+    # Create a table to handle normalization and goal distance
+    data = [header] + seen
+    tbl = ezr.Tbl(data)
+    
+    # Calculate the ydist (distance from ideal) for the new row
+    # and the best row seen so far.
+    current_ydist = ezr.ydist(tbl, row)
+    best_ydist = min(ezr.ydist(tbl, s) for s in seen)
+    
+    # Warn if the new row is significantly worse than the best seen.
+    # If the current ydist is more than 20% worse than the best,
+    # we flag it as a warning.
+    return current_ydist > (best_ydist * 1.20)
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    rows_gen = ezr.csv(filename)
+    header = next(rows_gen)
+    rows = list(rows_gen)
+    
+    seen = []
+    warnings = 0
+    
+    for row in rows:
+        if flow(header, row, seen):
+            warnings += 1
+        seen.append(row)
+        
+    print(f"Monitoring complete.")
+    print(f"Total configurations processed: {len(rows)}")
+    print(f"Total performance warnings triggered: {warnings}")
+    print("Strategy: Flagged configurations that were at least 20% worse than the historical best.")

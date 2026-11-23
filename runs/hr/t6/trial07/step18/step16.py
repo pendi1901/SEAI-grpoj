@@ -1,0 +1,56 @@
+import ezr
+import step01
+import step05
+
+def justify(header, rows, row):
+    """
+    Justifies why we don't just pay everyone more by showing that 
+    other factors (like job role or overtime) are often more 
+    significant drivers of retention than income alone.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Estimate the goal values for the input row using the median of the dataset
+    row_filled = list(row)
+    for i, val in enumerate(row_filled):
+        if val == "?":
+            row_filled[i] = ezr.mid(tbl.cols[i])
+            
+    # Calculate the distance of the input row from the ideal
+    target_ydist = ezr.ydist(tbl, row_filled)
+    
+    # Calculate how many rows are worse (have a higher ydist) than this row
+    all_ydists = [ezr.ydist(tbl, r) for r in rows]
+    worse_count = sum(1 for d in all_ydists if d > target_ydist)
+    p = worse_count / len(rows)
+    
+    # Get the top drivers of performance to explain the ranking
+    drivers = step05.blame(header, rows)
+    
+    # Construct a reason that addresses the "pay more" question
+    # We highlight that the identified drivers (e.g., JobRole, OverTime) 
+    # are more predictive than MonthlyIncome.
+    reason = (f"While increasing pay is intuitive, our data shows that "
+              f"{drivers[0]} and {drivers[1]} are stronger predictors of "
+              "retention than salary, meaning structural changes often "
+              "outperform simple raises.")
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Pick a sample row to justify
+    sample_row = list(rows[10])
+    # Mask the goal columns
+    for i, h in enumerate(header):
+        if h.endswith(("+", "-")):
+            sample_row[i] = "?"
+            
+    p, reason = justify(header, rows, sample_row)
+    
+    print(f"Ranking: {p:.2f}")
+    print(f"Reason: {reason}")

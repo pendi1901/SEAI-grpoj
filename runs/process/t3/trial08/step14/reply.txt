@@ -1,0 +1,68 @@
+```python
+import csv
+
+def flow(header, row, seen):
+    """
+    Detects if the current row is significantly worse than the historical trend.
+    Returns True if the row is 'bad' (an outlier on the negative side), 
+    triggering a warning.
+    """
+    if not seen:
+        return False
+
+    goal_indices = [i for i, h in enumerate(header) if h.endswith('-') or h.endswith('+')]
+    
+    def get_score(r):
+        score = 0
+        for i in goal_indices:
+            val = float(r[i])
+            # Normalize: for '-', lower is better; for '+', higher is better.
+            # Since we don't have global min/max, we use the 'seen' data.
+            col_vals = [float(s[i]) for s in seen]
+            min_v, max_v = min(col_vals), max(col_vals)
+            norm = (val - min_v) / (max_v - min_v + 1e-9)
+            score += (1 - norm) if header[i].endswith('-') else norm
+        return score / len(goal_indices)
+
+    # Calculate scores for all seen rows
+    seen_scores = [get_score(s) for s in seen]
+    current_score = get_score(row)
+    
+    # If the current score is significantly lower than the average of seen rows
+    # (e.g., more than 2 standard deviations below the mean), flag it as "bad".
+    if len(seen_scores) > 10:
+        mean = sum(seen_scores) / len(seen_scores)
+        var = sum((s - mean)**2 for s in seen_scores) / len(seen_scores)
+        std = var**0.5
+        if current_score < (mean - 2 * std):
+            return True
+            
+    return False
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) if header[i][0].isupper() else val for i, val in enumerate(row)])
+        
+        warnings = 0
+        seen = []
+        for row in rows:
+            if flow(header, row, seen):
+                warnings += 1
+            seen.append(row)
+            
+        print("Customer Inquiry: Monitoring for performance degradation.")
+        print("-" * 60)
+        print(f"Analysis complete. Detected {warnings} instances where performance dropped significantly.")
+        print("The system is now configured to warn you the moment a new setup performs")
+        print("statistically worse than the historical trend.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

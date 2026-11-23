@@ -1,0 +1,48 @@
+import csv
+import step01
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column for test rows by finding the 
+    average of the first goal column from the 'best' training rows.
+    """
+    # Identify the index of the first goal column
+    goal_idx = -1
+    for i, name in enumerate(header):
+        if name.endswith('-') or name.endswith('+'):
+            goal_idx = i
+            break
+    
+    # Use step01 to identify the best rows in the training set
+    best_indices = step01.remember(header, train)
+    
+    # Calculate the average of the first goal column from the best rows
+    total = sum(float(train[i][goal_idx]) for i in best_indices)
+    avg_val = total / len(best_indices)
+    
+    # Return the estimate for each test row
+    return [avg_val for _ in test]
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', newline='') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(x) for x in row])
+            
+            # Split data: use first 800 as train, next 100 as test
+            train = rows[:800]
+            test = [[val if i < 9 else "?" for i, val in enumerate(row)] for row in rows[800:900]]
+            
+            estimates = guess(header, train, test)
+            
+            print("Customer Inquiry: Cost and Idle time estimates.")
+            print(f"Estimated average for the first goal column: {estimates[0]:.4f}")
+            print(f"Based on {len(train)} training samples, we predict this value for all setups.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

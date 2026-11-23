@@ -1,0 +1,46 @@
+```python
+import ezr
+import step07
+
+def choose(header, rows, label):
+    """
+    Find the best setup for a large, high-stakes project.
+    We use the acquire logic, which is designed to find the best rows
+    with a minimal labeling budget (50).
+    """
+    # We reuse the logic from step07, which implements the acquisition
+    # strategy to find the best row within the 50-label budget.
+    return step07.choose(header, rows, label)
+
+if __name__ == "__main__":
+    file_path = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(file_path))
+    header = data[0]
+    rows = data[1:]
+    
+    # Mask the goals for the choose function
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    masked_rows = []
+    for row in rows:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_rows.append(new_row)
+    
+    # Define the label function for the harness
+    def label_func(idx):
+        return rows[idx]
+    
+    # Find the best setup
+    best_idx = choose(header, masked_rows, label_func)
+    
+    # Calculate the actual performance of the chosen row
+    tbl = ezr.Tbl(data)
+    dist = ezr.ydist(tbl, rows[best_idx])
+    
+    print("Analysis: Finding the best setup for a high-stakes, large project.")
+    print(f"Best setup found at index: {best_idx}")
+    print(f"Performance (ydist to ideal): {dist:.4f}")
+    print("This setup was identified using a minimal labeling budget of 50 samples.")
+    exit(0)
+```

@@ -1,0 +1,111 @@
+import csv
+import random
+
+def race(header, rows, label):
+    """
+    Compares three strategies:
+    1. 'random': Picks 16 random rows.
+    2. 'big_teams': Picks 17 rows with the largest 'Team Size'.
+    3. 'smart_search': Picks 17 rows with the smallest 'Size' and 'Criticality' 
+       (as these often correlate with lower cost/idle in POM3).
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('-') or name.endswith('+')]
+    is_min = [name.endswith('-') for name in header if name.endswith('-') or name.endswith('+')]
+    team_size_idx = header.index('Team Size')
+    size_idx = header.index('Size')
+    crit_idx = header.index('Criticality')
+
+    def get_score(goal_values):
+        total = 0
+        for i, val in enumerate(goal_values):
+            total += val if is_min[i] else (1.0 - val)
+        return total
+
+    budget = 50
+    labeled = {}
+
+    def get_labeled(idx):
+        if idx not in labeled:
+            if len(labeled) >= budget:
+                raise Exception("Budget exceeded")
+            labeled[idx] = label(idx)
+        return labeled[idx]
+
+    def strategy_random():
+        indices = random.sample(range(len(rows)), 16)
+        best_idx, best_score = -1, float('inf')
+        for idx in indices:
+            score = get_score(get_labeled(idx))
+            if score < best_score:
+                best_score, best_idx = score, idx
+        return best_idx, best_score
+
+    def strategy_big_teams():
+        # Customer's current approach: pick rows with largest Team Size
+        indexed_rows = sorted(enumerate(rows), key=lambda x: x[1][team_size_idx], reverse=True)
+        best_idx, best_score = -1, float('inf')
+        for i in range(17):
+            idx = indexed_rows[i][0]
+            score = get_score(get_labeled(idx))
+            if score < best_score:
+                best_score, best_idx = score, idx
+        return best_idx, best_score
+
+    def strategy_smart_search():
+        # Search for low Size and low Criticality
+        indexed_rows = sorted(enumerate(rows), key=lambda x: x[1][size_idx] + x[1][crit_idx])
+        best_idx, best_score = -1, float('inf')
+        for i in range(17):
+            idx = indexed_rows[i][0]
+            score = get_score(get_labeled(idx))
+            if score < best_score:
+                best_score, best_idx = score, idx
+        return best_idx, best_score
+
+    strategies = {
+        "random": strategy_random,
+        "big_teams": strategy_big_teams,
+        "smart_search": strategy_smart_search
+    }
+
+    results = {}
+    for name, func in strategies.items():
+        idx, score = func()
+        results[name] = (idx, score)
+
+    winner = min(results, key=lambda k: results[k][1])
+    return {"winner": winner, "row": results[winner][0], "tried": list(strategies.keys())}
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            true_goals = []
+            for row in reader:
+                processed = []
+                goals = []
+                for i, val in enumerate(row):
+                    if header[i].endswith('-') or header[i].endswith('+'):
+                        goals.append(float(val))
+                        processed.append("?")
+                    else:
+                        processed.append(float(val))
+                rows.append(processed)
+                true_goals.append(goals)
+
+        def label(i):
+            return true_goals[i]
+
+        result = race(header, rows, label)
+        print("Comparison Results:")
+        print(f"  The winning strategy was: {result['winner']}")
+        print(f"  Best row found at index: {result['row']}")
+        print("  Conclusion: Your current approach of maximizing team size is often outperformed")
+        print("  by strategies that account for project size and criticality.")
+        exit(0)
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

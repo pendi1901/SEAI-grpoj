@@ -1,0 +1,81 @@
+```python
+import csv
+import random
+
+def choose(header, rows, label):
+    """
+    Finds the best row by sampling 50 setups.
+    Uses a simple random sampling strategy to explore the space,
+    then evaluates the performance of those 50 rows.
+    """
+    # Identify goal indices
+    goal_indices = [i for i, h in enumerate(header) if h.endswith('-') or h.endswith('+')]
+    
+    # We have 800 rows, we can label 50.
+    # We pick 50 random indices to evaluate.
+    indices_to_test = random.sample(range(len(rows)), 50)
+    
+    best_idx = -1
+    best_utility = -float('inf')
+    
+    # Pre-calculate min/max for normalization
+    # Since we don't know the full distribution, we use the 50 samples as a proxy
+    sampled_data = []
+    for idx in indices_to_test:
+        sampled_data.append(label(idx))
+        
+    # Transpose to get columns
+    cols = list(zip(*sampled_data))
+    mins = [min(c) for c in cols]
+    maxs = [max(c) for c in cols]
+    
+    def get_utility(goals):
+        u = 0.0
+        for i, g_idx in enumerate(goal_indices):
+            col_name = header[g_idx]
+            val = goals[i]
+            mi, ma = mins[i], maxs[i]
+            norm = (val - mi) / (ma - mi) if ma > mi else 0
+            if col_name.endswith('-'):
+                u += (1.0 - norm)
+            else:
+                u += norm
+        return u / len(goal_indices)
+
+    for idx in indices_to_test:
+        goals = label(idx)
+        utility = get_utility(goals)
+        if utility > best_utility:
+            best_utility = utility
+            best_idx = idx
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for line in reader:
+            processed_row = []
+            for i, val in enumerate(line):
+                if header[i] == 'criterion':
+                    processed_row.append(val)
+                else:
+                    processed_row.append(float(val))
+            rows.append(processed_row)
+
+    # Create a hidden version of rows for the label function
+    hidden_rows = []
+    for r in rows:
+        hidden_rows.append(["?"] * 3 + r[3:])
+
+    def label(i):
+        return rows[i][:3]
+
+    best_idx = choose(header, hidden_rows, label)
+    
+    print(f"Search complete. Best setup found at index {best_idx}.")
+    print(f"MRE: {rows[best_idx][0]:.4f}, ACC: {rows[best_idx][1]:.4f}, PRED40: {rows[best_idx][2]:.4f}")
+```

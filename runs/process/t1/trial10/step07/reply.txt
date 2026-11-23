@@ -1,0 +1,85 @@
+```python
+import csv
+import random
+
+def choose(header, rows, label):
+    """
+    Finds the best row by sampling a subset of rows, labeling them,
+    and then using a simple heuristic to pick the best.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('-') or name.endswith('+')]
+    input_indices = [i for i, name in enumerate(header) if not (name.endswith('-') or name.endswith('+'))]
+
+    def get_score(goals):
+        s = 0
+        for i, val in enumerate(goals):
+            name = header[goal_indices[i]]
+            if name.endswith('+'):
+                s += (1.0 - float(val))
+            else:
+                s += float(val)
+        return s
+
+    # We have 50 labels. We use 40 to explore and 10 to refine or just sample.
+    # Given the data size (800), random sampling is a robust baseline.
+    indices = list(range(len(rows)))
+    random.shuffle(indices)
+    
+    best_idx = -1
+    best_score = float('inf')
+    
+    # Label 50 rows
+    for i in range(min(50, len(indices))):
+        idx = indices[i]
+        goals = label(idx)
+        score = get_score(goals)
+        
+        if score < best_score:
+            best_score = score
+            best_idx = idx
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [row for row in reader]
+            
+        # Create a copy of rows with goals masked for the label function
+        goal_indices = [i for i, name in enumerate(header) if name.endswith('-') or name.endswith('+')]
+        
+        # Store original rows to access true values for the label function
+        original_rows = [list(r) for r in rows]
+        
+        # Mask rows for the choose function
+        masked_rows = []
+        for row in rows:
+            new_row = list(row)
+            for idx in goal_indices:
+                new_row[idx] = "?"
+            masked_rows.append(new_row)
+            
+        labeled_count = 0
+        def label(i):
+            global labeled_count
+            labeled_count += 1
+            if labeled_count > 50:
+                raise Exception("Label limit exceeded")
+            return [original_rows[i][idx] for idx in goal_indices]
+            
+        best_idx = choose(header, masked_rows, label)
+        
+        print(f"Best row found at index: {best_idx}")
+        print(f"Row data: {original_rows[best_idx]}")
+        exit(0)
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
+```

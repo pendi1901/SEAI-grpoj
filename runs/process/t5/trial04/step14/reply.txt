@@ -1,0 +1,63 @@
+```python
+import ezr
+import random
+
+def flow(header, row, seen):
+    """
+    Warn the customer if a row is 'going bad'.
+    We define 'going bad' as a significant drop in performance (ydist)
+    compared to the historical trend of the 'seen' rows.
+    """
+    if len(seen) < 10:
+        return False
+    
+    # Create a table from seen rows to establish the performance baseline
+    tbl = ezr.Tbl([header] + seen)
+    
+    # Calculate the ydist of the current row
+    # If the row has '?' in goals, we estimate its performance using the tree
+    if any(cell == "?" for cell in row):
+        node = ezr.tree(tbl, seen)
+        current_ydist = ezr.leaf(node, row).mu
+    else:
+        current_ydist = ezr.ydist(tbl, row)
+    
+    # Calculate the moving average of ydist for the last 10 rows
+    recent_rows = seen[-10:]
+    recent_ydists = [ezr.ydist(tbl, r) for r in recent_rows]
+    avg_recent_ydist = sum(recent_ydists) / len(recent_ydists)
+    
+    # Warn (return True) if the current performance is significantly worse
+    # than the recent average (e.g., 20% worse).
+    # Note: Higher ydist is worse.
+    return current_ydist > (avg_recent_ydist * 1.2)
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    
+    try:
+        header = next(data_gen)
+        all_rows = list(data_gen)
+    except StopIteration:
+        exit(1)
+        
+    seen = []
+    warnings = 0
+    
+    for row in all_rows:
+        if flow(header, row, seen):
+            warnings += 1
+            # We only print the first few warnings to avoid spamming the user
+            if warnings <= 5:
+                print(f"Warning: Performance degradation detected at row {len(seen)}!")
+        seen.append(row)
+        
+    print("-" * 60)
+    print(f"Monitoring complete. Processed {len(all_rows)} rows.")
+    print(f"Total performance warnings issued: {warnings}")
+    print("Logic: A warning is issued when the current setup's ydist is")
+    print("20% worse than the moving average of the last 10 setups.")
+    
+    exit(0)
+```

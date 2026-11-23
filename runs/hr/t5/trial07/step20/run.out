@@ -1,0 +1,29 @@
+
+--- stderr ---
+Traceback (most recent call last):
+  File "<repo>\runs\hr\t5\trial07\step20\step20.py", line 96, in <module>
+    result = race(header, masked_rows, label_func)
+  File "<repo>\runs\hr\t5\trial07\step20\step20.py", line 66, in race
+    results[name] = func(tbl)
+                    ~~~~^^^^^
+  File "<repo>\runs\hr\t5\trial07\step20\step20.py", line 56, in strategy_acquire
+    return min(range(len(tbl.rows)), key=lambda i: ezr.ydist(tbl, oracle(i) if i in labeled_cache else tbl.rows[i]))
+  File "<repo>\runs\hr\t5\trial07\step20\step20.py", line 56, in <lambda>
+    return min(range(len(tbl.rows)), key=lambda i: ezr.ydist(tbl, oracle(i) if i in labeled_cache else tbl.rows[i]))
+                                                   ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<repo>\runs\hr\t5\trial07\step20\ezr.py", line 180, in ydist
+    return dist((abs(norm(c, row[c.at]) - c.goal)
+                      for c in tbl.y), len(tbl.y))
+  File "<repo>\runs\hr\t5\trial07\step20\ezr.py", line 176, in dist
+    return sqrt(sum(v*v for v in vs) / n)
+                ~~~^^^^^^^^^^^^^^^^^
+  File "<repo>\runs\hr\t5\trial07\step20\ezr.py", line 176, in <genexpr>
+    return sqrt(sum(v*v for v in vs) / n)
+                                 ^^
+  File "<repo>\runs\hr\t5\trial07\step20\ezr.py", line 180, in <genexpr>
+    return dist((abs(norm(c, row[c.at]) - c.goal)
+                     ~~~~^^^^^^^^^^^^^^
+  File "<repo>\runs\hr\t5\trial07\step20\ezr.py", line 138, in norm
+    z = max(-3, min(3, (v - col.mu) / (1e-32 + div(col))))
+                        ~~^~~~~~~~
+TypeError: unsupported operand type(s) for -: 'str' and 'float'

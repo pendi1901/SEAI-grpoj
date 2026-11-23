@@ -1,0 +1,50 @@
+```python
+import ezr
+import random
+
+def remember(header, rows):
+    """
+    Finds the best rows based on the goals defined in the header.
+    - Columns ending in '-' are minimized.
+    - Columns ending in '+' are maximized.
+    - We return the top 5% of rows based on ydist.
+    """
+    # Create a table object to leverage ezr's goal handling
+    # We construct the header string to match ezr's expectations
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Sort rows by ydist (distance to ideal goals)
+    # ydist calculates how far a row is from the best possible outcome
+    scored = sorted(range(len(rows)), key=lambda i: ezr.ydist(tbl, rows[i]))
+    
+    # Return top 5% (or at least 1)
+    limit = max(1, len(rows) // 20)
+    return scored[:limit]
+
+if __name__ == "__main__":
+    # Load data
+    file_path = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(file_path))
+    header = data[0]
+    rows = data[1:]
+    
+    # Get best indices
+    best_indices = remember(header, rows)
+    
+    # Print summary for the customer
+    print(f"Found {len(best_indices)} employees who stay unusually long.")
+    print("Top characteristics of these employees:")
+    
+    # Sample the first best row to show as an example
+    best_row = rows[best_indices[0]]
+    
+    # Filter for interesting columns (e.g., JobRole, YearsAtCompany, MonthlyIncome)
+    # to provide a readable summary
+    summary_cols = ['jobRole', 'YearsAtCompany+', 'MonthlyIncome', 'TotalWorkingYears', 'WorkLifeBalance']
+    print("-" * 40)
+    for col_name in summary_cols:
+        idx = header.index(col_name)
+        print(f"{col_name:20}: {best_row[idx]}")
+    print("-" * 40)
+    print("These employees represent the top-performing group based on retention goals.")
+```

@@ -1,0 +1,66 @@
+```python
+import csv
+
+def flow(header, row, seen):
+    """
+    Warns the customer if the current row is significantly worse than the 
+    historical baseline. We define 'bad' as a row whose goal performance 
+    is more than 2 standard deviations worse than the mean of the 'seen' rows.
+    """
+    goal_indices = [i for i, name in enumerate(header) 
+                    if name.endswith('-') or name.endswith('+')]
+    
+    def get_score(r):
+        s = 0
+        for idx in goal_indices:
+            val = float(r[idx])
+            # Minimize '-' goals, maximize '+' goals
+            if header[idx].endswith('+'):
+                s += (1.0 - val)
+            else:
+                s += val
+        return s
+
+    # We need a baseline to determine what 'bad' is.
+    # If we haven't seen enough data, we cannot judge.
+    if len(seen) < 30:
+        return False
+
+    scores = [get_score(r) for r in seen]
+    mean = sum(scores) / len(scores)
+    std = (sum((s - mean)**2 for s in scores) / len(scores))**0.5
+    
+    current_score = get_score(row)
+    
+    # If the current row is > 2 standard deviations worse than the mean,
+    # it is an outlier indicating the process is going bad.
+    if std > 0 and (current_score - mean) / std > 2.0:
+        return True
+        
+    return False
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [row for row in reader]
+            
+        seen = []
+        warnings = 0
+        for row in rows:
+            if flow(header, row, seen):
+                warnings += 1
+            seen.append(row)
+            
+        print(f"Monitoring complete. {warnings} instances of performance degradation detected.")
+        if warnings > 0:
+            print("Warning: The process has shown signs of going bad.")
+        else:
+            print("Status: Process performance remains within acceptable bounds.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

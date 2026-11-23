@@ -1,0 +1,96 @@
+```python
+import csv
+import random
+import step01
+import step02
+import step07
+
+def race(header, rows, label):
+    """
+    Compares three strategies for finding the best employee row.
+    Budget: 50 labels total.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    
+    def get_score(row_idx):
+        vals = label(row_idx)
+        score = 0
+        for j, goal_idx in enumerate(goal_indices):
+            val = vals[j]
+            # Normalize: + is better high, - is better low
+            if header[goal_idx].endswith('+'):
+                score += val
+            else:
+                score -= val
+        return score
+
+    # Strategies
+    def strategy_random(budget):
+        indices = random.sample(range(len(rows)), budget)
+        best_idx = max(indices, key=get_score)
+        return best_idx, indices
+
+    def strategy_first_n(budget):
+        indices = list(range(budget))
+        best_idx = max(indices, key=get_score)
+        return best_idx, indices
+
+    def strategy_last_n(budget):
+        indices = list(range(len(rows) - budget, len(rows)))
+        best_idx = max(indices, key=get_score)
+        return best_idx, indices
+
+    # Budget allocation: 3 strategies, 16 labels each (48 total)
+    budget_per = 16
+    
+    res_rand, _ = strategy_random(budget_per)
+    res_first, _ = strategy_first_n(budget_per)
+    res_last, _ = strategy_last_n(budget_per)
+    
+    results = {
+        "random": get_score(res_rand),
+        "first_n": get_score(res_first),
+        "last_n": get_score(res_last)
+    }
+    
+    best_strat = max(results, key=results.get)
+    best_row = {"random": res_rand, "first_n": res_first, "last_n": res_last}[best_strat]
+    
+    return {
+        "winner": best_strat,
+        "row": best_row,
+        "tried": ["random", "first_n", "last_n"]
+    }
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    
+    def label(i):
+        return [rows[i][idx] for idx in goal_indices]
+        
+    result = race(header, rows, label)
+    
+    print("Race Results:")
+    print(f"The winning strategy is: {result['winner']}")
+    print(f"Best row found at index: {result['row']}")
+    print(f"Strategies compared: {', '.join(result['tried'])}")
+```

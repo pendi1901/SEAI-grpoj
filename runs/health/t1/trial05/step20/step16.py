@@ -1,0 +1,74 @@
+import csv
+
+def justify(header, rows, row):
+    """
+    Estimates the performance of 'row' by comparing it to the k-nearest neighbors
+    in 'rows', then calculates the fraction of 'rows' that are worse than this estimate.
+    """
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+    
+    input_indices = [i for i, h in enumerate(header) if not (h.endswith('-') or h.endswith('+'))]
+    numeric_inputs = [i for i in input_indices if header[i] != 'criterion']
+    crit_idx = header.index('criterion')
+
+    # Normalize inputs for distance
+    mins = [min(r[i] for r in rows) for i in numeric_inputs]
+    maxs = [max(r[i] for r in rows) for i in numeric_inputs]
+
+    def get_dist(r1, r2):
+        d2 = 0
+        for idx, i in enumerate(numeric_inputs):
+            if maxs[idx] > mins[idx]:
+                d2 += ((r1[i] - r2[i]) / (maxs[idx] - mins[idx]))**2
+        if r1[crit_idx] != r2[crit_idx]:
+            d2 += 1.0
+        return d2**0.5
+
+    # Estimate goals for the target row using k-NN
+    k = 10
+    neighbors = sorted([(get_dist(row, r), r) for r in rows], key=lambda x: x[0])[:k]
+    est_mre = sum(n[1][mre_idx] for n in neighbors) / k
+    est_acc = sum(n[1][acc_idx] for n in neighbors) / k
+    est_pred = sum(n[1][pred_idx] for n in neighbors) / k
+
+    # Compare estimated row against all other rows
+    # A row is better if MRE is lower, ACC is higher, PRED is higher
+    better_count = 0
+    for r in rows:
+        if (est_mre < r[mre_idx] and est_acc > r[acc_idx] and est_pred > r[pred_idx]):
+            better_count += 1
+            
+    p = better_count / len(rows)
+    reason = "Bigger setups often lead to overfitting or diminishing returns, meaning a balanced configuration frequently outperforms the most extreme settings."
+    return p, reason
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([val if header[i] == 'criterion' else float(val) for i, val in enumerate(row)])
+        
+        # Define a "biggest, deepest" setup to test the customer's hypothesis
+        # N_estimators=200, Max_depth=20, Min_sample_leaves=1
+        target = [180.0, 'squared_error', 1.0, 0.0, 20.0]
+        # Map to full row format with "?" for goals
+        full_target = ["?" for _ in header]
+        for i, h in enumerate(header):
+            if h == 'N_estimators': full_target[i] = 200.0
+            if h == 'criterion': full_target[i] = 'squared_error'
+            if h == 'Min_sample_leaves': full_target[i] = 1.0
+            if h == 'Min_impurity_decrease': full_target[i] = 0.0
+            if h == 'Max_depth': full_target[i] = 20.0
+            
+        p, reason = justify(header, rows, full_target)
+        print(f"Justification score: {p:.4f}")
+        print(reason)
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

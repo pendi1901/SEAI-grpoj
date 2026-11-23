@@ -1,0 +1,56 @@
+import ezr
+import step05
+
+def blame(header, rows):
+    """
+    Identify the top 2 input columns that matter most to cost (by impact on ydist)
+    and identify columns that can be ignored (those with minimal impact).
+    """
+    # Reuse the logic from step05 to rank columns by their influence on ydist
+    # step05.blame returns the top 3 most influential columns.
+    # We will use this to identify the 'most important' ones.
+    influential = step05.blame(header, rows)
+    
+    # To identify what to stop worrying about, we look for columns 
+    # with the least divergence between best and worst rows.
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate divergence for all input columns
+    scored = []
+    for col in tbl.x:
+        # We use the same scoring logic as step05
+        vals_best = [r[col.at] for r in rows[:len(rows)//5] if r[col.at] != "?"]
+        vals_worst = [r[col.at] for r in rows[4*len(rows)//5:] if r[col.at] != "?"]
+        
+        if not vals_best or not vals_worst:
+            score = 0
+        elif isinstance(col, ezr.Num):
+            m1 = sum(vals_best) / len(vals_best)
+            m2 = sum(vals_worst) / len(vals_worst)
+            score = abs(m1 - m2)
+        else:
+            score = 0
+        scored.append((col.txt, score))
+    
+    # Sort by score ascending to find the least important
+    scored.sort(key=lambda x: x[1])
+    
+    # Return the top 2 most important (from step05) and the least important
+    # The prompt asks for a list of strings.
+    return influential[:2] + [scored[0][0]]
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    rows_gen = ezr.csv(filename)
+    header = next(rows_gen)
+    rows = list(rows_gen)
+    
+    results = blame(header, rows)
+    
+    print("Analysis: Which project factors matter most?")
+    print("-" * 60)
+    print(f"Most important factors: {results[0]}, {results[1]}")
+    print(f"Safely ignore:          {results[2]}")
+    print("-" * 60)
+    print("Focus your management attention on the most important factors.")
+    print("The 'ignore' factor shows negligible impact on project outcomes.")

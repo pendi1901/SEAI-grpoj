@@ -1,0 +1,64 @@
+import csv
+import math
+
+def get_distance(row1, row2, header):
+    """Calculates Euclidean distance between two rows based on numeric inputs."""
+    dist = 0
+    for i, name in enumerate(header):
+        # Only compare numeric input columns (ignore goals)
+        if name[0].isupper() and not (name.endswith('+') or name.endswith('-')):
+            val1 = row1[i]
+            val2 = row2[i]
+            if isinstance(val1, (int, float)) and isinstance(val2, (int, float)):
+                dist += (val1 - val2) ** 2
+    return math.sqrt(dist)
+
+def remember(header, rows):
+    """
+    Finds the 5% of rows most similar to the first row (the reference employee).
+    Returns the indices of these similar rows.
+    """
+    if not rows:
+        return []
+
+    ref_row = rows[0]
+    distances = []
+    
+    # Calculate distance from the reference row for all other rows
+    for i in range(1, len(rows)):
+        d = get_distance(ref_row, rows[i], header)
+        distances.append((i, d))
+    
+    # Sort by distance ascending (closest first)
+    distances.sort(key=lambda x: x[1])
+    
+    # Return top 5%
+    limit = max(1, len(rows) // 20)
+    return [item[0] for item in distances[:limit]]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    tenure_idx = header.index('YearsAtCompany+')
+    similar_indices = remember(header, rows)
+    
+    print("Employees most similar to the first record:")
+    for idx in similar_indices:
+        print(f"Row {idx}: Stayed {rows[idx][tenure_idx]} years.")

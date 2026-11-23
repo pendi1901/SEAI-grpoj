@@ -1,0 +1,58 @@
+```python
+import csv
+import pandas as pd
+from sklearn.ensemble import RandomForestRegressor
+from step01 import remember
+
+def blame(header, rows):
+    """
+    Identifies input columns that correlate most strongly with the 'Idle-' goal
+    in the worst-performing setups.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    
+    # Identify input columns and goal columns
+    inputs = [c for c in header if not (c.endswith('-') or c.endswith('+'))]
+    
+    # Define 'worst' rows as those with the highest 'Idle-' values
+    # (Since 'Idle-' is a goal to minimize, high values are the worst)
+    worst_threshold = df['Idle-'].quantile(0.9)
+    worst_rows = df[df['Idle-'] >= worst_threshold]
+    
+    # Use a Random Forest to find feature importance for predicting 'Idle-'
+    # within the context of the worst setups
+    X = worst_rows[inputs]
+    y = worst_rows['Idle-']
+    
+    model = RandomForestRegressor(n_estimators=50, random_state=42)
+    model.fit(X, y)
+    
+    # Get feature importances
+    importances = model.feature_importances_
+    
+    # Pair features with their importance scores
+    feat_imp = sorted(zip(inputs, importances), key=lambda x: x[1], reverse=True)
+    
+    # Return the top 2 features that explain the 'Idle-' variance
+    return [feat[0] for feat in feat_imp[:2]]
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) for val in row])
+        
+        top_blame = blame(header, rows)
+        
+        print("Customer Inquiry: Why do our worst setups leave so many people waiting around?")
+        print(f"Analysis: The primary drivers for high idle time in worst-performing setups are: {', '.join(top_blame)}.")
+        print("These input factors have the strongest influence on the 'Idle-' metric when performance is poor.")
+        
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
+```

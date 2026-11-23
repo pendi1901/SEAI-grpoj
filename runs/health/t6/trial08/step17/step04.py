@@ -1,0 +1,56 @@
+import ezr
+import step01
+
+def flow(header, row, seen):
+    """
+    Decide if the current row is 'good enough' to stop.
+    We define 'good enough' as being in the top 5% of the potential 
+    distribution, calculated based on the history of rows seen so far.
+    """
+    # If this is the first row, we have no basis for comparison
+    if not seen:
+        return False
+    
+    # Build a table from all seen rows + current row to calculate ydist
+    # We use the header to define column roles
+    data = [header] + seen + [row]
+    tbl = ezr.Tbl(data)
+    
+    # Calculate ydist for all rows seen so far
+    # Lower ydist is better
+    all_ydists = [ezr.ydist(tbl, r) for r in (seen + [row])]
+    
+    # Current row's performance
+    current_ydist = all_ydists[-1]
+    
+    # Threshold: Is this row in the top 5% of what we've seen?
+    # We sort the distances seen so far to find the 5th percentile
+    sorted_ydists = sorted(all_ydists)
+    limit = max(1, int(len(sorted_ydists) * 0.05))
+    threshold = sorted_ydists[limit - 1]
+    
+    # If the current row is better than or equal to the threshold, stop
+    return current_ydist <= threshold
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data_iter = ezr.csv(filename)
+    header = next(data_iter)
+    rows = list(data_iter)
+    
+    seen = []
+    found_idx = -1
+    
+    for i, row in enumerate(rows):
+        if flow(header, row, seen):
+            found_idx = i
+            break
+        seen.append(row)
+    
+    if found_idx != -1:
+        print(f"Analysis complete. Stopped at record index {found_idx} (1-based: {found_idx + 1}).")
+        print("This setup met the criteria for being in the top 5% of observed performance.")
+    else:
+        print("Analysis complete. No setup met the 'good enough' criteria within the provided dataset.")
+    
+    exit(0)

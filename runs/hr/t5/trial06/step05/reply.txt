@@ -1,0 +1,64 @@
+```python
+import ezr
+import random
+
+def blame(header, rows):
+    """
+    Identifies input columns that best explain why the worst rows are 'bad'.
+    We define 'bad' as having a high ydist (far from the goal).
+    We compare the distribution of values in the worst 25% of rows 
+    against the best 25% of rows for each input column.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Score all rows
+    scored = sorted([(ezr.ydist(tbl, r), r) for r in rows], key=lambda x: x[0])
+    
+    # Split into worst and best quartiles
+    n = len(scored) // 4
+    worst = [x[1] for x in scored[-n:]]
+    best = [x[1] for x in scored[:n]]
+    
+    # For each input column, check if the distribution of values differs
+    # significantly between the worst and best groups.
+    explanations = []
+    for col in tbl.x:
+        at = col.at
+        if type(col) is ezr.Sym:
+            # For symbols, check if the mode in 'worst' is different from 'best'
+            best_vals = [r[at] for r in best if r[at] != "?"]
+            worst_vals = [r[at] for r in worst if r[at] != "?"]
+            if best_vals and worst_vals:
+                best_mode = max(set(best_vals), key=best_vals.count)
+                worst_mode = max(set(worst_vals), key=worst_vals.count)
+                if best_mode != worst_mode:
+                    explanations.append(header[at])
+        else:
+            # For numbers, check if the means are significantly different
+            best_vals = [r[at] for r in best if r[at] != "?"]
+            worst_vals = [r[at] for r in worst if r[at] != "?"]
+            if best_vals and worst_vals:
+                if not ezr.same(sorted(best_vals), sorted(worst_vals)):
+                    explanations.append(header[at])
+                    
+    return explanations
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    factors = blame(header, rows)
+    
+    print("Analysis: What factors correlate with short employee tenure?")
+    print("-" * 60)
+    print("The following input factors show a statistically significant")
+    print("difference between the best-performing and worst-performing")
+    print("employee records regarding tenure and satisfaction goals:")
+    for f in factors:
+        print(f" - {f}")
+    print("-" * 60)
+    print("These factors are the primary drivers explaining why some")
+    print("departments or roles experience higher turnover.")
+```

@@ -1,0 +1,86 @@
+import ezr
+import random
+
+def choose(header, rows, label):
+    """
+    Finds the best laboratory staff arrangement using a budget of 50 labels.
+    We filter for 'Laboratory Technician' and use the acquire strategy.
+    """
+    # Filter for Laboratory Technician role
+    idx_role = header.index("jobRole")
+    lab_indices = [i for i, r in enumerate(rows) if r[idx_role] == "Laboratory Technician"]
+    
+    # We need a subset of rows that are valid for the table.
+    # Since ezr.Tbl expects rows with valid numeric data for goals,
+    # we must only include rows that have been labeled.
+    # We start with an empty table and add rows as we label them.
+    
+    # Create a base table with the header
+    tbl = ezr.Tbl([header])
+    
+    # Keep track of labeled rows
+    labeled_indices = {}
+    
+    def oracle_wrapper(row):
+        # Find the global index of this row. 
+        # We use the EmployeeNumber (index 9) as a unique identifier.
+        idx_emp_num = header.index("EmployeeNumber")
+        global_idx = next(i for i, r in enumerate(rows) if r[idx_emp_num] == row[idx_emp_num])
+        
+        if global_idx not in labeled_indices:
+            if len(labeled_indices) >= 50:
+                raise Exception("Budget exceeded")
+            true_row = label(global_idx)
+            labeled_indices[global_idx] = true_row
+            # Update the row in place with true values
+            for j, val in enumerate(true_row):
+                row[j] = val
+        return row
+
+    # Extract the lab rows to search through
+    lab_rows = [rows[i] for i in lab_indices]
+    
+    # We need to initialize the table with some data to make norm() work.
+    # We label a small initial set to bootstrap the table.
+    initial_sample = random.sample(lab_rows, min(len(lab_rows), ezr.the.Start))
+    for r in initial_sample:
+        oracle_wrapper(r)
+        ezr.addRow(tbl, r)
+        
+    # Use the acquire strategy to find the best row
+    # We pass the table and the oracle
+    best_rows = ezr.acquire(tbl, cap=50, label=oracle_wrapper)
+    
+    # Find the best row among those we labeled
+    best_row = min(best_rows, key=lambda r: ezr.ydist(tbl, r))
+    
+    # Return the global index of the best row
+    idx_emp_num = header.index("EmployeeNumber")
+    return next(i for i, r in enumerate(rows) if r[idx_emp_num] == best_row[idx_emp_num])
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Mask goal columns
+    goal_indices = [i for i, h in enumerate(header) if h.endswith(("+", "-"))]
+    masked_rows = []
+    for row in rows:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_rows.append(new_row)
+        
+    # Define label function
+    def label_func(i):
+        return rows[i]
+    
+    best_idx = choose(header, masked_rows, label_func)
+    
+    print(f"Analysis: Best laboratory staff arrangement found at index {best_idx}.")
+    print("This selection was made by prioritizing retention metrics within the laboratory staff subset.")
+    print("Goal metrics for this employee:")
+    for idx in goal_indices:
+        print(f"  {header[idx]}: {rows[best_idx][idx]}")

@@ -1,0 +1,44 @@
+import ezr
+import step05
+
+def blame(header, rows):
+    """
+    Identify input columns that best explain why the worst rows are bad.
+    We reuse the logic from step05, which compares the distribution of 
+    input values in the worst 25% of rows against the rest of the data.
+    """
+    # The customer asks which settings can be left at factory defaults.
+    # If a column's distribution in the 'worst' rows is statistically 
+    # indistinguishable from the 'rest', that setting is not a 'culprit' 
+    # for poor performance and can likely be left at default.
+    
+    # Get all columns
+    tbl = ezr.Tbl([header] + rows)
+    all_input_names = [col.txt for col in tbl.x]
+    
+    # Get the culprits (columns that ARE associated with poor performance)
+    culprits = step05.blame(header, rows)
+    
+    # The answer is the set of input columns that are NOT culprits
+    safe_to_default = [name for name in all_input_names if name not in culprits]
+    
+    return safe_to_default
+
+if __name__ == "__main__":
+    file_path = "Health-ClosedIssues0000.n1000.train.csv"
+    all_data = list(ezr.csv(file_path))
+    header = all_data[0]
+    rows = all_data[1:]
+    
+    safe_settings = blame(header, rows)
+    
+    print("Analysis of settings that can be left at factory defaults:")
+    if safe_settings:
+        print("The following input settings do not significantly impact performance")
+        print("and can be left at their default values:")
+        for name in safe_settings:
+            print(f" - {name}")
+    else:
+        print("All input settings appear to influence performance.")
+    
+    exit(0)

@@ -1,0 +1,68 @@
+import ezr
+import random
+
+def choose(header, rows, label):
+    """
+    Find the best row among the provided rows by using a budget of 50 labels.
+    We use the 'acquire' strategy from ezr to intelligently select rows to label,
+    then return the index of the best row found.
+    """
+    # Create a table object. Note: rows currently have '?' for goals.
+    # We need to label them to know their true performance.
+    # The label function provided by the harness takes an index and returns the full row.
+    
+    # We will use the 'acquire' logic from ezr. 
+    # Since 'acquire' expects a TBL and an oracle, we wrap the label function.
+    
+    # First, build a TBL structure. We need to handle the '?' in the rows.
+    # We'll create a dummy TBL to hold the structure.
+    data = [header] + rows
+    tbl = ezr.Tbl(data)
+    
+    # The oracle function to pass to ezr.acquire
+    def oracle_wrapper(row):
+        # Find the index of this row in the original list to call the harness label
+        # Since we need to return the row with real values, we find it by matching
+        # the input row (which is a reference to one of the rows in the list)
+        idx = rows.index(row)
+        real_row = label(idx)
+        # Update the row in place so the TBL reflects the new data
+        for i in range(len(row)):
+            row[i] = real_row[i]
+        return row
+
+    # Use ezr.acquire to intelligently pick 50 rows to label
+    # ezr.acquire returns the rows that were labeled
+    labeled_rows = ezr.acquire(tbl, cap=50, label=oracle_wrapper)
+    
+    # After labeling, find the best row among all rows that were labeled
+    # We use ydist to determine the best
+    best_row = min(labeled_rows, key=lambda r: ezr.ydist(tbl, r))
+    
+    # Return the index of the best row
+    return rows.index(best_row)
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Mask the goals for the choose function
+    masked_rows = []
+    for r in rows:
+        new_row = list(r)
+        for i, name in enumerate(header):
+            if name[-1] in "+-":
+                new_row[i] = "?"
+        masked_rows.append(new_row)
+    
+    # Define the label function for the harness
+    def label_func(i):
+        return rows[i]
+    
+    # Run the selection
+    best_idx = choose(header, masked_rows, label_func)
+    
+    print(f"Best setup found at index: {best_idx}")
+    print(f"Row data: {rows[best_idx]}")

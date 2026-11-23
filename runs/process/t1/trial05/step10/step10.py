@@ -1,0 +1,98 @@
+import csv
+import random
+
+def race(header, rows, label):
+    """
+    Compares three strategies: random, greedy (nearest neighbor), and hill-climbing.
+    The total budget of 50 labels is shared.
+    """
+    goal_indices = [(i, name[-1]) for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    input_indices = [i for i, name in enumerate(header) if not (name.endswith(('-', '+')))]
+
+    def score_row(row_goals):
+        total = 0
+        for i, (idx, op) in enumerate(goal_indices):
+            val = float(row_goals[i])
+            if op == '-':
+                total += val
+            else:
+                total += (1.0 - val)
+        return total
+
+    # Shared cache to track the 50-label budget
+    cache = {}
+    def get_goals(i):
+        if i not in cache:
+            if len(cache) >= 50:
+                raise Exception("Limit of 50 labels exceeded.")
+            cache[i] = label(i)
+        return cache[i]
+
+    # Strategy 1: Random
+    def strategy_random():
+        indices = random.sample(range(len(rows)), 16)
+        best_idx = -1
+        best_score = float('inf')
+        for i in indices:
+            score = score_row(get_goals(i))
+            if score < best_score:
+                best_score, best_idx = score, i
+        return best_idx, best_score
+
+    # Strategy 2: Greedy (Sample 16, then pick nearest neighbor to best)
+    def strategy_greedy():
+        samples = random.sample(range(len(rows)), 10)
+        best_idx = -1
+        best_score = float('inf')
+        for i in samples:
+            score = score_row(get_goals(i))
+            if score < best_score:
+                best_score, best_idx = score, i
+        
+        # Find nearest neighbor to best_idx
+        target = rows[best_idx]
+        best_d = float('inf')
+        for i in range(len(rows)):
+            if i in cache: continue
+            d = sum((float(target[j]) - float(rows[i][j]))**2 for j in input_indices)**0.5
+            if d < best_d:
+                best_d, best_idx = d, i
+        return best_idx, score_row(get_goals(best_idx))
+
+    # Strategy 3: Hill Climbing (Sample 10, then move to neighbors)
+    def strategy_hill():
+        curr = random.randint(0, len(rows) - 1)
+        best_idx, best_score = curr, score_row(get_goals(curr))
+        for _ in range(7):
+            neighbors = random.sample(range(len(rows)), 5)
+            for n in neighbors:
+                s = score_row(get_goals(n))
+                if s < best_score:
+                    best_score, best_idx = s, n
+        return best_idx, best_score
+
+    results = {
+        "random": strategy_random(),
+        "greedy": strategy_greedy(),
+        "hill": strategy_hill()
+    }
+
+    winner = min(results, key=lambda k: results[k][1])
+    return {"winner": winner, "row": results[winner][0], "tried": list(results.keys())}
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = [row for row in reader]
+
+    def label(i):
+        return [rows[i][idx] for idx, name in enumerate(header) if name.endswith(('-', '+'))]
+
+    result = race(header, rows, label)
+    print("Customer Inquiry: Which consultant's strategy is best?")
+    print("-" * 60)
+    print(f"Winner: {result['winner']}")
+    print(f"Best row found at index: {result['row']}")
+    print(f"Strategies compared: {', '.join(result['tried'])}")

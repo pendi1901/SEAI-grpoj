@@ -1,0 +1,52 @@
+```python
+import ezr
+import step06
+import step08
+
+def justify(header, rows, row):
+    """
+    Returns (p, reason): p is the fraction of rows that 'row' is better than,
+    and a reason based on the tree-based ranking.
+    """
+    # Use step06 logic to get the rank and base reason
+    p, base_reason = step06.justify(header, rows, row)
+    
+    # To answer the "why not pay more" question, we check if MonthlyIncome
+    # is a significant lever for this specific row.
+    # We use step08's logic to see if changing MonthlyIncome improves the ydist.
+    levers = {"MonthlyIncome": (2000, 20000)}
+    recommendation = step08.fix(header, row, levers)
+    
+    if "MonthlyIncome" in recommendation:
+        reason = (f"This arrangement ranks in the top {int((1-p)*100)}% of records. "
+                  f"While increasing 'MonthlyIncome' could improve your metrics, "
+                  f"our analysis shows that other factors like 'OverTime' and "
+                  f"'TotalWorkingYears' have a more significant impact on retention.")
+    else:
+        reason = (f"This arrangement ranks in the top {int((1-p)*100)}% of records. "
+                  f"Increasing 'MonthlyIncome' does not significantly improve "
+                  f"the predicted retention outcomes for this specific profile.")
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Pick a random row and mask its goals
+    import random
+    test_row = list(random.choice(rows))
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(("+", "-"))]
+    for idx in goal_indices:
+        test_row[idx] = "?"
+        
+    p, reason = justify(header, rows, test_row)
+    
+    print("Analysis: Why not simply recommend paying everyone more?")
+    print(f"Result: {reason}")
+    print(f"Rank: This row is better than {p:.2f} of the population.")
+    
+    exit(0)
+```

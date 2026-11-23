@@ -1,0 +1,75 @@
+import csv
+import pandas as pd
+from sklearn.ensemble import RandomForestRegressor
+
+def blame(header, rows):
+    """
+    Identifies the input columns that most strongly influence the 'Cost-' goal.
+    Returns a list of input column names sorted by their importance in predicting
+    the 'Cost-' goal, which helps the customer decide what to focus on.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    
+    # Identify goal columns and input columns
+    goals = [c for c in header if c.endswith('-') or c.endswith('+')]
+    inputs = [c for c in header if c not in goals]
+    
+    # We focus on 'Cost-' as the primary goal to minimize
+    target = 'Cost-'
+    
+    # Prepare data
+    X = df[inputs]
+    y = df[target]
+    
+    # Convert symbolic columns to numeric codes for the model
+    X_encoded = pd.get_dummies(X)
+    
+    # Use Random Forest to determine feature importance
+    model = RandomForestRegressor(n_estimators=100, random_state=42)
+    model.fit(X_encoded, y)
+    
+    # Aggregate importance back to original input column names
+    importances = {col: 0.0 for col in inputs}
+    for feat, imp in zip(X_encoded.columns, model.feature_importances_):
+        # Handle one-hot encoded column names (e.g., 'Size_0.5' -> 'Size')
+        base_col = feat.split('_')[0]
+        if base_col in importances:
+            importances[base_col] += imp
+            
+    # Return inputs sorted by importance (descending)
+    sorted_inputs = sorted(importances, key=importances.get, reverse=True)
+    return sorted_inputs
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed_row = []
+                for val in row:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        important_factors = blame(header, rows)
+        
+        print("Customer Inquiry: Which project facts matter most to Cost?")
+        print("-" * 60)
+        print("Analysis: Based on our model, the following factors have the highest impact on Cost:")
+        for i, factor in enumerate(important_factors[:2]):
+            print(f"{i+1}. {factor}")
+        
+        print("\nFactors you can safely stop worrying about (lowest impact):")
+        for i, factor in enumerate(important_factors[-2:]):
+            print(f"- {factor}")
+            
+        print("\nConclusion: Focus your management efforts on the top-ranked factors.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

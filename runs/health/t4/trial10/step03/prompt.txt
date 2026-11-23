@@ -1,0 +1,194 @@
+You are writing one Python file, step03.py.
+
+The data is the csv file Health-ClosedIssues0000.n1000.train.csv in the current directory. Column names starting in upper case are numeric, lower case are symbolic. A name ending in - is a goal to minimise, in + a goal to maximise; all other columns are inputs. It has 800 data rows after the header. Any count the customer quotes describes their full records, not this file: never hard-code a row count, read the file to the end. Its first lines:
+
+MRE-,ACC+,PRED40+,N_estimators,criterion,Min_sample_leaves,Min_impurity_decrease,Max_depth
+0.883063328,0.40756167894905476,0,180,absolute_error,11,9.75,11
+0.26612665684830633,0.681512336,0.5714285714285714,110,squared_error,2,2,2
+0.23902798232695144,0.6843960269144505,0.8571428571428571,120,squared_error,2,7.75,7
+
+Your function receives rows already parsed. The header and the first two rows look like this in Python:
+
+header = ['MRE-', 'ACC+', 'PRED40+', 'N_estimators', 'criterion', 'Min_sample_leaves', 'Min_impurity_decrease', 'Max_depth']
+row = [0.883063328, 0.40756167894905476, 0.0, 180.0, 'absolute_error', 11.0, 9.75, 11.0]
+row = [0.26612665684830633, 0.681512336, 0.5714285714285714, 110.0, 'squared_error', 2.0, 2.0, 2.0]
+
+These columns hold text, not numbers: criterion (absolute_error, poisson, squared_error).
+
+You may use scikit-learn, numpy and pandas.
+
+These files, written earlier, are in the same directory:
+
+--- step01.py ---
+import csv
+
+def remember(header, rows):
+    """
+    Identifies the best rows based on multi-objective optimization.
+    Goals: Minimize columns ending in '-', Maximize columns ending in '+'.
+    Uses a simple Pareto-based ranking approach to find the most trustworthy setups.
+    """
+    goals = []
+    for i, name in enumerate(header):
+        if name.endswith('-'):
+            goals.append((i, -1))  # Minimize
+        elif name.endswith('+'):
+            goals.append((i, 1))   # Maximize
+
+    def get_score(row):
+        # Normalize values to compare across different scales
+        # Since we want to find the "handful", we calculate a weighted score
+        # based on how close each goal is to the best observed value.
+        return 0
+
+    # Calculate scores: for each goal, we want to be as far from the worst
+    # and as close to the best as possible.
+    scores = []
+    for idx, row in enumerate(rows):
+        # Simple scalarization: normalize goals and sum them
+        # We use the min/max of the column to normalize
+        val = 0
+        for col_idx, direction in goals:
+            col_data = [float(r[col_idx]) for r in rows]
+            min_v, max_v = min(col_data), max(col_data)
+            norm = (row[col_idx] - min_v) / (max_v - min_v + 1e-9)
+            val += norm if direction == 1 else (1 - norm)
+        scores.append((val, idx))
+
+    # Sort by score descending
+    scores.sort(key=lambda x: x[0], reverse=True)
+    
+    # Return top 5% (800 rows * 0.05 = 40)
+    limit = max(1, int(len(rows) * 0.05))
+    return [item[1] for item in scores[:limit]]
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    header = []
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            for row in reader:
+                # Convert numeric columns to float
+                processed_row = []
+                for i, val in enumerate(row):
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        best_indices = remember(header, rows)
+        
+        print(f"Analysis complete. Found {len(best_indices)} trustworthy setups.")
+        print("Indices of top performing rows:")
+        print(best_indices)
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+
+
+--- step02.py ---
+import csv
+import numpy as np
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import LabelEncoder
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column (MRE-) for test rows using a Random Forest.
+    Handles '?' in test data by excluding the goal column from input features.
+    """
+    goal_idx = 0
+    
+    # Identify symbolic columns
+    symbolic_indices = [i for i, val in enumerate(train[0]) if isinstance(val, str)]
+    
+    # Fit encoders on all available data (train + test non-goal columns)
+    encoders = {}
+    for i in symbolic_indices:
+        if i == goal_idx:
+            continue
+        encoders[i] = LabelEncoder()
+        # Collect all unique values from train and test (ignoring '?')
+        all_vals = [r[i] for r in train] + [r[i] for r in test if r[i] != '?']
+        encoders[i].fit(all_vals)
+
+    def transform_row(row):
+        features = []
+        for i in range(len(row)):
+            if i == goal_idx:
+                continue
+            if i in encoders:
+                features.append(encoders[i].transform([row[i]])[0])
+            else:
+                features.append(float(row[i]))
+        return features
+
+    X_train = [transform_row(row) for row in train]
+    y_train = [row[goal_idx] for row in train]
+    X_test = [transform_row(row) for row in test]
+    
+    model = RandomForestRegressor(n_estimators=100, random_state=42)
+    model.fit(X_train, y_train)
+    
+    return model.predict(X_test).tolist()
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            for row in reader:
+                processed_row = []
+                for val in row:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        # Split into train and a dummy test set (last 5 rows)
+        train_data = rows[:-5]
+        test_data = []
+        for r in rows[-5:]:
+            new_row = list(r)
+            new_row[0] = '?'
+            test_data.append(new_row)
+        
+        predictions = guess(header, train_data, test_data)
+        
+        print("Forecasts for the first goal column (MRE-):")
+        for i, pred in enumerate(predictions):
+            print(f"Test row {i+1}: Estimated MRE- = {pred:.4f}")
+            
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
+
+
+Reuse the earlier files wherever you can: import from them rather than rewriting. Write as little new code as possible. Do not edit the earlier files.
+
+The customer asks:
+
+  In my last batch the big setups looked more accurate than the small ones. Is that real, or noise?
+
+Write step03.py to answer that ask on this data.
+
+A test harness will import your file and call this function, so you must define it exactly:
+
+def certify(xs, ys)
+  Returns True or False.   `xs` and `ys` are lists of numbers. Return True if they are the same apart from noise, False if they really differ.
+
+Rules the harness enforces: Return a plain True or False for every call.
+
+Conventions: `header` is the list of column names. `rows` is a list of rows; each row is a list of cells in header order, floats for numeric columns and strings for symbolic ones. A cell shown as "?" is hidden from you. A row is better when its goals are closer to their best (low for names ending in -, high for names ending in +).
+
+Keep everything that prints or reads the csv file under `if __name__ == "__main__":` so that importing the file prints nothing. Plain built-in types are all you need: do not import anything from `typing`.
+
+Running `python step03.py` must load the csv, call your function, print a short answer a customer could read, and exit with status 0. Reply with the complete file in one ```python fenced block and nothing else.

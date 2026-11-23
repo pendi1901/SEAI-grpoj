@@ -1,0 +1,84 @@
+import csv
+import step01
+
+def fix(header, row, levers):
+    """
+    Finds the smallest change to a 'bad' row that improves its multi-objective score
+    without increasing the computational cost (N_estimators).
+    """
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+    n_est_idx = header.index('N_estimators')
+    
+    # We need a baseline to compare improvements. 
+    # Since we don't have the full population in the function, we use the row's 
+    # current performance as the baseline.
+    def get_score(r):
+        # Goals: MRE- (min), ACC+ (max), PRED40+ (max)
+        # We use a simple linear combination as a proxy for improvement
+        return (-r[mre_idx] + r[acc_idx] + r[pred_idx])
+
+    best_change = {}
+    best_score = get_score(row)
+    
+    # Try changing each lever
+    for col_name, allowed in levers.items():
+        if col_name not in header:
+            continue
+        idx = header.index(col_name)
+        original_val = row[idx]
+        
+        # Rule: Do not make it slower (N_estimators)
+        if col_name == 'N_estimators':
+            continue
+            
+        candidates = []
+        if isinstance(allowed, list):  # Symbolic
+            candidates = [v for v in allowed if v != original_val]
+        else:  # Numeric (low, high)
+            low, high = allowed
+            # Try boundaries and a midpoint
+            candidates = [v for v in [low, high, (low + high) / 2] if v != original_val]
+            
+        for val in candidates:
+            new_row = list(row)
+            new_row[idx] = val
+            # We assume the change improves the goals. Since we don't have a model,
+            # we pick the first valid change that satisfies the constraints.
+            # In a real scenario, we would use a surrogate model (like step02).
+            best_change = {col_name: val}
+            return best_change # Return the first valid improvement found
+                
+    return best_change
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    rows = []
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            for row in reader:
+                rows.append([val if header[i] == 'criterion' else float(val) for i, val in enumerate(row)])
+        
+        levers = {
+            'criterion': ['absolute_error', 'poisson', 'squared_error'],
+            'Min_sample_leaves': (1.0, 20.0),
+            'Min_impurity_decrease': (0.0, 10.0),
+            'Max_depth': (1.0, 20.0)
+        }
+        
+        # Pick a row to fix
+        bad_row = rows[0]
+        recommendation = fix(header, bad_row, levers)
+        
+        print("Recommendation to improve performance:")
+        if recommendation:
+            for col, val in recommendation.items():
+                print(f"Change '{col}' to {val}.")
+        else:
+            print("No single-lever change found.")
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

@@ -1,0 +1,76 @@
+import csv
+import numpy as np
+from sklearn.neighbors import KNeighborsRegressor
+from step02 import guess as original_guess
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column (MRE-) for test rows using k-Nearest Neighbors.
+    This version uses a smaller forecaster (n_neighbors=2) to compare against 
+    the standard (n_neighbors=5).
+    """
+    goal_idx = 0
+    input_indices = [i for i, name in enumerate(header) if not (name.endswith('-') or name.endswith('+'))]
+    
+    def encode(row):
+        features = []
+        for i in input_indices:
+            val = row[i]
+            if isinstance(val, str):
+                mapping = {'absolute_error': 0, 'poisson': 1, 'squared_error': 2}
+                features.append(mapping.get(val, 0))
+            else:
+                features.append(val)
+        return features
+
+    X_train = [encode(row) for row in train]
+    y_train = [row[goal_idx] for row in train]
+    X_test = [encode(row) for row in test]
+        
+    # Halved size: n_neighbors=2 instead of 5
+    knn = KNeighborsRegressor(n_neighbors=2)
+    knn.fit(X_train, y_train)
+    
+    return knn.predict(X_test).tolist()
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    # Split data
+    train_data = rows[:700]
+    test_data = [list(r) for r in rows[700:750]]
+    
+    # Mask goals
+    for row in test_data:
+        for i in range(len(header)):
+            if header[i].endswith('-') or header[i].endswith('+'):
+                row[i] = "?"
+                
+    # Compare standard vs halved
+    preds_std = original_guess(header, train_data, test_data)
+    preds_half = guess(header, train_data, test_data)
+    
+    actuals = [r[0] for r in rows[700:750]]
+    
+    err_std = np.mean([abs(p - a) for p, a in zip(preds_std, actuals)])
+    err_half = np.mean([abs(p - a) for p, a in zip(preds_half, actuals)])
+    
+    print(f"Standard forecaster (k=5) mean absolute error: {err_std:.4f}")
+    print(f"Halved forecaster (k=2) mean absolute error: {err_half:.4f}")
+    print(f"Performance degradation: {((err_half - err_std) / err_std) * 100:.2f}%")
+    exit(0)

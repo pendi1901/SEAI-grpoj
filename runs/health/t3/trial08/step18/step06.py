@@ -1,0 +1,79 @@
+import csv
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+
+def justify(header, rows, row):
+    """
+    Estimates the performance of the given row and compares it to the dataset.
+    Returns (fraction of rows outperformed, explanation string).
+    """
+    goal_indices = [i for i, h in enumerate(header) if h.endswith('-') or h.endswith('+')]
+    input_indices = [i for i in range(len(header)) if i not in goal_indices]
+    
+    # Prepare training data
+    X_train = [[r[i] for i in input_indices] for r in rows]
+    y_train = []
+    for r in rows:
+        # Normalize goals: (1 - MRE) + ACC + PRED
+        mre = r[header.index('MRE-')]
+        acc = r[header.index('ACC+')]
+        pred = r[header.index('PRED40+')]
+        y_train.append((1.0 - mre) + acc + pred)
+    
+    # Preprocessing for categorical inputs
+    cat_features = [i for i, val in enumerate(rows[0]) if isinstance(val, str) and i in input_indices]
+    cat_indices = [input_indices.index(i) for i in cat_features]
+    
+    preprocessor = ColumnTransformer(
+        transformers=[('cat', OneHotEncoder(handle_unknown='ignore'), cat_indices)],
+        remainder='passthrough'
+    )
+    
+    model = Pipeline(steps=[
+        ('preprocessor', preprocessor),
+        ('regressor', RandomForestRegressor(n_estimators=50, random_state=42))
+    ])
+    
+    model.fit(X_train, y_train)
+    
+    # Predict score for the target row
+    target_X = [[row[i] for i in input_indices]]
+    estimated_score = model.predict(target_X)[0]
+    
+    # Calculate fraction of rows outperformed
+    better_count = sum(1 for s in y_train if estimated_score > s)
+    fraction = better_count / len(rows)
+    
+    reason = f"This configuration is estimated to outperform {fraction:.1%} of all known setups based on its predicted aggregate performance score."
+    
+    return fraction, reason
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed_row = []
+                for val in row:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        # Use the first row as the target, masking its goals
+        test_row = list(rows[0])
+        for idx in [i for i, h in enumerate(header) if h.endswith('-') or h.endswith('+')]:
+            test_row[idx] = "?"
+            
+        p, reason = justify(header, rows, test_row)
+        print(reason)
+        exit(0)
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

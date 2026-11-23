@@ -1,0 +1,80 @@
+import csv
+import numpy as np
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import LabelEncoder
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column (MRE-) for test rows using a Random Forest.
+    """
+    # Identify goal columns and input columns
+    goal_idx = 0  # MRE-
+    
+    # Prepare training data
+    X_train = []
+    y_train = []
+    
+    # Encode symbolic columns (criterion)
+    # We need to handle the 'criterion' column which is at index 4
+    encoders = {}
+    
+    def process_row(row):
+        processed = []
+        for i, val in enumerate(row):
+            if isinstance(val, str):
+                if i not in encoders:
+                    encoders[i] = LabelEncoder()
+                    # Fit on all available data if possible, but here we fit on train
+                processed.append(encoders[i].transform([val])[0])
+            else:
+                processed.append(val)
+        return processed
+
+    # Fit encoders on all data to ensure consistency
+    all_data = train + test
+    for i, col_name in enumerate(header):
+        if isinstance(all_data[0][i], str):
+            encoders[i] = LabelEncoder()
+            encoders[i].fit([r[i] for r in all_data if r[i] != '?'])
+
+    # Build X and y
+    for row in train:
+        y_train.append(row[goal_idx])
+        X_train.append([encoders[i].transform([row[i]])[0] if i in encoders else row[i] 
+                        for i in range(len(row)) if i != goal_idx])
+    
+    X_test = []
+    for row in test:
+        X_test.append([encoders[i].transform([row[i]])[0] if i in encoders else row[i] 
+                       for i in range(len(row)) if i != goal_idx])
+    
+    # Train model
+    model = RandomForestRegressor(n_estimators=100, random_state=42)
+    model.fit(X_train, y_train)
+    
+    return model.predict(X_test).tolist()
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            for row in reader:
+                processed_row = [float(val) if val.replace('.','',1).isdigit() or (val.startswith('-') and val[1:].replace('.','',1).isdigit()) else val for val in row]
+                rows.append(processed_row)
+        
+        # Split into train and a dummy test set (last 5 rows) to demonstrate
+        train_data = rows[:-5]
+        test_data = [[r[0] if i != 0 else '?' for i, r_val in enumerate(r)] for r in rows[-5:]]
+        
+        predictions = guess(header, train_data, test_data)
+        
+        print("Forecasts for the first goal column (MRE-):")
+        for i, pred in enumerate(predictions):
+            print(f"Test row {i+1}: Estimated MRE- = {pred:.4f}")
+            
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

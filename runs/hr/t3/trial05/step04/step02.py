@@ -1,0 +1,85 @@
+import csv
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import LabelEncoder
+
+def guess(header, train, test):
+    """
+    Estimates 'YearsAtCompany+' for new hires based on day-one information.
+    We exclude goal columns from the training features to simulate 'day one' knowledge.
+    """
+    # Identify goal columns (ending in + or -)
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('+', '-'))]
+    target_idx = goal_indices[0]  # First goal column is 'YearsAtCompany+'
+    
+    # Features: exclude all goal columns
+    feature_indices = [i for i in range(len(header)) if i not in goal_indices]
+    
+    # Prepare data
+    def get_features(row):
+        return [row[i] for i in feature_indices]
+
+    # Encode symbolic data
+    combined = [get_features(r) for r in train] + [get_features(r) for r in test]
+    encoders = {}
+    for i in range(len(combined[0])):
+        if isinstance(combined[0][i], str):
+            le = LabelEncoder()
+            col_data = [row[i] for row in combined]
+            le.fit(col_data)
+            encoders[i] = le
+
+    def transform(data):
+        transformed = []
+        for row in data:
+            new_row = []
+            for i, val in enumerate(row):
+                if i in encoders:
+                    new_row.append(encoders[i].transform([val])[0])
+                else:
+                    new_row.append(val)
+            transformed.append(new_row)
+        return transformed
+
+    X_train = transform([get_features(r) for r in train])
+    y_train = [r[target_idx] for r in train]
+    X_test = transform([get_features(r) for r in test])
+
+    # Train model
+    model = RandomForestRegressor(n_estimators=100, random_state=42)
+    model.fit(X_train, y_train)
+    
+    return model.predict(X_test).tolist()
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Split: use first 700 for training, next 100 for testing
+    train_data = rows[:700]
+    test_data = rows[700:]
+    
+    # Mask goals in test data
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('+', '-'))]
+    masked_test = []
+    for row in test_data:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_test.append(new_row)
+
+    predictions = guess(header, train_data, masked_test)
+    
+    print("Estimated 'YearsAtCompany+' for new hires (first 10 samples):")
+    for i in range(min(10, len(predictions))):
+        print(f"Sample {i+1}: {predictions[i]:.2f} years")

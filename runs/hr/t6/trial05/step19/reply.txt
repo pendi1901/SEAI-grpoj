@@ -1,0 +1,36 @@
+```python
+import ezr
+import step09
+
+def spot(header, rows):
+    """
+    Identifies rows that are suspicious because they are outliers in the input space.
+    We reuse the logic from step09, which calculates the distance of each row
+    from the global centroid (mids) of the dataset. Rows with high xdist are
+    anomalies and thus suspicious.
+    """
+    return step09.spot(header, rows)
+
+if __name__ == "__main__":
+    # Load data
+    data = list(ezr.csv("WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"))
+    header = data[0]
+    rows = data[1:]
+    
+    # Identify suspicious rows
+    suspicious_indices = spot(header, rows)
+    
+    print("Analysis: Identifying records that may be unreliable.")
+    print("When we hire someone unlike anyone we have employed, our estimates")
+    print("cannot be trusted. We identify these 'outlier' records by measuring")
+    print("their distance from the typical input values of our current staff.")
+    print("\nThe following row indices are the most suspicious (outliers):")
+    
+    for i, idx in enumerate(suspicious_indices[:5]):
+        print(f"{i+1}. Row index {idx}")
+        
+    print("\nThese rows contain input values that deviate significantly from the")
+    print("established norms, making our model's predictions for them less reliable.")
+    
+    exit(0)
+```

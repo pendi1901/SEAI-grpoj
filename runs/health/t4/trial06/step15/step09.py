@@ -1,0 +1,64 @@
+import csv
+import numpy as np
+
+def spot(header, rows):
+    """
+    Identifies suspicious rows by detecting outliers in input columns.
+    Rows with values significantly outside the distribution (Z-score > 3)
+    are flagged as potentially erroneous entries.
+    """
+    suspicious = []
+    input_indices = [i for i, name in enumerate(header) if not name.endswith(('-', '+'))]
+    
+    # Track anomaly scores for each row
+    anomaly_scores = [0.0] * len(rows)
+    
+    for i in input_indices:
+        col_data = [r[i] for r in rows if not isinstance(r[i], str)]
+        if not col_data:
+            continue
+            
+        arr = np.array(col_data)
+        mean = np.mean(arr)
+        std = np.std(arr)
+        
+        if std == 0:
+            continue
+            
+        for row_idx, row in enumerate(rows):
+            val = row[i]
+            if not isinstance(val, str):
+                z_score = abs((val - mean) / std)
+                if z_score > 3:
+                    anomaly_scores[row_idx] += z_score
+                    
+    # Get indices of rows with non-zero anomaly scores, sorted by score descending
+    scored_indices = [(idx, score) for idx, score in enumerate(anomaly_scores) if score > 0]
+    scored_indices.sort(key=lambda x: x[1], reverse=True)
+    
+    return [idx for idx, score in scored_indices]
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i] == 'criterion':
+                    processed_row.append(val)
+                else:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+            rows.append(processed_row)
+
+    suspicious_indices = spot(header, rows)
+    
+    print(f"Detected {len(suspicious_indices)} potentially erroneous configurations.")
+    if suspicious_indices:
+        print("Top 5 most suspicious row indices (0-indexed):")
+        print(suspicious_indices[:5])

@@ -1,0 +1,55 @@
+import ezr
+import random
+
+def flow(header, row, seen):
+    """
+    Decide if the current row is worth a 'what would keep you here' conversation.
+    We use a simple threshold based on the distribution of ydist in the seen data.
+    If the current row is significantly better than the average of what we have seen,
+    we flag it for a conversation.
+    """
+    if not seen:
+        return False
+    
+    # Create a table to calculate ydist
+    # We need to handle the fact that 'seen' might be empty or small
+    tbl = ezr.Tbl([header] + seen)
+    
+    # Calculate ydist for all seen rows
+    seen_ydists = [ezr.ydist(tbl, r) for r in seen]
+    
+    # Calculate the current row's ydist
+    # Note: We assume the row has its goal values available for this decision
+    current_ydist = ezr.ydist(tbl, row)
+    
+    # Decision logic: If the current row is in the top 10% of what we've seen
+    # (or if it's the first few, be more selective), trigger the conversation.
+    threshold = sorted(seen_ydists)[max(0, int(len(seen_ydists) * 0.1))]
+    
+    return current_ydist <= threshold
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Simulate the arrival process
+    random.seed(1234567891)
+    random.shuffle(rows)
+    
+    seen = []
+    triggered = 0
+    
+    print("Simulating annual review arrivals...")
+    for i, row in enumerate(rows):
+        if flow(header, row, seen):
+            triggered += 1
+            # In a real scenario, we'd perform the action here
+        seen.append(row)
+        
+    print(f"Processed {len(rows)} employees.")
+    print(f"Triggered 'what would keep you here' conversations for {triggered} employees.")
+    print("Decision logic: Flagged employees in the top 10% of performance/retention potential.")
+    
+    exit(0)

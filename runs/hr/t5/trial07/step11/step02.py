@@ -1,0 +1,76 @@
+import ezr
+import random
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column for each row in test.
+    Uses the tree-based ranker from ezr to predict the outcome.
+    """
+    # Create a table object for the training data
+    # ezr.Tbl expects the header as the first row of the input
+    train_tbl = ezr.Tbl([header] + train)
+    
+    # Create a dummy table for test to handle column mapping
+    # We use the same header to ensure column indices match
+    test_tbl = ezr.Tbl([header] + test)
+    
+    # Build a tree on the training data to learn the relationship
+    # between inputs and the goal columns (ydist)
+    node = ezr.tree(train_tbl, train_tbl.rows)
+    
+    # The first goal column is the one that determines the target value.
+    # Since we need to estimate the value of the first goal column,
+    # we look at the leaf nodes of the tree.
+    # We calculate the average value of the first goal column in each leaf.
+    goal_idx = -1
+    for i, name in enumerate(header):
+        if name.endswith('+') or name.endswith('-'):
+            goal_idx = i
+            break
+            
+    # Map each leaf to the average of the goal column
+    leaf_means = {}
+    for leaf in ezr.leafs(node):
+        vals = [r[goal_idx] for r in leaf.rows]
+        leaf_means[id(leaf)] = sum(vals) / len(vals)
+        
+    # For each test row, find its leaf and return the mean
+    results = []
+    for row in test:
+        leaf = ezr.leaf(node, row)
+        results.append(leaf_means[id(leaf)])
+        
+    return results
+
+if __name__ == "__main__":
+    # Load the data
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Split data into train and test for demonstration
+    random.seed(1234567891)
+    random.shuffle(rows)
+    train = rows[:600]
+    test = rows[600:610]
+    
+    # Prepare test rows by hiding the goal columns
+    # Goal columns are those ending in + or -
+    goal_indices = [i for i, h in enumerate(header) if h.endswith('+') or h.endswith('-')]
+    masked_test = []
+    for row in test:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_test.append(new_row)
+        
+    # Get predictions
+    predictions = guess(header, train, masked_test)
+    
+    # Print results
+    print("Estimation of 'YearsAtCompany+' (first goal column) for new hires:")
+    for i, pred in enumerate(predictions):
+        print(f"  Hire {i+1}: Predicted stay duration = {pred:.2f} years")
+    
+    exit(0)

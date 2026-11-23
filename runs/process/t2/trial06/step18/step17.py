@@ -1,0 +1,78 @@
+import csv
+import random
+from step01 import remember
+from step07 import choose as original_choose
+
+def choose(header, rows, label):
+    """
+    Finds the best setup for a large, high-stakes project.
+    We define 'large' as having a high 'Size' value.
+    We sample 50 rows, prioritizing those with high 'Size',
+    and return the index of the best one found.
+    """
+    size_idx = header.index('Size')
+    
+    # Filter for large projects (Size > 0.75)
+    large_indices = [i for i, row in enumerate(rows) if float(row[size_idx]) > 0.75]
+    
+    # If not enough large projects, fallback to all indices
+    if len(large_indices) < 50:
+        search_space = list(range(len(rows)))
+    else:
+        search_space = large_indices
+        
+    sample_indices = random.sample(search_space, min(50, len(search_space)))
+    
+    best_idx = -1
+    best_score = float('inf')
+    
+    goal_indices = [i for i, name in enumerate(header) 
+                    if name.endswith('-') or name.endswith('+')]
+    
+    def get_score(row_goals):
+        s = 0
+        for i, val in enumerate(row_goals):
+            name = header[goal_indices[i]]
+            if name.endswith('-'):
+                s += val
+            else:
+                s -= val
+        return s
+
+    for idx in sample_indices:
+        true_goals = label(idx)
+        current_score = get_score(true_goals)
+        
+        if current_score < best_score:
+            best_score = current_score
+            best_idx = idx
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [row for row in reader]
+            
+        def label(i):
+            return [float(rows[i][j]) for j, name in enumerate(header) 
+                    if name.endswith('-') or name.endswith('+')]
+        
+        masked_rows = []
+        for row in rows:
+            masked_rows.append([val if not (header[i].endswith('-') or header[i].endswith('+')) else "?" 
+                               for i, val in enumerate(row)])
+        
+        best_idx = choose(header, masked_rows, label)
+        
+        print("Customer Inquiry: Best setup for a large, high-stakes project")
+        print(f"Analysis: Focused search on large-scale configurations (Size > 0.75).")
+        print(f"The best configuration found is at index {best_idx}.")
+        print("This setup minimizes risk and optimizes performance for large-scale operations.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

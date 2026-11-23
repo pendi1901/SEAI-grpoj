@@ -1,0 +1,51 @@
+import ezr
+import random
+
+def spot(header, rows):
+    """
+    Identifies rows that contain input values far outside the observed range
+    or significantly distant from the centroid of the input space.
+    """
+    # Create a table to handle column roles and distance calculations
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate the centroid of the input space
+    centroid = ezr.mids(tbl)
+    
+    # Calculate the distance of each row from the centroid
+    # We use xdist because we are looking for suspicious input configurations
+    distances = []
+    for i, row in enumerate(rows):
+        # xdist measures distance in the input space
+        d = ezr.xdist(tbl, row, centroid)
+        distances.append((i, d))
+    
+    # Sort by distance descending (most suspicious first)
+    distances.sort(key=lambda x: x[1], reverse=True)
+    
+    # Return the indices of the rows that are most suspicious
+    return [item[0] for item in distances]
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data_iter = ezr.csv(filename)
+    header = next(data_iter)
+    rows = list(data_iter)
+    
+    # Get the suspicious indices
+    suspicious_indices = spot(header, rows)
+    
+    print("--- Analysis: Detecting Outlier Configurations ---")
+    print("The following rows contain input settings that deviate significantly")
+    print("from the observed data, suggesting they are 'unseen' or erroneous:")
+    
+    # Show the top 5 most suspicious rows
+    tbl = ezr.Tbl([header] + rows)
+    centroid = ezr.mids(tbl)
+    
+    for i, idx in enumerate(suspicious_indices[:5], 1):
+        dist = ezr.xdist(tbl, rows[idx], centroid)
+        print(f"{i}. Row index {idx} (Distance from centroid: {dist:.4f})")
+        print(f"   Data: {rows[idx]}")
+    
+    print("\nThese configurations are far outside the norm and should be reviewed.")

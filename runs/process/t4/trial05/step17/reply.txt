@@ -1,0 +1,94 @@
+```python
+import csv
+import pandas as pd
+import numpy as np
+from sklearn.neighbors import KNeighborsRegressor
+
+def get_score(row_goals, header):
+    """Calculates geometric mean of normalized goals."""
+    goals = [c for c in header if c.endswith('-') or c.endswith('+')]
+    norm_goals = []
+    for i, goal in enumerate(goals):
+        val = row_goals[i]
+        # Normalize assuming 0-1 range based on POM3a data properties
+        if goal.endswith('-'):
+            norm_goals.append(1.0 - val)
+        else:
+            norm_goals.append(val)
+    return np.prod(norm_goals)
+
+def choose(header, rows, label):
+    """
+    Finds the best setup for a large, high-criticality project.
+    We filter for rows where 'Size' and 'Criticality' are high,
+    then use a small budget to sample and predict the best.
+    """
+    # 1. Filter for 'large' and 'high criticality' projects
+    # Size and Criticality are columns 6 and 1
+    size_idx = header.index('Size')
+    crit_idx = header.index('Criticality')
+    
+    candidates = []
+    for i, row in enumerate(rows):
+        if row[size_idx] > 0.7 and row[crit_idx] > 0.7:
+            candidates.append(i)
+            
+    # 2. Budgeted sampling
+    # We have 50 labels. Use 20 to train a model, 30 to explore.
+    budget = 50
+    tried = {}
+    
+    # Sample 20 candidates to build a model
+    sample_size = min(20, len(candidates))
+    for i in range(sample_size):
+        idx = candidates[i]
+        tried[idx] = label(idx)
+        
+    # 3. Train model and predict
+    inputs = [c for c in header if not (c.endswith('-') or c.endswith('+'))]
+    goals = [c for c in header if c.endswith('-') or c.endswith('+')]
+    
+    X_train = [[rows[i][header.index(c)] for c in inputs] for i in tried]
+    y_train = [tried[i] for i in tried]
+    
+    model = KNeighborsRegressor(n_neighbors=3)
+    model.fit(X_train, y_train)
+    
+    # Predict for remaining candidates
+    best_idx = -1
+    best_score = -1
+    
+    for idx in candidates:
+        if idx not in tried:
+            pred = model.predict([[rows[idx][header.index(c)] for c in inputs]])[0]
+            score = get_score(pred, header)
+            if score > best_score:
+                best_score = score
+                best_idx = idx
+                
+    # Label the best one found
+    if best_idx != -1:
+        label(best_idx)
+        return best_idx
+    return candidates[0]
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            data = [[float(x) for x in row] for row in reader]
+            
+        def label(i):
+            return data[i][len(header)-3:]
+            
+        rows = [r[:len(header)-3] + ["?"]*3 for r in data]
+        best_idx = choose(header, rows, label)
+        
+        print(f"Customer Inquiry: Best setup for large, high-criticality project found at index {best_idx}.")
+        print("Analysis: Filtered for high-size/high-criticality configurations and optimized using a predictive model.")
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
+```

@@ -1,0 +1,61 @@
+import csv
+import step01
+
+def find_similar(header, rows, target_row, k=5):
+    """
+    Finds the k rows most similar to the target_row using Euclidean distance
+    on input columns.
+    """
+    input_indices = [i for i, name in enumerate(header) 
+                     if not (name.endswith('-') or name.endswith('+'))]
+    
+    def dist(r1, r2):
+        d = 0
+        for i in input_indices:
+            # Assuming numeric inputs for this dataset
+            d += (float(r1[i]) - float(r2[i]))**2
+        return d**0.5
+
+    # Calculate distances to all rows
+    distances = []
+    for i, row in enumerate(rows):
+        distances.append((dist(row, target_row), i))
+    
+    # Return indices of k nearest neighbors
+    distances.sort(key=lambda x: x[0])
+    return [idx for _, idx in distances[:k]]
+
+def remember(header, rows):
+    """
+    Returns the indices of the top 5% of rows based on goal performance.
+    """
+    return step01.remember(header, rows)
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', newline='') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [row for row in reader]
+            
+            # Pick a target row (e.g., the last one) to compare against history
+            target = rows[-1]
+            
+            # Find similar past setups
+            similar_indices = find_similar(header, rows, target)
+            
+            print("Customer Inquiry: Show me past setups most like my proposed one.")
+            print(f"Proposed setup inputs: {[target[i] for i, name in enumerate(header) if not (name.endswith('-') or name.endswith('+'))][:3]}...")
+            print("\nMost similar past setups and their outcomes:")
+            
+            goal_indices = [i for i, name in enumerate(header) if name.endswith('-') or name.endswith('+')]
+            for idx in similar_indices:
+                outcomes = [f"{header[i]}: {rows[idx][i]}" for i in goal_indices]
+                print(f" - Row {idx}: {', '.join(outcomes)}")
+                
+            print("\nAnalysis: These historical configurations are the closest matches to your proposal.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

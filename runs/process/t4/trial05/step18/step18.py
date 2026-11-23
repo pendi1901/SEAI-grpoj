@@ -1,0 +1,88 @@
+import csv
+import pandas as pd
+import numpy as np
+from sklearn.ensemble import RandomForestRegressor
+
+def fix(header, row, levers):
+    """
+    Identifies the best change to the provided levers to minimize 'Idle-'.
+    """
+    filename = 'pom3a.n1000.train.csv'
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header_csv = next(reader)
+        rows = []
+        for r in reader:
+            rows.append([float(val) for val in r])
+    
+    df = pd.DataFrame(rows, columns=header_csv)
+    
+    # We want to minimize 'Idle-'
+    target_goal = 'Idle-'
+    input_cols = [c for c in header if c in levers]
+    
+    # Train a model to predict 'Idle-' based on the allowed levers
+    model = RandomForestRegressor(n_estimators=20, random_state=42)
+    model.fit(df[input_cols], df[target_goal])
+    
+    best_change = {}
+    min_idle = float('inf')
+    
+    # For each lever, test 5 values within the allowed range
+    for col in input_cols:
+        allowed = levers[col]
+        # Generate test values
+        if isinstance(allowed, tuple):
+            low, high = allowed
+            test_vals = np.linspace(low, high, 5)
+        else:
+            test_vals = allowed
+            
+        for val in test_vals:
+            test_row = list(row)
+            test_row[header.index(col)] = val
+            
+            # Predict impact
+            pred = model.predict([[test_row[header.index(c)] for c in input_cols]])[0]
+            
+            if pred < min_idle:
+                min_idle = pred
+                best_change = {col: val}
+                
+    return best_change
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [[float(val) for val in row] for row in reader]
+        
+        # Define levers excluding 'Team Size' (hiring)
+        # Available inputs: Culture, Criticality, Criticality Modifier, Initial Known, 
+        # Inter-Dependency, Dynamism, Size, Plan
+        levers = {
+            'Culture': (0.0, 1.0),
+            'Criticality': (0.0, 1.0),
+            'Dynamism': (0.0, 1.0),
+            'Size': (0.0, 1.0),
+            'Plan': (0.0, 1.0)
+        }
+        
+        # Find a 'bad' row (high Idle-)
+        df = pd.DataFrame(rows, columns=header)
+        bad_row_idx = df['Idle-'].idxmax()
+        bad_row = rows[bad_row_idx]
+        
+        recommendation = fix(header, bad_row, levers)
+        
+        print("Customer Inquiry: I am not allowed to hire. What else can I change to cut idle time?")
+        print("Analysis: Based on our model, adjusting the following project parameters can reduce idle time:")
+        for col, val in recommendation.items():
+            print(f" - Adjust '{col}' to {val:.4f}")
+        print("These changes are predicted to optimize resource utilization without requiring additional staff.")
+        
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

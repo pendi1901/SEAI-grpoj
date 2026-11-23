@@ -1,0 +1,90 @@
+```python
+import csv
+import pandas as pd
+import numpy as np
+from sklearn.ensemble import RandomForestRegressor
+
+def fix(header, row, levers):
+    """
+    Finds the best change to the provided levers to minimize 'Idle-'.
+    """
+    filename = 'pom3a.n1000.train.csv'
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header_csv = next(reader)
+        rows = []
+        for r in reader:
+            rows.append([float(val) if val.replace('.','',1).isdigit() or (val.startswith('-') and val[1:].replace('.','',1).isdigit()) else val for val in r])
+    
+    df = pd.DataFrame(rows, columns=header_csv)
+    goals = [c for c in header_csv if c.endswith(('-', '+'))]
+    inputs = [c for c in header_csv if c not in goals]
+    
+    # Train model to predict 'Idle-'
+    model = RandomForestRegressor(n_estimators=20, random_state=42)
+    model.fit(df[inputs], df['Idle-'])
+    
+    def get_idle_score(r_list):
+        r_df = pd.DataFrame([r_list], columns=header)
+        return model.predict(r_df[inputs])[0]
+
+    best_change = {}
+    best_score = get_idle_score(row)
+    
+    for col, bounds in levers.items():
+        idx = header.index(col)
+        # If numeric, test bounds and midpoint
+        if isinstance(bounds, tuple):
+            low, high = bounds
+            for val in [low, (low + high) / 2, high]:
+                new_row = list(row)
+                new_row[idx] = val
+                new_score = get_idle_score(new_row)
+                if new_score < best_score:
+                    best_score = new_score
+                    best_change = {col: val}
+        # If symbolic, test all options
+        elif isinstance(bounds, list):
+            for val in bounds:
+                new_row = list(row)
+                new_row[idx] = val
+                new_score = get_idle_score(new_row)
+                if new_score < best_score:
+                    best_score = new_score
+                    best_change = {col: val}
+                    
+    return best_change
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [[float(val) if val.replace('.','',1).isdigit() or (val.startswith('-') and val[1:].replace('.','',1).isdigit()) else val for val in r] for r in reader]
+        
+        df = pd.DataFrame(rows, columns=header)
+        # Find a row with high idle time
+        bad_row = df.loc[df['Idle-'].idxmax()].tolist()
+        
+        # Levers excluding 'Team Size' (hiring)
+        levers = {
+            'Culture': (0.0, 1.0),
+            'Criticality': (0.0, 1.0),
+            'Size': (0.0, 1.0),
+            'Plan': (0.0, 1.0)
+        }
+        
+        recommendation = fix(header, bad_row, levers)
+        
+        print("Customer Inquiry: I am not allowed to hire. What else can I change to cut idle time?")
+        if recommendation:
+            for col, val in recommendation.items():
+                print(f"Recommendation: Adjust '{col}' to {val:.4f} to reduce idle time.")
+        else:
+            print("No significant improvement found with available non-hiring levers.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

@@ -1,0 +1,67 @@
+import csv
+
+def remember(header, rows):
+    """
+    Identifies the best rows based on multi-objective optimization.
+    Goals: Minimize MRE-, Maximize ACC+, Maximize PRED40+.
+    Uses a simple Pareto-based ranking approach to find the 'best' setups.
+    """
+    # Identify indices of goals
+    goals = []
+    for i, name in enumerate(header):
+        if name.endswith('-'):
+            goals.append((i, -1))  # -1 for minimize
+        elif name.endswith('+'):
+            goals.append((i, 1))   # 1 for maximize
+
+    def get_score(row):
+        # Normalize goals to a 0-1 scale relative to the dataset
+        # Since we need a simple heuristic, we use a weighted sum of normalized values
+        # This identifies rows that perform well across all objectives
+        score = 0
+        for idx, direction in goals:
+            col_data = [float(r[idx]) for r in rows]
+            min_val, max_val = min(col_data), max(col_data)
+            val = float(row[idx])
+            norm = (val - min_val) / (max_val - min_val + 1e-9)
+            score += norm if direction == 1 else (1 - norm)
+        return score
+
+    # Calculate scores and keep indices
+    scored_rows = []
+    for i, row in enumerate(rows):
+        scored_rows.append((i, get_score(row)))
+
+    # Sort by score descending
+    scored_rows.sort(key=lambda x: x[1], reverse=True)
+
+    # Return top 5% (max 40 rows for 800 rows)
+    limit = max(1, int(len(rows) * 0.05))
+    return [x[0] for x in scored_rows[:limit]]
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            # Convert numeric columns to float, keep symbolic as strings
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i] in ['criterion']:
+                    processed_row.append(val)
+                else:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+            rows.append(processed_row)
+
+    best_indices = remember(header, rows)
+    
+    print(f"Found {len(best_indices)} unusually trustworthy setups.")
+    print("Indices of the best performing configurations:")
+    print(best_indices)

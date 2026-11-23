@@ -1,0 +1,50 @@
+import ezr
+import step06
+
+def justify(header, rows, row):
+    """
+    Explains why a proposed setup (row) is better or worse than another.
+    Returns (p, reason) where p is the fraction of rows that 'row' is better than,
+    and reason is a sentence explaining the estimation.
+    """
+    # We reuse the logic from step06 which estimates goals using a tree
+    # and calculates the rank (p) of the row relative to the dataset.
+    return step06.justify(header, rows, row)
+
+if __name__ == "__main__":
+    # Load data
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Example: Compare a specific row (A) against another (B)
+    # Let's pick two arbitrary rows to demonstrate the justification
+    row_a = list(rows[0])
+    row_b = list(rows[1])
+    
+    # Mask goals for the justification function
+    def mask(r):
+        new_r = list(r)
+        for i, name in enumerate(header):
+            if name.endswith(('-', '+')):
+                new_r[i] = "?"
+        return new_r
+
+    masked_a = mask(row_a)
+    masked_b = mask(row_b)
+    
+    p_a, reason_a = justify(header, rows, masked_a)
+    p_b, reason_b = justify(header, rows, masked_b)
+    
+    print("Comparison of Setup A vs Setup B:")
+    print(f"Setup A is better than {p_a:.2f} of all configurations.")
+    print(f"Setup B is better than {p_b:.2f} of all configurations.")
+    
+    if p_a > p_b:
+        print(f"Explanation: Setup A is recommended because it outperforms {int(p_a*100)}% of configurations, "
+              f"whereas Setup B only outperforms {int(p_b*100)}%.")
+    else:
+        print("Explanation: Setup B is actually performing better than or equal to Setup A.")
+        
+    exit(0)

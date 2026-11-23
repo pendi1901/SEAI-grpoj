@@ -1,0 +1,59 @@
+```python
+import ezr
+import random
+
+def spot(header, rows):
+    """
+    Identifies rows that are 'suspicious' by checking for outliers in 
+    the input space. A row is suspicious if its input values are 
+    statistically distant from the rest of the population, as measured 
+    by the xdist (distance across input columns) to the median row.
+    """
+    # Create a table to handle normalization and distance
+    data = [header] + rows
+    tbl = ezr.Tbl(data)
+    
+    # Calculate the median row (the centroid of the input space)
+    # ezr.mids(tbl) returns a dictionary of column medians
+    median_row = ezr.mids(tbl)
+    
+    # Calculate the xdist of every row to the median row
+    # Rows with high xdist are outliers in the input space
+    outlier_scores = []
+    for i, row in enumerate(rows):
+        d = ezr.xdist(tbl, row, median_row)
+        outlier_scores.append((d, i))
+    
+    # Sort by distance descending (most suspicious first)
+    outlier_scores.sort(key=lambda x: x[0], reverse=True)
+    
+    # Return the indices of the top 5% most suspicious rows
+    limit = max(1, len(rows) // 20)
+    return [item[1] for item in outlier_scores[:limit]]
+
+if __name__ == "__main__":
+    # Load the data
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Identify suspicious rows
+    suspicious_indices = spot(header, rows)
+    
+    # Print a summary for the customer
+    print(f"Analysis complete. Found {len(suspicious_indices)} potentially mistyped records.")
+    print(f"{'Row Index':<10} | {'Input Distance (xdist)':<25}")
+    print("-" * 40)
+    
+    # Calculate table for xdist reference
+    tbl = ezr.Tbl(data)
+    median_row = ezr.mids(tbl)
+    
+    for idx in suspicious_indices:
+        dist = ezr.xdist(tbl, rows[idx], median_row)
+        print(f"{idx:<10} | {dist:.4f}")
+        
+    print("\nThese rows have input values that deviate significantly from the norm.")
+    exit(0)
+```

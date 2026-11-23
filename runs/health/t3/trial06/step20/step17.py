@@ -1,0 +1,81 @@
+import csv
+import random
+
+def get_utility(header, goals):
+    """
+    Calculates a normalized utility score for a set of goals.
+    Goals: MRE- (minimize), ACC+ (maximize), PRED40+ (maximize).
+    """
+    u = 0.0
+    goal_indices = [i for i, h in enumerate(header) if h.endswith('-') or h.endswith('+')]
+    
+    # We use a simple heuristic: normalize goals to [0, 1]
+    # Since we don't have global min/max, we assume the provided goals
+    # are within reasonable ranges for this dataset.
+    for i, g_idx in enumerate(goal_indices):
+        col_name = header[g_idx]
+        val = goals[i]
+        if col_name.endswith('-'):
+            # Minimize: 1 - normalized value
+            u += (1.0 - min(1.0, max(0.0, val)))
+        else:
+            # Maximize: normalized value
+            u += min(1.0, max(0.0, val))
+    return u / len(goal_indices)
+
+def choose(header, rows, label):
+    """
+    Finds a setup that is both high-performing and 'small' (low N_estimators).
+    We sample 50 rows, evaluate their utility, and penalize high N_estimators
+    to favor setups that are efficient to run.
+    """
+    n_est_idx = header.index('N_estimators')
+    
+    # We have a budget of 50 labels.
+    indices = random.sample(range(len(rows)), 50)
+    
+    best_idx = -1
+    best_score = -float('inf')
+    
+    for idx in indices:
+        goals = label(idx)
+        utility = get_utility(header, goals)
+        
+        # Penalty for N_estimators: higher N_estimators reduces the score.
+        # We normalize N_estimators (range approx 50-200) to [0, 1].
+        n_est = rows[idx][n_est_idx]
+        penalty = (n_est - 50) / 150.0
+        
+        # Score = Utility - Penalty
+        score = utility - (0.2 * penalty)
+        
+        if score > best_score:
+            best_score = score
+            best_idx = idx
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for line in reader:
+            processed_row = []
+            for i, val in enumerate(line):
+                if header[i] == 'criterion':
+                    processed_row.append(val)
+                else:
+                    processed_row.append(float(val))
+            rows.append(processed_row)
+
+    # Hidden version for the label function
+    def label(i):
+        return rows[i][:3]
+
+    best_idx = choose(header, rows, label)
+    
+    print(f"Recommended setup found at index {best_idx}.")
+    print(f"Performance: MRE={rows[best_idx][0]:.4f}, ACC={rows[best_idx][1]:.4f}, PRED40={rows[best_idx][2]:.4f}")
+    print(f"Efficiency: N_estimators={rows[best_idx][3]:.0f} (low enough for nightly runs).")

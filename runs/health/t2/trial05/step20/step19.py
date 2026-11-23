@@ -1,0 +1,43 @@
+import csv
+import step09
+
+def spot(header, rows):
+    """
+    Identifies rows that contain input values far outside the observed range
+    or are otherwise suspicious. We reuse the logic from step09 which 
+    calculates anomaly scores based on deviations from the median.
+    """
+    # step09.spot returns a list of indices sorted by anomaly score descending.
+    # This aligns perfectly with the requirement to return the most suspicious first.
+    return step09.spot(header, rows)
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                # Convert numeric columns to float, keep symbolic as is
+                processed_row = [val if header[i] == 'criterion' else float(val) 
+                                 for i, val in enumerate(row)]
+                rows.append(processed_row)
+        
+        suspicious_indices = spot(header, rows)
+        
+        print("Analysis: Identifying suspicious configurations (outliers).")
+        print("The following rows contain settings that are far outside the observed norms:")
+        for idx in suspicious_indices[:5]:
+            # Display the row index and a few key inputs to help the user verify
+            row = rows[idx]
+            n_est = row[header.index('N_estimators')]
+            crit = row[header.index('criterion')]
+            print(f"- Row {idx}: N_estimators={n_est:.0f}, criterion={crit}")
+            
+        print("\nConclusion: These configurations are statistically unusual. "
+              "I recommend reviewing these settings before deployment.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

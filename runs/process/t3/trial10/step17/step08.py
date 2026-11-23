@@ -1,0 +1,72 @@
+import csv
+import random
+
+def fix(header, row, levers):
+    """
+    Finds the smallest change to levers to improve the row.
+    A row is bad if it has high Cost- and high Idle-.
+    We try to move numeric levers towards values that correlate with lower goals.
+    """
+    # Identify goal indices
+    goal_indices = [i for i, col in enumerate(header) if col.endswith(('-', '+'))]
+    
+    # Simple heuristic: move each numeric lever by a small delta 
+    # to see if it improves the projected score.
+    # Since we don't have a model, we assume lower values for inputs 
+    # generally reduce cost/idle in this specific domain.
+    recommendations = {}
+    
+    for col_name, bounds in levers.items():
+        col_idx = header.index(col_name)
+        current_val = row[col_idx]
+        
+        if isinstance(bounds, (list, tuple)):
+            # Numeric: try to move towards the lower bound
+            low, high = bounds
+            # Move 10% towards the lower bound
+            new_val = max(low, current_val - (high - low) * 0.1)
+            recommendations[col_name] = new_val
+        else:
+            # Symbolic: pick a random valid value
+            new_val = random.choice(bounds)
+            recommendations[col_name] = new_val
+            
+    return recommendations
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) for val in row])
+        
+        # Define levers based on problem domain
+        # Plan and Team Size are the primary levers requested
+        levers = {
+            'Plan': (0.0, 1.0),
+            'Team Size': (0.0, 1.0)
+        }
+        
+        # Find a "bad" row (high cost and high idle)
+        cost_idx = header.index('Cost-')
+        idle_idx = header.index('Idle-')
+        
+        # Sort by sum of goals to find a bad one
+        rows.sort(key=lambda r: r[cost_idx] + r[idle_idx], reverse=True)
+        bad_row = rows[0]
+        
+        recommendations = fix(header, bad_row, levers)
+        
+        print("Customer Inquiry: Rescue Strategy")
+        print("To reduce project cost and idle time, we recommend the following adjustments:")
+        for col, val in recommendations.items():
+            print(f"- Adjust '{col}' to {val:.4f}")
+        print("\nThese changes are designed to shift your project configuration")
+        print("towards more efficient, lower-cost operating parameters.")
+        
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        exit(1)

@@ -1,0 +1,42 @@
+import ezr
+import random
+
+def certify(xs, ys):
+    """
+    Returns True if the two distributions are statistically indistinguishable 
+    (same apart from noise), False if they are significantly different.
+    Uses the same() function from ezr.stats.
+    """
+    return ezr.same(xs, ys)
+
+if __name__ == "__main__":
+    # Load the data
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Identify column indices
+    # Team Size is index 8, Cost- is index 9
+    team_size_idx = header.index("Team Size")
+    cost_idx = header.index("Cost-")
+    
+    # Split data into small-team and big-team groups
+    # Using the median of Team Size as the threshold
+    team_sizes = [r[team_size_idx] for r in rows]
+    median_team_size = sorted(team_sizes)[len(team_sizes) // 2]
+    
+    small_team_costs = [r[cost_idx] for r in rows if r[team_size_idx] <= median_team_size]
+    big_team_costs = [r[cost_idx] for r in rows if r[team_size_idx] > median_team_size]
+    
+    # Perform the certification
+    is_same = certify(small_team_costs, big_team_costs)
+    
+    print(f"Analysis of Cost- for small vs big teams:")
+    print(f"Small team count: {len(small_team_costs)}, Mean cost: {sum(small_team_costs)/len(small_team_costs):.4f}")
+    print(f"Big team count: {len(big_team_costs)}, Mean cost: {sum(big_team_costs)/len(big_team_costs):.4f}")
+    
+    if is_same:
+        print("Result: The difference in costs is statistically insignificant (it was likely luck).")
+    else:
+        print("Result: The difference in costs is statistically significant (it is real).")

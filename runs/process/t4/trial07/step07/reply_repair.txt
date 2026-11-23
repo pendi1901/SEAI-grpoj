@@ -1,0 +1,75 @@
+```python
+import csv
+import numpy as np
+import pandas as pd
+from sklearn.ensemble import RandomForestRegressor
+
+def choose(header, rows, label):
+    """
+    Finds the best row by querying 50 setups. Since we start with no labels,
+    we sample 50 rows across the space to build an initial model, then 
+    query the most promising ones.
+    """
+    inputs = [col for col in header if not (col.endswith('-') or col.endswith('+'))]
+    goals = [col for col in header if col.endswith(('-', '+'))]
+    
+    # 1. Initial sampling: Query 50 rows spread across the dataset
+    # to build a baseline model.
+    n_rows = len(rows)
+    indices_to_query = np.linspace(0, n_rows - 1, 50, dtype=int)
+    
+    known_data = []
+    for idx in indices_to_query:
+        true_goals = label(idx)
+        row_data = rows[idx][:len(inputs)] + true_goals
+        known_data.append(row_data)
+        
+    df_known = pd.DataFrame(known_data, columns=header)
+    
+    # 2. Calculate aggregate score for the 50 queried rows
+    scores = pd.DataFrame(index=df_known.index)
+    for goal in goals:
+        g_min, g_max = df_known[goal].min(), df_known[goal].max()
+        norm = (df_known[goal] - g_min) / (g_max - g_min + 1e-9)
+        scores[goal] = 1 - norm if goal.endswith('-') else norm
+    df_known['aggregate'] = scores.mean(axis=1)
+    
+    # 3. Train surrogate model
+    model = RandomForestRegressor(n_estimators=50, random_state=42)
+    model.fit(df_known[inputs], df_known['aggregate'])
+    
+    # 4. Predict for all rows and find the best one
+    # We use the model to find the best candidate among all rows
+    all_inputs = pd.DataFrame([r[:len(inputs)] for r in rows], columns=inputs)
+    preds = model.predict(all_inputs)
+    
+    best_idx = int(np.argmax(preds))
+    return best_idx
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed = [float(val) if i < len(header)-3 else val for i, val in enumerate(row)]
+                rows.append(processed)
+        
+        # Keep a copy of full rows for the label function
+        full_rows = [r[:] for r in rows]
+        
+        def label(i):
+            return [full_rows[i][j] for j, col in enumerate(header) if col.endswith(('-', '+'))]
+            
+        # Mask rows for the test
+        masked_rows = [r[:len(header)-3] + ['?'] * 3 for r in rows]
+            
+        best_idx = choose(header, masked_rows, label)
+        print(f"Best setup found at index: {best_idx}")
+        
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
+```

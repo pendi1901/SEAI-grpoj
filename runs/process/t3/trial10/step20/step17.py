@@ -1,0 +1,81 @@
+import csv
+import random
+
+def choose(header, rows, label):
+    """
+    Finds the best setup for a large, high-criticality project.
+    We filter for rows where 'Size' and 'Criticality' are high,
+    then sample from that subset to find the best performer.
+    """
+    # Identify indices
+    size_idx = header.index('Size')
+    crit_idx = header.index('Criticality')
+    goal_indices = [i for i, col in enumerate(header) if col.endswith(('-', '+'))]
+
+    # Filter candidates: Large size (> 0.7) and High criticality (> 0.7)
+    candidates = [i for i, row in enumerate(rows) if row[size_idx] > 0.7 and row[crit_idx] > 0.7]
+    
+    # If not enough candidates, fall back to all rows
+    if len(candidates) < 10:
+        candidates = range(len(rows))
+        
+    # Sample up to 50 candidates
+    num_samples = min(len(candidates), 50)
+    to_test = random.sample(candidates, num_samples)
+    
+    best_idx = -1
+    best_score = -float('inf')
+    
+    for idx in to_test:
+        goals = label(idx)
+        
+        # Calculate score: minimize '-' (negate), maximize '+' (keep)
+        current_score = 0
+        for i, val in enumerate(goals):
+            col_name = header[goal_indices[i]]
+            if col_name.endswith('-'):
+                current_score -= val
+            else:
+                current_score += val
+        
+        if current_score > best_score:
+            best_score = current_score
+            best_idx = idx
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            full_data = []
+            rows = []
+            for row in reader:
+                processed = []
+                full_row = []
+                for i, val in enumerate(row):
+                    f_val = float(val)
+                    full_row.append(f_val)
+                    if header[i].endswith(('-', '+')):
+                        processed.append("?")
+                    else:
+                        processed.append(f_val)
+                full_data.append(full_row)
+                rows.append(processed)
+        
+        def label(i):
+            goal_indices = [idx for idx, col in enumerate(header) if col.endswith(('-', '+'))]
+            return [full_data[i][idx] for idx in goal_indices]
+        
+        best_index = choose(header, rows, label)
+        
+        print("Customer Inquiry: High-Stakes Project Setup")
+        print(f"For large, high-criticality projects, the recommended setup is at index {best_index}.")
+        print("This configuration was identified by filtering for high-scale, high-risk")
+        print("parameters and evaluating performance within that specific subset.")
+        
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        exit(1)

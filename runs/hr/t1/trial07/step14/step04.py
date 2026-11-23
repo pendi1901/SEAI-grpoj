@@ -1,0 +1,71 @@
+import csv
+
+def flow(header, row, seen):
+    """
+    Decides if the current employee needs a 'what would keep you here' conversation.
+    We target employees who are high performers (high 'YearsAtCompany+') but
+    might be at risk (e.g., low 'JobSatisfaction' or 'EnvironmentSatisfaction').
+    
+    This is an online selection problem. We use a threshold-based approach:
+    if the current row's tenure is significantly better than the average 
+    tenure seen so far, and they have low satisfaction, we flag them.
+    """
+    tenure_idx = header.index('YearsAtCompany+')
+    sat_idx = header.index('JobSatisfaction')
+    
+    # If this is the first row, we can't compare, so let it go
+    if not seen:
+        return False
+    
+    # Calculate average tenure of seen rows
+    avg_tenure = sum(r[tenure_idx] for r in seen) / len(seen)
+    
+    # Criteria:
+    # 1. Tenure is above average (they are experienced)
+    # 2. Job Satisfaction is low (<= 2)
+    # 3. We only pick one person (the first one that meets the criteria)
+    # Since the harness asks to stop once we return True, this acts as a 
+    # "first-best-fit" selector.
+    
+    current_tenure = row[tenure_idx]
+    current_sat = row[sat_idx]
+    
+    if current_tenure > avg_tenure and current_sat <= 2:
+        return True
+    
+    return False
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Simulate the flow
+    seen = []
+    selected = None
+    for i, row in enumerate(rows):
+        if flow(header, row, seen):
+            selected = (i, row)
+            break
+        seen.append(row)
+    
+    if selected:
+        idx, row = selected
+        print(f"Conversation recommended for employee at row {idx}.")
+        print(f"Reason: Tenure={row[header.index('YearsAtCompany+')]}, "
+              f"JobSatisfaction={row[header.index('JobSatisfaction')]}")
+    else:
+        print("No employees met the criteria for a retention conversation.")

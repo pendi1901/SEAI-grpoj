@@ -1,0 +1,61 @@
+import csv
+import step01
+
+def flow(header, row, seen):
+    """
+    Decides if the current row is 'good enough' to stop the build process.
+    We define 'good enough' as being in the top 5% of the expected distribution
+    based on the historical data provided in step01.
+    """
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+
+    # Calculate utility for the current row
+    # MRE is minimize, so (1 - MRE) is used for maximization
+    current_utility = (1.0 - row[mre_idx]) + row[acc_idx] + row[pred_idx]
+
+    # If no history, we cannot judge, so keep going
+    if not seen:
+        return False
+
+    # Calculate utilities of all seen rows
+    seen_utilities = []
+    for r in seen:
+        seen_utilities.append((1.0 - r[mre_idx]) + r[acc_idx] + r[pred_idx])
+
+    # Threshold: Is this row better than 95% of what we have seen so far?
+    # Or, if we have enough data, is it in the top 5% of the total expected range?
+    # Here we use the 95th percentile of the seen rows as the stopping criterion.
+    seen_utilities.sort(reverse=True)
+    threshold_idx = max(0, int(len(seen_utilities) * 0.05))
+    threshold = seen_utilities[threshold_idx]
+
+    return current_utility >= threshold
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    seen = []
+    found = False
+    for i, row in enumerate(rows):
+        if flow(header, row, seen):
+            print(f"Stopped at row {i}: Found a setup good enough to ship.")
+            found = True
+            break
+        seen.append(row)
+    
+    if not found:
+        print("Processed all rows; no setup met the 'good enough' criteria.")

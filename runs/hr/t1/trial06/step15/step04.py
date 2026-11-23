@@ -1,0 +1,63 @@
+import csv
+
+def flow(header, row, seen):
+    """
+    Decides if the current employee needs a 'what would keep you here' conversation.
+    We target employees who are high-performers but have high risk of attrition.
+    We use a simple threshold strategy: if the employee has high 'YearsAtCompany+'
+    and 'YearsInCurrentRole+' but low 'JobSatisfaction', they are a priority.
+    
+    Since we cannot go back, we use a 'Secretary Problem' inspired threshold:
+    we observe the first 20% of employees to establish a baseline for 
+    'JobSatisfaction' and 'YearsAtCompany+', then pick the first one that 
+    exceeds our baseline criteria.
+    """
+    idx_sat = header.index('JobSatisfaction')
+    idx_years = header.index('YearsAtCompany+')
+    
+    # Baseline: average of the first 20% of arrivals
+    n_seen = len(seen)
+    if n_seen < 160:
+        return False
+    
+    # Calculate baseline from seen data
+    avg_sat = sum(r[idx_sat] for r in seen) / n_seen
+    avg_years = sum(r[idx_years] for r in seen) / n_seen
+    
+    # Criteria: If current employee has lower satisfaction than average
+    # but higher tenure than average, they are at risk and need a conversation.
+    if row[idx_sat] < avg_sat and row[idx_years] > avg_years:
+        return True
+        
+    return False
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Simulate the flow
+    seen = []
+    chosen = None
+    for row in rows:
+        if flow(header, row, seen):
+            chosen = row
+            break
+        seen.append(row)
+    
+    if chosen:
+        print("Conversation needed for employee:")
+        print(f"Years at Company: {chosen[header.index('YearsAtCompany+')]}")
+        print(f"Job Satisfaction: {chosen[header.index('JobSatisfaction')]}")
+    else:
+        print("No high-risk employees identified for intervention.")

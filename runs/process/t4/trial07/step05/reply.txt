@@ -1,0 +1,54 @@
+```python
+import csv
+import pandas as pd
+from sklearn.ensemble import RandomForestRegressor
+from step01 import remember
+
+def blame(header, rows):
+    """
+    Identifies input columns that correlate most strongly with the 'Idle-' goal
+    in the worst-performing rows.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    
+    # Identify input and goal columns
+    inputs = [col for col in header if not (col.endswith('-') or col.endswith('+'))]
+    
+    # Define "worst" as the bottom 25% of rows based on the 'Idle-' goal
+    # Since 'Idle-' is a goal to minimize, higher values are worse.
+    worst_rows = df.nlargest(int(len(df) * 0.25), 'Idle-')
+    
+    # Use a Random Forest to find feature importance for predicting 'Idle-'
+    # within the subset of worst rows.
+    model = RandomForestRegressor(n_estimators=50, random_state=42)
+    model.fit(worst_rows[inputs], worst_rows['Idle-'])
+    
+    # Get feature importances
+    importances = dict(zip(inputs, model.feature_importances_))
+    
+    # Return the top 3 input columns that contribute to high Idle-
+    sorted_inputs = sorted(importances, key=importances.get, reverse=True)
+    return sorted_inputs[:3]
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) for val in row])
+        
+        top_blame = blame(header, rows)
+        
+        print("Customer Inquiry: Why do our worst setups leave so many people waiting around?")
+        print("Analysis: The primary factors contributing to high idle time in worst-performing setups are:")
+        for i, col in enumerate(top_blame, 1):
+            print(f"  {i}. {col}")
+        print("\nThese input parameters have the strongest influence on the 'Idle-' metric.")
+        
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
+```

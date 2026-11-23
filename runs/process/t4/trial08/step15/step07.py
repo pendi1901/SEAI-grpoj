@@ -1,0 +1,86 @@
+import csv
+import pandas as pd
+import numpy as np
+from sklearn.ensemble import RandomForestRegressor
+from step01 import remember
+
+def choose(header, rows, label):
+    """
+    Finds the best row by sampling 50 rows, training a surrogate model,
+    and selecting the best predicted row.
+    """
+    # Identify indices
+    goal_indices = [i for i, h in enumerate(header) if h.endswith(('-', '+'))]
+    input_indices = [i for i, h in enumerate(header) if not (h.endswith('-') or h.endswith('+'))]
+    
+    # 1. Sample 50 rows to build a model
+    # We pick indices spread across the dataset
+    indices_to_label = np.linspace(0, len(rows) - 1, 50, dtype=int)
+    
+    train_inputs = []
+    train_goals = []
+    
+    for i in indices_to_label:
+        goals = label(i)
+        train_goals.append(goals)
+        train_inputs.append([rows[i][j] for j in input_indices])
+        
+    # 2. Train a surrogate model to predict goals from inputs
+    model = RandomForestRegressor(n_estimators=50, random_state=42)
+    model.fit(train_inputs, train_goals)
+    
+    # 3. Predict goals for all rows
+    all_inputs = [[rows[i][j] for j in input_indices] for i in range(len(rows))]
+    predictions = model.predict(all_inputs)
+    
+    # 4. Score predictions
+    # Normalize goals based on the 50 samples
+    pred_df = pd.DataFrame(predictions, columns=[header[i] for i in goal_indices])
+    scores = pd.DataFrame(index=pred_df.index)
+    
+    for col in pred_df.columns:
+        col_data = pred_df[col]
+        norm = (col_data - col_data.min()) / (col_data.max() - col_data.min() + 1e-9)
+        scores[col] = 1 - norm if col.endswith('-') else norm
+        
+    aggregate_scores = scores.mean(axis=1)
+    
+    # Return index of the best row
+    return int(aggregate_scores.idxmax())
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            true_goals = []
+            for row in reader:
+                # Separate inputs and goals
+                processed = []
+                goals = []
+                for i, val in enumerate(row):
+                    if header[i].endswith(('-', '+')):
+                        goals.append(float(val))
+                        processed.append("?")
+                    else:
+                        try:
+                            processed.append(float(val))
+                        except ValueError:
+                            processed.append(val)
+                rows.append(processed)
+                true_goals.append(goals)
+        
+        def label(i):
+            return true_goals[i]
+            
+        best_idx = choose(header, rows, label)
+        
+        print(f"Analysis complete.")
+        print(f"The best setup found is at index {best_idx}.")
+        print("This setup was selected by modeling the performance of 50 sampled configurations.")
+        
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

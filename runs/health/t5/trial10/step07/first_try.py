@@ -1,0 +1,84 @@
+import ezr
+import random
+
+def choose(header, rows, label):
+    """
+    Find the best row using a budget of 50 labels.
+    We use the acquire logic from ezr to intelligently sample the space.
+    """
+    # Create a table object to manage the data
+    # We need to handle the fact that input rows have '?' in goal columns
+    # but the label() function will provide the true values.
+    
+    # Initialize the table with the header
+    tbl = ezr.Tbl([header])
+    
+    # We need to keep track of which rows we have labeled to avoid exceeding budget
+    # and to build our model.
+    labeled_rows = []
+    
+    # We use the acquire logic:
+    # 1. Start with a small random sample
+    # 2. Iteratively pick rows that are near the best and far from the rest
+    # 3. Use the provided label() function to reveal the goals
+    
+    # The acquire function in ezr expects a TBL with rows already populated.
+    # We will build a local TBL to track our progress.
+    
+    # We have 50 labels total.
+    # Start with a small random sample
+    start_count = min(len(rows), 4)
+    indices = random.sample(range(len(rows)), start_count)
+    
+    for idx in indices:
+        row_with_goals = label(idx)
+        labeled_rows.append(row_with_goals)
+        ezr.addRow(tbl, row_with_goals)
+        
+    # Now use the acquire logic to pick the remaining 46
+    # We need to pass a function that labels a row by index
+    def oracle_wrapper(row):
+        # Find the index of this row in the original list
+        # Since rows are passed by reference, we can find the index
+        # or simply store the index in the row object if needed.
+        # Here, we assume we can identify the row by its content.
+        for i, r in enumerate(rows):
+            if r is row:
+                return label(i)
+        return row
+
+    # Use ezr.acquire to get the best rows
+    # We set the budget to 50
+    final_rows = ezr.acquire(tbl, cap=50, label=oracle_wrapper)
+    
+    # Find the best row among all labeled ones
+    best_row = min(final_rows, key=lambda r: ezr.ydist(tbl, r))
+    
+    # Return the index of the best row
+    for i, r in enumerate(rows):
+        if r is best_row:
+            return i
+    return 0
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    try:
+        data = list(ezr.csv(filename))
+        header = data[0]
+        rows = data[1:]
+        
+        # Define the label function for the harness
+        def label(i):
+            return rows[i]
+            
+        best_idx = choose(header, rows, label)
+        
+        print(f"Analysis complete.")
+        print(f"The best setup found is at index: {best_idx}")
+        print(f"Row details: {rows[best_idx]}")
+        
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
+    
+    exit(0)

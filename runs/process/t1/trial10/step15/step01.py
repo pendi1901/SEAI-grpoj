@@ -1,0 +1,57 @@
+import csv
+
+def remember(header, rows):
+    """
+    Identifies rows that perform well across all goal columns.
+    Goals ending in '-' are minimized, '+' are maximized.
+    """
+    goal_indices = []
+    for i, name in enumerate(header):
+        if name.endswith('-') or name.endswith('+'):
+            goal_indices.append((i, name[-1]))
+
+    def score_row(row):
+        # Calculate a normalized score for the row.
+        # Since we want to minimize '-' and maximize '+', 
+        # we can treat all as "minimize" by negating '+' values.
+        # We use the relative rank or simple sum of normalized values.
+        # Here, we use the sum of values (after negating '+' goals) 
+        # to find rows that are generally "low" (good).
+        s = 0
+        for idx, op in goal_indices:
+            val = float(row[idx])
+            if op == '+':
+                s += (1.0 - val)
+            else:
+                s += val
+        return s
+
+    # Score all rows
+    scored = []
+    for i, row in enumerate(rows):
+        scored.append((score_row(row), i))
+    
+    # Sort by score (ascending, as lower is better)
+    scored.sort()
+    
+    # Return top 5% (or at least 1)
+    limit = max(1, len(rows) // 20)
+    return [item[1] for item in scored[:limit]]
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [row for row in reader]
+            
+        best_indices = remember(header, rows)
+        
+        print(f"Found {len(best_indices)} top-performing setups:")
+        for idx in best_indices:
+            print(f"Row index {idx}: {rows[idx]}")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

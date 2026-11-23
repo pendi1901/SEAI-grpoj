@@ -1,0 +1,103 @@
+import ezr
+import random
+
+def race(header, rows, label):
+    """
+    Compares three strategies: random, greedy (nearest to best), 
+    and the tree-based ranker.
+    """
+    # Shared budget management
+    labeled_cache = {}
+    
+    def oracle_wrapper(idx):
+        if idx not in labeled_cache:
+            if len(labeled_cache) >= 50:
+                raise Exception("Budget exceeded")
+            labeled_cache[idx] = label(idx)
+        return labeled_cache[idx]
+
+    # Strategy 1: Random
+    def strategy_random(tbl, budget):
+        indices = random.sample(range(len(rows)), budget)
+        for i in indices:
+            row = rows[i]
+            true_vals = oracle_wrapper(i)
+            for j, val in enumerate(true_vals):
+                if header[j].endswith(("-", "+")):
+                    row[j] = val
+        return min(range(len(rows)), key=lambda i: ezr.ydist(tbl, rows[i]))
+
+    # Strategy 2: Greedy (Nearest to current best)
+    def strategy_greedy(tbl, budget):
+        # Start with one random
+        idx = random.randint(0, len(rows) - 1)
+        true_vals = oracle_wrapper(idx)
+        for j, val in enumerate(true_vals):
+            if header[j].endswith(("-", "+")):
+                rows[idx][j] = val
+        
+        best_idx = idx
+        for _ in range(budget - 1):
+            # Find row closest to current best in input space
+            best_row = rows[best_idx]
+            next_idx = min([i for i in range(len(rows)) if i not in labeled_cache],
+                           key=lambda i: ezr.xdist(tbl, rows[i], best_row))
+            true_vals = oracle_wrapper(next_idx)
+            for j, val in enumerate(true_vals):
+                if header[j].endswith(("-", "+")):
+                    rows[next_idx][j] = val
+            if ezr.ydist(tbl, rows[next_idx]) < ezr.ydist(tbl, rows[best_idx]):
+                best_idx = next_idx
+        return best_idx
+
+    # Strategy 3: Tree-based (using ezr.acquire)
+    def strategy_tree(tbl, budget):
+        # acquire() handles the logic of labeling near best, far from rest
+        labeled_rows = ezr.acquire(tbl, cap=budget, label=lambda r: oracle_wrapper(rows.index(r)))
+        best_row = min(labeled_rows, key=lambda r: ezr.ydist(tbl, r))
+        return rows.index(best_row)
+
+    # Setup
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Run races
+    results = {}
+    # We must reset rows for each strategy to ensure fair budget usage
+    # Since we need to compare them, we run them sequentially
+    strategies = {"random": strategy_random, "greedy": strategy_greedy, "tree": strategy_tree}
+    
+    for name, func in strategies.items():
+        # Reset rows to masked state
+        for r in rows:
+            for j, h in enumerate(header):
+                if h.endswith(("-", "+")): r[j] = "?"
+        labeled_cache.clear()
+        results[name] = func(tbl, 16) # 16 * 3 = 48 < 50
+
+    # Determine winner
+    winner = min(results, key=lambda n: ezr.ydist(tbl, rows[results[n]]))
+    
+    return {"winner": winner, "row": results[winner], "tried": list(strategies.keys())}
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Ground truth for oracle
+    ground_truth = [row[:] for row in rows]
+    
+    # Mask rows
+    for row in rows:
+        for i, h in enumerate(header):
+            if h.endswith(("-", "+")): row[i] = "?"
+            
+    def label_func(i):
+        return ground_truth[i]
+        
+    result = race(header, rows, label_func)
+    print(f"Race Results: Winner is {result['winner']} strategy.")
+    print(f"Best row found at index {result['row']}.")
+    print(f"Strategies compared: {', '.join(result['tried'])}")
+    exit(0)

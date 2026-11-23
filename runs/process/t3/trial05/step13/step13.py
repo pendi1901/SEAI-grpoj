@@ -1,0 +1,69 @@
+import csv
+import pandas as pd
+from scipy import stats
+
+def certify(xs, ys):
+    """
+    Returns True if the difference between two distributions is statistically 
+    insignificant (likely noise), False if they are significantly different.
+    Uses Welch's t-test.
+    """
+    if len(xs) < 2 or len(ys) < 2:
+        return True
+    
+    # Welch's t-test (equal_var=False)
+    t_stat, p_value = stats.ttest_ind(xs, ys, equal_var=False)
+    
+    # If p-value > 0.05, we fail to reject the null hypothesis (they are the same)
+    return p_value > 0.05
+
+def analyze_shift(header, rows):
+    """
+    Compares the first half of the data (before the shift) 
+    with the second half (after the shift) across all goal columns.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    goal_cols = [c for c in header if c.endswith('-') or c.endswith('+')]
+    
+    mid = len(df) // 2
+    before = df.iloc[:mid]
+    after = df.iloc[mid:]
+    
+    results = {}
+    for goal in goal_cols:
+        is_same = certify(before[goal].tolist(), after[goal].tolist())
+        results[goal] = is_same
+        
+    return results
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) for val in row])
+        
+        shift_analysis = analyze_shift(header, rows)
+        
+        print("Customer Inquiry: Did results shift after changing how teams decide what to build?")
+        print("Analysis: Comparing performance before and after the change:")
+        
+        all_same = True
+        for goal, is_same in shift_analysis.items():
+            status = "the same (noise)" if is_same else "significantly different"
+            print(f"  {goal}: {status}")
+            if not is_same:
+                all_same = False
+        
+        if all_same:
+            print("\nConclusion: The results appear to be statistically the same as before.")
+        else:
+            print("\nConclusion: There is a statistically significant shift in performance.")
+            
+        exit(0)
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

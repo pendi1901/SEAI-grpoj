@@ -1,0 +1,62 @@
+import csv
+from sklearn.ensemble import RandomForestRegressor
+
+def blame(header, rows):
+    """
+    Identifies input columns that best explain low tenure ('YearsAtCompany+').
+    We filter out goal columns and use Random Forest feature importance.
+    """
+    # Identify goal columns (ending in + or -)
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    input_indices = [i for i in range(len(header)) if i not in goal_indices]
+    
+    # Prepare data: encode symbolic columns
+    encoded_rows = []
+    for row in rows:
+        new_row = []
+        for i, val in enumerate(row):
+            if isinstance(val, str):
+                new_row.append(float(hash(val) % 1000))
+            else:
+                new_row.append(float(val))
+        encoded_rows.append(new_row)
+    
+    # Use the first goal column found as the target
+    target_idx = goal_indices[0]
+    
+    X = [[r[i] for i in input_indices] for r in encoded_rows]
+    y = [r[target_idx] for r in encoded_rows]
+    
+    # Train a regressor to find feature importance
+    model = RandomForestRegressor(n_estimators=50, random_state=42)
+    model.fit(X, y)
+    
+    # Get feature importances
+    importances = model.feature_importances_
+    
+    # Map importances back to column names
+    feature_names = [header[i] for i in input_indices]
+    ranked = sorted(zip(feature_names, importances), key=lambda x: x[1], reverse=True)
+    
+    # Return the top 3 input features
+    return [name for name, score in ranked[:3]]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    top_factors = blame(header, rows)
+    
+    print("Analysis: What factors best explain short employee tenure?")
+    print(f"The primary drivers identified are: {', '.join(top_factors)}.")

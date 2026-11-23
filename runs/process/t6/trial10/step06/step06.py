@@ -1,0 +1,58 @@
+import ezr
+import step02
+
+def justify(header, rows, row):
+    """
+    Returns (p, reason): p is the fraction of rows that 'row' is better than,
+    and reason is a sentence explaining the ranking.
+    """
+    # Create a table to calculate ydist for all rows
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Estimate the goals for the target row using the tree-based ranker
+    # We use the training data (all rows) to build the model
+    rank_func = step02.guess(header, rows, [row])
+    
+    # Since step02.guess returns a list of estimates for the first goal,
+    # we need a full estimate for all goals. We'll use the leaf mean 
+    # of the tree to estimate all goal columns.
+    node = ezr.tree(tbl, tbl.rows)
+    leaf_node = ezr.leaf(node, row)
+    
+    # Estimate all goal columns based on the leaf's average
+    # Goals are columns ending in '-' or '+'
+    goal_indices = [i for i, name in enumerate(header) 
+                    if name.endswith("-") or name.endswith("+")]
+    
+    estimated_row = row[:]
+    for idx in goal_indices:
+        vals = [r[idx] for r in leaf_node.rows if r[idx] != "?"]
+        estimated_row[idx] = sum(vals) / len(vals) if vals else 0
+        
+    # Calculate how many rows are worse than this estimated row
+    target_ydist = ezr.ydist(tbl, estimated_row)
+    worse_count = sum(1 for r in rows if ezr.ydist(tbl, r) > target_ydist)
+    
+    p = worse_count / len(rows)
+    reason = f"This setup is better than {int(p * 100)}% of all known configurations based on its predicted performance metrics."
+    
+    return p, reason
+
+if __name__ == "__main__":
+    file_path = "pom3a.n1000.train.csv"
+    rows_gen = ezr.csv(file_path)
+    try:
+        header = next(rows_gen)
+        rows = list(rows_gen)
+        
+        # Pick a sample row and mask its goals
+        test_row = rows[0][:]
+        test_row[-3:] = ["?", "?", "?"]
+        
+        p, reason = justify(header, rows, test_row)
+        print(f"Ranking: {p:.4f}")
+        print(f"Justification: {reason}")
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
+    exit(0)

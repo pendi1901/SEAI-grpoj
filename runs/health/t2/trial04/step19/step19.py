@@ -1,0 +1,37 @@
+import csv
+import step09
+
+def spot(header, rows):
+    """
+    Identifies rows that are 'suspicious' by detecting outliers in the input space.
+    A colleague suggests settings far outside anything we have tried.
+    We use the Z-score of numeric inputs to find rows that deviate significantly
+    from the mean of their respective columns.
+    """
+    # Reuse the logic from step09 which calculates Z-scores for numeric inputs
+    # and returns indices of rows with high deviation.
+    return step09.spot(header, rows)
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            # Convert numeric columns to floats, keep strings as is
+            processed_row = [val if header[i] == 'criterion' else float(val) for i, val in enumerate(row)]
+            rows.append(processed_row)
+            
+    suspicious = spot(header, rows)
+    
+    print("Customer Inquiry: A colleague suggests settings far outside anything we have tried.")
+    print("Analysis: I have identified rows that contain input values significantly different from the norm.")
+    if suspicious:
+        print(f"I found {len(suspicious)} suspicious configurations.")
+        print("The most suspicious row indices are:", suspicious[:5])
+        print("These rows represent settings that deviate significantly from your historical data.")
+    else:
+        print("No suspicious configurations were found; all settings are within the expected range.")

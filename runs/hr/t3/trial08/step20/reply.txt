@@ -1,0 +1,108 @@
+```python
+import csv
+import random
+
+def race(header, rows, label):
+    """
+    Compares strategies to find the best employee row.
+    Budget: 50 labels total.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    
+    def get_score(row_idx):
+        goals = label(row_idx)
+        score = 0
+        for i, val in enumerate(goals):
+            name = header[goal_indices[i]]
+            if name.endswith('+'):
+                score += val
+            else:
+                score -= val
+        return score
+
+    # Strategies:
+    # 1. random: 16 random samples
+    # 2. newest_pay_rise: 17 rows with lowest 'YearsAtCompany+' (Customer's rule)
+    # 3. tenure_reward: 17 rows with highest 'YearsAtCompany+' (Alternative)
+    
+    strategies = ["random", "newest_pay_rise", "tenure_reward"]
+    results = {}
+    
+    # Strategy 1: Random
+    random_indices = random.sample(range(len(rows)), 16)
+    best_random_idx = -1
+    best_random_score = float('-inf')
+    for idx in random_indices:
+        s = get_score(idx)
+        if s > best_random_score:
+            best_random_score = s
+            best_random_idx = idx
+    results["random"] = (best_random_idx, best_random_score)
+    
+    # Strategy 2: Customer's Rule (Newest staff = lowest YearsAtCompany+)
+    years_idx = header.index('YearsAtCompany+')
+    newest_sorted = sorted(range(len(rows)), key=lambda i: rows[i][years_idx])
+    best_newest_idx = -1
+    best_newest_score = float('-inf')
+    for idx in newest_sorted[:17]:
+        s = get_score(idx)
+        if s > best_newest_score:
+            best_newest_score = s
+            best_newest_idx = idx
+    results["newest_pay_rise"] = (best_newest_idx, best_newest_score)
+    
+    # Strategy 3: Tenure Reward (Highest YearsAtCompany+)
+    tenure_sorted = sorted(range(len(rows)), key=lambda i: rows[i][years_idx], reverse=True)
+    best_tenure_idx = -1
+    best_tenure_score = float('-inf')
+    for idx in tenure_sorted[:17]:
+        s = get_score(idx)
+        if s > best_tenure_score:
+            best_tenure_score = s
+            best_tenure_idx = idx
+    results["tenure_reward"] = (best_tenure_idx, best_tenure_score)
+    
+    winner = max(results, key=lambda k: results[k][1])
+    
+    return {
+        "winner": winner,
+        "row": results[winner][0],
+        "tried": strategies
+    }
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try: processed_row.append(float(val))
+                    except ValueError: processed_row.append(val)
+                else: processed_row.append(val)
+            rows.append(processed_row)
+
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    
+    def label(i):
+        return [rows[i][idx] for idx in goal_indices]
+
+    # Mask goals
+    for row in rows:
+        for idx in goal_indices:
+            row[idx] = '?'
+
+    outcome = race(header, rows, label)
+    
+    print("Comparison: Is the 'newest staff' rule effective?")
+    print(f"The winning strategy was: {outcome['winner']}")
+    if outcome['winner'] == "newest_pay_rise":
+        print("Your rule of thumb is effective for this dataset.")
+    else:
+        print("Our analysis suggests that rewarding tenure or random selection outperforms the 'newest staff' rule.")
+    print(f"Best row found at index: {outcome['row']}")
+```

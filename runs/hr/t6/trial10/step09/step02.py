@@ -1,0 +1,69 @@
+import ezr
+import random
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column ('YearsAtCompany+') for test rows.
+    Uses the tree-based ranker from ezr to find the leaf node mean 
+    for the target column.
+    """
+    # Create a table from training data
+    tbl = ezr.Tbl([header] + train)
+    
+    # Identify the first goal column index
+    # The first goal column is 'YearsAtCompany+'
+    goal_idx = -1
+    for i, name in enumerate(header):
+        if name.endswith("+") or name.endswith("-"):
+            goal_idx = i
+            break
+            
+    # Build a tree on the training data
+    root = ezr.tree(tbl, tbl.rows)
+    
+    # For each test row, find its leaf and return the mean of the goal column
+    results = []
+    for row in test:
+        leaf_node = ezr.leaf(root, row)
+        # Calculate mean of the goal column in this leaf
+        vals = [r[goal_idx] for r in leaf_node.rows if r[goal_idx] != "?"]
+        if vals:
+            results.append(sum(vals) / len(vals))
+        else:
+            # Fallback to global mean if leaf is empty or missing data
+            results.append(tbl.cols[goal_idx].mu)
+            
+    return results
+
+if __name__ == "__main__":
+    # Load data
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Split into train and test (80/20)
+    random.seed(1234567891)
+    random.shuffle(rows)
+    n = int(len(rows) * 0.8)
+    train = rows[:n]
+    test_full = rows[n:]
+    
+    # Mask the goal columns in test data to simulate "day one"
+    test = []
+    for row in test_full:
+        new_row = list(row)
+        for i, name in enumerate(header):
+            if name.endswith("+") or name.endswith("-"):
+                new_row[i] = "?"
+        test.append(new_row)
+        
+    # Get estimates
+    estimates = guess(header, train, test)
+    
+    # Print summary
+    print(f"Estimated tenure for {len(test)} new hires.")
+    print(f"Average estimated 'YearsAtCompany+': {sum(estimates)/len(estimates):.2f} years.")
+    print("\nFirst 5 estimates:")
+    for i in range(min(5, len(estimates))):
+        print(f"  Hire {i+1}: {estimates[i]:.2f} years")

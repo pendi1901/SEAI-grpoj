@@ -1,0 +1,52 @@
+import ezr
+import step01
+
+def certify(xs, ys):
+    """
+    Returns True if the two distributions are statistically indistinguishable,
+    False if they differ significantly.
+    """
+    # ezr.same uses cliffs and ks tests to compare distributions
+    return ezr.same(xs, ys)
+
+def get_tenure_by_overtime(header, rows):
+    """
+    Extracts 'YearsAtCompany+' for employees who work overtime vs those who don't.
+    """
+    overtime_idx = header.index('overTime')
+    tenure_idx = header.index('YearsAtCompany+')
+    
+    yes_overtime = []
+    no_overtime = []
+    
+    for row in rows:
+        tenure = row[tenure_idx]
+        if row[overtime_idx] == 'Yes':
+            yes_overtime.append(tenure)
+        else:
+            no_overtime.append(tenure)
+            
+    return yes_overtime, no_overtime
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    yes_tenure, no_tenure = get_tenure_by_overtime(header, rows)
+    
+    # Check if the difference is statistically significant
+    # certify returns True if they are the same (noise), False if they differ
+    is_same = certify(yes_tenure, no_tenure)
+    
+    print("Analysis: Do people who work overtime leave their role sooner?")
+    if is_same:
+        print("Result: The difference is statistically insignificant (noise).")
+    else:
+        print("Result: The difference is statistically significant (real).")
+        
+    avg_yes = sum(yes_tenure) / len(yes_tenure)
+    avg_no = sum(no_tenure) / len(no_tenure)
+    print(f"Average tenure (Overtime=Yes): {avg_yes:.2f} years")
+    print(f"Average tenure (Overtime=No):  {avg_no:.2f} years")

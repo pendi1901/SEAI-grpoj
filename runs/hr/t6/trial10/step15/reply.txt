@@ -1,0 +1,59 @@
+```python
+import ezr
+import step05
+
+def blame(header, rows):
+    """
+    Identifies input columns that have 'nothing to do' with how long people stay.
+    We define these as columns that show no statistically significant difference 
+    between the 'worst' rows (bottom 20% by ydist) and the 'rest' of the population.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate ydist for all rows and sort to find the worst
+    scored = []
+    for row in rows:
+        scored.append((ezr.ydist(tbl, row), row))
+    scored.sort(key=lambda x: x[0], reverse=True)
+    
+    # Bottom 20% are the "worst"
+    n = len(rows) // 5
+    worst = [x[1] for x in scored[:n]]
+    rest = [x[1] for x in scored[n:]]
+    
+    useless_cols = []
+    
+    # For each input column, check if the distribution in 'worst' is 
+    # statistically the same as in 'rest'.
+    for col in tbl.x:
+        w_vals = [r[col.at] for r in worst if r[col.at] != "?"]
+        r_vals = [r[col.at] for r in rest if r[col.at] != "?"]
+        
+        if not w_vals or not r_vals:
+            continue
+            
+        # If the distributions are the same (indistinguishable), 
+        # the column has nothing to do with the outcome.
+        if ezr.same(sorted(w_vals), sorted(r_vals)):
+            useless_cols.append(col.txt)
+            
+    return useless_cols
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    useless = blame(header, rows)
+    
+    print("Analysis: Which columns have nothing to do with retention?")
+    if useless:
+        print(f"The following {len(useless)} columns appear to be noise:")
+        for col in useless:
+            print(f"  - {col}")
+        print("\nThese columns show no statistically significant difference between "
+              "the worst-performing records and the rest of the population.")
+    else:
+        print("All input columns show some statistical relationship with retention.")
+```

@@ -1,0 +1,507 @@
+You are writing one Python file, step07.py.
+
+The data is the csv file Health-ClosedIssues0000.n1000.train.csv in the current directory. Column names starting in upper case are numeric, lower case are symbolic. A name ending in - is a goal to minimise, in + a goal to maximise; all other columns are inputs. It has 800 data rows after the header. Any count the customer quotes describes their full records, not this file: never hard-code a row count, read the file to the end. Its first lines:
+
+MRE-,ACC+,PRED40+,N_estimators,criterion,Min_sample_leaves,Min_impurity_decrease,Max_depth
+0.883063328,0.40756167894905476,0,180,absolute_error,11,9.75,11
+0.26612665684830633,0.681512336,0.5714285714285714,110,squared_error,2,2,2
+0.23902798232695144,0.6843960269144505,0.8571428571428571,120,squared_error,2,7.75,7
+
+Your function receives rows already parsed. The header and the first two rows look like this in Python:
+
+header = ['MRE-', 'ACC+', 'PRED40+', 'N_estimators', 'criterion', 'Min_sample_leaves', 'Min_impurity_decrease', 'Max_depth']
+row = [0.883063328, 0.40756167894905476, 0.0, 180.0, 'absolute_error', 11.0, 9.75, 11.0]
+row = [0.26612665684830633, 0.681512336, 0.5714285714285714, 110.0, 'squared_error', 2.0, 2.0, 2.0]
+
+These columns hold text, not numbers: criterion (absolute_error, poisson, squared_error).
+
+Use only the Python standard library.
+
+These files, written earlier, are in the same directory:
+
+--- step01.py ---
+import csv
+
+def remember(header, rows):
+    """
+    Identifies the top 5% of rows based on multi-objective optimization.
+    Goals: MRE- (minimize), ACC+ (maximize), PRED40+ (maximize).
+    We normalize values to [0, 1] and use a simple weighted sum (Pareto-like ranking).
+    """
+    n = len(rows)
+    limit = max(1, n // 20)  # 5% limit
+    
+    # Identify column indices
+    idx_mre = header.index('MRE-')
+    idx_acc = header.index('ACC+')
+    idx_pred = header.index('PRED40+')
+    
+    # Extract columns for normalization
+    mres = [r[idx_mre] for r in rows]
+    accs = [r[idx_acc] for r in rows]
+    preds = [r[idx_pred] for r in rows]
+    
+    min_mre, max_mre = min(mres), max(mres)
+    min_acc, max_acc = min(accs), max(accs)
+    min_pred, max_pred = min(preds), max(preds)
+    
+    def normalize(val, min_v, max_v, reverse=False):
+        if max_v == min_v: return 0.0
+        norm = (val - min_v) / (max_v - min_v)
+        return (1.0 - norm) if reverse else norm
+
+    scores = []
+    for i, row in enumerate(rows):
+        # Score = (1 - MRE_norm) + ACC_norm + PRED_norm
+        s = (normalize(row[idx_mre], min_mre, max_mre, True) +
+             normalize(row[idx_acc], min_acc, max_acc) +
+             normalize(row[idx_pred], min_pred, max_pred))
+        scores.append((s, i))
+    
+    # Sort by score descending
+    scores.sort(key=lambda x: x[0], reverse=True)
+    
+    return [item[1] for item in scores[:limit]]
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            for row in reader:
+                # Convert numeric columns to floats, keep symbolic as strings
+                processed_row = []
+                for i, val in enumerate(row):
+                    if header[i] in ['criterion']:
+                        processed_row.append(val)
+                    else:
+                        processed_row.append(float(val))
+                rows.append(processed_row)
+        
+        best_indices = remember(header, rows)
+        
+        print(f"Found {len(best_indices)} top-performing setups.")
+        print("Indices of the most trustworthy setups:")
+        print(best_indices)
+        print("\nTop 3 examples:")
+        for i in best_indices[:3]:
+            print(f"Row {i}: {rows[i]}")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+
+
+--- step02.py ---
+import csv
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column (MRE-) for test rows using a 
+    k-Nearest Neighbors approach based on Euclidean distance of 
+    numeric input features.
+    """
+    # Identify goal and input columns
+    goal_idx = 0  # MRE-
+    # Inputs are all columns except the goals (first 3 columns)
+    input_indices = [i for i, name in enumerate(header) if i >= 3]
+    
+    # Normalize numeric inputs for distance calculation
+    def get_stats(data):
+        stats = []
+        for i in input_indices:
+            col = [r[i] for r in data if isinstance(r[i], (int, float))]
+            if col:
+                stats.append((min(col), max(col)))
+            else:
+                stats.append((0, 1))
+        return stats
+
+    stats = get_stats(train)
+
+    def distance(row1, row2):
+        d = 0
+        for idx, (min_v, max_v) in zip(input_indices, stats):
+            v1, v2 = row1[idx], row2[idx]
+            if isinstance(v1, str):  # Symbolic comparison
+                d += 0 if v1 == v2 else 1
+            else:  # Numeric normalization
+                range_v = max_v - min_v
+                d += ((v1 - v2) / range_v)**2 if range_v > 0 else 0
+        return d**0.5
+
+    predictions = []
+    for t_row in test:
+        # Find 5 nearest neighbors
+        distances = []
+        for train_row in train:
+            distances.append((distance(t_row, train_row), train_row[goal_idx]))
+        
+        distances.sort(key=lambda x: x[0])
+        # Return average of top 5 neighbors
+        neighbors = distances[:5]
+        avg_mre = sum(n[1] for n in neighbors) / len(neighbors)
+        predictions.append(avg_mre)
+        
+    return predictions
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            for row in reader:
+                processed_row = []
+                for i, val in enumerate(header):
+                    if val in ['criterion']:
+                        processed_row.append(row[i])
+                    else:
+                        processed_row.append(float(row[i]))
+                rows.append(processed_row)
+        
+        # Split: use last 10 rows as a test set to demonstrate
+        train_data = rows[:-10]
+        test_data = [r[:] for r in rows[-10:]]
+        for r in test_data:
+            r[0] = "?" # Hide goal
+            
+        results = guess(header, train_data, test_data)
+        
+        print("Estimated MRE- for the last 10 rows:")
+        for i, val in enumerate(results):
+            print(f"Row {len(train_data) + i}: {val:.4f}")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+
+
+--- step03.py ---
+import csv
+
+def certify(xs, ys):
+    """
+    Returns True if the distributions of xs and ys are statistically 
+    indistinguishable (same apart from noise), False otherwise.
+    Uses a simple A12 effect size test (Vargha-Delaney).
+    """
+    if not xs or not ys:
+        return True
+    
+    n_x = len(xs)
+    n_y = len(ys)
+    
+    # Count how many times x > y, x < y, and x == y
+    greater = 0
+    less = 0
+    for x in xs:
+        for y in ys:
+            if x > y:
+                greater += 1
+            elif x < y:
+                less += 1
+                
+    # A12 = (count(x > y) + 0.5 * count(x == y)) / (n_x * n_y)
+    a12 = (greater + 0.5 * (n_x * n_y - greater - less)) / (n_x * n_y)
+    
+    # If A12 is close to 0.5, they are likely the same (noise).
+    # Thresholds: 0.56, 0.64, 0.71 are small, medium, large effects.
+    return 0.44 <= a12 <= 0.56
+
+def analyze(header, rows):
+    """
+    Compares 'ACC+' (accuracy) for 'big' vs 'small' setups.
+    'Big' defined as N_estimators > median.
+    """
+    idx_acc = header.index('ACC+')
+    idx_n = header.index('N_estimators')
+    
+    n_values = [r[idx_n] for r in rows]
+    median_n = sorted(n_values)[len(n_values) // 2]
+    
+    small = [r[idx_acc] for r in rows if r[idx_n] <= median_n]
+    big = [r[idx_acc] for r in rows if r[idx_n] > median_n]
+    
+    is_same = certify(small, big)
+    
+    return is_same, len(small), len(big)
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            for row in reader:
+                processed_row = []
+                for i, val in enumerate(row):
+                    if header[i] == 'criterion':
+                        processed_row.append(val)
+                    else:
+                        processed_row.append(float(val))
+                rows.append(processed_row)
+        
+        same, n_small, n_big = analyze(header, rows)
+        
+        print("Analysis: Are big setups significantly more accurate than small ones?")
+        if same:
+            print("Answer: No, the difference is likely just noise.")
+        else:
+            print("Answer: Yes, there is a statistically significant difference.")
+        print(f"(Compared {n_small} small setups vs {n_big} big setups)")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+
+
+--- step04.py ---
+import csv
+
+def flow(header, row, seen):
+    """
+    Decides whether to stop at the current row based on a threshold.
+    We define 'good enough' as being in the top 5% of the expected 
+    performance range based on the history seen so far.
+    """
+    if not seen:
+        return False
+
+    # Identify goal indices
+    idx_mre = header.index('MRE-')
+    idx_acc = header.index('ACC+')
+    idx_pred = header.index('PRED40+')
+
+    # Collect all seen goals to establish a baseline
+    mres = [r[idx_mre] for r in seen]
+    accs = [r[idx_acc] for r in seen]
+    preds = [r[idx_pred] for r in seen]
+
+    # Calculate current row score
+    # Normalize against the history seen so far
+    def norm(val, col_data, reverse=False):
+        min_v, max_v = min(col_data), max(col_data)
+        if max_v == min_v: return 0.5
+        res = (val - min_v) / (max_v - min_v)
+        return (1.0 - res) if reverse else res
+
+    score = (norm(row[idx_mre], mres, True) + 
+             norm(row[idx_acc], accs) + 
+             norm(row[idx_pred], preds)) / 3.0
+
+    # Threshold: Stop if score is in the top 5% of observed scores
+    # We use a heuristic: if score > 0.9 (very high relative to history)
+    return score >= 0.9
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed = []
+                for i, val in enumerate(row):
+                    processed.append(val if header[i] == 'criterion' else float(val))
+                rows.append(processed)
+
+        seen = []
+        found = False
+        for i, row in enumerate(rows):
+            if flow(header, row, seen):
+                print(f"Stopped at row {i}: {row}")
+                found = True
+                break
+            seen.append(row)
+        
+        if not found:
+            print("No row met the criteria; processed all data.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+
+
+--- step05.py ---
+import csv
+
+def blame(header, rows):
+    """
+    Identifies which input columns correlate most strongly with poor performance.
+    'Bad' rows are defined as the bottom 10% based on a multi-objective score.
+    We calculate the correlation (or difference in means) between input values
+    and the 'badness' of the rows.
+    """
+    # Identify goal indices
+    idx_mre = header.index('MRE-')
+    idx_acc = header.index('ACC+')
+    idx_pred = header.index('PRED40+')
+    
+    # Identify input indices
+    input_indices = [i for i, name in enumerate(header) if name not in ['MRE-', 'ACC+', 'PRED40+']]
+    
+    # Calculate a score for each row to define 'badness'
+    # Lower score = worse performance
+    def get_score(row):
+        # Normalize goals: MRE (min), ACC (max), PRED (max)
+        # We use simple relative ranking here
+        return -row[idx_mre] + row[idx_acc] + row[idx_pred]
+
+    scored_rows = sorted([(get_score(r), r) for r in rows])
+    
+    # Define 'bad' as the bottom 10%
+    n_bad = max(1, len(rows) // 10)
+    bad_rows = [r for s, r in scored_rows[:n_bad]]
+    all_rows = rows
+    
+    # For each input, calculate the difference in mean/distribution between bad and all
+    # We look for inputs where the bad rows have significantly different values
+    impacts = []
+    for i in input_indices:
+        col_name = header[i]
+        vals = [r[i] for r in all_rows if isinstance(r[i], (int, float))]
+        bad_vals = [r[i] for r in bad_rows if isinstance(r[i], (int, float))]
+        
+        if not vals or not bad_vals:
+            continue
+            
+        mean_all = sum(vals) / len(vals)
+        mean_bad = sum(bad_vals) / len(bad_vals)
+        
+        # The 'blame' score is the absolute difference in means
+        # normalized by the range of the column
+        diff = abs(mean_bad - mean_all)
+        impacts.append((diff, col_name))
+    
+    # Sort by impact descending
+    impacts.sort(key=lambda x: x[0], reverse=True)
+    
+    # Return the top 2 most impactful input columns
+    return [name for diff, name in impacts[:2]]
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            for row in reader:
+                processed_row = []
+                for i, val in enumerate(row):
+                    if header[i] == 'criterion':
+                        processed_row.append(val)
+                    else:
+                        processed_row.append(float(val))
+                rows.append(processed_row)
+        
+        culprits = blame(header, rows)
+        print("The settings most responsible for poor performance are:")
+        for c in culprits:
+            print(f"- {c}")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+
+
+--- step06.py ---
+import csv
+
+def justify(header, rows, row):
+    """
+    Returns (p, reason) where p is the fraction of rows that 'row' is better than,
+    and reason is a human-readable explanation.
+    """
+    # Identify goal indices
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    
+    # Estimate goal values for the target row using the mean of the entire dataset
+    # (Simple baseline estimation since the row has '?' goals)
+    estimates = []
+    for g_idx in goal_indices:
+        vals = [r[g_idx] for r in rows if isinstance(r[g_idx], (int, float))]
+        estimates.append(sum(vals) / len(vals) if vals else 0.0)
+    
+    # Define 'better' logic: 
+    # A row is better if it dominates or has a higher aggregate score
+    def get_score(r_goals):
+        score = 0
+        for i, g_idx in enumerate(goal_indices):
+            val = r_goals[i]
+            name = header[g_idx]
+            # Normalize: 0 to 1
+            col_vals = [r[g_idx] for r in rows if isinstance(r[g_idx], (int, float))]
+            min_v, max_v = min(col_vals), max(col_vals)
+            norm = (val - min_v) / (max_v - min_v + 1e-9)
+            if name.endswith('-'):
+                score += (1.0 - norm)
+            else:
+                score += norm
+        return score / len(goal_indices)
+
+    target_score = get_score(estimates)
+    
+    better_count = 0
+    for r in rows:
+        r_goals = [r[i] for i in goal_indices]
+        if get_score(r_goals) < target_score:
+            better_count += 1
+            
+    p = better_count / len(rows)
+    reason = f"This configuration outperforms {p:.1%} of all historical setups based on its estimated multi-objective performance score."
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed = []
+                for i, val in enumerate(row):
+                    processed.append(val if header[i] == 'criterion' else float(val))
+                rows.append(processed)
+        
+        # Example: Justify the first row as if its goals were hidden
+        test_row = rows[0][:]
+        for i, name in enumerate(header):
+            if name.endswith(('-', '+')):
+                test_row[i] = "?"
+        
+        p, reason = justify(header, rows, test_row)
+        print(f"Performance Rank: {p:.4f}")
+        print(f"Justification: {reason}")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+
+
+The customer asks:
+
+  I have time to try 50 setups. Find me the best one.
+
+Write step07.py to answer that ask on this data.
+
+A test harness will import your file and call this function, so you must define it exactly:
+
+def choose(header, rows, label)
+  Returns an int.   Every goal cell in `rows` is "?". Calling label(i) returns the list of true goal values for rows[i]; you may label at most 50 different rows. Return the position of the best row you found.
+
+Rules the harness enforces: label() raises an error if called on a 51st different row, and that run then scores zero.
+
+Conventions: `header` is the list of column names. `rows` is a list of rows; each row is a list of cells in header order, floats for numeric columns and strings for symbolic ones. A cell shown as "?" is hidden from you. A row is better when its goals are closer to their best (low for names ending in -, high for names ending in +).
+
+Keep everything that prints or reads the csv file under `if __name__ == "__main__":` so that importing the file prints nothing. Plain built-in types are all you need: do not import anything from `typing`.
+
+Running `python step07.py` must load the csv, call your function, print a short answer a customer could read, and exit with status 0. Reply with the complete file in one ```python fenced block and nothing else.

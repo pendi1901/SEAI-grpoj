@@ -1,0 +1,50 @@
+```python
+import ezr
+import random
+
+def certify(xs, ys):
+    """
+    Returns True if the two distributions are statistically indistinguishable
+    (i.e., the difference is likely just noise). Returns False if they differ.
+    """
+    # We use the same logic as the stats layer in ezr.py
+    # same() checks cliffs and ks tests.
+    return ezr.same(xs, ys)
+
+if __name__ == "__main__":
+    # Load the data
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    
+    if not data:
+        print("No data found.")
+        exit(1)
+        
+    header = data[0]
+    rows = data[1:]
+    
+    # Define "big" vs "small" based on N_estimators (index 3)
+    # Median split on N_estimators
+    n_est_idx = 3
+    n_estimators = [row[n_est_idx] for row in rows]
+    median_n = sorted(n_estimators)[len(n_estimators) // 2]
+    
+    # Get MRE- (index 0) for big vs small setups
+    # MRE- is a goal to minimize
+    big_setups = [row[0] for row in rows if row[n_est_idx] >= median_n]
+    small_setups = [row[0] for row in rows if row[n_est_idx] < median_n]
+    
+    # Run the certification
+    is_same = certify(big_setups, small_setups)
+    
+    print("Analysis: Are big setups significantly different from small ones?")
+    if is_same:
+        print("Result: The difference in accuracy is likely just noise.")
+    else:
+        print("Result: There is a statistically significant difference in accuracy.")
+        
+    print(f"Average MRE for small setups: {sum(small_setups)/len(small_setups):.4f}")
+    print(f"Average MRE for big setups:   {sum(big_setups)/len(big_setups):.4f}")
+    
+    exit(0)
+```

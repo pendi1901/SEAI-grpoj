@@ -1,0 +1,33 @@
+
+--- stderr ---
+Traceback (most recent call last):
+  File "<repo>\runs\process\t5\trial09\step20\step20.py", line 100, in <module>
+    result = race(header, rows, label_oracle)
+  File "<repo>\runs\process\t5\trial09\step20\step20.py", line 78, in race
+    best_idx = func(tbl)
+  File "<repo>\runs\process\t5\trial09\step20\step20.py", line 59, in strategy_tree
+    ranker = ezr.ranker(lab_tbl)
+  File "<repo>\runs\process\t5\trial09\step20\ezr.py", line 298, in ranker
+    node = tree(lab, lab.rows)
+  File "<repo>\runs\process\t5\trial09\step20\ezr.py", line 258, in tree
+    mu=sum(ydist(tbl,r) for r in rows)/len(rows))
+       ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<repo>\runs\process\t5\trial09\step20\ezr.py", line 258, in <genexpr>
+    mu=sum(ydist(tbl,r) for r in rows)/len(rows))
+           ~~~~~^^^^^^^
+  File "<repo>\runs\process\t5\trial09\step20\ezr.py", line 180, in ydist
+    return dist((abs(norm(c, row[c.at]) - c.goal)
+                      for c in tbl.y), len(tbl.y))
+  File "<repo>\runs\process\t5\trial09\step20\ezr.py", line 176, in dist
+    return sqrt(sum(v*v for v in vs) / n)
+                ~~~^^^^^^^^^^^^^^^^^
+  File "<repo>\runs\process\t5\trial09\step20\ezr.py", line 176, in <genexpr>
+    return sqrt(sum(v*v for v in vs) / n)
+                                 ^^
+  File "<repo>\runs\process\t5\trial09\step20\ezr.py", line 180, in <genexpr>
+    return dist((abs(norm(c, row[c.at]) - c.goal)
+                     ~~~~^^^^^^^^^^^^^^
+  File "<repo>\runs\process\t5\trial09\step20\ezr.py", line 138, in norm
+    z = max(-3, min(3, (v - col.mu) / (1e-32 + div(col))))
+                        ~~^~~~~~~~
+TypeError: unsupported operand type(s) for -: 'str' and 'float'

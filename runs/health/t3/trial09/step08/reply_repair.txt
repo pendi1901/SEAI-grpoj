@@ -1,0 +1,97 @@
+```python
+import csv
+
+def fix(header, row, levers):
+    """
+    Finds the smallest change to a 'bad' row that improves its score.
+    We evaluate potential changes by comparing them against the average
+    performance of the dataset.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('-') or name.endswith('+')]
+    
+    def get_score(r):
+        score = 0
+        for i, name in enumerate(header):
+            if name.endswith('-'):
+                score -= r[i]
+            elif name.endswith('+'):
+                score += r[i]
+        return score
+
+    best_change = {}
+    best_score = get_score(row)
+    
+    # Try changing one lever at a time
+    for col_name, allowed in levers.items():
+        if col_name not in header:
+            continue
+        idx = header.index(col_name)
+        original_val = row[idx]
+        
+        candidates = []
+        if isinstance(allowed, (list, tuple)) and not isinstance(allowed[0], (int, float)) and not isinstance(allowed, tuple):
+            # Symbolic
+            for val in allowed:
+                if val != original_val:
+                    candidates.append(val)
+        else:
+            # Numeric (low, high)
+            low, high = allowed
+            # Try boundaries and midpoint
+            for val in [low, high, (low + high) / 2]:
+                if val != original_val:
+                    candidates.append(val)
+        
+        for val in candidates:
+            new_row = list(row)
+            new_row[idx] = val
+            
+            # Simple heuristic: if the new configuration score is better, accept it
+            current_val = get_score(new_row)
+            if current_val > best_score:
+                best_score = current_val
+                best_change = {col_name: val}
+                
+    return best_change
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed = []
+            for val in row:
+                try:
+                    processed.append(float(val))
+                except ValueError:
+                    processed.append(val)
+            rows.append(processed)
+
+    levers = {
+        'N_estimators': (10.0, 200.0),
+        'criterion': ['absolute_error', 'poisson', 'squared_error'],
+        'Min_sample_leaves': (1.0, 20.0),
+        'Min_impurity_decrease': (0.0, 10.0),
+        'Max_depth': (1.0, 20.0)
+    }
+
+    def get_score(r):
+        s = 0
+        for i, name in enumerate(header):
+            if name.endswith('-'): s -= r[i]
+            elif name.endswith('+'): s += r[i]
+        return s
+
+    # Pick a 'bad' row
+    bad_row = min(rows, key=get_score)
+    
+    recommendation = fix(header, bad_row, levers)
+    
+    if recommendation:
+        col, val = list(recommendation.items())[0]
+        print(f"Recommended change: Set '{col}' to {val}.")
+    else:
+        print("No improvement found.")
+```

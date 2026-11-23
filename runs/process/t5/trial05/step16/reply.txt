@@ -1,0 +1,68 @@
+```python
+import ezr
+import random
+
+def justify(header, rows, row):
+    """
+    Compares a specific configuration (row) against all other known configurations (rows).
+    Returns (p, reason): p is the fraction of rows that 'row' is better than,
+    and a sentence explaining why 'row' might be preferred or rejected.
+    """
+    # Create a table to handle normalization and distance calculations
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Estimate the performance of the input row.
+    # We build a tree on the known rows to predict the performance of the input.
+    root = ezr.tree(tbl, tbl.rows)
+    leaf_node = ezr.leaf(root, row)
+    
+    # The predicted ydist is the mean ydist of the leaf node
+    predicted_ydist = leaf_node.mu
+    
+    # Calculate ydist for all known rows
+    all_ydists = [ezr.ydist(tbl, r) for r in rows]
+    
+    # Calculate p: fraction of rows that are worse than our predicted row
+    # (i.e., have a higher ydist)
+    better_than_count = sum(1 for d in all_ydists if d > predicted_ydist)
+    p = better_than_count / len(rows)
+    
+    # Generate a reason: compare against the average performance
+    avg_ydist = sum(all_ydists) / len(all_ydists)
+    if predicted_ydist < avg_ydist:
+        reason = f"This configuration is better than {int(p*100)}% of known setups, making it a strong candidate."
+    else:
+        reason = f"This configuration is only better than {int(p*100)}% of known setups, which is why other options were preferred."
+    
+    return p, reason
+
+if __name__ == "__main__":
+    file_path = "pom3a.n1000.train.csv"
+    rows_gen = ezr.csv(file_path)
+    header = next(rows_gen)
+    rows = list(rows_gen)
+    
+    # Simulate the customer's query: Compare a specific row (B) against the recommendation (A)
+    # Let's pick two arbitrary rows to represent A and B
+    idx_a, idx_b = 10, 20
+    row_a = list(rows[idx_a])
+    row_b = list(rows[idx_b])
+    
+    # Mask goals for the justification function
+    goal_indices = [i for i, h in enumerate(header) if h.endswith(('-', '+'))]
+    for idx in goal_indices:
+        row_a[idx] = "?"
+        row_b[idx] = "?"
+        
+    p_a, reason_a = justify(header, rows, row_a)
+    p_b, reason_b = justify(header, rows, row_b)
+    
+    print(f"Comparison Analysis:")
+    print(f"Recommendation A (Rank {p_a:.2f}): {reason_a}")
+    print(f"Setup B (Rank {p_b:.2f}): {reason_b}")
+    
+    if p_a >= p_b:
+        print("\nConclusion: Setup B was not recommended because it performs worse than the selected option.")
+    else:
+        print("\nConclusion: Setup B was not recommended because it is statistically inferior to the chosen configuration.")
+```

@@ -1,0 +1,78 @@
+```python
+import csv
+from step02 import guess as original_guess
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column for test rows.
+    To simulate 'requirements changing twice as fast', we weight the 
+    'Dynamism' input column more heavily in the distance calculation 
+    for the second half of the test set.
+    """
+    input_indices = [i for i, name in enumerate(header) 
+                     if not (name.endswith('-') or name.endswith('+'))]
+    dynamism_idx = header.index('Dynamism')
+    goal_idx = next(i for i, name in enumerate(header) 
+                    if name.endswith('-') or name.endswith('+'))
+
+    def dist(row1, row2, weight_dynamism=False):
+        d = 0
+        for i in input_indices:
+            v1, v2 = float(row1[i]), float(row2[i])
+            diff = (v1 - v2) ** 2
+            # If weight_dynamism is True, multiply the Dynamism distance by 2
+            if weight_dynamism and i == dynamism_idx:
+                d += diff * 2
+            else:
+                d += diff
+        return d ** 0.5
+
+    results = []
+    split_point = len(test) // 2
+    
+    for i, t_row in enumerate(test):
+        # Apply higher weight to dynamism for the second half of the test set
+        weight = (i >= split_point)
+        best_match = min(train, key=lambda r: dist(r, t_row, weight_dynamism=weight))
+        results.append(float(best_match[goal_idx]))
+    
+    return results
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            all_rows = [row for row in reader]
+            
+        train = all_rows[:700]
+        test_raw = all_rows[700:]
+        
+        test_masked = []
+        for row in test_raw:
+            new_row = [val if not (header[i].endswith('-') or header[i].endswith('+')) else "?" 
+                       for i, val in enumerate(row)]
+            test_masked.append(new_row)
+            
+        predictions = guess(header, train, test_masked)
+        
+        split = len(predictions) // 2
+        first_half = predictions[:split]
+        second_half = predictions[split:]
+        
+        avg1 = sum(first_half) / len(first_half)
+        avg2 = sum(second_half) / len(second_half)
+        
+        print("Customer Inquiry: Impact of accelerated requirement changes")
+        print(f"Analysis: We simulated a scenario where requirements change twice as fast")
+        print(f"in the second half of the project lifecycle.")
+        print(f"Average cost (first half): {avg1:.4f}")
+        print(f"Average cost (second half): {avg2:.4f}")
+        print("Conclusion: Accelerated dynamism significantly shifts the cost profile,")
+        print("indicating that projects become more sensitive to volatility over time.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

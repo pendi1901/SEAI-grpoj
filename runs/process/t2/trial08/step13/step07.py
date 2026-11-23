@@ -1,0 +1,69 @@
+import csv
+import step01
+
+def choose(header, rows, label):
+    """
+    Finds the best row by sampling 50 rows, labeling them,
+    and returning the index of the one with the best score.
+    """
+    # We have 800 rows. We can sample 50.
+    # To get a good spread, we pick indices at regular intervals.
+    n = len(rows)
+    indices_to_sample = [int(i * (n / 50)) for i in range(50)]
+    
+    best_idx = -1
+    best_score = float('inf')
+    
+    def get_score(row_with_goals):
+        # Reuse logic from step01 to score a row
+        total = 0
+        for i, name in enumerate(header):
+            if name.endswith('-'):
+                total += row_with_goals[i]
+            elif name.endswith('+'):
+                total += (1.0 - row_with_goals[i])
+        return total
+
+    for idx in indices_to_sample:
+        # Get true goals from the oracle
+        goals = label(idx)
+        
+        # Create a temporary row with the goals filled in
+        temp_row = list(rows[idx])
+        goal_idx = 0
+        for i, name in enumerate(header):
+            if name.endswith('-') or name.endswith('+'):
+                temp_row[i] = goals[goal_idx]
+                goal_idx += 1
+        
+        score = get_score(temp_row)
+        if score < best_score:
+            best_score = score
+            best_idx = idx
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(x) for x in row])
+        
+        # Define the label function for the harness
+        def label(i):
+            # Extract only the goal columns for the row
+            return [rows[i][j] for j, name in enumerate(header) 
+                    if name.endswith('-') or name.endswith('+')]
+        
+        best_idx = choose(header, rows, label)
+        
+        print(f"Customer Inquiry: I can afford to trial 50 setups. Find me the best one.")
+        print(f"Answer: The best setup found is at index {best_idx}.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

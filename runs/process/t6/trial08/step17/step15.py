@@ -1,0 +1,38 @@
+import ezr
+import step05
+
+def blame(header, rows):
+    """
+    Identify the input columns that best explain why the worst rows are bad.
+    We reuse the logic from step05, which compares the distribution of 
+    input columns in the worst 20% of rows against the rest.
+    """
+    return step05.blame(header, rows)
+
+if __name__ == "__main__":
+    # Load data
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Get the suspects
+    suspects = blame(header, rows)
+    
+    # Identify all input columns (those not ending in - or +)
+    all_inputs = [h for h in header if not (h.endswith('-') or h.endswith('+'))]
+    
+    # Determine which inputs are safe to ignore (those not in suspects)
+    safe_to_ignore = [h for h in all_inputs if h not in suspects]
+    
+    print("Project Cost Analysis:")
+    print("----------------------")
+    print("The following factors matter most to cost (they differ significantly in poor setups):")
+    for s in suspects:
+        print(f" - {s}")
+        
+    print("\nYou can safely stop worrying about these factors (they do not correlate with poor outcomes):")
+    for s in safe_to_ignore:
+        print(f" - {s}")
+        
+    exit(0)

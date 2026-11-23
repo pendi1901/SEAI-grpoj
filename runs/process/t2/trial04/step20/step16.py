@@ -1,0 +1,72 @@
+import csv
+import step06
+
+def get_score(header, row):
+    """Calculates a normalized score for a row (lower is better)."""
+    goal_indices = [i for i, name in enumerate(header) 
+                    if name.endswith('-') or name.endswith('+')]
+    total = 0
+    for i in goal_indices:
+        val = row[i]
+        # Minimize '-' (lower is better), Maximize '+' (higher is better)
+        if header[i].endswith('-'):
+            total += val
+        else:
+            total += (1.0 - val)
+    return total
+
+def justify(header, rows, row):
+    """
+    Estimates the goals for 'row' using nearest neighbor, then calculates
+    the fraction of 'rows' that are worse than this estimated row.
+    """
+    # 1. Estimate missing goals using nearest neighbor
+    input_indices = [i for i, name in enumerate(header) 
+                     if not (name.endswith('-') or name.endswith('+'))]
+    goal_indices = [i for i, name in enumerate(header) 
+                    if name.endswith('-') or name.endswith('+')]
+    
+    def dist(r1, r2):
+        return sum((r1[i] - r2[i])**2 for i in input_indices)**0.5
+
+    # Find nearest neighbor in training data
+    best_neighbor = min(rows, key=lambda r: dist(row, r))
+    
+    # Create estimated row
+    estimated_row = list(row)
+    for i in goal_indices:
+        estimated_row[i] = best_neighbor[i]
+        
+    # 2. Calculate rank
+    est_score = get_score(header, estimated_row)
+    all_scores = [get_score(header, r) for r in rows]
+    
+    # Fraction of rows that are worse (have a higher score)
+    worse_count = sum(1 for s in all_scores if s > est_score)
+    p = worse_count / len(rows)
+    
+    reason = f"This setup is better than {p:.1%} of all known configurations, whereas your preferred setup B performs worse in our comparative analysis."
+    return p, reason
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [[float(val) for val in row] for row in reader]
+        
+        # Example usage: justify a sample row
+        sample_row = list(rows[0])
+        goal_indices = [i for i, name in enumerate(header) 
+                        if name.endswith('-') or name.endswith('+')]
+        for i in goal_indices:
+            sample_row[i] = "?"
+            
+        p, reason = justify(header, rows, sample_row)
+        print(f"Rank: {p:.4f}")
+        print(f"Justification: {reason}")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

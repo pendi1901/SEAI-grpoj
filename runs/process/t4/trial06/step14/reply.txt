@@ -1,0 +1,72 @@
+```python
+import csv
+import pandas as pd
+from step01 import remember
+
+def flow(header, row, seen):
+    """
+    Returns True if the current row is 'bad' (a significant drop in performance)
+    compared to the historical trend, acting as an early warning system.
+    """
+    if not seen:
+        return False
+    
+    # Combine seen rows to establish a baseline
+    df_seen = pd.DataFrame(seen, columns=header)
+    
+    # Identify goal columns
+    goals = [col for col in header if col.endswith(('-', '+'))]
+    
+    # Calculate aggregate scores for seen data
+    scores = pd.DataFrame(index=df_seen.index)
+    for goal in goals:
+        col_data = df_seen[goal].astype(float)
+        diff = col_data.max() - col_data.min()
+        normalized = (col_data - col_data.min()) / diff if diff != 0 else 0
+        scores[goal] = (1 - normalized) if goal.endswith('-') else normalized
+    
+    df_seen['aggregate'] = scores.mean(axis=1)
+    
+    # Calculate the current row's aggregate score
+    # We use the mean of the seen data to normalize the new row's goals
+    current_agg = 0
+    for goal in goals:
+        val = float(row[header.index(goal)])
+        col_data = df_seen[goal].astype(float)
+        diff = col_data.max() - col_data.min()
+        norm = (val - col_data.min()) / diff if diff != 0 else 0
+        current_agg += (1 - norm) if goal.endswith('-') else norm
+    current_agg /= len(goals)
+    
+    # If the new row is significantly worse than the average of the seen rows
+    # (e.g., 2 standard deviations below the mean), warn the user.
+    mean_agg = df_seen['aggregate'].mean()
+    std_agg = df_seen['aggregate'].std()
+    
+    # Return True if performance has "gone bad" (dropped significantly)
+    if std_agg > 0 and current_agg < (mean_agg - 2 * std_agg):
+        return True
+    return False
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [[float(val) for val in row] for row in reader]
+            
+        seen = []
+        warnings = 0
+        for row in rows:
+            if flow(header, row, seen):
+                warnings += 1
+            seen.append(row)
+            
+        print(f"Monitoring complete. Detected {warnings} instances where project performance dropped significantly.")
+        print("These warnings indicate setups that deviate negatively from the established historical trend.")
+        exit(0)
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

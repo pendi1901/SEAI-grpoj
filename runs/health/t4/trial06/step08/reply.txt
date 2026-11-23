@@ -1,0 +1,77 @@
+```python
+import csv
+import random
+from step01 import remember
+
+def fix(header, row, levers):
+    """
+    Finds the smallest change to a bad row's settings that improves its 
+    Pareto ranking without increasing the 'N_estimators' (proxy for speed).
+    """
+    def get_score(r):
+        # Simple heuristic: sum of normalized goals
+        score = 0
+        for i, name in enumerate(header):
+            if name.endswith('-'):
+                score += (1 - r[i])
+            elif name.endswith('+'):
+                score += r[i]
+        return score
+
+    best_change = {}
+    best_score = -1.0
+    
+    # Try small perturbations for each lever
+    for col_name, allowed in levers.items():
+        idx = header.index(col_name)
+        original_val = row[idx]
+        
+        # Generate candidates
+        candidates = []
+        if isinstance(allowed, list):  # Symbolic
+            candidates = [v for v in allowed if v != original_val]
+        else:  # Numeric (low, high)
+            low, high = allowed
+            # Try a small step or boundary
+            candidates = [low, high, (low + high) / 2]
+            
+        for val in candidates:
+            # Constraint: Do not increase N_estimators (speed proxy)
+            if col_name == 'N_estimators' and val > original_val:
+                continue
+                
+            new_row = list(row)
+            new_row[idx] = val
+            
+            # Evaluate improvement
+            score = get_score(new_row)
+            if score > best_score:
+                best_score = score
+                best_change = {col_name: val}
+                
+    return best_change
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = [float(val) if header[i] not in ['criterion'] else val 
+                             for i, val in enumerate(row)]
+            rows.append(processed_row)
+
+    # Example: Fix the first row
+    bad_row = rows[0]
+    levers = {
+        'N_estimators': (100, 200),
+        'criterion': ['absolute_error', 'poisson', 'squared_error'],
+        'Max_depth': (2, 12)
+    }
+    
+    recommendation = fix(header, bad_row, levers)
+    print("Recommendation to improve performance:")
+    for col, val in recommendation.items():
+        print(f"Change {col} to {val}")
+```

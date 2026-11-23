@@ -1,0 +1,63 @@
+import csv
+
+def remember(header, rows):
+    """
+    Identifies the 5% of rows most similar to the 'current' setup (the first row).
+    Similarity is calculated using Euclidean distance on normalized input features.
+    """
+    # Identify goal and input columns
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    input_indices = [i for i, name in enumerate(header) if not name.endswith(('-', '+'))]
+    
+    # Normalize numeric inputs to [0, 1] for distance calculation
+    normalized_rows = []
+    for row in rows:
+        norm_row = []
+        for i in input_indices:
+            val = row[i]
+            if isinstance(val, (int, float)):
+                # Simple min-max normalization using global bounds
+                col_vals = [r[i] for r in rows if isinstance(r[i], (int, float))]
+                min_v, max_v = min(col_vals), max(col_vals)
+                norm_row.append((val - min_v) / (max_v - min_v + 1e-9))
+            else:
+                # Symbolic: 1 if same as reference, 0 otherwise
+                norm_row.append(1.0 if val == rows[0][i] else 0.0)
+        normalized_rows.append(norm_row)
+
+    # Calculate distance from the first row (the team's current setup)
+    ref = normalized_rows[0]
+    distances = []
+    for i, row in enumerate(normalized_rows):
+        dist = sum((row[j] - ref[j])**2 for j in range(len(ref)))**0.5
+        distances.append((dist, i))
+    
+    # Sort by distance (closest first)
+    distances.sort(key=lambda x: x[0])
+    
+    # Return top 5% (40 rows out of 800)
+    limit = max(1, len(rows) // 20)
+    return [item[1] for item in distances[:limit]]
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    best_indices = remember(header, rows)
+    
+    print("The setups most similar to the current team configuration are:")
+    for idx in best_indices[:5]:
+        print(f"Row {idx}: {rows[idx]}")
+    
+    exit(0)

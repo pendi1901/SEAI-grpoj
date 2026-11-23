@@ -1,0 +1,115 @@
+import csv
+import random
+
+def race(header, rows, label):
+    """
+    Compares three strategies: random, greedy (nearest neighbor), and 
+    a simple hill-climber, sharing a budget of 50 labels.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    input_indices = [i for i, name in enumerate(header) if not name.endswith(('-', '+'))]
+
+    def get_score(row_goals):
+        s = 0
+        for i, val in enumerate(row_goals):
+            idx = goal_indices[i]
+            s += val if header[idx].endswith('-') else (1.0 - val)
+        return s
+
+    def dist(r1, r2):
+        d = 0
+        for i in input_indices:
+            v1, v2 = r1[i], r2[i]
+            d += (v1 - v2) ** 2
+        return d ** 0.5
+
+    # Shared budget
+    budget = 50
+    tried_indices = {} # index -> score
+
+    def get_label(i):
+        if i not in tried_indices:
+            if len(tried_indices) >= budget:
+                raise Exception("Exceeded 50 labels!")
+            tried_indices[i] = get_score(label(i))
+        return tried_indices[i]
+
+    # 1. Random Strategy
+    def strategy_random():
+        best_idx = -1
+        best_score = float('inf')
+        for _ in range(16): # 16 labels
+            idx = random.randint(0, len(rows) - 1)
+            score = get_label(idx)
+            if score < best_score:
+                best_score, best_idx = score, idx
+        return best_idx, best_score
+
+    # 2. Greedy Strategy (Sample 10, then pick nearest)
+    def strategy_greedy():
+        samples = random.sample(range(len(rows)), 10)
+        best_idx = min(samples, key=get_label)
+        best_score = get_label(best_idx)
+        # Look for 6 neighbors
+        others = sorted([i for i in range(len(rows)) if i not in samples], key=lambda i: dist(rows[i], rows[best_idx]))
+        for i in others[:6]:
+            score = get_label(i)
+            if score < best_score:
+                best_score, best_idx = score, i
+        return best_idx, best_score
+
+    # 3. Hill Climber (Start random, move to better neighbor)
+    def strategy_hill():
+        curr = random.randint(0, len(rows) - 1)
+        curr_score = get_label(curr)
+        for _ in range(17): # 18 labels total
+            neighbors = random.sample(range(len(rows)), 10)
+            best_n = min(neighbors, key=lambda i: dist(rows[i], rows[curr]))
+            n_score = get_label(best_n)
+            if n_score < curr_score:
+                curr, curr_score = best_n, n_score
+        return curr, curr_score
+
+    results = {
+        "random": strategy_random(),
+        "greedy": strategy_greedy(),
+        "hill": strategy_hill()
+    }
+
+    winner = min(results, key=lambda k: results[k][1])
+    return {
+        "winner": winner,
+        "row": results[winner][0],
+        "tried": ["random", "greedy", "hill"]
+    }
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            true_goals = []
+            goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+            for row in reader:
+                processed = []
+                goals = []
+                for i, val in enumerate(row):
+                    if i in goal_indices:
+                        goals.append(float(val))
+                        processed.append("?")
+                    else:
+                        processed.append(float(val) if val.replace('.','',1).isdigit() else val)
+                rows.append(processed)
+                true_goals.append(goals)
+
+        def label(i): return true_goals[i]
+        
+        res = race(header, rows, label)
+        print(f"Winner: {res['winner']}")
+        print(f"Best row index found: {res['row']}")
+        print(f"Strategies compared: {', '.join(res['tried'])}")
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

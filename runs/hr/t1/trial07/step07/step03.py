@@ -1,0 +1,73 @@
+import csv
+import math
+
+def certify(xs, ys):
+    """
+    Performs a Welch's t-test to determine if two samples have significantly
+    different means. Returns True if they are statistically similar (p > 0.05),
+    False if they are significantly different (p <= 0.05).
+    """
+    n1, n2 = len(xs), len(ys)
+    if n1 < 2 or n2 < 2:
+        return True
+    
+    m1, m2 = sum(xs) / n1, sum(ys) / n2
+    v1 = sum((x - m1) ** 2 for x in xs) / (n1 - 1)
+    v2 = sum((y - m2) ** 2 for y in ys) / (n2 - 1)
+    
+    # Welch's t-statistic
+    se = math.sqrt((v1 / n1) + (v2 / n2))
+    if se == 0:
+        return m1 == m2
+    
+    t_stat = abs(m1 - m2) / se
+    
+    # Degrees of freedom (Welch-Satterthwaite)
+    df = ((v1 / n1 + v2 / n2) ** 2) / (((v1 / n1) ** 2 / (n1 - 1)) + ((v2 / n2) ** 2 / (n2 - 1)))
+    
+    # Critical value for t-distribution (approx for alpha=0.05, two-tailed)
+    # For df > 30, 2.0 is a reasonable approximation for 95% confidence
+    critical_val = 2.0
+    
+    return t_stat < critical_val
+
+def analyze_overtime_impact(header, rows):
+    """
+    Compares 'YearsInCurrentRole+' for employees who work overtime vs those who don't.
+    """
+    ot_idx = header.index('overTime')
+    role_idx = header.index('YearsInCurrentRole+')
+    
+    yes_ot = [r[role_idx] for r in rows if r[ot_idx] == 'Yes']
+    no_ot = [r[role_idx] for r in rows if r[ot_idx] == 'No']
+    
+    is_similar = certify(yes_ot, no_ot)
+    
+    print(f"Analysis of Overtime impact on 'YearsInCurrentRole+':")
+    print(f"  Avg tenure (Overtime=Yes): {sum(yes_ot)/len(yes_ot):.2f} years")
+    print(f"  Avg tenure (Overtime=No):  {sum(no_ot)/len(no_ot):.2f} years")
+    
+    if not is_similar:
+        print("  Result: The difference is statistically significant. Overtime correlates with shorter tenure.")
+    else:
+        print("  Result: The difference is likely just noise.")
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    analyze_overtime_impact(header, rows)

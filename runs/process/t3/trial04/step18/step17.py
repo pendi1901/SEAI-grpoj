@@ -1,0 +1,83 @@
+import csv
+import random
+
+def choose(header, rows, label):
+    """
+    Finds the best setup for a 'large' project (high 'Size' value).
+    We filter for rows where 'Size' is in the top 25% to ensure we are 
+    looking at 'large' projects, then use a small budget of 50 labels 
+    to find the best performer among them.
+    """
+    size_idx = header.index('Size')
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    
+    # Identify 'large' projects (top 25% of Size)
+    # We don't have the full distribution, so we estimate based on the rows provided
+    all_sizes = [row[size_idx] for row in rows]
+    size_threshold = sorted(all_sizes)[int(len(rows) * 0.75)]
+    large_indices = [i for i, row in enumerate(rows) if row[size_idx] >= size_threshold]
+    
+    # If we have fewer than 50 large projects, sample all of them.
+    # Otherwise, sample 50 random ones from the large pool.
+    trials = min(len(large_indices), 50)
+    candidates = random.sample(large_indices, trials)
+    
+    def get_score(goals):
+        scores = []
+        for i, g_idx in enumerate(goal_indices):
+            # Normalize goals: 0 is worst, 1 is best
+            # Since we don't know global min/max, we use the values from the 
+            # current candidate set to normalize.
+            val = goals[i]
+            if header[g_idx].endswith('-'):
+                scores.append(1.0 - val)
+            else:
+                scores.append(val)
+        return sum(scores) / len(scores)
+    
+    best_idx = -1
+    best_score = -1.0
+    
+    for idx in candidates:
+        goals = label(idx)
+        score = get_score(goals)
+        if score > best_score:
+            best_score = score
+            best_idx = idx
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            true_goals = []
+            for row in reader:
+                processed = []
+                goals = []
+                for i, val in enumerate(row):
+                    if header[i].endswith(('-', '+')):
+                        goals.append(float(val))
+                        processed.append('?')
+                    else:
+                        processed.append(float(val))
+                rows.append(processed)
+                true_goals.append(goals)
+        
+        def label(i):
+            return true_goals[i]
+            
+        best_idx = choose(header, rows, label)
+        
+        print("Customer Inquiry Analysis: Best Setup for Large Projects")
+        print(f"For large, high-stakes projects, the optimal configuration found is at index {best_idx}.")
+        print(f"Goal values for this setup: {true_goals[best_idx]}")
+        print("This selection was made by filtering for large-scale project parameters")
+        print("and evaluating performance within a limited trial budget.")
+        
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        exit(1)

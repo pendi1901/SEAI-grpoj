@@ -1,0 +1,109 @@
+import csv
+import pandas as pd
+import numpy as np
+import random
+from sklearn.ensemble import RandomForestRegressor
+
+def race(header, rows, label):
+    """
+    Compares the customer's 'Big Team' strategy against 'Random' and 'Surrogate' search.
+    Budget: 50 labels total.
+    """
+    budget = 50
+    labeled = {}
+
+    def get_true_goals(i):
+        if i not in labeled:
+            if len(labeled) >= budget:
+                raise Exception("Budget exceeded")
+            labeled[i] = label(i)
+        return labeled[i]
+
+    def get_score(i):
+        goals = get_true_goals(i)
+        goal_cols = [c for c in header if c.endswith(('-', '+'))]
+        # Normalize: lower is better for '-', higher for '+'
+        score = 0
+        for j, col in enumerate(goal_cols):
+            val = goals[j]
+            score += (1 - val) if col.endswith('-') else val
+        return score / len(goal_cols)
+
+    # 1. Random Strategy: Pick 16 random rows
+    def strategy_random():
+        indices = random.sample(range(len(rows)), 16)
+        for i in indices: get_true_goals(i)
+        return max(indices, key=get_score)
+
+    # 2. Big Team Strategy (Customer's current approach): 
+    # Pick 16 rows with the highest 'Team Size'
+    def strategy_big_teams():
+        df = pd.DataFrame(rows, columns=header)
+        indices = df['Team Size'].nlargest(16).index.tolist()
+        for i in indices: get_true_goals(i)
+        return max(indices, key=get_score)
+
+    # 3. Surrogate Strategy: Pick 18 random, then 16 best-predicted
+    def strategy_surrogate():
+        indices = random.sample(range(len(rows)), 18)
+        for i in indices: get_true_goals(i)
+        
+        goal_cols = [c for c in header if c.endswith(('-', '+'))]
+        input_cols = [c for c in header if c not in goal_cols]
+        
+        df_train = pd.DataFrame([rows[i] for i in indices], columns=header)
+        for j, g in enumerate(goal_cols):
+            df_train[g] = [get_true_goals(i)[j] for i in indices]
+            
+        model = RandomForestRegressor(n_estimators=10).fit(df_train[input_cols], df_train[goal_cols].sum(axis=1))
+        
+        unlabeled = [i for i in range(len(rows)) if i not in labeled]
+        preds = model.predict(pd.DataFrame([rows[i] for i in unlabeled], columns=header)[input_cols])
+        best_pred_idx = unlabeled[np.argmax(preds)]
+        get_true_goals(best_pred_idx)
+        return best_pred_idx
+
+    results = {
+        "random": strategy_random(),
+        "big_teams": strategy_big_teams(),
+        "surrogate": strategy_surrogate()
+    }
+    
+    best_strategy = max(results, key=lambda s: get_score(results[s]))
+    
+    return {
+        "winner": best_strategy,
+        "row": results[best_strategy],
+        "tried": ["random", "big_teams", "surrogate"]
+    }
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) if val.replace('.','',1).isdigit() or (val.startswith('-') and val[1:].replace('.','',1).isdigit()) else val for val in row])
+        
+        true_goals_map = {i: [row[header.index(g)] for g in header if g.endswith(('-', '+'))] for i, row in enumerate(rows)}
+        masked_rows = []
+        for row in rows:
+            m_row = row[:]
+            for g in [c for c in header if c.endswith(('-', '+'))]:
+                m_row[header.index(g)] = "?"
+            masked_rows.append(m_row)
+            
+        result = race(header, masked_rows, lambda i: true_goals_map[i])
+        print("Customer Inquiry: Is 'Big Teams' better than other strategies?")
+        print(f"  Winner: {result['winner']}")
+        print(f"  Best Row Index Found: {result['row']}")
+        print(f"  Strategies compared: {', '.join(result['tried'])}")
+        if result['winner'] == 'big_teams':
+            print("  Conclusion: Your current 'Big Teams' strategy is optimal.")
+        else:
+            print(f"  Conclusion: No, the '{result['winner']}' strategy outperformed 'big_teams'.")
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

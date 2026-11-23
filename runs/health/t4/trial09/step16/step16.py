@@ -1,0 +1,60 @@
+import csv
+import numpy as np
+from step02 import guess
+from step06 import justify as justify_base
+
+def justify(header, rows, row):
+    """
+    Estimates the performance of the given row and compares it to the 
+    distribution of all other rows to justify its quality.
+    """
+    # Use the logic from step06 to estimate goals and calculate percentile
+    p, reason = justify_base(header, rows, row)
+    
+    # Add a specific explanation regarding the "biggest, deepest" question
+    # We check if the row is "big/deep" (e.g., high N_estimators and Max_depth)
+    n_est_idx = header.index('N_estimators')
+    depth_idx = header.index('Max_depth')
+    
+    n_est_vals = [r[n_est_idx] for r in rows]
+    depth_vals = [r[depth_idx] for r in rows]
+    
+    is_big = row[n_est_idx] > np.percentile(n_est_vals, 75)
+    is_deep = row[depth_idx] > np.percentile(depth_vals, 75)
+    
+    if is_big or is_deep:
+        reason = ("While this setup is large and deep, it is estimated to outperform "
+                  f"{p:.1%} of configurations, suggesting that bigger is not always better "
+                  "due to potential overfitting or diminishing returns.")
+    else:
+        reason = (f"This setup is estimated to outperform {p:.1%} of all configurations, "
+                  "indicating that a more moderate configuration is often more effective "
+                  "than the largest possible setup.")
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i] in ['MRE-', 'ACC+', 'PRED40+', 'N_estimators', 
+                                 'Min_sample_leaves', 'Min_impurity_decrease', 'Max_depth']:
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Test with a "big/deep" row
+    test_row = [rows[-1][i] if i in [3, 4, 5, 6, 7] else "?" for i in range(len(header))]
+    # Force it to be big/deep for the demonstration
+    test_row[3] = 200.0 # N_estimators
+    test_row[7] = 20.0  # Max_depth
+    
+    p, reason = justify(header, rows, test_row)
+    print(f"Performance Score: {p:.4f}")
+    print(f"Justification: {reason}")

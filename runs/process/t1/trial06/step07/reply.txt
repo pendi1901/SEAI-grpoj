@@ -1,0 +1,107 @@
+```python
+import csv
+import random
+
+def choose(header, rows, label):
+    """
+    Finds the best row by sampling a subset of rows to estimate the 
+    distribution of goals, then picking the best candidate.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    input_indices = [i for i in range(len(header)) if i not in goal_indices]
+    
+    # We have 50 labels. We will use 25 to sample the space and 25 to refine.
+    # First, pick 25 random rows to get a sense of the landscape.
+    indices = list(range(len(rows)))
+    random.shuffle(indices)
+    
+    sampled_indices = indices[:25]
+    data = []
+    for i in sampled_indices:
+        goals = label(i)
+        data.append((rows[i], goals))
+        
+    # Simple heuristic: find the best row among the 25 sampled
+    def score(row_data):
+        row, goals = row_data
+        s = 0
+        for j, g_idx in enumerate(goal_indices):
+            val = goals[j]
+            if header[g_idx].endswith('-'):
+                s += val
+            else:
+                s += (1.0 - val)
+        return s
+
+    best_sampled = min(data, key=score)
+    
+    # Use remaining 25 labels to find neighbors of the best sampled row
+    # to see if we can improve.
+    def get_dist(r1, r2):
+        d2 = 0
+        for i in input_indices:
+            d2 += (r1[i] - r2[i]) ** 2
+        return d2 ** 0.5
+
+    best_row_inputs = best_sampled[0]
+    # Find 25 nearest neighbors to the best found so far
+    candidates = []
+    for i in indices[25:]:
+        dist = get_dist(best_row_inputs, rows[i])
+        candidates.append((dist, i))
+    
+    candidates.sort()
+    
+    best_idx = sampled_indices[data.index(best_sampled)]
+    best_score = score(best_sampled)
+    
+    for _, i in candidates[:25]:
+        goals = label(i)
+        s = 0
+        for j, g_idx in enumerate(goal_indices):
+            val = goals[j]
+            if header[g_idx].endswith('-'):
+                s += val
+            else:
+                s += (1.0 - val)
+        if s < best_score:
+            best_score = s
+            best_idx = i
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            full_rows = []
+            for row in reader:
+                full_rows.append([float(x) for x in row])
+        
+        # Prepare rows with hidden goals
+        goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+        rows_with_hidden = []
+        for r in full_rows:
+            new_row = list(r)
+            for idx in goal_indices:
+                new_row[idx] = "?"
+            rows_with_hidden.append(new_row)
+            
+        labeled_count = 0
+        def label(i):
+            global labeled_count
+            labeled_count += 1
+            if labeled_count > 50:
+                raise Exception("Too many labels!")
+            return [full_rows[i][idx] for idx in goal_indices]
+            
+        best_idx = choose(header, rows_with_hidden, label)
+        print(f"Analysis complete. Best configuration found at index {best_idx}.")
+        print(f"Total labels used: {labeled_count}")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

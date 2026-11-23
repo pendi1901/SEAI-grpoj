@@ -1,0 +1,50 @@
+import ezr
+import random
+
+def spot(header, rows):
+    """
+    Finds suspicious rows by identifying outliers.
+    A row is considered suspicious if its x-distance to the nearest 
+    neighbor is significantly higher than the average x-distance 
+    between rows, suggesting it is an outlier or contains erroneous data.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate the x-distance of each row to its nearest neighbor
+    # (excluding itself).
+    distances = []
+    for i, r1 in enumerate(rows):
+        # Find the distance to the closest other row
+        min_dist = 1e30
+        for j, r2 in enumerate(rows):
+            if i == j:
+                continue
+            d = ezr.xdist(tbl, r1, r2)
+            if d < min_dist:
+                min_dist = d
+        distances.append((min_dist, i))
+    
+    # Sort by distance descending: the rows that are "furthest" from 
+    # their neighbors are the most suspicious.
+    distances.sort(key=lambda x: x[0], reverse=True)
+    
+    return [idx for dist, idx in distances]
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Identify suspicious rows
+    suspicious_indices = spot(header, rows)
+    
+    print("Analysis: Identifying suspicious records (potential data entry errors).")
+    print("Method: Flagging rows that are statistical outliers in the input space.")
+    print(f"Top 5 most suspicious row indices: {suspicious_indices[:5]}")
+    
+    # Provide a brief explanation of why these might be wrong
+    print("\nNote: These rows have the largest 'x-distance' to their nearest neighbors,")
+    print("meaning they contain combinations of input values rarely seen in the rest of the dataset.")
+    
+    exit(0)

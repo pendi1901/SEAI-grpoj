@@ -1,0 +1,86 @@
+```python
+import csv
+import random
+
+def choose(header, rows, label):
+    """
+    Finds the best row by sampling 50 configurations.
+    Uses a simple random sampling strategy to explore the space,
+    then evaluates the goals using the provided label function.
+    """
+    # Identify goal indices
+    goal_indices = [i for i, name in enumerate(header) 
+                    if name.endswith('-') or name.endswith('+')]
+    
+    # Identify directions: -1 for minimize, 1 for maximize
+    directions = {}
+    for i in goal_indices:
+        if header[i].endswith('-'):
+            directions[i] = -1
+        else:
+            directions[i] = 1
+
+    def get_score(goals):
+        score = 0
+        for i, val in enumerate(goals):
+            idx = goal_indices[i]
+            score += val * directions[idx]
+        return score
+
+    # We have 800 rows, we can sample 50
+    indices = list(range(len(rows)))
+    sample_size = min(50, len(indices))
+    sampled_indices = random.sample(indices, sample_size)
+    
+    best_idx = -1
+    best_score = float('-inf')
+    
+    for idx in sampled_indices:
+        # Get true goals from the harness
+        goals = label(idx)
+        score = get_score(goals)
+        
+        if score > best_score:
+            best_score = score
+            best_idx = idx
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        # Store full rows to access goals later
+        full_data = []
+        for row in reader:
+            processed = []
+            for val in row:
+                try:
+                    processed.append(float(val))
+                except ValueError:
+                    processed.append(val)
+            full_data.append(processed)
+            
+    # Create masked rows for the choose function
+    masked_rows = []
+    goal_indices = [i for i, name in enumerate(header) 
+                    if name.endswith('-') or name.endswith('+')]
+    
+    for row in full_data:
+        masked = row[:]
+        for idx in goal_indices:
+            masked[idx] = "?"
+        masked_rows.append(masked)
+        
+    def label(i):
+        return [full_data[i][idx] for idx in goal_indices]
+    
+    best_index = choose(header, masked_rows, label)
+    
+    print(f"Search complete. The best configuration found is at index {best_index}.")
+    print("This setup was selected after evaluating 50 candidates.")
+```

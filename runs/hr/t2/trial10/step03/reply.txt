@@ -1,0 +1,59 @@
+```python
+import csv
+import step01
+
+def certify(xs, ys):
+    """
+    Performs a simple two-sample t-test approximation.
+    Returns True if the means are close (noise), False if they differ significantly.
+    """
+    n_x, n_y = len(xs), len(ys)
+    if n_x < 2 or n_y < 2:
+        return True
+    
+    mean_x, mean_y = sum(xs) / n_x, sum(ys) / n_y
+    var_x = sum((x - mean_x) ** 2 for x in xs) / (n_x - 1)
+    var_y = sum((y - mean_y) ** 2 for y in ys) / (n_y - 1)
+    
+    pooled_se = ((var_x / n_x) + (var_y / n_y)) ** 0.5
+    if pooled_se == 0:
+        return mean_x == mean_y
+    
+    t_stat = abs(mean_x - mean_y) / pooled_se
+    # Threshold for 95% confidence (approx 2.0 for large samples)
+    return t_stat < 2.0
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    ot_idx = header.index('overTime')
+    tenure_idx = header.index('YearsAtCompany+')
+    
+    yes_ot = [r[tenure_idx] for r in rows if r[ot_idx] == 'Yes']
+    no_ot = [r[tenure_idx] for r in rows if r[ot_idx] == 'No']
+    
+    is_noise = certify(yes_ot, no_ot)
+    
+    print("Analysis: Do people who work overtime leave sooner?")
+    if is_noise:
+        print("Result: The observed difference is likely just noise.")
+    else:
+        print("Result: There is a statistically significant difference in tenure.")
+```

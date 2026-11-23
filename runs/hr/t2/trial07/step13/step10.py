@@ -1,0 +1,108 @@
+import csv
+import random
+import step05
+
+def race(header, rows, label):
+    """
+    Compares three strategies for finding the best row within a 50-label budget.
+    Strategies:
+    1. random: Picks 16 random rows.
+    2. tenure_focus: Picks 17 rows with high 'TotalWorkingYears'.
+    3. blame_avoidance: Picks 17 rows that avoid columns identified as 'bad' in step05.
+    """
+    goal_indices = [i for i, h in enumerate(header) if '+' in h or '-' in h]
+    
+    def get_score(row_vals):
+        score = 0
+        for i, val in enumerate(row_vals):
+            col_name = header[goal_indices[i]]
+            if col_name.endswith('+'):
+                score += val
+            else:
+                score -= val
+        return score
+
+    # We need a version of rows that has numeric data for the strategies to work
+    # Since the harness passes rows with '?', we use a copy for internal logic
+    # but only call label(i) for the 50 allowed budget.
+    # To avoid the TypeError in step05, we must ensure we don't pass '?' to it.
+    # We use the first 500 rows as a proxy for the 'population' to determine blame.
+    clean_rows = []
+    for r in rows:
+        if '?' not in r:
+            clean_rows.append(r)
+    
+    strategies = ["random", "tenure_focus", "blame_avoidance"]
+    results = {}
+    
+    # Strategy 1: Random
+    sampled_random = random.sample(range(len(rows)), 16)
+    best_random_idx = -1
+    best_random_score = -float('inf')
+    for i in sampled_random:
+        score = get_score(label(i))
+        if score > best_random_score:
+            best_random_score = score
+            best_random_idx = i
+    results["random"] = (best_random_score, best_random_idx)
+
+    # Strategy 2: Tenure Focus
+    idx_twy = header.index('TotalWorkingYears')
+    sorted_by_twy = sorted(range(len(rows)), key=lambda i: rows[i][idx_twy] if rows[i][idx_twy] != '?' else 0, reverse=True)
+    sampled_twy = sorted_by_twy[:17]
+    best_twy_idx = -1
+    best_twy_score = -float('inf')
+    for i in sampled_twy:
+        score = get_score(label(i))
+        if score > best_twy_score:
+            best_twy_score = score
+            best_twy_idx = i
+    results["tenure_focus"] = (best_twy_score, best_twy_idx)
+
+    # Strategy 3: Blame Avoidance
+    bad_cols = step05.blame(header, clean_rows)
+    bad_indices = [header.index(c) for c in bad_cols]
+    def is_good(i):
+        return all(rows[i][idx] < 5 for idx in bad_indices if isinstance(rows[i][idx], (int, float)))
+    
+    candidates = [i for i in range(len(rows)) if is_good(i)]
+    sampled_blame = random.sample(candidates, min(len(candidates), 17))
+    best_blame_idx = -1
+    best_blame_score = -float('inf')
+    for i in sampled_blame:
+        score = get_score(label(i))
+        if score > best_blame_score:
+            best_blame_score = score
+            best_blame_idx = i
+    results["blame_avoidance"] = (best_blame_score, best_blame_idx)
+
+    winner = max(results, key=lambda k: results[k][0])
+    return {"winner": winner, "row": results[winner][1], "tried": strategies}
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    goal_indices = [i for i, h in enumerate(header) if '+' in h or '-' in h]
+    def label(i):
+        return [rows[i][idx] for idx in goal_indices]
+
+    for row in rows:
+        for idx in goal_indices:
+            row[idx] = "?"
+
+    outcome = race(header, rows, label)
+    print(f"The winning strategy is: {outcome['winner']}")
+    print(f"Best row found at index: {outcome['row']}")
+    print(f"Strategies compared: {', '.join(outcome['tried'])}")

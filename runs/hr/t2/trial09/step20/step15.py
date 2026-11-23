@@ -1,0 +1,76 @@
+import csv
+import step05
+
+def blame(header, rows):
+    """
+    Identifies input columns that have the least correlation with tenure.
+    We reuse the logic from step05 to identify 'bad' rows (bottom 20% tenure).
+    Then, we identify columns that show no significant difference in distribution
+    between the 'bad' rows and the 'good' rows (top 20% tenure).
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    input_indices = [i for i, name in enumerate(header) if not (name.endswith('+') or name.endswith('-'))]
+
+    def get_score(r):
+        score = 0
+        for i in goal_indices:
+            val = r[i]
+            if header[i].endswith('+'):
+                score += val
+            else:
+                score -= val
+        return score
+
+    # Sort rows by score
+    scored_rows = sorted([(get_score(r), r) for r in rows], key=lambda x: x[0])
+    limit = max(1, int(len(rows) * 0.2))
+    bad_rows = scored_rows[:limit]
+    good_rows = scored_rows[-limit:]
+    
+    # Identify columns where the distribution is similar between bad and good rows
+    # (i.e., the column has nothing to do with tenure)
+    useless_columns = []
+    for i in input_indices:
+        col_name = header[i]
+        
+        # Collect values for this column in both groups
+        bad_vals = [r[1][i] for r in bad_rows]
+        good_vals = [r[1][i] for r in good_rows]
+        
+        # If numeric, check if means are very close (low effect size)
+        if isinstance(bad_vals[0], (int, float)):
+            m_bad = sum(bad_vals) / len(bad_vals)
+            m_good = sum(good_vals) / len(good_vals)
+            # If the difference is negligible, it's a candidate
+            if abs(m_bad - m_good) < 0.1:
+                useless_columns.append(col_name)
+        else:
+            # If symbolic, check if frequency distribution is similar
+            # For simplicity, we check if the most common value is the same
+            bad_mode = max(set(bad_vals), key=bad_vals.count)
+            good_mode = max(set(good_vals), key=good_vals.count)
+            if bad_mode == good_mode:
+                useless_columns.append(col_name)
+                
+    return useless_columns
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    useless = blame(header, rows)
+    print("Analysis: Columns that appear to have little to no impact on employee tenure:")
+    for col in useless[:10]:  # Print a sample of the findings
+        print(f"- {col}")
+    print("\nThese columns could potentially be removed to simplify data collection.")

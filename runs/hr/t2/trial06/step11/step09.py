@@ -1,0 +1,66 @@
+import csv
+
+def spot(header, rows):
+    """
+    Identifies suspicious rows by checking for outliers in numeric columns.
+    A value is considered suspicious if it is more than 3 standard deviations 
+    away from the mean of its column.
+    """
+    suspicious = {}
+    
+    # Identify numeric columns
+    num_indices = [i for i, name in enumerate(header) if name[0].isupper()]
+    
+    for i in num_indices:
+        col_vals = [row[i] for row in rows if isinstance(row[i], (int, float))]
+        if not col_vals:
+            continue
+            
+        mean = sum(col_vals) / len(col_vals)
+        std = (sum((x - mean) ** 2 for x in col_vals) / len(col_vals)) ** 0.5
+        
+        if std == 0:
+            continue
+            
+        # Flag rows where this column is an extreme outlier
+        for row_idx, row in enumerate(rows):
+            val = row[i]
+            if isinstance(val, (int, float)):
+                z_score = abs(val - mean) / std
+                if z_score > 3:
+                    suspicious[row_idx] = suspicious.get(row_idx, 0) + 1
+                    
+    # Sort by number of suspicious columns found in the row (descending)
+    sorted_rows = sorted(suspicious.items(), key=lambda x: x[1], reverse=True)
+    return [item[0] for item in sorted_rows]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    outliers = spot(header, rows)
+    
+    print("Suspicious employee records identified:")
+    if not outliers:
+        print("No suspicious records found.")
+    else:
+        for idx in outliers[:10]:
+            print(f"- Row {idx} contains values that are statistical outliers.")
+        if len(outliers) > 10:
+            print(f"... and {len(outliers) - 10} more.")

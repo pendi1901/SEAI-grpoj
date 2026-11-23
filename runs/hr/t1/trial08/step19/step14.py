@@ -1,0 +1,74 @@
+import csv
+
+def flow(header, row, seen):
+    """
+    Detects if the current team composition has drifted from the 'normal' 
+    baseline established by the 'seen' rows.
+    
+    We monitor the distribution of 'department' and the average 'YearsAtCompany+'.
+    If the current row significantly deviates from the established baseline 
+    (e.g., a sudden influx of a specific department or a shift in average tenure),
+    we flag it as a change in team dynamics.
+    """
+    if len(seen) < 30:
+        return False
+
+    dept_idx = header.index('department')
+    tenure_idx = header.index('YearsAtCompany+')
+    
+    # Baseline stats
+    seen_depts = [r[dept_idx] for r in seen]
+    seen_tenures = [r[tenure_idx] for r in seen]
+    
+    avg_tenure = sum(seen_tenures) / len(seen_tenures)
+    
+    # Current row metrics
+    current_dept = row[dept_idx]
+    current_tenure = row[tenure_idx]
+    
+    # Detect drift:
+    # 1. If the department frequency is very low (rare arrival)
+    dept_counts = {d: seen_depts.count(d) for d in set(seen_depts)}
+    dept_freq = dept_counts.get(current_dept, 0) / len(seen)
+    
+    # 2. If the tenure is an outlier (more than 2x the average)
+    tenure_drift = abs(current_tenure - avg_tenure) > (avg_tenure * 2)
+    
+    # Flag if the team structure is changing (rare department or tenure spike)
+    if dept_freq < 0.05 or tenure_drift:
+        return True
+        
+    return False
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = None
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    seen = []
+    drift_count = 0
+    for row in rows:
+        if flow(header, row, seen):
+            drift_count += 1
+        seen.append(row)
+        
+    print("Team Dynamics Analysis:")
+    print(f"Processed {len(rows)} employee records.")
+    print(f"Detected {drift_count} instances where the team composition drifted from the baseline.")
+    print("The system flags arrivals that represent rare departments or significant tenure outliers.")
+    exit(0)

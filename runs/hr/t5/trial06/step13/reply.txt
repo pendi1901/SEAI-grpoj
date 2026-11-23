@@ -1,0 +1,54 @@
+```python
+import ezr
+import random
+
+def certify(xs, ys):
+    """
+    Returns True if the distributions are statistically indistinguishable 
+    (i.e., the difference is just noise), False if they significantly differ.
+    """
+    # Using the library's same function which checks for statistical significance
+    # using Cliff's Delta and Kolmogorov-Smirnov tests.
+    return ezr.same(xs, ys)
+
+if __name__ == "__main__":
+    # Load the data
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+
+    # Identify column indices
+    # 'TrainingTimesLastYear' is numeric, 'YearsWithCurrManager+' is numeric
+    train_idx = header.index('TrainingTimesLastYear')
+    manager_idx = header.index('YearsWithCurrManager+')
+
+    # Split data into two groups: those with low training vs high training
+    # We define 'low' as <= 2 days and 'high' as > 2 days
+    low_training = []
+    high_training = []
+
+    for row in rows:
+        t_val = row[train_idx]
+        m_val = row[manager_idx]
+        if t_val != "?" and m_val != "?":
+            if t_val <= 2:
+                low_training.append(m_val)
+            else:
+                high_training.append(m_val)
+
+    # Perform the certification
+    is_noise = certify(low_training, high_training)
+
+    print("Analysis: Do people with more training stay longer with their manager?")
+    print("-" * 60)
+    print(f"Low training (<=2 days, n={len(low_training)}): mean tenure = {sum(low_training)/len(low_training):.2f} years")
+    print(f"High training (>2 days, n={len(high_training)}): mean tenure = {sum(high_training)/len(high_training):.2f} years")
+    
+    if is_noise:
+        print("Result: The observed difference is statistically indistinguishable from noise.")
+        print("Conclusion: There is no significant evidence that training days affect tenure with a manager.")
+    else:
+        print("Result: The difference is statistically significant.")
+        print("Conclusion: Training frequency is a real factor in how long employees stay with their manager.")
+```

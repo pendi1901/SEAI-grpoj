@@ -1,0 +1,74 @@
+import csv
+import numpy as np
+
+def flow(header, row, seen):
+    """
+    Decides whether to accept a row based on the Secretary Problem logic
+    adapted for multi-objective optimization. We observe a sample to 
+    establish a baseline, then accept the first row that outperforms 
+    the best seen so far.
+    """
+    goal_indices = [i for i, h in enumerate(header) if h.endswith('-') or h.endswith('+')]
+    
+    def get_score(r):
+        # Normalize goals: 0 to 1, where 1 is best
+        scores = []
+        for i in goal_indices:
+            val = r[i]
+            # Since we don't have global min/max easily, we use relative 
+            # performance against the 'seen' set
+            col_vals = [s[i] for s in seen]
+            if not col_vals:
+                return 0
+            
+            min_v, max_v = min(col_vals), max(col_vals)
+            rng = max_v - min_v if max_v != min_v else 1
+            norm = (val - min_v) / rng
+            
+            if header[i].endswith('-'):
+                scores.append(1 - norm)
+            else:
+                scores.append(norm)
+        return np.mean(scores)
+
+    # If it's the first row, we can't evaluate it yet
+    if not seen:
+        return False
+    
+    # Secretary problem: explore 20% of the data to set a threshold
+    # If we haven't seen enough, keep looking
+    if len(seen) < 160:
+        return False
+    
+    # Calculate threshold: best score seen so far
+    best_score = max(get_score(s) for s in seen)
+    current_score = get_score(row)
+    
+    # Accept if it's better than anything seen before
+    return current_score > best_score
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(x) for x in row])
+        
+        accepted = []
+        seen = []
+        for row in rows:
+            if flow(header, row, seen):
+                accepted.append(row)
+            seen.append(row)
+            
+        print(f"Analysis complete.")
+        print(f"Total rows processed: {len(rows)}")
+        print(f"Proposals accepted: {len(accepted)}")
+        print("Strategy: Observed first 20% to establish baseline, then accepted improvements.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

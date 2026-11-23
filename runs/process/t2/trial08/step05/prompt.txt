@@ -1,0 +1,283 @@
+You are writing one Python file, step05.py.
+
+The data is the csv file pom3a.n1000.train.csv in the current directory. Column names starting in upper case are numeric, lower case are symbolic. A name ending in - is a goal to minimise, in + a goal to maximise; all other columns are inputs. It has 800 data rows after the header. Any count the customer quotes describes their full records, not this file: never hard-code a row count, read the file to the end. Its first lines:
+
+Culture,Criticality,Criticality Modifier,Initial Known,Inter-Dependency,Dynamism,Size,Plan,Team Size,Cost-,Score-,Idle-
+0.4863835854691406,0.7814138479775361,0.7942400082173279,0.9589684216149276,0.557947615775458,0.3259470868012972,0.9288813777439578,0.7472624007860125,0.3420153475108642,0.581663466,0.421223061,0.452086553
+0.9234966400117394,0.9846231766630602,0.8975893218748641,0.217557119182439,0.1896271539834424,0.7090941445234622,0.6598767626223592,0.6648265985767,0.914601998981603,0.636050775,0.580503258,0.652492669
+0.7314699483484348,0.7710049024846026,0.9163787982776002,0.1799130867505435,0.7598398912974998,0.3642696885032515,0.8975086429467506,0.6248338598160256,0.5153219689325651,0.623365206,0.516162913,0.639322917
+
+Your function receives rows already parsed. The header and the first two rows look like this in Python:
+
+header = ['Culture', 'Criticality', 'Criticality Modifier', 'Initial Known', 'Inter-Dependency', 'Dynamism', 'Size', 'Plan', 'Team Size', 'Cost-', 'Score-', 'Idle-']
+row = [0.4863835854691406, 0.7814138479775361, 0.7942400082173279, 0.9589684216149276, 0.557947615775458, 0.3259470868012972, 0.9288813777439578, 0.7472624007860125, 0.3420153475108642, 0.581663466, 0.421223061, 0.452086553]
+row = [0.9234966400117394, 0.9846231766630602, 0.8975893218748641, 0.217557119182439, 0.1896271539834424, 0.7090941445234622, 0.6598767626223592, 0.6648265985767, 0.914601998981603, 0.636050775, 0.580503258, 0.652492669]
+
+Use only the Python standard library.
+
+These files, written earlier, are in the same directory:
+
+--- step01.py ---
+import csv
+
+def remember(header, rows):
+    """
+    Identifies rows that perform well across all goal columns.
+    Goals ending in '-' are minimized, '+' are maximized.
+    """
+    goal_indices = []
+    for i, name in enumerate(header):
+        if name.endswith('-') or name.endswith('+'):
+            goal_indices.append((i, name[-1]))
+
+    def score_row(row):
+        # Calculate a normalized score for the row.
+        # Since we want to minimize '-' and maximize '+',
+        # we can treat all as "minimize" by inverting '+' values.
+        # Here we use a simple sum of normalized values.
+        total = 0
+        for idx, op in goal_indices:
+            val = float(row[idx])
+            total += val if op == '-' else (1.0 - val)
+        return total
+
+    # Score all rows
+    scored = []
+    for i, row in enumerate(rows):
+        scored.append((score_row(row), i))
+
+    # Sort by score (ascending, as we minimized everything)
+    scored.sort()
+
+    # Return top 5% (or at least 1)
+    limit = max(1, len(rows) // 20)
+    return [item[1] for item in scored[:limit]]
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                # Convert numeric columns to float
+                processed_row = []
+                for i, val in enumerate(row):
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        best_indices = remember(header, rows)
+        
+        print(f"Found {len(best_indices)} top-performing setups.")
+        print("Indices of best rows:", best_indices)
+        
+        # Display a summary of the first best row
+        if best_indices:
+            print("\nExample of a top-performing row:")
+            best_row = rows[best_indices[0]]
+            for name, val in zip(header, best_row):
+                print(f"  {name}: {val}")
+                
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+
+
+--- step02.py ---
+import csv
+import step01
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column for each test row by finding the 
+    average of the first goal column from the 'best' rows identified 
+    in the training set.
+    """
+    # Identify the index of the first goal column
+    goal_idx = -1
+    for i, name in enumerate(header):
+        if name.endswith('-') or name.endswith('+'):
+            goal_idx = i
+            break
+    
+    # Get indices of the best rows from step01
+    best_indices = step01.remember(header, train)
+    
+    # Calculate the average value of the first goal column among best rows
+    total_val = sum(train[i][goal_idx] for i in best_indices)
+    avg_val = total_val / len(best_indices)
+    
+    # Return the average for every test row
+    return [avg_val for _ in test]
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed_row = [float(val) for val in row]
+                rows.append(processed_row)
+        
+        # Simulate a test set by masking the goal columns of the first 5 rows
+        test_rows = []
+        for r in rows[:5]:
+            new_row = list(r)
+            for i, name in enumerate(header):
+                if name.endswith('-') or name.endswith('+'):
+                    new_row[i] = "?"
+            test_rows.append(new_row)
+            
+        predictions = guess(header, rows, test_rows)
+        
+        print("Customer Inquiry: Estimated Cost (first goal column) for setups:")
+        for i, val in enumerate(predictions):
+            print(f"  Setup {i+1}: {val:.4f}")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+
+
+--- step03.py ---
+import csv
+import math
+import step01
+
+def certify(xs, ys):
+    """
+    Returns True if the distributions of xs and ys are statistically similar
+    (i.e., the difference is likely noise), False if they differ significantly.
+    Uses a simple A12 effect size check (non-parametric).
+    """
+    def a12(lst1, lst2):
+        m, n = len(lst1), len(lst2)
+        if m == 0 or n == 0: return 0.5
+        greater = 0
+        for x in lst1:
+            for y in lst2:
+                if x > y: greater += 1
+                elif x == y: greater += 0.5
+        return greater / (m * n)
+
+    # If A12 is close to 0.5, they are similar. 
+    # Threshold 0.56 is a common small effect size.
+    val = a12(xs, ys)
+    return 0.44 <= val <= 0.56
+
+def get_data():
+    filename = "pom3a.n1000.train.csv"
+    with open(filename, mode='r', encoding='utf-8') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = [[float(x) for x in row] for row in reader]
+    return header, rows
+
+if __name__ == "__main__":
+    header, rows = get_data()
+    
+    # Identify Team Size index and Cost- index
+    team_idx = header.index('Team Size')
+    cost_idx = header.index('Cost-')
+    
+    # Split into small (bottom 50%) and big (top 50%) teams
+    # Using median split on Team Size
+    team_sizes = [r[team_idx] for r in rows]
+    median_team = sum(team_sizes) / len(team_sizes)
+    
+    small_teams = [r[cost_idx] for r in rows if r[team_idx] <= median_team]
+    big_teams = [r[cost_idx] for r in rows if r[team_idx] > median_team]
+    
+    is_noise = certify(small_teams, big_teams)
+    
+    print("Customer Inquiry: Are small-team setups cheaper than big-team ones?")
+    if is_noise:
+        print("Answer: The difference is statistically insignificant; it was likely luck.")
+    else:
+        avg_small = sum(small_teams) / len(small_teams)
+        avg_big = sum(big_teams) / len(big_teams)
+        print(f"Answer: The difference is real. Small teams average {avg_small:.4f} vs big teams {avg_big:.4f}.")
+
+
+--- step04.py ---
+import csv
+import step01
+
+def flow(header, row, seen):
+    """
+    Decides whether to accept a row based on whether it is better than 
+    the current best seen so far.
+    """
+    goal_indices = []
+    for i, name in enumerate(header):
+        if name.endswith('-') or name.endswith('+'):
+            goal_indices.append((i, name[-1]))
+
+    def score_row(r):
+        total = 0
+        for idx, op in goal_indices:
+            val = float(r[idx])
+            total += val if op == '-' else (1.0 - val)
+        return total
+
+    # If this is the first row, accept it
+    if not seen:
+        return True
+
+    # Calculate score of current row and the best score seen so far
+    current_score = score_row(row)
+    best_score = min(score_row(r) for r in seen)
+
+    # Accept if it's better than the best seen so far
+    return current_score < best_score
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [[float(x) for x in row] for row in reader]
+        
+        accepted = []
+        seen = []
+        for row in rows:
+            if flow(header, row, seen):
+                accepted.append(row)
+            seen.append(row)
+            
+        print(f"Customer Inquiry: Sequential decision making.")
+        print(f"Processed {len(rows)} proposals.")
+        print(f"Accepted {len(accepted)} proposals that improved upon previous bests.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+
+
+Reuse the earlier files wherever you can: import from them rather than rewriting. Write as little new code as possible. Do not edit the earlier files.
+
+The customer asks:
+
+  Why do our worst setups leave so many people waiting around?
+
+Write step05.py to answer that ask on this data.
+
+A test harness will import your file and call this function, so you must define it exactly:
+
+def blame(header, rows)
+  Returns a list of strings.   Return the names of the input columns (not goals) that best explain why the worst rows are bad.
+
+Rules the harness enforces: Name only input columns, spelled exactly as in `header`. A goal column or an unknown name scores zero.
+
+Conventions: `header` is the list of column names. `rows` is a list of rows; each row is a list of cells in header order, floats for numeric columns and strings for symbolic ones. A cell shown as "?" is hidden from you. A row is better when its goals are closer to their best (low for names ending in -, high for names ending in +).
+
+Keep everything that prints or reads the csv file under `if __name__ == "__main__":` so that importing the file prints nothing. Plain built-in types are all you need: do not import anything from `typing`.
+
+Running `python step05.py` must load the csv, call your function, print a short answer a customer could read, and exit with status 0. Reply with the complete file in one ```python fenced block and nothing else.

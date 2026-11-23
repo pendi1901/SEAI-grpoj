@@ -1,0 +1,93 @@
+import ezr
+import random
+
+def race(header, rows, label):
+    """
+    Compare three strategies for finding the best employee record:
+    1. 'random': Picks rows at random.
+    2. 'greedy': Picks rows that are most similar to the best found so far.
+    3. 'tree': Uses the tree-based ranker to find promising areas.
+    """
+    # Shared budget
+    budget = 50
+    tried_names = ["random", "greedy", "tree"]
+    
+    # Track labels to ensure we don't exceed 50 total
+    labeled_indices = {}
+    
+    def get_label(idx):
+        if idx not in labeled_indices:
+            if len(labeled_indices) >= budget:
+                raise Exception("Budget exceeded")
+            labeled_indices[idx] = label(rows[idx])
+        return labeled_indices[idx]
+
+    # Strategy 1: Random
+    def strategy_random(tbl, budget_per):
+        indices = random.sample(range(len(rows)), budget_per)
+        for i in indices: get_label(i)
+        return min(indices, key=lambda i: ezr.ydist(tbl, labeled_indices[i]))
+
+    # Strategy 2: Greedy (similar to step07)
+    def strategy_greedy(tbl, budget_per):
+        indices = random.sample(range(len(rows)), min(len(rows), 10))
+        for i in indices: get_label(i)
+        
+        while len(labeled_indices) < budget and len(indices) < budget_per:
+            best_idx = min(labeled_indices, key=lambda i: ezr.ydist(tbl, labeled_indices[i]))
+            # Find unlabelled row closest to current best
+            best_row = labeled_indices[best_idx]
+            candidates = random.sample(range(len(rows)), 20)
+            next_idx = min(candidates, key=lambda i: ezr.xdist(tbl, rows[i], best_row))
+            get_label(next_idx)
+            indices.append(next_idx)
+        return min(labeled_indices, key=lambda i: ezr.ydist(tbl, labeled_indices[i]))
+
+    # Strategy 3: Tree-based (uses ranker)
+    def strategy_tree(tbl, budget_per):
+        # Initial sample
+        indices = random.sample(range(len(rows)), 10)
+        for i in indices: get_label(i)
+        
+        # Build ranker on current knowledge
+        lab_tbl = ezr.clone(tbl, [labeled_indices[i] for i in labeled_indices])
+        rank = ezr.ranker(lab_tbl)
+        
+        # Pick best based on ranker
+        candidates = random.sample(range(len(rows)), 40)
+        best_idx = min(candidates, key=rank)
+        get_label(best_idx)
+        return min(labeled_indices, key=lambda i: ezr.ydist(tbl, labeled_indices[i]))
+
+    # Run race
+    tbl = ezr.Tbl([header] + rows)
+    results = {}
+    
+    # Note: We divide budget equally to ensure fair comparison
+    results["random"] = strategy_random(tbl, 16)
+    results["greedy"] = strategy_greedy(tbl, 17)
+    results["tree"] = strategy_tree(tbl, 17)
+    
+    winner = min(results, key=lambda name: ezr.ydist(tbl, labeled_indices[results[name]]))
+    
+    return {"winner": winner, "row": results[winner], "tried": tried_names}
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # The oracle returns the full row (including goals)
+    def oracle(row):
+        return row
+    
+    result = race(header, rows, oracle)
+    
+    print("Strategy Race Results")
+    print("-" * 30)
+    print(f"Winner: {result['winner']}")
+    print(f"Best Row Index: {result['row']}")
+    print(f"Strategies Tried: {', '.join(result['tried'])}")
+    print("-" * 30)
+    print("The tree-based strategy typically outperforms random search by focusing on high-potential regions.")

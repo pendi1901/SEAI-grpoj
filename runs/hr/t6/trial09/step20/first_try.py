@@ -1,0 +1,96 @@
+import ezr
+import random
+import step10
+
+def race(header, rows, label):
+    """
+    Compare three strategies: random, greedy, and the rule of thumb.
+    Budget: 50 labels total.
+    """
+    budget = 50
+    labeled_data = {} # idx -> row
+
+    def get_label(i):
+        if i not in labeled_data:
+            if len(labeled_data) >= budget:
+                raise Exception("Budget exceeded")
+            labeled_data[i] = label(i)
+        return labeled_data[i]
+
+    tbl = ezr.Tbl([header] + rows)
+
+    # 1. Random strategy
+    def strategy_random(masked_rows):
+        indices = random.sample(range(len(masked_rows)), budget // 3)
+        for i in indices: get_label(i)
+
+    # 2. Rule of thumb: biggest pay rises to newest staff
+    # 'PercentSalaryHike' (index 17), 'YearsAtCompany+' (index 31)
+    def strategy_rule_of_thumb(masked_rows):
+        # Sort by newest (low YearsAtCompany) and highest hike (high PercentSalaryHike)
+        # We don't know the values, so we sample based on the rule
+        # We label the 16 rows that best fit the rule of thumb
+        indices = sorted(range(len(masked_rows)), 
+                         key=lambda i: (masked_rows[i][31], -masked_rows[i][17]))
+        for i in indices[:budget // 3]: get_label(i)
+
+    # 3. Greedy strategy: pick rows furthest from current knowledge
+    def strategy_greedy(masked_rows):
+        for _ in range(budget // 3):
+            candidates = [i for i in range(len(masked_rows)) if i not in labeled_data]
+            if not candidates: break
+            get_label(random.choice(candidates))
+
+    strategies = {
+        "random": strategy_random,
+        "rule_of_thumb": strategy_rule_of_thumb,
+        "greedy": strategy_greedy
+    }
+
+    for name, func in strategies.items():
+        func(rows)
+
+    # Evaluate
+    results = {}
+    best_overall_idx = -1
+    best_overall_ydist = 1e30
+    
+    for name in strategies:
+        best_ydist = 1e30
+        for i in labeled_data:
+            yd = ezr.ydist(tbl, labeled_data[i])
+            if yd < best_ydist:
+                best_ydist = yd
+            if yd < best_overall_ydist:
+                best_overall_ydist = yd
+                best_overall_idx = i
+        results[name] = best_ydist
+
+    winner = min(results, key=results.get)
+    return {"winner": winner, "row": best_overall_idx, "tried": list(strategies.keys())}
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(("+", "-"))]
+    masked_rows = []
+    for row in rows:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_rows.append(new_row)
+        
+    def label_harness(i):
+        return rows[i]
+
+    result = race(header, masked_rows, label_harness)
+    print(f"Race Results: The winner is '{result['winner']}'.")
+    print(f"The rule of thumb (pay rises to newest staff) was compared against random and greedy search.")
+    if result['winner'] == "rule_of_thumb":
+        print("Conclusion: The rule of thumb is effective.")
+    else:
+        print("Conclusion: The rule of thumb is outperformed by other search strategies.")
+    exit(0)

@@ -1,0 +1,62 @@
+```python
+import csv
+
+def remember(header, rows):
+    """
+    Identifies the best rows based on multi-objective optimization.
+    Goals: MRE- (minimize), ACC+ (maximize), PRED40+ (maximize).
+    We use a simple Pareto-based approach or weighted normalization.
+    Given the constraints, we normalize the goals and pick the top 5% (40 rows).
+    """
+    # Identify column indices
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+
+    # Extract goals and normalize
+    # MRE is minimize, so we invert it: (max - val) / (max - min)
+    # ACC and PRED are maximize: (val - min) / (max - min)
+    
+    scores = []
+    for i, row in enumerate(rows):
+        scores.append((row[mre_idx], row[acc_idx], row[pred_idx], i))
+
+    # Simple heuristic: maximize (ACC + PRED) - MRE
+    # Since they are on different scales, we use rank-based scoring
+    mre_sorted = sorted(scores, key=lambda x: x[0])
+    acc_sorted = sorted(scores, key=lambda x: x[1], reverse=True)
+    pred_sorted = sorted(scores, key=lambda x: x[2], reverse=True)
+
+    ranks = {s[3]: 0 for s in scores}
+    for r, s in enumerate(mre_sorted): ranks[s[3]] += r
+    for r, s in enumerate(acc_sorted): ranks[s[3]] += r
+    for r, s in enumerate(pred_sorted): ranks[s[3]] += r
+
+    # Return top 5% (40 rows out of 800)
+    best_indices = sorted(ranks, key=ranks.get)[:40]
+    return best_indices
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            # Convert numeric columns
+            processed_row = []
+            for i, val in enumerate(row):
+                try:
+                    processed_row.append(float(val))
+                except ValueError:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    best_indices = remember(header, rows)
+    
+    print(f"Analysis complete. Found {len(best_indices)} trustworthy setups.")
+    print("Top 5 indices:", best_indices[:5])
+    exit(0)
+```

@@ -1,0 +1,79 @@
+import csv
+import pandas as pd
+from step02 import guess
+from step01 import remember
+
+def justify(header, rows, row):
+    """
+    Estimates the goals for the given row and calculates the fraction of 
+    existing rows that are worse than this row.
+    """
+    # 1. Estimate the missing goals for the input row
+    # Create a temporary list of rows including the new one to use the guess function
+    # We need to fill the '?' with dummy values to match the structure
+    goals = [col for col in header if col.endswith(('-', '+'))]
+    
+    # Prepare the test row with placeholders
+    test_row = row[:]
+    
+    # Use guess from step02 to estimate all goals
+    # Note: step02 guess() only estimates the first goal, so we iterate
+    all_estimates = []
+    for goal in goals:
+        # Temporarily modify header/logic to target specific goal
+        # Since step02 is fixed, we use a simple KNN approach here
+        from sklearn.neighbors import KNeighborsRegressor
+        df_train = pd.DataFrame(rows, columns=header)
+        inputs = [c for c in header if not (c.endswith('-') or c.endswith('+'))]
+        model = KNeighborsRegressor(n_neighbors=5)
+        model.fit(df_train[inputs], df_train[goal])
+        all_estimates.append(model.predict([row[:len(inputs)]])[0])
+    
+    # 2. Calculate aggregate scores for all rows
+    df = pd.DataFrame(rows, columns=header)
+    scores = pd.DataFrame(index=df.index)
+    for i, goal in enumerate(goals):
+        col_data = df[goal].astype(float)
+        val = all_estimates[i]
+        norm = (val - col_data.min()) / (col_data.max() - col_data.min())
+        if goal.endswith('-'):
+            scores[goal] = 1 - norm
+        else:
+            scores[goal] = norm
+    
+    row_score = scores.mean(axis=1).iloc[0]
+    
+    # 3. Compare against existing rows
+    df_existing = pd.DataFrame(rows, columns=header)
+    existing_scores = pd.DataFrame(index=df_existing.index)
+    for goal in goals:
+        col_data = df_existing[goal].astype(float)
+        norm = (col_data - col_data.min()) / (col_data.max() - col_data.min())
+        if goal.endswith('-'):
+            existing_scores[goal] = 1 - norm
+        else:
+            existing_scores[goal] = norm
+    
+    existing_agg = existing_scores.mean(axis=1)
+    p = (existing_agg < row_score).mean()
+    
+    reason = f"This setup is better than {p:.1%} of all known configurations based on its estimated performance across all goal metrics."
+    return p, reason
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [[float(val) for val in row] for row in reader]
+        
+        # Take the first row as a sample, hide its goals
+        sample_row = rows[0][:len(header) - 3] + ['?'] * 3
+        p, reason = justify(header, rows, sample_row)
+        
+        print(f"Rank: {p}")
+        print(f"Justification: {reason}")
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

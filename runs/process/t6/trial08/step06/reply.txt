@@ -1,0 +1,60 @@
+```python
+import ezr
+import step01
+import step02
+
+def justify(header, rows, row):
+    """
+    Returns (p, reason): p is the fraction of rows that 'row' is better than,
+    and reason is a sentence explaining the estimation.
+    """
+    # 1. Estimate the goal values for the target row
+    # We use the tree-based estimation from step02
+    tbl = ezr.Tbl([header] + rows)
+    node = ezr.tree(tbl, tbl.rows)
+    leaf_node = ezr.leaf(node, row)
+    
+    # Create a copy of the row to fill in the estimated goals
+    estimated_row = list(row)
+    for i, col in tbl.cols.items():
+        if header[i].endswith(('-', '+')):
+            # Get mean of this goal in the leaf
+            vals = [r[i] for r in leaf_node.rows if r[i] != "?"]
+            estimated_row[i] = sum(vals) / len(vals) if vals else 0
+            
+    # 2. Calculate how many rows this estimated row is better than
+    # A row is better if its ydist is lower
+    target_ydist = ezr.ydist(tbl, estimated_row)
+    better_than_count = 0
+    for r in rows:
+        if ezr.ydist(tbl, r) > target_ydist:
+            better_than_count += 1
+            
+    p = better_than_count / len(rows)
+    reason = (f"Based on the {len(leaf_node.rows)} similar setups in this region of the "
+              f"decision tree, this configuration is estimated to outperform {int(p*100)}% "
+              "of all known project configurations.")
+    
+    return p, reason
+
+if __name__ == "__main__":
+    # Load data
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Pick a sample row to justify (e.g., the last one)
+    test_row = list(rows[-1])
+    # Mask the goals
+    for i, name in enumerate(header):
+        if name.endswith(('-', '+')):
+            test_row[i] = "?"
+            
+    p, reason = justify(header, rows, test_row)
+    
+    print(f"Justification for row:")
+    print(f"  {test_row}")
+    print(f"Rank: {p:.2f}")
+    print(f"Reason: {reason}")
+```

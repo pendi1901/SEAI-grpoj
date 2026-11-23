@@ -1,0 +1,62 @@
+import csv
+import math
+
+def certify(xs, ys):
+    """
+    Returns True if xs and ys are statistically indistinguishable (noise),
+    False if they differ significantly (real effect).
+    Uses a simple A12 effect size test (non-parametric).
+    """
+    def a12(lst1, lst2):
+        m, n = len(lst1), len(lst2)
+        if m == 0 or n == 0: return 0.5
+        greater = 0
+        for x in lst1:
+            for y in lst2:
+                if x > y: greater += 1
+                elif x == y: greater += 0.5
+        return greater / (m * n)
+
+    # A12 threshold: 0.56 is a small effect, 0.64 medium, 0.71 large.
+    # If A12 is close to 0.5, they are likely the same.
+    score = a12(xs, ys)
+    return 0.44 <= score <= 0.56
+
+def get_data():
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i] == 'criterion':
+                    processed_row.append(val)
+                else:
+                    processed_row.append(float(val))
+            rows.append(processed_row)
+    return header, rows
+
+if __name__ == "__main__":
+    header, rows = get_data()
+    
+    # Define "big" vs "small" based on N_estimators (index 3)
+    # Split by median
+    n_est_idx = header.index('N_estimators')
+    n_ests = [r[n_est_idx] for r in rows]
+    median = sorted(n_ests)[len(n_ests) // 2]
+    
+    # Use ACC+ (index 1) as the metric for accuracy
+    acc_idx = header.index('ACC+')
+    
+    big_setups = [r[acc_idx] for r in rows if r[n_est_idx] >= median]
+    small_setups = [r[acc_idx] for r in rows if r[n_est_idx] < median]
+    
+    is_noise = certify(big_setups, small_setups)
+    
+    print("Analysis: Is the difference between big and small setups real or noise?")
+    if is_noise:
+        print("Result: The difference is likely noise. Setup size does not significantly impact accuracy.")
+    else:
+        print("Result: The difference is real. Setup size has a measurable impact on accuracy.")

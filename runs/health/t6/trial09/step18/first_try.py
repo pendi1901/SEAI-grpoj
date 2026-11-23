@@ -1,0 +1,40 @@
+import ezr
+import step08
+
+def fix(header, row, levers):
+    """
+    Find the single best change to a bad row's settings that improves its ydist.
+    Reuses the logic from step08.
+    """
+    return step08.fix(header, row, levers)
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Define levers based on the problem description
+    levers = {
+        'N_estimators': (50, 200),
+        'criterion': ['absolute_error', 'poisson', 'squared_error'],
+        'Min_sample_leaves': (1, 20),
+        'Min_impurity_decrease': (0, 10),
+        'Max_depth': (1, 20)
+    }
+    
+    # Pick a "bad" row (highest ydist)
+    tbl = ezr.Tbl(data)
+    scored = sorted([(ezr.ydist(tbl, r), r) for r in rows], key=lambda x: x[0], reverse=True)
+    bad_row = scored[0][1]
+    
+    recommendation = fix(header, bad_row, levers)
+    
+    print("Analysis complete.")
+    if recommendation:
+        col, val = list(recommendation.items())[0]
+        print(f"To improve performance, change '{col}' to {val}.")
+    else:
+        print("No single-lever change found to improve performance.")
+    
+    exit(0)

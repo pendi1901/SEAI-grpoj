@@ -1,0 +1,69 @@
+import csv
+import numpy as np
+
+def spot(header, rows):
+    """
+    Identifies rows containing input values that are 'far outside' 
+    anything seen before, using a distance-based outlier detection 
+    approach (Mahalanobis-like or simple Z-score).
+    """
+    input_indices = [i for i, h in enumerate(header) if '-' not in h and '+' not in h]
+    
+    # Extract numeric input data for statistical analysis
+    numeric_data = []
+    for row in rows:
+        features = []
+        for i in input_indices:
+            val = row[i]
+            # Map symbolic to numeric for distance calculation
+            if isinstance(val, str):
+                features.append(float(hash(val) % 1000))
+            else:
+                features.append(float(val))
+        numeric_data.append(features)
+    
+    data_arr = np.array(numeric_data)
+    
+    # Calculate Z-scores for each feature
+    means = np.mean(data_arr, axis=0)
+    stds = np.std(data_arr, axis=0)
+    
+    # Avoid division by zero for constant columns
+    stds[stds == 0] = 1.0
+    
+    z_scores = np.abs((data_arr - means) / stds)
+    
+    # A row is suspicious if any of its inputs are extreme (e.g., > 3 std devs)
+    # We use the maximum Z-score across features as the suspicion index
+    max_z = np.max(z_scores, axis=1)
+    
+    # Get indices of rows with high Z-scores, sorted by suspicion
+    suspicious_indices = np.where(max_z > 3)[0]
+    sorted_indices = sorted(suspicious_indices, key=lambda i: max_z[i], reverse=True)
+    
+    return [int(idx) for idx in sorted_indices]
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i] == 'criterion':
+                    processed_row.append(val)
+                else:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+            rows.append(processed_row)
+
+    outliers = spot(header, rows)
+    
+    print(f"Analysis complete. Found {len(outliers)} rows with settings far outside the norm.")
+    if outliers:
+        print(f"The most suspicious row index is {outliers[0]} with a significant deviation.")
+        print("These rows contain input values that were likely entered incorrectly.")

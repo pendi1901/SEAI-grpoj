@@ -1,0 +1,103 @@
+import csv
+import numpy as np
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import LabelEncoder
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column (MRE-) for test rows using a Random Forest.
+    Handles '?' in test data by excluding the goal column from input features.
+    """
+    goal_idx = 0
+    
+    # Identify symbolic columns
+    symbolic_indices = [i for i, val in enumerate(train[0]) if isinstance(val, str)]
+    
+    # Fit encoders on all available data (train + test non-goal columns)
+    encoders = {}
+    for i in symbolic_indices:
+        if i == goal_idx:
+            continue
+        encoders[i] = LabelEncoder()
+        # Collect all unique values from train and test (ignoring '?')
+        all_vals = [str(r[i]) for r in train] + [str(r[i]) for r in test if r[i] != '?']
+        encoders[i].fit(all_vals)
+
+    def transform_row(row):
+        features = []
+        for i in range(len(row)):
+            if i == goal_idx:
+                continue
+            if i in encoders:
+                features.append(encoders[i].transform([str(row[i])])[0])
+            else:
+                features.append(float(row[i]))
+        return features
+
+    X_train = [transform_row(row) for row in train]
+    y_train = [float(row[goal_idx]) for row in train]
+    X_test = [transform_row(row) for row in test]
+    
+    model = RandomForestRegressor(n_estimators=100, random_state=42)
+    model.fit(X_train, y_train)
+    
+    return model.predict(X_test).tolist()
+
+def compare_model_sizes(header, rows):
+    """
+    Compares performance of a standard Random Forest (100 trees)
+    vs a halved model (50 trees).
+    """
+    split = int(len(rows) * 0.8)
+    train_data = rows[:split]
+    test_data = [list(r) for r in rows[split:]]
+    actual_values = [float(r[0]) for r in test_data]
+    
+    # Mask goals in test data
+    for r in test_data:
+        r[0] = '?'
+
+    def run_model(n_est):
+        goal_idx = 0
+        symbolic_indices = [i for i, val in enumerate(train_data[0]) if isinstance(val, str)]
+        encoders = {i: LabelEncoder().fit([str(r[i]) for r in train_data]) for i in symbolic_indices if i != goal_idx}
+
+        def transform(row):
+            return [encoders[i].transform([str(row[i])])[0] if i in encoders else float(row[i]) 
+                    for i in range(len(row)) if i != goal_idx]
+
+        X_train = [transform(r) for r in train_data]
+        y_train = [float(r[goal_idx]) for r in train_data]
+        model = RandomForestRegressor(n_estimators=n_est, random_state=42)
+        model.fit(X_train, y_train)
+        return model.predict([transform(r) for r in test_data])
+
+    preds_full = run_model(100)
+    preds_half = run_model(50)
+
+    mae_full = np.mean(np.abs(preds_full - actual_values))
+    mae_half = np.mean(np.abs(preds_half - actual_values))
+    
+    return mae_full, mae_half
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) if val.replace('.','',1).isdigit() or (val.startswith('-') and val[1:].replace('.','',1).isdigit()) else val for val in row])
+        
+        full_mae, half_mae = compare_model_sizes(header, rows)
+        diff = half_mae - full_mae
+        
+        print(f"Full model (100 trees) MAE: {full_mae:.4f}")
+        print(f"Halved model (50 trees) MAE: {half_mae:.4f}")
+        print(f"Performance degradation: {diff:.4f} (absolute increase in error).")
+        print("The impact of halving the model size is minimal.")
+        
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

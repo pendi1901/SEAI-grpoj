@@ -1,0 +1,76 @@
+```python
+import csv
+
+def remember(header, rows):
+    """
+    Identifies the best rows based on multi-objective optimization.
+    Goals: MRE- (minimize), ACC+ (maximize), PRED40+ (maximize).
+    We use a simple Pareto-based approach or weighted normalization.
+    Returns the top 5% (40 rows out of 800).
+    """
+    if not rows:
+        return []
+
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+
+    # Normalize values to [0, 1] for each goal
+    # MRE- (minimize): score = (max - val) / (max - min)
+    # ACC+ (maximize): score = (val - min) / (max - min)
+    # PRED40+ (maximize): score = (val - min) / (max - min)
+    
+    cols = [mre_idx, acc_idx, pred_idx]
+    mins = [min(row[c] for row in rows) for c in cols]
+    maxs = [max(row[c] for row in rows) for c in cols]
+    
+    def get_score(row):
+        # MRE
+        mre_norm = (maxs[0] - row[mre_idx]) / (maxs[0] - mins[0] + 1e-9)
+        # ACC
+        acc_norm = (row[acc_idx] - mins[1]) / (maxs[1] - mins[1] + 1e-9)
+        # PRED
+        pred_norm = (row[pred_idx] - mins[2]) / (maxs[2] - mins[2] + 1e-9)
+        return mre_norm + acc_norm + pred_norm
+
+    # Calculate aggregate score for each row
+    scored_rows = []
+    for i, row in enumerate(rows):
+        scored_rows.append((get_score(row), i))
+
+    # Sort by score descending
+    scored_rows.sort(key=lambda x: x[0], reverse=True)
+
+    # Return top 5% (40 rows)
+    limit = max(1, len(rows) // 20)
+    best_indices = [x[1] for x in scored_rows[:limit]]
+    
+    return best_indices
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    header = []
+    
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            for row in reader:
+                processed_row = []
+                for i, val in enumerate(row):
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+            
+        best_indices = remember(header, rows)
+        
+        print(f"Analysis complete. Found {len(best_indices)} trustworthy setups.")
+        print("Top 5 indices:", best_indices[:5])
+        exit(0)
+    except FileNotFoundError:
+        print(f"File {filename} not found.")
+        exit(1)
+```

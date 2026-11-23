@@ -1,0 +1,63 @@
+```python
+import ezr
+import random
+
+def flow(header, row, seen):
+    """
+    Decide whether to approve a row based on whether it is better than 
+    the current best seen so far. We use ydist to measure quality.
+    """
+    # If this is the first row, we have no baseline, so we accept it.
+    if not seen:
+        return True
+    
+    # Create a table to calculate ydist
+    # We use the current row and all seen rows to define the goal space
+    data = [header] + seen + [row]
+    tbl = ezr.Tbl(data)
+    
+    # Calculate ydist for the new row and all previously seen rows
+    # Lower ydist is better.
+    current_ydist = ezr.ydist(tbl, row)
+    seen_ydists = [ezr.ydist(tbl, r) for r in seen]
+    
+    # If the new row is better than all previous rows, approve it.
+    # We use a small epsilon to avoid floating point issues.
+    if current_ydist < min(seen_ydists) - 1e-9:
+        return True
+    
+    return False
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data_iter = ezr.csv(filename)
+    
+    try:
+        header = next(data_iter)
+        rows = list(data_iter)
+    except StopIteration:
+        exit(0)
+        
+    # Shuffle to simulate random arrival order
+    random.seed(1234567891)
+    random.shuffle(rows)
+    
+    seen = []
+    approved = []
+    
+    for row in rows:
+        if flow(header, row, seen):
+            approved.append(row)
+        seen.append(row)
+        
+    print(f"Decision Process Complete.")
+    print(f"Total rows processed: {len(rows)}")
+    print(f"Total approved: {len(approved)}")
+    
+    if approved:
+        tbl = ezr.Tbl([header] + rows)
+        best_ydist = min(ezr.ydist(tbl, r) for r in approved)
+        print(f"Best ydist achieved: {best_ydist:.4f}")
+    
+    exit(0)
+```

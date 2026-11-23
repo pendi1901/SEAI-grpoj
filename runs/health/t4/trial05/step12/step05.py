@@ -1,0 +1,74 @@
+import csv
+from step01 import remember
+
+def blame(header, rows):
+    """
+    Identifies input columns that correlate with poor performance.
+    'Bad' rows are defined as those in the bottom 25% of the remember() score.
+    We compare the distribution of input values in bad rows vs the rest.
+    """
+    # Identify goal and input indices
+    input_indices = [i for i, name in enumerate(header) if name not in ['MRE-', 'ACC+', 'PRED40+']]
+    
+    # Score all rows to find the bottom 25%
+    # We reuse remember logic but invert the selection
+    scored = []
+    for i, row in enumerate(rows):
+        # We need a score for every row. 
+        # Since remember() returns top indices, we calculate scores manually:
+        idx_mre = header.index('MRE-')
+        idx_acc = header.index('ACC+')
+        idx_pred = header.index('PRED40+')
+        
+        mres = [r[idx_mre] for r in rows]
+        accs = [r[idx_acc] for r in rows]
+        preds = [r[idx_pred] for r in rows]
+        
+        n_mre = (row[idx_mre] - min(mres)) / (max(mres) - min(mres) + 1e-9)
+        n_acc = (row[idx_acc] - min(accs)) / (max(accs) - min(accs) + 1e-9)
+        n_pred = (row[idx_pred] - min(preds)) / (max(preds) - min(preds) + 1e-9)
+        score = (n_acc + n_pred) - n_mre
+        scored.append((score, row))
+    
+    scored.sort(key=lambda x: x[0])
+    cutoff = len(rows) // 4
+    bad_rows = [x[1] for x in scored[:cutoff]]
+    good_rows = [x[1] for x in scored[cutoff:]]
+    
+    # Find inputs where the mean/mode in bad_rows deviates significantly from good_rows
+    diffs = []
+    for i in input_indices:
+        col_name = header[i]
+        if isinstance(bad_rows[0][i], str):
+            # Categorical: compare frequency of the most common value
+            bad_val = max(set(r[i] for r in bad_rows), key=[r[i] for r in bad_rows].count)
+            good_val = max(set(r[i] for r in good_rows), key=[r[i] for r in good_rows].count)
+            if bad_val != good_val:
+                diffs.append((1.0, col_name))
+        else:
+            # Numeric: compare means
+            bad_mean = sum(r[i] for r in bad_rows) / len(bad_rows)
+            good_mean = sum(r[i] for r in good_rows) / len(good_rows)
+            diffs.append((abs(bad_mean - good_mean), col_name))
+            
+    diffs.sort(key=lambda x: x[0], reverse=True)
+    return [d[1] for d in diffs[:2]]
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i] == 'criterion':
+                    processed_row.append(val)
+                else:
+                    processed_row.append(float(val))
+            rows.append(processed_row)
+            
+    blame_cols = blame(header, rows)
+    print(f"The settings causing the most damage are: {', '.join(blame_cols)}")
+    exit(0)

@@ -1,0 +1,68 @@
+```python
+import csv
+import pandas as pd
+import numpy as np
+from sklearn.neighbors import KNeighborsRegressor
+from step01 import remember
+from step02 import guess
+
+def justify(header, rows, row):
+    """
+    Estimates the performance of a row with hidden goals and ranks it 
+    against the existing dataset.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    goals = [col for col in header if col.endswith(('-', '+'))]
+    inputs = [col for col in header if col not in goals]
+    
+    # Estimate the missing goals for the input row
+    # We use the first goal as the primary metric for ranking as per step02 logic
+    # or we can aggregate them. Here we use the first goal for consistency with step02.
+    target = goals[0]
+    
+    # Train model on known data
+    model = KNeighborsRegressor(n_neighbors=5)
+    model.fit(df[inputs], df[target])
+    
+    # Predict target for the input row
+    input_df = pd.DataFrame([row], columns=header)
+    prediction = model.predict(input_df[inputs])[0]
+    
+    # Calculate rank: fraction of rows better than this one
+    # If goal ends in '-', lower is better. If '+', higher is better.
+    if target.endswith('-'):
+        better_than = df[df[target] > prediction]
+    else:
+        better_than = df[df[target] < prediction]
+        
+    p = len(better_than) / len(rows)
+    reason = f"Based on the {target} metric, this setup outperforms {p:.1%} of all historical configurations."
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) if val.replace('.','',1).isdigit() or (val.startswith('-') and val[1:].replace('.','',1).isdigit()) else val for val in row])
+        
+        # Create a test row by masking goals of the first row
+        test_row = rows[0][:]
+        goals = [col for col in header if col.endswith(('-', '+'))]
+        for col in goals:
+            test_row[header.index(col)] = "?"
+            
+        p, reason = justify(header, rows, test_row)
+        
+        print("Customer Inquiry: Why is this setup 'top tier'?")
+        print(f"  Rank: {p:.4f}")
+        print(f"  Reason: {reason}")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

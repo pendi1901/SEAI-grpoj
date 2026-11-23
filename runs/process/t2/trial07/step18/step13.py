@@ -1,0 +1,39 @@
+import csv
+import step03
+
+def certify(xs, ys):
+    """
+    Returns True if xs and ys are statistically similar (same population),
+    False if they differ significantly.
+    """
+    return step03.certify(xs, ys)
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            rows.append([float(x) for x in row])
+
+    # The customer asks if results shifted after a change in decision-making.
+    # We simulate this by comparing the first half of the data (before) 
+    # to the second half (after). We use the first goal column (Cost-) as the metric.
+    goal_idx = -1
+    for i, name in enumerate(header):
+        if name.endswith('-') or name.endswith('+'):
+            goal_idx = i
+            break
+            
+    mid = len(rows) // 2
+    before = [r[goal_idx] for r in rows[:mid]]
+    after = [r[goal_idx] for r in rows[mid:]]
+    
+    is_same = certify(before, after)
+    
+    print("Customer Inquiry: Did results shift after changing how teams decide what to build?")
+    if is_same:
+        print("Result: No, the results are statistically the same as before. The change had no significant impact.")
+    else:
+        print("Result: Yes, the results have shifted significantly. The change in decision-making had a measurable effect.")

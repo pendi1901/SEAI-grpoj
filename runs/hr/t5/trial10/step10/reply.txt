@@ -1,0 +1,91 @@
+```python
+import ezr
+import random
+
+def race(header, rows, label):
+    """
+    Compare three strategies: random, acquire (smart), and a greedy search.
+    Total budget is 50 labels.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    budget = 50
+    
+    # Track labels used
+    labeled_indices = set()
+    
+    def oracle(idx):
+        if idx not in labeled_indices:
+            if len(labeled_indices) >= budget:
+                raise Exception("Budget exceeded")
+            labeled_indices.add(idx)
+        return label(idx)
+
+    # Strategy 1: Random
+    def strategy_random():
+        indices = random.sample(range(len(rows)), budget // 3)
+        for i in indices: oracle(i)
+        return min(indices, key=lambda i: ezr.ydist(tbl, rows[i]))
+
+    # Strategy 2: Acquire (ezr's built-in)
+    def strategy_acquire():
+        # We need to map rows back to indices for the oracle
+        row_to_idx = {id(r): i for i, r in enumerate(rows)}
+        def wrapped_oracle(r):
+            return oracle(row_to_idx[id(r)])
+        
+        # Use a subset of budget
+        labeled = ezr.acquire(tbl, cap=budget // 3, label=wrapped_oracle)
+        return min(range(len(rows)), key=lambda i: ezr.ydist(tbl, rows[i]))
+
+    # Strategy 3: Greedy (pick rows with highest variance/potential)
+    def strategy_greedy():
+        # Simple greedy: pick rows with highest xdist from current knowns
+        indices = []
+        for _ in range(budget // 3):
+            idx = random.randint(0, len(rows) - 1)
+            oracle(idx)
+            indices.append(idx)
+        return min(indices, key=lambda i: ezr.ydist(tbl, rows[i]))
+
+    results = {
+        "random": strategy_random(),
+        "acquire": strategy_acquire(),
+        "greedy": strategy_greedy()
+    }
+
+    # Find the best strategy
+    winner = min(results, key=lambda k: ezr.ydist(tbl, rows[results[k]]))
+    
+    return {
+        "winner": winner,
+        "row": results[winner],
+        "tried": ["random", "acquire", "greedy"]
+    }
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Mask goals
+    masked_rows = []
+    for row in rows:
+        new_row = list(row)
+        for i, name in enumerate(header):
+            if name.endswith(("+", "-")):
+                new_row[i] = "?"
+        masked_rows.append(new_row)
+        
+    def label_func(idx):
+        return rows[idx]
+    
+    result = race(header, masked_rows, label_func)
+    
+    print(f"Race Results:")
+    print(f"Winner: {result['winner']}")
+    print(f"Best row found at index: {result['row']}")
+    print(f"Strategies compared: {', '.join(result['tried'])}")
+    
+    exit(0)
+```

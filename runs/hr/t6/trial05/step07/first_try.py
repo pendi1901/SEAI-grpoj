@@ -1,0 +1,59 @@
+import ezr
+import random
+
+def choose(header, rows, label):
+    """
+    Finds the best row by using the 'acquire' strategy from ezr.
+    We label up to 50 rows, then return the index of the best one found.
+    """
+    # Create a table object. Note: rows currently have '?' in goal columns.
+    # We need to create a table that understands the column structure.
+    tbl = ezr.Tbl([header] + rows)
+    
+    # The label function provided by the harness takes an index and returns the row
+    # with the goal values filled in. We wrap this to match the ORACLE type.
+    def oracle_wrapper(row):
+        # Find the index of this row in the original list to call label()
+        # Since rows are passed as a list, we find the index by reference
+        idx = rows.index(row)
+        return label(idx)
+
+    # Use ezr.acquire to intelligently select rows to label.
+    # ezr.acquire returns the rows that were labeled.
+    labeled_rows = ezr.acquire(tbl, cap=50, label=oracle_wrapper)
+    
+    # Find the best row among those we labeled.
+    # We use ydist to determine the best row (lowest ydist is best).
+    best_row = min(labeled_rows, key=lambda r: ezr.ydist(tbl, r))
+    
+    # Return the index of the best row found
+    return rows.index(best_row)
+
+if __name__ == "__main__":
+    # Load data
+    data = list(ezr.csv("WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"))
+    header = data[0]
+    rows = data[1:]
+    
+    # Create a copy of rows with goals masked as '?'
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    masked_rows = []
+    for row in rows:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_rows.append(new_row)
+        
+    # Define the label function for the harness
+    def label(i):
+        return rows[i]
+    
+    # Run the selection
+    best_idx = choose(header, masked_rows, label)
+    
+    # Print result
+    print(f"Best employee arrangement found at index: {best_idx}")
+    print("This row was identified using 50 targeted interviews.")
+    print(f"Goal metrics (tenure/role duration) for this row: {rows[best_idx][-4:]}")
+    
+    exit(0)

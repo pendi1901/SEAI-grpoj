@@ -1,0 +1,77 @@
+import csv
+
+def blame(header, rows):
+    """
+    Identifies input columns that correlate with short stays.
+    'Short stays' are defined by low values in 'YearsAtCompany+' and 'YearsInCurrentRole+'.
+    We calculate the correlation between input features and these tenure goals.
+    """
+    # Identify goal columns
+    goal_indices = [i for i, col in enumerate(header) if col.endswith('+')]
+    # Identify input columns (exclude goals)
+    input_indices = [i for i, col in enumerate(header) if not (col.endswith('+') or col.endswith('-'))]
+    
+    # Calculate average tenure score for each row (normalized)
+    # We want to find what features are present when tenure is low
+    tenure_scores = []
+    for row in rows:
+        score = sum(row[i] for i in goal_indices)
+        tenure_scores.append(score)
+    
+    # Find the bottom 25% (short stays)
+    sorted_indices = sorted(range(len(rows)), key=lambda i: tenure_scores[i])
+    cutoff = len(rows) // 4
+    worst_rows = [rows[i] for i in sorted_indices[:cutoff]]
+    
+    # For each input column, calculate the mean value in the 'worst' group
+    # vs the global mean. High difference indicates a potential 'blame' factor.
+    explanations = []
+    for i in input_indices:
+        col_name = header[i]
+        
+        # Only consider numeric inputs for simple correlation
+        if isinstance(rows[0][i], float):
+            vals = [row[i] for row in rows]
+            worst_vals = [row[i] for row in worst_rows]
+            
+            avg_all = sum(vals) / len(vals)
+            avg_worst = sum(worst_vals) / len(worst_vals)
+            
+            # If the average in the worst group is significantly different, flag it
+            if abs(avg_worst - avg_all) > (avg_all * 0.2):
+                explanations.append(col_name)
+        else:
+            # For symbolic, check if a specific category is over-represented in worst rows
+            categories = set(row[i] for row in rows)
+            for cat in categories:
+                count_all = sum(1 for row in rows if row[i] == cat)
+                count_worst = sum(1 for row in worst_rows if row[i] == cat)
+                if count_worst / cutoff > (count_all / len(rows)) * 1.5:
+                    explanations.append(col_name)
+                    break
+                    
+    return list(set(explanations))
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    factors = blame(header, rows)
+    
+    print("Analysis: Factors contributing to short employee tenure:")
+    print("The following input columns show a strong correlation with short stays:")
+    for factor in factors:
+        print(f"- {factor}")
+    print("\nThese factors suggest that specific job roles, travel requirements, "
+          "or satisfaction levels are linked to higher turnover.")

@@ -1,0 +1,69 @@
+import csv
+
+def flow(header, row, seen):
+    """
+    Warns the customer if a program starts to go bad.
+    We define 'bad' as a significant drop in performance compared to the 
+    historical baseline (the best 10% of seen rows).
+    """
+    goal_indices = []
+    for i, name in enumerate(header):
+        if name.endswith('-') or name.endswith('+'):
+            goal_indices.append((i, name[-1]))
+
+    def score_row(r):
+        total = 0
+        for idx, op in goal_indices:
+            val = float(r[idx])
+            if op == '-':
+                total += val
+            else:
+                total += (1.0 - val)
+        return total
+
+    # We need a baseline to define what 'good' looks like.
+    # We wait for at least 50 rows to establish a stable baseline.
+    if len(seen) < 50:
+        return False
+
+    # Calculate scores of all seen rows
+    scores = [score_row(r) for r in seen]
+    
+    # Define the threshold for 'bad' as being significantly worse than the 
+    # average of the best 10% of seen rows.
+    scores.sort()
+    best_10_percent = scores[:max(1, len(scores) // 10)]
+    baseline = sum(best_10_percent) / len(best_10_percent)
+    
+    # If the current row's score is significantly worse than the baseline
+    # (e.g., 2x worse), we flag it as 'bad'.
+    current_score = score_row(row)
+    if current_score > (baseline * 2.0):
+        return True
+        
+    return False
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [row for row in reader]
+        
+        seen = []
+        warnings = 0
+        for row in rows:
+            if flow(header, row, seen):
+                warnings += 1
+            seen.append(row)
+            
+        print("Customer Inquiry: Monitoring program performance")
+        print("-" * 60)
+        print(f"Analysis complete. {warnings} programs were flagged as 'going bad'.")
+        print("The system monitors incoming data and alerts when performance")
+        print("deviates significantly from the established historical baseline.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

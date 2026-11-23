@@ -1,0 +1,66 @@
+import csv
+
+def guess(header, train, test):
+    """
+    Estimates the first goal (MRE-) using k-Nearest Neighbors.
+    To simulate 'halving the size of the forecaster', we use a smaller
+    training subset (half the original) and compare performance.
+    """
+    mre_idx = 0
+    input_indices = [i for i, h in enumerate(header) if not (h.endswith('-') or h.endswith('+'))]
+    numeric_inputs = [i for i in input_indices if header[i] != 'criterion']
+    crit_idx = header.index('criterion')
+
+    # Precompute normalization bounds
+    mins = [min(r[i] for r in train) for i in numeric_inputs]
+    maxs = [max(r[i] for r in train) for i in numeric_inputs]
+
+    def get_dist(row1, row2):
+        d2 = 0
+        for idx, i in enumerate(numeric_inputs):
+            if maxs[idx] > mins[idx]:
+                d2 += ((row1[i] - row2[i]) / (maxs[idx] - mins[idx]))**2
+        if row1[crit_idx] != row2[crit_idx]:
+            d2 += 1.0
+        return d2**0.5
+
+    k = 5
+    predictions = []
+    for t_row in test:
+        distances = sorted([(get_dist(t_row, tr), tr[mre_idx]) for tr in train], key=lambda x: x[0])
+        predictions.append(sum(d[1] for d in distances[:k]) / k)
+    return predictions
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [[val if header[i] == 'criterion' else float(val) for i, val in enumerate(row)] for row in reader]
+
+        # Split data: full training set vs half training set
+        mid = len(rows) // 2
+        full_train = rows[:mid]
+        half_train = rows[:mid // 2]
+        test_set = rows[mid:mid + 20]
+        
+        # Prepare test rows (mask goals)
+        test_masked = [[val if header[i] not in ['MRE-', 'ACC+', 'PRED40+'] else "?" for i, val in enumerate(r)] for r in test_set]
+        
+        # Get actual values for comparison
+        actuals = [r[0] for r in test_set]
+        
+        preds_full = guess(header, full_train, test_masked)
+        preds_half = guess(header, half_train, test_masked)
+        
+        err_full = sum(abs(p - a) for p, a in zip(preds_full, actuals)) / len(actuals)
+        err_half = sum(abs(p - a) for p, a in zip(preds_half, actuals)) / len(actuals)
+        
+        print(f"Average error with full training set: {err_full:.4f}")
+        print(f"Average error with halved training set: {err_half:.4f}")
+        print(f"Performance degradation: {((err_half - err_full) / err_full) * 100:.2f}% increase in error.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

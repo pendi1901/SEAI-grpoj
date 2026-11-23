@@ -1,0 +1,49 @@
+```python
+import ezr
+import step10
+
+def race(header, rows, label):
+    """
+    Compare three strategies for finding the best setup within a 50-label budget.
+    Strategies:
+    1. random: Randomly samples rows.
+    2. acquire: Uses ezr.acquire (model-based active learning).
+    3. greedy: Picks the next row by finding the one closest to the current best.
+    """
+    # Reuse the race logic from step10
+    return step10.race(header, rows, label)
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    all_rows = data[1:]
+    
+    # Mask goals for the race
+    goal_indices = [i for i, name in enumerate(header) if name[-1] in "+-"]
+    masked_rows = []
+    for row in all_rows:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_rows.append(new_row)
+        
+    # Define the label function for the harness
+    def label_func(i):
+        return all_rows[i]
+        
+    # Run the race
+    result = race(header, masked_rows, label_func)
+    
+    print("Comparison of search strategies on Health-ClosedIssues data:")
+    print(f"Winner: {result['winner']}")
+    print(f"Best row found at index: {result['row']}")
+    print(f"Strategies tried: {', '.join(result['tried'])}")
+    
+    if result['winner'] != 'random':
+        print("Conclusion: The model-based strategies outperform random selection.")
+    else:
+        print("Conclusion: Random selection performed competitively on this dataset.")
+        
+    exit(0)
+```

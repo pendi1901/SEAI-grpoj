@@ -1,0 +1,59 @@
+import csv
+import pandas as pd
+import numpy as np
+from sklearn.neighbors import KNeighborsRegressor
+from step01 import remember
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column for test rows using K-Nearest Neighbors
+    based on the input columns.
+    """
+    df_train = pd.DataFrame(train, columns=header)
+    df_test = pd.DataFrame(test, columns=header)
+    
+    # Identify input columns (those not ending in - or +)
+    inputs = [col for col in header if not (col.endswith('-') or col.endswith('+'))]
+    
+    # Identify goal columns
+    goals = [col for col in header if col.endswith(('-', '+'))]
+    
+    # Target is the first goal column
+    target = goals[0]
+    
+    # Train a KNN regressor
+    # Using n_neighbors=5 as a standard heuristic for small datasets
+    model = KNeighborsRegressor(n_neighbors=5)
+    model.fit(df_train[inputs], df_train[target])
+    
+    # Predict for test rows
+    predictions = model.predict(df_test[inputs])
+    
+    return predictions.tolist()
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) for val in row])
+        
+        # Split data: use 80% for training, 20% for testing simulation
+        split = int(len(rows) * 0.8)
+        train_data = rows[:split]
+        test_data = [row[:len(header)-len([c for c in header if c.endswith(('-', '+'))])] + ['?'] * len([c for c in header if c.endswith(('-', '+'))]) for row in rows[split:]]
+        
+        predictions = guess(header, train_data, test_data)
+        
+        print("Customer Inquiry: Estimated Cost and Idle time for new setups.")
+        print(f"Processed {len(train_data)} training records.")
+        print(f"Estimated value for the first goal column (Cost-) for the first 5 test cases:")
+        for i, val in enumerate(predictions[:5]):
+            print(f"  Test Case {i+1}: {val:.4f}")
+            
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

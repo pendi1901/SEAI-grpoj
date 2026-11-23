@@ -1,0 +1,67 @@
+import csv
+
+def remember(header, rows):
+    """
+    Identifies the top 5% of rows based on multi-objective optimization.
+    Goals ending in '-' are minimized, '+' are maximized.
+    """
+    goal_indices = []
+    for i, name in enumerate(header):
+        if name.endswith('-') or name.endswith('+'):
+            goal_indices.append((i, name.endswith('-')))
+
+    def get_score(row):
+        # Normalize goals to [0, 1] and calculate penalty.
+        # Since POM3 data is already in [0, 1], we use values directly.
+        # Lower penalty is better.
+        penalty = 0
+        for col_idx, is_min in goal_indices:
+            val = float(row[col_idx])
+            if is_min:
+                penalty += val
+            else:
+                penalty += (1.0 - val)
+        return penalty
+
+    # Calculate scores for all rows
+    scored_rows = []
+    for idx, row in enumerate(rows):
+        scored_rows.append((get_score(row), idx))
+    
+    # Sort by penalty ascending
+    scored_rows.sort(key=lambda x: x[0])
+    
+    # Return top 5% (or at least 1)
+    limit = max(1, len(rows) // 20)
+    return [item[1] for item in scored_rows[:limit]]
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed_row = []
+                for val in row:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        best_indices = remember(header, rows)
+        
+        print("Past configurations that performed best:")
+        for idx in best_indices[:5]:  # Show top 5 examples
+            row = rows[idx]
+            goals = {header[i]: row[i] for i, name in enumerate(header) 
+                     if name.endswith('-') or name.endswith('+')}
+            print(f"  Row {idx}: {goals}")
+            
+        print(f"\nTotal of {len(best_indices)} top-performing configurations identified.")
+        exit(0)
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

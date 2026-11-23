@@ -1,0 +1,70 @@
+import csv
+
+def blame(header, rows):
+    """
+    Identifies input columns that have the least correlation with 'YearsAtCompany+'.
+    We calculate the correlation (or association) of each input column with the 
+    goal column and return the names of the columns with the lowest impact.
+    """
+    # Identify goal column
+    goal_idx = next(i for i, h in enumerate(header) if h.endswith('+') or h.endswith('-'))
+    
+    # Identify input columns
+    input_indices = [i for i, h in enumerate(header) if not (h.endswith('+') or h.endswith('-'))]
+    
+    # Calculate a simple importance score for each input column
+    # For numeric: absolute correlation
+    # For symbolic: variance in goal means across categories
+    scores = []
+    goal_vals = [float(r[goal_idx]) for r in rows]
+    
+    for i in input_indices:
+        col_vals = [r[i] for r in rows]
+        col_name = header[i]
+        
+        if isinstance(col_vals[0], float):
+            # Numeric: simple correlation heuristic
+            mean_x = sum(col_vals) / len(col_vals)
+            mean_y = sum(goal_vals) / len(goal_vals)
+            num = sum((col_vals[j] - mean_x) * (goal_vals[j] - mean_y) for j in range(len(rows)))
+            den = (sum((col_vals[j] - mean_x)**2 for j in range(len(rows))) * 
+                   sum((goal_vals[j] - mean_y)**2 for j in range(len(rows))))**0.5
+            score = abs(num / (den + 1e-9))
+        else:
+            # Symbolic: ANOVA-like heuristic (variance of group means)
+            groups = {}
+            for j, val in enumerate(col_vals):
+                if val not in groups: groups[val] = []
+                groups[val].append(goal_vals[j])
+            
+            group_means = [sum(v)/len(v) for v in groups.values()]
+            overall_mean = sum(goal_vals) / len(goal_vals)
+            score = sum((m - overall_mean)**2 for m in group_means) / (len(group_means) + 1e-9)
+            
+        scores.append((score, col_name))
+    
+    # Return the columns with the lowest scores (least impact)
+    scores.sort()
+    return [s[1] for s in scores[:5]]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    unimportant_cols = blame(header, rows)
+    
+    print("Columns with the least impact on employee tenure (candidates for removal):")
+    for col in unimportant_cols:
+        print(f"- {col}")
+    print("\nThese columns show the lowest statistical correlation with 'YearsAtCompany+'.")

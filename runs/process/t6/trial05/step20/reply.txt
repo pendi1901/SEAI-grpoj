@@ -1,0 +1,96 @@
+```python
+import ezr
+import random
+import step01
+import step07
+import step10
+
+def race(header, rows, label):
+    """
+    Compare three strategies: random, acquire, and 'big_team' (the customer's current way).
+    Total budget is 50 labels.
+    """
+    budget = 50
+    labeled_indices = set()
+
+    def get_label(i):
+        if i not in labeled_indices:
+            if len(labeled_indices) >= budget:
+                raise Exception("Budget exceeded")
+            labeled_indices.add(i)
+            full_row = label(i)
+            for j in range(len(rows[i])):
+                rows[i][j] = full_row[j]
+        return rows[i]
+
+    tbl = ezr.Tbl([header] + rows)
+
+    # Strategy 1: Random
+    def strategy_random(tbl, rows):
+        indices = random.sample(range(len(rows)), budget // 3)
+        for i in indices: get_label(i)
+        return min(indices, key=lambda i: ezr.ydist(tbl, rows[i]))
+
+    # Strategy 2: Acquire (from ezr)
+    def strategy_acquire(tbl, rows):
+        def oracle_wrapper(row):
+            idx = rows.index(row)
+            return get_label(idx)
+        ezr.acquire(tbl, cap=budget // 3, label=oracle_wrapper)
+        return min(range(len(rows)), key=lambda i: ezr.ydist(tbl, rows[i]))
+
+    # Strategy 3: Big Teams (Customer's current way)
+    def strategy_big_team(tbl, rows):
+        team_idx = header.index("Team Size")
+        # Sort by Team Size descending, pick top ones
+        candidates = sorted(range(len(rows)), key=lambda i: rows[i][team_idx], reverse=True)
+        indices = candidates[:budget // 3]
+        for i in indices: get_label(i)
+        return min(indices, key=lambda i: ezr.ydist(tbl, rows[i]))
+
+    strategies = {
+        "random": strategy_random,
+        "acquire": strategy_acquire,
+        "big_team": strategy_big_team
+    }
+
+    results = {}
+    for name, func in strategies.items():
+        results[name] = func(tbl, rows)
+
+    winner = min(results, key=lambda n: ezr.ydist(tbl, rows[results[n]]))
+    
+    return {
+        "winner": winner,
+        "row": results[winner],
+        "tried": list(strategies.keys())
+    }
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Mask goals
+    masked = [["?" if (h.endswith("-") or h.endswith("+")) else v 
+               for h, v in zip(header, r)] for r in rows]
+    
+    def label(i):
+        return rows[i]
+    
+    res = race(header, masked, label)
+    
+    print("Optimization Strategy Comparison:")
+    print(f"The winning strategy is: {res['winner']}")
+    print(f"The best setup found was at index: {res['row']}")
+    print(f"Strategies tested: {', '.join(res['tried'])}")
+    
+    if res['winner'] == "big_team":
+        print("\nConclusion: Your current 'big team' approach is optimal.")
+    else:
+        print("\nConclusion: Our 'acquire' strategy outperforms your 'big team' approach.")
+        print("We recommend adopting a more targeted search to improve performance.")
+    
+    exit(0)
+```

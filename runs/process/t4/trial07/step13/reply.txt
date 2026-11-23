@@ -1,0 +1,59 @@
+```python
+import csv
+import pandas as pd
+from scipy.stats import ttest_ind
+from step03 import certify
+
+def analyze_shift(header, rows):
+    """
+    The customer asks if results shifted after a change in team decision-making.
+    We assume the dataset is split into two halves: 'before' and 'after' the change.
+    We compare the aggregate performance of both halves.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    
+    # Identify goal columns
+    goals = [col for col in header if col.endswith(('-', '+'))]
+    
+    # Normalize goals to [0, 1] range
+    scores = pd.DataFrame(index=df.index)
+    for goal in goals:
+        col_min, col_max = df[goal].min(), df[goal].max()
+        norm = (df[goal] - col_min) / (col_max - col_min + 1e-9)
+        scores[goal] = 1 - norm if goal.endswith('-') else norm
+    
+    df['aggregate'] = scores.mean(axis=1)
+    
+    # Split data into two halves
+    mid = len(df) // 2
+    before = df.iloc[:mid]['aggregate'].tolist()
+    after = df.iloc[mid:]['aggregate'].tolist()
+    
+    # Use the certify function from step03 to check for statistical difference
+    is_same = certify(before, after)
+    
+    return is_same, sum(before)/len(before), sum(after)/len(after)
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [[float(val) for val in row] for row in reader]
+        
+        is_same, avg_before, avg_after = analyze_shift(header, rows)
+        
+        print("Customer Inquiry: Did results shift after changing how teams decide what to build?")
+        print(f"Average Performance (Before): {avg_before:.4f}")
+        print(f"Average Performance (After):  {avg_after:.4f}")
+        
+        if is_same:
+            print("Conclusion: The difference is statistically insignificant. The results are effectively the same.")
+        else:
+            print("Conclusion: There is a statistically significant shift in performance.")
+            
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
+```

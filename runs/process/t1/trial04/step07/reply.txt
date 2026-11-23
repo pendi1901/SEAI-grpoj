@@ -1,0 +1,78 @@
+```python
+import csv
+
+def choose(header, rows, label):
+    """
+    Finds the best row by sampling 50 rows.
+    Strategy:
+    1. Sample 50 rows spread across the dataset to get a representative view.
+    2. Label these rows to get their true goal values.
+    3. Calculate a normalized score for each labeled row.
+    4. Return the index of the row with the best (lowest penalty) score.
+    """
+    goal_indices = [i for i, name in enumerate(header) 
+                    if name.endswith('-') or name.endswith('+')]
+    is_min = [name.endswith('-') for name in header if name.endswith('-') or name.endswith('+')]
+
+    def get_score(row_values):
+        # Normalize goals to [0, 1] and calculate penalty
+        # Since the data is already in [0, 1], we use values directly
+        total = 0
+        for i, val in enumerate(row_values):
+            if is_min[i]:
+                total += val
+            else:
+                total += (1.0 - val)
+        return total
+
+    # Select 50 indices spread evenly across the dataset
+    n = len(rows)
+    sample_indices = [int(i * (n - 1) / 49) for i in range(50)]
+    
+    best_idx = -1
+    best_score = float('inf')
+    
+    for idx in sample_indices:
+        # label(i) returns the list of true goal values for rows[i]
+        goals = label(idx)
+        score = get_score(goals)
+        
+        if score < best_score:
+            best_score = score
+            best_idx = idx
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            true_goals = []
+            for row in reader:
+                # Separate inputs and goals
+                processed = []
+                goals = []
+                for i, val in enumerate(row):
+                    if header[i].endswith('-') or header[i].endswith('+'):
+                        goals.append(float(val))
+                        processed.append("?")
+                    else:
+                        processed.append(float(val))
+                rows.append(processed)
+                true_goals.append(goals)
+
+        def label(i):
+            return true_goals[i]
+
+        best_row_idx = choose(header, rows, label)
+        
+        print(f"Best row found at index: {best_row_idx}")
+        print("This row was selected after evaluating 50 samples to minimize cost/idle and maximize score.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

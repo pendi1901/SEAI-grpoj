@@ -1,0 +1,71 @@
+```python
+import ezr
+import random
+
+def fix(header, row, levers):
+    """
+    Finds the best change to a 'bad' row by exploring the neighborhood
+    defined by the allowed levers.
+    """
+    # Create a table to evaluate the quality of potential changes
+    # We use the row itself to initialize the table context
+    tbl = ezr.Tbl([header, row])
+    
+    best_change = {}
+    best_ydist = ezr.ydist(tbl, row)
+    
+    # Try changing each lever to a new value
+    for col_name, allowed in levers.items():
+        col_idx = header.index(col_name)
+        original_val = row[col_idx]
+        
+        # Generate candidates based on lever type
+        candidates = []
+        if isinstance(allowed, (list, tuple)) and not isinstance(allowed[0], (int, float)):
+            # Symbolic: try all allowed values
+            candidates = [v for v in allowed if v != original_val]
+        else:
+            # Numeric: try low, high, and midpoint
+            low, high = allowed
+            candidates = [low, high, (low + high) / 2]
+            
+        for val in candidates:
+            # Create a test row with the change
+            test_row = list(row)
+            test_row[col_idx] = val
+            
+            # Evaluate
+            current_ydist = ezr.ydist(tbl, test_row)
+            if current_ydist < best_ydist:
+                best_ydist = current_ydist
+                best_change = {col_name: val}
+                
+    return best_change
+
+if __name__ == "__main__":
+    # Load data
+    file_path = "pom3a.n1000.train.csv"
+    rows_gen = ezr.csv(file_path)
+    header = next(rows_gen)
+    rows = list(rows_gen)
+    
+    # Define levers: numeric ranges based on the data distribution
+    # We allow changing 'Plan' and 'Team Size' to optimize performance
+    levers = {
+        "Plan": (0.0, 1.0),
+        "Team Size": (0.0, 1.0)
+    }
+    
+    # Pick a 'bad' row (e.g., one with high ydist)
+    tbl = ezr.Tbl([header] + rows)
+    scored = sorted([(ezr.ydist(tbl, r), r) for r in rows], key=lambda x: x[0], reverse=True)
+    bad_row = scored[0][1]
+    
+    # Get recommendation
+    recommendation = fix(header, bad_row, levers)
+    
+    print("Optimization Analysis:")
+    print(f"Original row (sample): {bad_row[:3]}...")
+    print(f"Recommended changes to rescue the project: {recommendation}")
+    print("By adjusting these levers, we move the configuration closer to the ideal goal state.")
+```

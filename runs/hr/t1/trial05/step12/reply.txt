@@ -1,0 +1,76 @@
+```python
+import csv
+
+def guess(header, train, test):
+    """
+    Estimates the 'YearsAtCompany+' for employees in the test set,
+    simulating the effect of cutting overtime for those in the 'Sales' department.
+    
+    Logic:
+    1. Identify the 'Sales' department and 'overTime' status.
+    2. Calculate the average tenure (YearsAtCompany+) for 'Sales' employees 
+       who do NOT work overtime in the training set.
+    3. For test rows in 'Sales', we assume the 'overTime' is cut (set to 'No'),
+       and return the average tenure of the 'No Overtime' Sales group.
+    4. For other rows, return the average tenure of the training set.
+    """
+    idx_goal = header.index('YearsAtCompany+')
+    idx_dept = header.index('department')
+    idx_ot = header.index('overTime')
+    
+    # Calculate baseline for Sales employees who don't work overtime
+    sales_no_ot = [r[idx_goal] for r in train 
+                   if r[idx_dept] == 'Sales' and r[idx_ot] == 'No']
+    
+    avg_sales_no_ot = sum(sales_no_ot) / len(sales_no_ot) if sales_no_ot else 0
+    
+    # Calculate global average for others
+    all_tenure = [r[idx_goal] for r in train]
+    avg_all = sum(all_tenure) / len(all_tenure)
+    
+    predictions = []
+    for row in test:
+        # If the employee is in Sales, we simulate cutting overtime
+        if row[idx_dept] == 'Sales':
+            predictions.append(avg_sales_no_ot)
+        else:
+            predictions.append(avg_all)
+            
+    return predictions
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Split data
+    train_data = rows[:700]
+    test_data = rows[700:]
+    
+    # Mask goals in test
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    for row in test_data:
+        for idx in goal_indices:
+            row[idx] = "?"
+            
+    results = guess(header, train_data, test_data)
+    
+    print("Impact Analysis: Cutting Overtime in Sales")
+    print("By removing overtime for Sales staff, we estimate their average tenure")
+    print(f"to be approximately {sum(results)/len(results):.2f} years.")
+    print("This estimate is based on the historical performance of Sales employees")
+    print("who currently do not work overtime.")
+```

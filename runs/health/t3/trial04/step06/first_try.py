@@ -1,0 +1,87 @@
+import csv
+import pandas as pd
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+
+def justify(header, rows, row):
+    """
+    Estimates the performance of the given row and compares it to all rows.
+    Returns (fraction_better, reason_string).
+    """
+    df = pd.DataFrame(rows, columns=header)
+    goal_cols = [c for c in header if c.endswith('-') or c.endswith('+')]
+    input_cols = [c for c in header if c not in goal_cols]
+
+    # Helper to calculate aggregate score
+    def get_score(r):
+        score = 0
+        for col in goal_cols:
+            val = float(r[header.index(col)])
+            if col.endswith('-'):
+                score -= val
+            else:
+                score += val
+        return score
+
+    # Train a model to estimate the goals for the input row
+    numeric_features = [c for c in input_cols if df[c].dtype != 'object']
+    categorical_features = [c for c in input_cols if df[c].dtype == 'object']
+    
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ('num', 'passthrough', numeric_features),
+            ('cat', OneHotEncoder(handle_unknown='ignore'), categorical_features)
+        ])
+
+    # We estimate each goal column individually to build the full row
+    estimates = {}
+    for goal in goal_cols:
+        model = Pipeline(steps=[
+            ('preprocessor', preprocessor),
+            ('regressor', RandomForestRegressor(n_estimators=50, random_state=42))
+        ])
+        model.fit(df[input_cols], df[goal])
+        estimates[goal] = model.predict(pd.DataFrame([row], columns=header)[input_cols])[0]
+
+    # Construct estimated row
+    est_row = list(row)
+    for i, col in enumerate(header):
+        if col in estimates:
+            est_row[i] = estimates[col]
+    
+    est_score = get_score(est_row)
+    all_scores = [get_score(r) for r in rows]
+    
+    # Fraction of rows that are worse than our estimated row
+    better_than_count = sum(1 for s in all_scores if est_score > s)
+    p = better_than_count / len(rows)
+    
+    reason = f"Based on our predictive model, this configuration outperforms {p:.1%} of all historical setups."
+    return (p, reason)
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                try:
+                    processed_row.append(float(val))
+                except ValueError:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Test with the last row, masking its goals
+    test_row = list(rows[-1])
+    for i, h in enumerate(header):
+        if h.endswith('-') or h.endswith('+'):
+            test_row[i] = "?"
+            
+    p, reason = justify(header, rows[:-1], test_row)
+    print(f"Performance Score: {p:.4f}")
+    print(reason)

@@ -1,0 +1,62 @@
+import ezr
+import random
+
+def blame(header, rows):
+    """
+    Identify input columns that best explain why the worst rows are bad.
+    We define 'bad' as having a high ydist. We compare the distribution of 
+    input values in the worst 25% of rows against the rest.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Score all rows by ydist
+    scored = sorted([(ezr.ydist(tbl, r), r) for r in rows], key=lambda x: x[0])
+    
+    # Split into worst 25% and the rest
+    n = len(scored) // 4
+    worst = [x[1] for x in scored[-n:]]
+    rest = [x[1] for x in scored[:-n]]
+    
+    # For each input column, check if the distribution of values in 'worst'
+    # is significantly different from 'rest'.
+    explanations = []
+    for col in tbl.x:
+        if type(col) is ezr.Num:
+            # For numbers, compare means
+            w_vals = [r[col.at] for r in worst if r[col.at] != "?"]
+            r_vals = [r[col.at] for r in rest if r[col.at] != "?"]
+            if w_vals and r_vals:
+                w_mu = sum(w_vals) / len(w_vals)
+                r_mu = sum(r_vals) / len(r_vals)
+                # If the worst rows have significantly different values, flag it
+                if abs(w_mu - r_mu) > (ezr.div(col) * 0.5):
+                    explanations.append(col.txt)
+        else:
+            # For symbols, check if any category is over-represented in worst
+            w_counts = {}
+            for r in worst:
+                v = r[col.at]
+                w_counts[v] = w_counts.get(v, 0) + 1
+            
+            for v, count in w_counts.items():
+                if count / len(worst) > 0.5: # If > 50% of worst rows share this
+                    explanations.append(f"{col.txt}={v}")
+                    break
+                    
+    return explanations
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    factors = blame(header, rows)
+    
+    print("Analysis: What explains short stays (worst performance metrics)?")
+    if factors:
+        print("The following factors are strongly associated with poor outcomes:")
+        for f in factors:
+            print(f" - {f}")
+    else:
+        print("No single input factor clearly explains the worst outcomes.")

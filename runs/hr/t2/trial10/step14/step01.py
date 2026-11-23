@@ -1,0 +1,57 @@
+import csv
+
+def remember(header, rows):
+    """
+    Identifies staff who stay 'unusually long'.
+    'YearsAtCompany+' is a goal to maximize.
+    We return the indices of the top 5% of rows based on this metric.
+    """
+    # Identify index for 'YearsAtCompany+'
+    try:
+        idx = header.index('YearsAtCompany+')
+    except ValueError:
+        return []
+
+    # Create list of (index, value)
+    indexed_rows = []
+    for i, row in enumerate(rows):
+        val = row[idx]
+        if isinstance(val, (int, float)):
+            indexed_rows.append((i, val))
+
+    # Sort by years descending
+    indexed_rows.sort(key=lambda x: x[1], reverse=True)
+
+    # Calculate 5% limit (at least 1, max 5% of total rows)
+    limit = max(1, len(rows) // 20)
+    
+    # Return indices of the top performers
+    return [item[0] for item in indexed_rows[:limit]]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                # Convert numeric columns (starting with uppercase)
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    best_indices = remember(header, rows)
+    
+    print("Staff records with unusually long tenure (YearsAtCompany+):")
+    years_idx = header.index('YearsAtCompany+')
+    for idx in best_indices:
+        print(f"Row {idx}: {rows[idx][years_idx]} years at company")

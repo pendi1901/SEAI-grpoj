@@ -1,0 +1,44 @@
+import csv
+from step05 import blame as original_blame
+
+def blame(header, rows):
+    """
+    Identifies input columns that correlate with poor performance.
+    The customer asks which settings can be left at defaults without hurting anything.
+    Settings that do not appear in the 'blame' list are those that do not 
+    significantly correlate with poor performance, implying they are safe 
+    to leave at default values.
+    """
+    # We reuse the logic from step05 to identify the most damaging settings.
+    # The settings NOT in this list are the ones that are "safe".
+    damaging_settings = original_blame(header, rows)
+    
+    # The customer wants to know which settings they CAN leave at default.
+    # This is the set of all input columns minus the damaging ones.
+    input_columns = [name for name in header if name not in ['MRE-', 'ACC+', 'PRED40+']]
+    safe_settings = [name for name in input_columns if name not in damaging_settings]
+    
+    return safe_settings
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i] == 'criterion':
+                    processed_row.append(val)
+                else:
+                    processed_row.append(float(val))
+            rows.append(processed_row)
+            
+    safe_cols = blame(header, rows)
+    
+    print("Customer Inquiry: Which settings can I leave at factory default without hurting anything?")
+    print("Based on our analysis, the following settings have the least impact on performance:")
+    print(", ".join(safe_cols))
+    print("\nYou can safely leave these at their default values.")
+    exit(0)

@@ -1,0 +1,53 @@
+import ezr
+import step01
+import step02
+
+def justify(header, rows, row):
+    """
+    Returns (p, reason): p is the fraction of rows that 'row' is better than,
+    and reason is a sentence explaining the performance.
+    """
+    # Create table to calculate ydist
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Estimate the goal values for the input row using nearest neighbor
+    # We use the logic from step02 to fill in the "?"
+    goal_indices = [i for i, name in enumerate(header) if name[-1] in "+-"]
+    
+    # Find the nearest neighbor in the training set to estimate the row's goals
+    # We treat the input row as a test row with missing goals
+    best_neighbor = min(rows, key=lambda r: ezr.xdist(tbl, row, r))
+    
+    # Create a copy of the row with estimated goals
+    estimated_row = list(row)
+    for idx in goal_indices:
+        estimated_row[idx] = best_neighbor[idx]
+        
+    # Calculate ydist for the estimated row and all other rows
+    target_ydist = ezr.ydist(tbl, estimated_row)
+    all_ydists = [ezr.ydist(tbl, r) for r in rows]
+    
+    # Calculate fraction of rows that are worse (have higher ydist)
+    # A row is better if its ydist is lower
+    better_than_count = sum(1 for d in all_ydists if d > target_ydist)
+    p = better_than_count / len(rows)
+    
+    reason = (f"This configuration is better than {p:.1%} of all known setups "
+              "based on its predicted multi-objective performance.")
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    all_data = list(ezr.csv(filename))
+    header = all_data[0]
+    rows = all_data[1:]
+    
+    # Pick an arbitrary row to justify (e.g., the 10th row)
+    test_row = list(rows[10])
+    goal_indices = [i for i, name in enumerate(header) if name[-1] in "+-"]
+    for idx in goal_indices:
+        test_row[idx] = "?"
+        
+    p, reason = justify(header, rows, test_row)
+    print(f"Justification: {reason}")

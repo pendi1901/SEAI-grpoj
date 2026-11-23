@@ -1,0 +1,68 @@
+import csv
+
+def remember(header, rows):
+    """
+    Identifies the best rows by calculating a normalized multi-objective score.
+    Goals: MRE- (minimize), ACC+ (maximize), PRED40+ (maximize).
+    Returns the top 5% (40 rows) of the 800 rows.
+    """
+    if not rows:
+        return []
+
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+
+    # Extract goal columns
+    goals = [[row[mre_idx], row[acc_idx], row[pred_idx]] for row in rows]
+    
+    # Calculate min/max for normalization
+    mins = [min(g[i] for g in goals) for i in range(3)]
+    maxs = [max(g[i] for g in goals) for i in range(3)]
+    
+    def get_score(row):
+        # MRE- (minimize): (max - val) / range
+        mre_norm = (maxs[0] - row[mre_idx]) / (maxs[0] - mins[0] + 1e-9)
+        # ACC+ (maximize): (val - min) / range
+        acc_norm = (row[acc_idx] - mins[1]) / (maxs[1] - mins[1] + 1e-9)
+        # PRED40+ (maximize): (val - min) / range
+        pred_norm = (row[pred_idx] - mins[2]) / (maxs[2] - mins[2] + 1e-9)
+        return mre_norm + acc_norm + pred_norm
+
+    # Score all rows
+    scored = []
+    for i, row in enumerate(rows):
+        scored.append((get_score(row), i))
+
+    # Sort descending by score
+    scored.sort(key=lambda x: x[0], reverse=True)
+
+    # Return top 5% (40 rows)
+    limit = max(1, len(rows) // 20)
+    return [x[1] for x in scored[:limit]]
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            for row in reader:
+                processed_row = []
+                for i, val in enumerate(row):
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        best_indices = remember(header, rows)
+        
+        print("Top performing setups identified.")
+        print(f"Number of setups returned: {len(best_indices)}")
+        print(f"Indices of top 5 setups: {best_indices[:5]}")
+        exit(0)
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

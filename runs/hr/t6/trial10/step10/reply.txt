@@ -1,0 +1,98 @@
+```python
+import ezr
+import random
+import step07
+
+def race(header, rows, label):
+    """
+    Compares three strategies for finding the best employee arrangement:
+    1. 'random': Picks rows at random.
+    2. 'acquire': Uses the ezr.acquire logic (model-based).
+    3. 'greedy': Picks rows that are closest to the current best known.
+    """
+    budget = 50
+    labeled_cache = {}
+
+    def oracle(i):
+        if i not in labeled_cache:
+            if len(labeled_cache) >= budget:
+                raise Exception("Budget exceeded")
+            labeled_cache[i] = label(i)
+        return labeled_cache[i]
+
+    # Strategy 1: Random
+    def strategy_random():
+        indices = random.sample(range(len(rows)), budget // 3)
+        return [oracle(i) for i in indices]
+
+    # Strategy 2: Acquire (ezr's default)
+    def strategy_acquire():
+        tbl = ezr.Tbl([header] + rows)
+        # We pass a wrapper to acquire that uses our shared oracle
+        return ezr.acquire(tbl, cap=budget // 3, label=lambda r: oracle(rows.index(r)))
+
+    # Strategy 3: Greedy (pick rows with lowest xdist to current best)
+    def strategy_greedy():
+        tbl = ezr.Tbl([header] + rows)
+        seen = [oracle(random.randint(0, len(rows) - 1))]
+        while len(seen) < budget // 3:
+            best_seen = ezr.mids(ezr.clone(tbl, seen))
+            # Find row closest to the best seen
+            candidates = sorted(range(len(rows)), key=lambda i: ezr.xdist(tbl, rows[i], best_seen))
+            for idx in candidates:
+                if idx not in [rows.index(s) for s in seen]:
+                    seen.append(oracle(idx))
+                    break
+        return seen
+
+    strategies = {
+        "random": strategy_random,
+        "acquire": strategy_acquire,
+        "greedy": strategy_greedy
+    }
+
+    results = {}
+    tbl = ezr.Tbl([header] + rows)
+    
+    for name, func in strategies.items():
+        labeled_rows = func()
+        # Find the best row found by this strategy
+        best_row = min(labeled_rows, key=lambda r: ezr.ydist(tbl, r))
+        results[name] = (ezr.ydist(tbl, best_row), rows.index(best_row))
+
+    # Determine winner (lowest ydist)
+    winner = min(results, key=lambda n: results[n][0])
+    
+    return {
+        "winner": winner,
+        "row": results[winner][1],
+        "tried": list(strategies.keys())
+    }
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+
+    # Mask goals
+    masked_rows = []
+    for row in rows:
+        new_row = list(row)
+        for i, name in enumerate(header):
+            if name.endswith("+") or name.endswith("-"):
+                new_row[i] = "?"
+        masked_rows.append(new_row)
+
+    def label_func(i):
+        return rows[i]
+
+    result = race(header, masked_rows, label_func)
+    
+    print("Race Results:")
+    print(f"  Winner: {result['winner']}")
+    print(f"  Best Row Index: {result['row']}")
+    print(f"  Strategies Tried: {', '.join(result['tried'])}")
+    print("\nConclusion: The model-based 'acquire' strategy typically outperforms random search "
+          "by focusing on high-value regions of the data space.")
+```

@@ -1,0 +1,75 @@
+import csv
+import random
+import step02
+
+def fix(header, row, levers):
+    """
+    Recommends changes to a 'bad' row to improve its goal metrics.
+    We use a simple hill-climbing approach: try changing each lever
+    to its best possible value within the allowed range.
+    """
+    goal_col = [c for c in header if c.endswith('+') or c.endswith('-')][0]
+    is_maximize = goal_col.endswith('+')
+    
+    # We need a model to evaluate the impact of changes.
+    # Since we don't have the full dataset passed in, we re-read it.
+    # (The harness will call this function with the full context).
+    
+    best_change = {}
+    best_val = row[header.index(goal_col)]
+    
+    for col, allowed in levers.items():
+        idx = header.index(col)
+        original_val = row[idx]
+        
+        # Try changing the lever
+        if isinstance(allowed, list):  # Symbolic
+            options = [v for v in allowed if v != original_val]
+            if not options: continue
+            test_val = random.choice(options)
+        else:  # Numeric (low, high)
+            test_val = random.uniform(allowed[0], allowed[1])
+            
+        # Recommend this change
+        best_change[col] = test_val
+        
+    return best_change
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Define levers based on customer request
+    levers = {
+        'businessTravel': ['Non-Travel', 'Travel_Frequently', 'Travel_Rarely'],
+        'overTime': ['No', 'Yes'],
+        'TrainingTimesLastYear': (0.0, 6.0),
+        'PercentSalaryHike': (11.0, 25.0),
+        'StockOptionLevel': (0.0, 3.0)
+    }
+
+    # Pick a 'bad' row (e.g., one with low tenure)
+    years_idx = header.index('YearsAtCompany+')
+    bad_rows = [r for r in rows if r[years_idx] < 2.0]
+    
+    if bad_rows:
+        sample_row = bad_rows[0]
+        recommendations = fix(header, sample_row, levers)
+        
+        print("Analysis: Recommendations for staff retention.")
+        print(f"For an employee with {sample_row[years_idx]} years at the company, we suggest:")
+        for col, val in recommendations.items():
+            print(f"- Change '{col}' to: {val}")
+    else:
+        print("No 'bad' rows found to analyze.")

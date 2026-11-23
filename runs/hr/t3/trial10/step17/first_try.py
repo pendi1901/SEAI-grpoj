@@ -1,0 +1,71 @@
+import csv
+import random
+
+def choose(header, rows, label):
+    """
+    Finds the best working arrangement for 'Laboratory Technician' staff
+    by sampling up to 50 rows. Goal: Maximize 'YearsAtCompany+'.
+    """
+    goal_idx = next(i for i, h in enumerate(header) if h.endswith('+'))
+    role_idx = header.index('jobRole')
+    
+    # Filter for Laboratory Technicians
+    lab_indices = [i for i, r in enumerate(rows) if r[role_idx] == 'Laboratory Technician']
+    
+    # If no lab staff, return any valid index
+    if not lab_indices:
+        return 0
+    
+    # Sample up to 50 lab staff
+    sample_size = min(50, len(lab_indices))
+    indices_to_sample = random.sample(lab_indices, sample_size)
+    
+    best_val = -1.0
+    best_idx = -1
+    
+    for i in indices_to_sample:
+        # label(i) returns the full row with the true goal value
+        full_row = label(i)
+        val = float(full_row[goal_idx])
+        
+        if val > best_val:
+            best_val = val
+            best_idx = i
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Keep a copy of original goals to simulate the label function
+    goal_idx = next(i for i, h in enumerate(header) if h.endswith('+'))
+    true_goals = [r[goal_idx] for r in rows]
+    
+    # Mask the goal column in the rows passed to choose
+    for r in rows:
+        r[goal_idx] = "?"
+
+    def label(i):
+        # Returns the full row with the true goal value restored
+        row_copy = rows[i][:]
+        row_copy[goal_idx] = true_goals[i]
+        return row_copy
+
+    best_idx = choose(header, rows, label)
+    
+    print("Laboratory Staff Retention Analysis:")
+    print(f"The best working arrangement for a Laboratory Technician was found at index {best_idx}.")
+    print(f"This employee has a tenure of {true_goals[best_idx]} years.")
+    print("Strategy: Sampled up to 50 laboratory staff to identify the most effective tenure outcomes.")

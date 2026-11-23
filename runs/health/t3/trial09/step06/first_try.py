@@ -1,0 +1,84 @@
+import csv
+import pandas as pd
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import LabelEncoder
+
+def justify(header, rows, row):
+    """
+    Estimates the performance of the given row and compares it to the dataset.
+    Returns (fraction_better, reason_string).
+    """
+    df = pd.DataFrame(rows, columns=header)
+    goal_cols = [c for c in header if c.endswith('-') or c.endswith('+')]
+    input_cols = [c for c in header if c not in goal_cols]
+
+    # Prepare training data
+    X_train = df[input_cols].copy()
+    
+    # Encode symbolic columns
+    encoders = {}
+    for col in input_cols:
+        if X_train[col].dtype == 'object':
+            le = LabelEncoder()
+            X_train[col] = le.fit_transform(X_train[col].astype(str))
+            encoders[col] = le
+    
+    # Prepare target row
+    row_df = pd.DataFrame([row], columns=header)
+    X_test = row_df[input_cols].copy()
+    for col in input_cols:
+        if col in encoders:
+            X_test[col] = encoders[col].transform(X_test[col].astype(str))
+
+    # Estimate goals
+    estimates = {}
+    for goal in goal_cols:
+        y_train = df[goal]
+        model = RandomForestRegressor(n_estimators=50, random_state=42)
+        model.fit(X_train, y_train)
+        estimates[goal] = model.predict(X_test)[0]
+
+    # Calculate score for all rows
+    def get_score(r):
+        s = 0
+        for col in goal_cols:
+            val = r[col]
+            if col.endswith('-'):
+                s -= val
+            else:
+                s += val
+        return s
+
+    row_score = sum(estimates[c] * (-1 if c.endswith('-') else 1) for c in goal_cols)
+    all_scores = [get_score(r) for r in rows]
+    
+    better_count = sum(1 for s in all_scores if row_score > s)
+    fraction = better_count / len(rows)
+    
+    reason = f"This setup is estimated to outperform {fraction:.1%} of all historical configurations based on its input parameters."
+    return (fraction, reason)
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for val in row:
+                try:
+                    processed_row.append(float(val))
+                except ValueError:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Create a test row (using the first row's inputs, masking goals)
+    test_row = rows[0][:]
+    for i, name in enumerate(header):
+        if name.endswith('-') or name.endswith('+'):
+            test_row[i] = "?"
+
+    p, reason = justify(header, rows, test_row)
+    print(f"Performance Score: {p:.4f}")
+    print(f"Justification: {reason}")

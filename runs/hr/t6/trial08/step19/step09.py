@@ -1,0 +1,55 @@
+import ezr
+import random
+
+def spot(header, rows):
+    """
+    Finds rows that look wrong (outliers).
+    We use the distance from the centroid of the data as a measure of suspicion.
+    Rows that are far from the 'average' behavior (high xdist) are flagged.
+    """
+    # Create a table to calculate column statistics
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate the centroid (mids) of the input columns
+    # We use the cached mids from the table
+    centroid = ezr.mids(tbl)
+    
+    # Calculate xdist for every row from the centroid
+    # Higher xdist means the row is more 'unusual' compared to the rest
+    scored = []
+    for i, row in enumerate(rows):
+        d = ezr.xdist(tbl, row, centroid)
+        scored.append((d, i))
+    
+    # Sort by xdist descending (most suspicious first)
+    scored.sort(key=lambda x: x[0], reverse=True)
+    
+    # Return the indices of the top 10 most suspicious rows
+    return [idx for d, idx in scored[:10]]
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Identify suspicious rows
+    suspicious_indices = spot(header, rows)
+    
+    print("Data Integrity Report: Suspicious Records")
+    print("-" * 45)
+    print("The following rows contain input values that deviate significantly")
+    print("from the rest of the dataset and may be entry errors:")
+    print("-" * 45)
+    print(f"{'Rank':<6} | {'Row Index':<10} | {'Suspicion Score'}")
+    
+    # Re-calculate distances for display
+    tbl = ezr.Tbl([header] + rows)
+    centroid = ezr.mids(tbl)
+    
+    for rank, idx in enumerate(suspicious_indices, 1):
+        score = ezr.xdist(tbl, rows[idx], centroid)
+        print(f"{rank:<6} | {idx:<10} | {score:.2f}")
+        
+    print("-" * 45)
+    print("These records should be reviewed for potential data entry errors.")

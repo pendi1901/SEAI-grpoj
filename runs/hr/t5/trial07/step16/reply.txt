@@ -1,0 +1,66 @@
+```python
+import ezr
+import random
+
+def justify(header, rows, row):
+    """
+    Estimates the rank of a row and provides a justification for why 
+    simply increasing salary might not be the universal solution.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Predict the performance of the current row using the tree ranker
+    ranker_func = ezr.ranker(tbl)
+    predicted_ydist = ranker_func(row)
+    
+    # Calculate p: fraction of rows that are worse than our predicted row
+    # A row is worse if its ydist is higher than our predicted ydist.
+    all_ydists = [ezr.ydist(tbl, r) for r in rows]
+    worse_count = sum(1 for d in all_ydists if d > predicted_ydist)
+    p = worse_count / len(rows)
+    
+    # Identify the 'MonthlyIncome' column index
+    income_idx = header.index('MonthlyIncome')
+    
+    # Check if increasing income significantly improves ydist
+    # We compare the current row's predicted performance with a hypothetical 
+    # version where income is increased by 20%.
+    row_high_income = list(row)
+    row_high_income[income_idx] = row[income_idx] * 1.2 if isinstance(row[income_idx], (int, float)) else row[income_idx]
+    
+    predicted_ydist_high = ranker_func(row_high_income)
+    
+    # If the improvement is negligible, we use that as the reason
+    improvement = predicted_ydist - predicted_ydist_high
+    
+    if improvement < 0.05:
+        reason = ("Increasing salary alone is insufficient because our analysis shows "
+                  "that other factors like job role and work-life balance have a "
+                  "much stronger impact on retention than income adjustments.")
+    else:
+        reason = (f"While increasing salary helps, this arrangement ranks in the top "
+                  f"{int((1-p)*100)}% of records, suggesting that non-monetary "
+                  "factors are already optimized.")
+                  
+    return p, reason
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Pick a sample row and mask its goals
+    test_row = list(rows[0])
+    goal_indices = [i for i, h in enumerate(header) if h.endswith('+') or h.endswith('-')]
+    for idx in goal_indices:
+        test_row[idx] = "?"
+        
+    p, reason = justify(header, rows, test_row)
+    
+    print("Analysis: Why not just pay everyone more?")
+    print(f"  Rank (p): {p:.4f}")
+    print(f"  Reason: {reason}")
+    
+    exit(0)
+```

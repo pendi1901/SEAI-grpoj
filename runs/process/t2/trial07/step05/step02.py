@@ -1,0 +1,52 @@
+import csv
+import step01
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column value for test rows by finding the 
+    average of the first goal column from the 5% best-performing training rows.
+    """
+    # Identify the index of the first goal column
+    goal_idx = -1
+    for i, name in enumerate(header):
+        if name.endswith('-') or name.endswith('+'):
+            goal_idx = i
+            break
+    
+    # Get indices of the best rows from step01
+    best_indices = step01.remember(header, train)
+    
+    # Calculate the average of the first goal column for these best rows
+    total_val = sum(train[i][goal_idx] for i in best_indices)
+    avg_val = total_val / len(best_indices)
+    
+    # Return the estimate for each test row
+    return [avg_val for _ in test]
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = [float(val) for val in row]
+            rows.append(processed_row)
+    
+    # For the purpose of this demonstration, we treat the last 10 rows as "test"
+    # where the goal columns are unknown.
+    train = rows[:-10]
+    test = rows[-10:]
+    
+    # Mask the goal columns in test data to simulate the "?" requirement
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    for row in test:
+        for idx in goal_indices:
+            row[idx] = "?"
+            
+    estimates = guess(header, train, test)
+    
+    print("Customer Inquiry: Estimated Cost (first goal column) for test setups:")
+    for i, val in enumerate(estimates[:5]):
+        print(f"  Test Row {i+1}: {val:.4f}")
+    print("  ...")

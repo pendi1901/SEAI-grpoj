@@ -1,0 +1,81 @@
+```python
+import ezr
+import random
+
+def choose(header, rows, label):
+    """
+    Finds a setup that forecasts well (low ydist) and is small.
+    We define 'small' as having a low 'N_estimators' value.
+    We use the acquire strategy to explore the space, but prioritize
+    rows that are both accurate and have low N_estimators.
+    """
+    # Create a table object to manage column roles
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Identify the index for N_estimators to penalize large models
+    n_est_idx = -1
+    for i, name in enumerate(header):
+        if name == "N_estimators":
+            n_est_idx = i
+            break
+            
+    # We need to track which rows we have already labeled
+    row_to_idx = {id(row): i for i, row in enumerate(rows)}
+    labeled_data = {}
+
+    def oracle_wrapper(row):
+        idx = row_to_idx[id(row)]
+        if idx not in labeled_data:
+            labeled_data[idx] = label(idx)
+        return labeled_data[idx]
+
+    # Use the acquire strategy to explore the space
+    # We modify the selection criteria to favor smaller N_estimators
+    # by adjusting the ydist calculation to include a penalty for size.
+    def penalized_ydist(tbl, row):
+        base_dist = ezr.ydist(tbl, row)
+        # Normalize N_estimators to 0..1 range for penalty
+        # 50 is min, 200 is max based on typical ranges
+        size_penalty = (row[n_est_idx] - 50) / 150
+        return base_dist + (0.2 * size_penalty)
+
+    # We perform the acquisition
+    # Since acquire uses ydist internally, we temporarily monkey-patch ydist
+    # to include our size penalty.
+    original_ydist = ezr.ydist
+    ezr.ydist = penalized_ydist
+    
+    try:
+        best_rows = ezr.acquire(tbl, cap=50, label=oracle_wrapper)
+        best_row = min(best_rows, key=lambda r: penalized_ydist(tbl, r))
+    finally:
+        ezr.ydist = original_ydist
+    
+    return row_to_idx[id(best_row)]
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    all_data = list(ezr.csv(filename))
+    header = all_data[0]
+    rows = all_data[1:]
+    
+    # Mask goals
+    masked_rows = []
+    goal_indices = [i for i, name in enumerate(header) if name[-1] in "+-"]
+    for row in rows:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_rows.append(new_row)
+        
+    def label(idx):
+        return rows[idx]
+    
+    random.seed(1234567891)
+    best_idx = choose(header, masked_rows, label)
+    
+    print("Optimization Analysis: Finding a high-performance, small-footprint configuration.")
+    print(f"The best configuration found is at index {best_idx}.")
+    print(f"Configuration details: {rows[best_idx]}")
+    print("This setup balances predictive accuracy with a smaller model size for nightly execution.")
+```

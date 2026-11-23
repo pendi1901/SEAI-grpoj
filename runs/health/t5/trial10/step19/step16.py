@@ -1,0 +1,56 @@
+import ezr
+import random
+
+def justify(header, rows, row):
+    """
+    Estimates the quality of a configuration and compares it to the population.
+    Answers why 'bigger/deeper' isn't always better by showing that 
+    performance is a function of specific settings, not just size.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Estimate the quality of the provided row using a decision tree
+    # The tree captures the relationship between inputs and goal distance (ydist)
+    node = ezr.tree(tbl, rows)
+    
+    # Predict ydist for the target row
+    leaf_node = ezr.leaf(node, row)
+    estimated_ydist = leaf_node.mu
+    
+    # Calculate what fraction of the population is worse (has higher ydist)
+    # than this estimated quality.
+    all_ydists = [ezr.ydist(tbl, r) for r in rows]
+    better_than_count = sum(1 for y in all_ydists if y > estimated_ydist)
+    p = better_than_count / len(rows)
+    
+    reason = (f"This configuration is estimated to outperform {p:.2%} of all possible setups; "
+              "bigger or deeper models often introduce noise or overfitting, "
+              "whereas optimal performance relies on finding the right balance of settings.")
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    try:
+        data = list(ezr.csv(filename))
+        header = data[0]
+        rows = data[1:]
+        
+        # Pick a sample row and mask its goals to demonstrate the function
+        target_row = list(rows[random.randint(0, len(rows) - 1)])
+        masked_row = [
+            "?" if header[i][-1] in "+-" else target_row[i] 
+            for i in range(len(header))
+        ]
+        
+        p, reason = justify(header, rows, masked_row)
+        
+        print("Analysis: Why not just use the biggest, deepest setup?")
+        print(f"Performance Rank: {p:.4f}")
+        print(f"Reasoning: {reason}")
+        
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
+    
+    exit(0)

@@ -1,0 +1,56 @@
+```python
+import ezr
+import step05
+
+def blame(header, rows):
+    """
+    Identifies input columns that have the least impact on goal outcomes.
+    We define 'least impact' as columns that are statistically indistinguishable
+    between the 'best' and 'worst' performing rows.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Sort rows by ydist ascending (best first)
+    scored = sorted(rows, key=lambda r: ezr.ydist(tbl, r))
+    
+    # Split into top 25% (best) and bottom 25% (worst)
+    n = len(scored) // 4
+    best = scored[:n]
+    worst = scored[-n:]
+    
+    # Identify columns that are NOT significant (noise)
+    # If same() returns True, the column distribution is indistinguishable
+    # between best and worst, meaning it has little to do with the outcome.
+    unimportant = []
+    for col in tbl.x:
+        b_vals = [r[col.at] for r in best if r[col.at] != "?"]
+        w_vals = [r[col.at] for r in worst if r[col.at] != "?"]
+        
+        if not b_vals or not w_vals:
+            continue
+            
+        if ezr.same(b_vals, w_vals):
+            unimportant.append(col.txt)
+            
+    return unimportant
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Run the analysis
+    useless_factors = blame(header, rows)
+    
+    print("Analysis: Which columns have little impact on retention?")
+    print("-" * 60)
+    if useless_factors:
+        print("The following input columns show no significant difference")
+        print("between top and bottom performers and could be retired:")
+        for i, factor in enumerate(useless_factors, 1):
+            print(f"{i}. {factor}")
+    else:
+        print("All columns appear to have some statistical relevance.")
+    print("-" * 60)
+```

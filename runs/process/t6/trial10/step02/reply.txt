@@ -1,0 +1,70 @@
+```python
+import ezr
+import step01
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column ('Cost-') for each row in test.
+    Uses the tree-based ranker from ezr to find the leaf node
+    and returns the mean value of the first goal column in that leaf.
+    """
+    # Create table from training data
+    data = [header] + train
+    tbl = ezr.Tbl(data)
+    
+    # Build a tree on the training data
+    node = ezr.tree(tbl, tbl.rows)
+    
+    # Identify the index of the first goal column (Cost-)
+    # Cost- is the first goal column (index 9 in the provided header)
+    goal_idx = -1
+    for i, name in enumerate(header):
+        if name.endswith("-") or name.endswith("+"):
+            goal_idx = i
+            break
+            
+    results = []
+    for row in test:
+        # Walk the tree to find the leaf for this test row
+        leaf_node = ezr.leaf(node, row)
+        
+        # Calculate the mean of the first goal column in this leaf
+        vals = [r[goal_idx] for r in leaf_node.rows if r[goal_idx] != "?"]
+        if vals:
+            results.append(sum(vals) / len(vals))
+        else:
+            # Fallback to global mean if leaf is empty or missing data
+            all_vals = [r[goal_idx] for r in train if r[goal_idx] != "?"]
+            results.append(sum(all_vals) / len(all_vals))
+            
+    return results
+
+if __name__ == "__main__":
+    # Load data
+    file_path = "pom3a.n1000.train.csv"
+    rows_gen = ezr.csv(file_path)
+    header = next(rows_gen)
+    all_rows = list(rows_gen)
+    
+    # Split: 80% train, 20% test
+    n = int(len(all_rows) * 0.8)
+    train = all_rows[:n]
+    test = all_rows[n:]
+    
+    # Mask the goals in test rows to simulate the requirement
+    # Goals are the last 3 columns: Cost-, Score-, Idle-
+    masked_test = []
+    for row in test:
+        new_row = row[:]
+        new_row[-3:] = ["?", "?", "?"]
+        masked_test.append(new_row)
+        
+    estimates = guess(header, train, masked_test)
+    
+    # Print a summary for the customer
+    print("Estimating 'Cost-' for test rows:")
+    print(f"Average estimated cost: {sum(estimates)/len(estimates):.4f}")
+    print(f"Sample estimates (first 5): {[round(x, 4) for x in estimates[:5]]}")
+    
+    exit(0)
+```

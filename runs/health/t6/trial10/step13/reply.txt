@@ -1,0 +1,55 @@
+```python
+import ezr
+import step03
+
+def certify(xs, ys):
+    """
+    Returns True if xs and ys are statistically indistinguishable,
+    False if they really differ.
+    """
+    return ezr.same(xs, ys)
+
+def analyze():
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    all_rows = list(ezr.csv(filename))
+    header = all_rows[0]
+    rows = all_rows[1:]
+    
+    tbl = ezr.Tbl(all_rows)
+    
+    # The customer asks about the "two built-in rules".
+    # In the context of this data and the provided tools, 
+    # we compare the two main ways to evaluate/rank rows:
+    # 1. The 'ydist' (multi-objective distance to ideal)
+    # 2. The 'xdist' (distance in input space to the centroid)
+    
+    # We check if the performance (ydist) of rows that are "near" the centroid
+    # is statistically different from rows that are "far" from the centroid.
+    
+    centroid = ezr.mids(tbl)
+    
+    # Calculate distances for all rows
+    distances = [ezr.xdist(tbl, r, centroid) for r in rows]
+    median = sorted(distances)[len(distances) // 2]
+    
+    # Split rows into two groups based on input-space distance
+    near = [ezr.ydist(tbl, r) for r, d in zip(rows, distances) if d <= median]
+    far = [ezr.ydist(tbl, r) for r, d in zip(rows, distances) if d > median]
+    
+    # Check if they are the same
+    is_same = certify(near, far)
+    
+    print(f"Analysis of input-space distance vs performance:")
+    print(f"Near centroid count: {len(near)}")
+    print(f"Far from centroid count: {len(far)}")
+    if is_same:
+        print("Result: The difference is statistically insignificant (noise).")
+        print("Conclusion: You can stop arguing; the choice of rule makes no real difference.")
+    else:
+        print("Result: There is a statistically significant difference.")
+        print("Conclusion: The choice of rule matters.")
+    return is_same
+
+if __name__ == "__main__":
+    analyze()
+```

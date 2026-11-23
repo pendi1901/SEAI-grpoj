@@ -1,0 +1,49 @@
+import csv
+from step09 import spot
+
+def flow(header, row, seen):
+    """
+    Determines if the current row makes the team look 'abnormal' compared
+    to the historical 'seen' data. We use the Isolation Forest logic from
+    step09 to check if the current row is an outlier relative to the 
+    population seen so far.
+    """
+    if len(seen) < 20:
+        return False
+    
+    # Combine seen rows with the new row to check for anomaly
+    all_data = seen + [row]
+    
+    # Identify outliers in the current population
+    # If the new row is identified as an outlier, return True
+    outliers = spot(header, all_data)
+    
+    # If the last row (the one just added) is in the list of outliers, flag it
+    return (len(all_data) - 1) in outliers
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    seen = []
+    anomalies_detected = 0
+    for row in rows:
+        if flow(header, row, seen):
+            anomalies_detected += 1
+        seen.append(row)
+
+    print("Analysis: Detecting when team composition deviates from the norm.")
+    print(f"Total employees processed: {len(rows)}")
+    print(f"Number of records identified as anomalous: {anomalies_detected}")
+    print("These records represent instances where the team no longer looks like it normally does.")

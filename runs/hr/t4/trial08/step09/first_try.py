@@ -1,0 +1,64 @@
+import csv
+from sklearn.ensemble import IsolationForest
+from sklearn.preprocessing import LabelEncoder
+
+def spot(header, rows):
+    """
+    Identifies rows that look wrong (outliers) using an Isolation Forest.
+    Returns the indices of the most suspicious rows, sorted by suspicion level.
+    """
+    # Prepare data for the model
+    X = []
+    encoders = {}
+    
+    for row in rows:
+        processed_row = []
+        for i, val in enumerate(row):
+            # Handle symbolic columns
+            if not header[i][0].isupper():
+                if i not in encoders:
+                    encoders[i] = LabelEncoder()
+                    # Fit on all values in this column
+                    encoders[i].fit([str(r[i]) for r in rows])
+                processed_row.append(float(encoders[i].transform([str(val)])[0]))
+            else:
+                # Handle numeric columns
+                processed_row.append(float(val))
+        X.append(processed_row)
+    
+    # Use IsolationForest to detect anomalies
+    # contamination is set to a small value to find the most extreme outliers
+    model = IsolationForest(n_estimators=100, contamination=0.05, random_state=42)
+    scores = model.decision_function(X)
+    
+    # Lower scores indicate more anomalous (suspicious) rows
+    indexed_scores = sorted(enumerate(scores), key=lambda x: x[1])
+    
+    # Return indices of the most suspicious rows
+    return [idx for idx, score in indexed_scores]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    suspicious_indices = spot(header, rows)
+    
+    print("Analysis: Identifying potentially incorrectly entered records.")
+    print("The following row indices are the most suspicious (top 5):")
+    for i in range(min(5, len(suspicious_indices))):
+        print(f"Row Index: {suspicious_indices[i]}")
+    
+    exit(0)

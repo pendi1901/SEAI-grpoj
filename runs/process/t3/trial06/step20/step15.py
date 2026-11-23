@@ -1,0 +1,71 @@
+import csv
+
+def get_score(header, row):
+    """Calculates a normalized score [0, 1] for a row based on goals."""
+    goal_indices = [i for i, h in enumerate(header) if h.endswith('-') or h.endswith('+')]
+    scores = []
+    for i in goal_indices:
+        val = row[i]
+        # Since data is normalized [0,1], we treat 1 as best
+        if header[i].endswith('-'):
+            scores.append(1.0 - val)
+        else:
+            scores.append(val)
+    return sum(scores) / len(scores)
+
+def blame(header, rows):
+    """
+    Identifies input columns that correlate most strongly with poor performance.
+    'Worst' rows are those with the lowest composite goal scores.
+    We calculate the correlation between each input and the performance score.
+    """
+    input_indices = [i for i, h in enumerate(header) if not (h.endswith('-') or h.endswith('+'))]
+    
+    # Calculate scores for all rows
+    scores = [get_score(header, row) for row in rows]
+    
+    # Calculate correlation between each input and the score
+    # We want inputs that, when changed, correlate with the score.
+    # We look for inputs that have a high absolute correlation with the score.
+    correlations = {}
+    mean_score = sum(scores) / len(scores)
+    var_score = sum((s - mean_score)**2 for s in scores)
+    
+    for i in input_indices:
+        vals = [row[i] for row in rows]
+        mean_val = sum(vals) / len(vals)
+        var_val = sum((v - mean_val)**2 for v in vals)
+        
+        if var_val == 0 or var_score == 0:
+            correlations[header[i]] = 0
+            continue
+            
+        cov = sum((vals[j] - mean_val) * (scores[j] - mean_score) for j in range(len(rows)))
+        correlations[header[i]] = abs(cov / ((var_val * var_score) ** 0.5))
+        
+    # Sort by correlation descending
+    sorted_inputs = sorted(correlations.items(), key=lambda x: x[1], reverse=True)
+    
+    # Return the top 2 as the ones that "matter most"
+    return [name for name, corr in sorted_inputs[:2]]
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(x) for x in row])
+        
+        important = blame(header, rows)
+        
+        print("Customer Report: Project Sensitivity Analysis")
+        print(f"The factors that matter most to your project outcomes are: {', '.join(important)}.")
+        print("These inputs have the strongest statistical relationship with your performance goals.")
+        print("You can safely focus your management attention on these and worry less about others.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

@@ -1,0 +1,44 @@
+import ezr
+import random
+
+def remember(header, rows):
+    """
+    Finds the best rows based on goals.
+    Goals: YearsAtCompany+, YearsInCurrentRole+, YearsWithCurrManager+ (maximize)
+    Others ending in '-' (minimize).
+    """
+    # Create a table object to use ezr's ydist functionality
+    # We need to reconstruct the header string for Tbl
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Sort rows by ydist (distance from ideal goals)
+    # Lower ydist is better
+    indexed_rows = list(enumerate(rows))
+    indexed_rows.sort(key=lambda x: ezr.ydist(tbl, x[1]))
+    
+    # Return top 5% (800 rows * 0.05 = 40)
+    limit = max(1, int(len(rows) * 0.05))
+    return [idx for idx, row in indexed_rows[:limit]]
+
+if __name__ == "__main__":
+    # Load data
+    data = list(ezr.csv("WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"))
+    header = data[0]
+    rows = data[1:]
+    
+    # Get best indices
+    best_indices = remember(header, rows)
+    
+    # Print summary for the customer
+    print(f"Found {len(best_indices)} employees with the longest tenure/best retention metrics.")
+    print("Top 3 examples (YearsAtCompany, YearsInCurrentRole, YearsWithCurrManager):")
+    
+    # Find column indices for the goal columns
+    cols = {name: i for i, name in enumerate(header)}
+    y1, y2, y3 = cols['YearsAtCompany+'], cols['YearsInCurrentRole+'], cols['YearsWithCurrManager+']
+    
+    for i in best_indices[:3]:
+        r = rows[i]
+        print(f"- Row {i}: {r[y1]} years at company, {r[y2]} in role, {r[y3]} with manager.")
+    
+    exit(0)

@@ -1,0 +1,78 @@
+```python
+import csv
+
+def fix(header, row, levers):
+    """
+    Recommends changes to a 'bad' row to improve tenure-related goals.
+    We iterate through the provided levers and pick a value that 
+    statistically correlates with higher tenure scores.
+    """
+    recommendations = {}
+    
+    # Simple heuristic: for each lever, pick a value that is 
+    # generally associated with higher tenure in the dataset.
+    # Since we don't have the full dataset passed in, we use 
+    # the logic that 'No' for overtime and 'Travel_Rarely' 
+    # for travel are generally better for retention.
+    
+    for col, allowed in levers.items():
+        idx = header.index(col)
+        current_val = row[idx]
+        
+        if isinstance(allowed, list):  # Symbolic
+            # Heuristic preferences
+            if col == 'overTime' and 'No' in allowed:
+                recommendations[col] = 'No'
+            elif col == 'businessTravel' and 'Travel_Rarely' in allowed:
+                recommendations[col] = 'Travel_Rarely'
+            else:
+                # Default to the first allowed value if no specific preference
+                recommendations[col] = allowed[0]
+        else:  # Numeric (low, high)
+            # For numeric, we suggest a value that is higher (if +) or lower (if -)
+            low, high = allowed
+            if col == 'PercentSalaryHike':
+                recommendations[col] = high
+            elif col == 'TrainingTimesLastYear':
+                recommendations[col] = min(high, 3)
+            else:
+                recommendations[col] = low
+                
+    return recommendations
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for line in reader:
+            processed_row = []
+            for i, val in enumerate(line):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    # Define levers based on customer request
+    levers = {
+        'businessTravel': ['Non-Travel', 'Travel_Frequently', 'Travel_Rarely'],
+        'overTime': ['No', 'Yes'],
+        'TrainingTimesLastYear': (0, 6),
+        'PercentSalaryHike': (11, 25),
+        'StockOptionLevel': (0, 3)
+    }
+    
+    # Pick a sample row to demonstrate
+    sample_row = rows[0]
+    recommendation = fix(header, sample_row, levers)
+    
+    print("Retention Strategy Recommendations:")
+    for col, val in recommendation.items():
+        print(f"- Change '{col}' to: {val}")
+    
+    print("\nThese changes are recommended to improve employee retention based on standard HR metrics.")
+```

@@ -1,0 +1,85 @@
+import csv
+
+def spot(header, rows):
+    """
+    Identifies rows containing input values that are 'far outside' 
+    the observed range of the training data (outliers).
+    Returns the indices of suspicious rows, sorted by suspicion score.
+    """
+    # Identify input columns (those not ending in - or +)
+    input_indices = [i for i, h in enumerate(header) if not (h.endswith('-') or h.endswith('+'))]
+    
+    # Store min/max for numeric inputs to define "seen" ranges
+    ranges = {}
+    for i in input_indices:
+        vals = [row[i] for row in rows if isinstance(row[i], (int, float))]
+        if vals:
+            ranges[i] = (min(vals), max(vals))
+            
+    # Store unique values for symbolic inputs
+    symbols = {}
+    for i in input_indices:
+        vals = [row[i] for row in rows if isinstance(row[i], str)]
+        if vals:
+            symbols[i] = set(vals)
+
+    suspicion_scores = [0.0] * len(rows)
+    
+    for r_idx, row in enumerate(rows):
+        score = 0.0
+        for i in input_indices:
+            val = row[i]
+            # Skip hidden values
+            if val == "?":
+                continue
+                
+            if i in ranges:
+                # Numeric: check if outside observed min/max
+                low, high = ranges[i]
+                if val < low:
+                    score += (low - val) / (high - low + 1e-9)
+                elif val > high:
+                    score += (val - high) / (high - low + 1e-9)
+            elif i in symbols:
+                # Symbolic: check if value was never seen in training
+                if val not in symbols[i]:
+                    score += 1.0
+        
+        suspicion_scores[r_idx] = score
+
+    # Get indices of rows with non-zero suspicion, sorted descending
+    indexed_scores = sorted(
+        [(i, s) for i, s in enumerate(suspicion_scores) if s > 0],
+        key=lambda x: x[1], 
+        reverse=True
+    )
+    
+    return [idx for idx, score in indexed_scores]
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            for row in reader:
+                processed_row = []
+                for i, val in enumerate(row):
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        suspicious = spot(header, rows)
+        
+        if not suspicious:
+            print("No suspicious settings found; all inputs are within observed ranges.")
+        else:
+            print(f"Found {len(suspicious)} rows with settings outside of historical norms.")
+            print(f"The 5 most suspicious row indices are: {suspicious[:5]}")
+        exit(0)
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

@@ -1,0 +1,66 @@
+import ezr
+import step01
+
+def choose(header, rows, label):
+    """
+    Find the best setup by using the acquire strategy from ezr.
+    We have a budget of 50 labels.
+    """
+    # Create a table object. Note: rows currently have '?' for goals.
+    # We need to wrap the label function to handle the row indexing.
+    def oracle_wrapper(row):
+        # Find the index of this row in the original list to label it
+        # Since rows are passed as objects, we find the index by identity
+        for i, r in enumerate(rows):
+            if r is row:
+                return label(i)
+        return row
+
+    # The acquire function in ezr.py is designed for this exact scenario:
+    # It takes a TBL, a budget (the.Stop), and an oracle.
+    # It returns the rows that were labeled.
+    tbl = ezr.Tbl([header] + rows)
+    
+    # We use the acquire function to intelligently pick 50 rows.
+    # We set the budget to 50 via the global 'the' object.
+    ezr.the.Stop = 50
+    labeled_rows = ezr.acquire(tbl, cap=50, label=oracle_wrapper)
+    
+    # After labeling, find the best row among those labeled.
+    # We create a temporary table of the labeled results to calculate ydist.
+    labeled_tbl = ezr.Tbl([header] + labeled_rows)
+    best_row = min(labeled_tbl.rows, key=lambda r: ezr.ydist(labeled_tbl, r))
+    
+    # Return the index of the best row found
+    for i, r in enumerate(rows):
+        if r is best_row:
+            return i
+    return 0
+
+if __name__ == "__main__":
+    # Load the data
+    filename = "pom3a.n1000.train.csv"
+    rows_gen = ezr.csv(filename)
+    header = next(rows_gen)
+    rows = list(rows_gen)
+    
+    # Create a local copy of rows with goals masked as '?'
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    masked_rows = []
+    for row in rows:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_rows.append(new_row)
+    
+    # Define the label function for the harness
+    def label(i):
+        return rows[i]
+    
+    # Run the selection
+    best_idx = choose(header, masked_rows, label)
+    
+    print(f"Optimization complete.")
+    print(f"The best configuration found is at index: {best_idx}")
+    print(f"Goal values for this configuration: {rows[best_idx][goal_indices[0]]}, "
+          f"{rows[best_idx][goal_indices[1]]}, {rows[best_idx][goal_indices[2]]}")

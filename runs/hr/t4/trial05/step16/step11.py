@@ -1,0 +1,54 @@
+import csv
+from sklearn.neighbors import NearestNeighbors
+
+def remember(header, rows):
+    """
+    Finds the 5% of employees most similar to the first employee in the dataset.
+    Similarity is calculated using Euclidean distance on numeric features.
+    """
+    # Identify numeric columns (excluding goals)
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    numeric_indices = [i for i, name in enumerate(header) if name[0].isupper() and i not in goal_indices]
+    
+    # Prepare data for similarity (only numeric inputs)
+    X = [[row[i] for i in numeric_indices] for row in rows]
+    
+    # Use NearestNeighbors to find the most similar rows
+    # We want 5% of the rows
+    n_neighbors = max(1, len(rows) // 20)
+    
+    # Fit model on all rows
+    nn = NearestNeighbors(n_neighbors=n_neighbors + 1)
+    nn.fit(X)
+    
+    # Find neighbors of the first row (index 0)
+    distances, indices = nn.kneighbors([X[0]])
+    
+    # Return the indices of the neighbors (excluding the first one if it's the query itself)
+    result = [i for i in indices[0] if i != 0]
+    
+    # Ensure we return exactly the requested count
+    return result[:n_neighbors]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    indices = remember(header, rows)
+    tenure_idx = header.index('YearsAtCompany+')
+    
+    print("Analysis: Employees most similar to the first record and their tenure:")
+    for idx in indices:
+        tenure = rows[idx][tenure_idx]
+        print(f" - Row {idx}: {tenure} years at company")

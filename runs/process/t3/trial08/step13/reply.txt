@@ -1,0 +1,72 @@
+```python
+import csv
+from scipy import stats
+
+def certify(xs, ys):
+    """
+    Returns True if the difference between two distributions is not statistically 
+    significant (i.e., they are the same apart from noise), False otherwise.
+    Uses Welch's t-test.
+    """
+    if len(xs) < 2 or len(ys) < 2:
+        return True
+    t_stat, p_value = stats.ttest_ind(xs, ys, equal_var=False)
+    return p_value > 0.05
+
+def analyze_shift(header, rows):
+    """
+    Compares the performance of the first half of the data vs the second half
+    to determine if the 'spring' change resulted in a statistically significant shift.
+    """
+    goal_indices = [i for i, h in enumerate(header) if h.endswith('-') or h.endswith('+')]
+    
+    # Calculate aggregate score for each row
+    # Normalize goals: 1 is best, 0 is worst
+    def get_aggregate(row):
+        scores = []
+        for i in goal_indices:
+            col_vals = [r[i] for r in rows]
+            min_v, max_v = min(col_vals), max(col_vals)
+            norm = (row[i] - min_v) / (max_v - min_v + 1e-9)
+            scores.append(1 - norm if header[i].endswith('-') else norm)
+        return sum(scores) / len(scores)
+
+    scores = [get_aggregate(row) for row in rows]
+    
+    # Split into two halves (before and after the change)
+    mid = len(scores) // 2
+    before = scores[:mid]
+    after = scores[mid:]
+    
+    is_same = certify(before, after)
+    return is_same, sum(before)/len(before), sum(after)/len(after)
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed_row = [float(val) if header[i][0].isupper() else val for i, val in enumerate(row)]
+                rows.append(processed_row)
+        
+        is_same, mean_before, mean_after = analyze_shift(header, rows)
+        
+        print("Customer Inquiry: Did the spring team process change shift results?")
+        print("-" * 60)
+        print(f"Average Performance (Before): {mean_before:.4f}")
+        print(f"Average Performance (After):  {mean_after:.4f}")
+        
+        if is_same:
+            print("\nConclusion: The results are statistically the same.")
+            print("The observed differences are likely due to noise.")
+        else:
+            print("\nConclusion: The results have shifted significantly.")
+            print("The change in team process had a measurable impact on performance.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

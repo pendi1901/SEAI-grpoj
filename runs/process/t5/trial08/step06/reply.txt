@@ -1,0 +1,60 @@
+```python
+import ezr
+import random
+
+def justify(header, rows, row):
+    """
+    Returns (p, reason): p is the fraction of rows that `row` is better than.
+    `row` has '?' in goal columns; we estimate its quality by finding the
+    average ydist of rows in the same leaf node of a decision tree.
+    """
+    # Create a table to handle column roles and ydist calculations
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Build a tree to partition the space
+    root = ezr.tree(tbl, tbl.rows)
+    
+    # Find the leaf node for the input row
+    leaf_node = ezr.leaf(root, row)
+    
+    # Estimate quality: mean ydist of rows in this leaf
+    # Lower ydist is better.
+    estimated_ydist = leaf_node.mu
+    
+    # Calculate how many rows are worse (have higher ydist) than our estimate
+    all_ydists = [ezr.ydist(tbl, r) for r in rows]
+    worse_count = sum(1 for y in all_ydists if y > estimated_ydist)
+    
+    p = worse_count / len(rows)
+    
+    reason = (f"This configuration is estimated to be better than {int(p * 100)}% "
+              "of all known setups based on its similarity to high-performing "
+              "clusters in our historical data.")
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    
+    try:
+        header = next(data_gen)
+        rows = list(data_gen)
+    except StopIteration:
+        print("Error: File is empty or missing.")
+        exit(1)
+        
+    # Pick a sample row and mask its goals to test the function
+    sample_row = list(rows[0])
+    goal_indices = [i for i, name in enumerate(header) if name[-1] in ('-', '+')]
+    for idx in goal_indices:
+        sample_row[idx] = "?"
+        
+    p, reason = justify(header, rows, sample_row)
+    
+    print(f"Justification Analysis:")
+    print(f"Rank: {p:.4f}")
+    print(f"Reason: {reason}")
+    
+    exit(0)
+```

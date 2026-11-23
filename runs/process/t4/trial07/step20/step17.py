@@ -1,0 +1,87 @@
+import csv
+import numpy as np
+import pandas as pd
+from sklearn.ensemble import RandomForestRegressor
+
+def get_score(header, row_goals):
+    """Calculates a normalized aggregate score for a row."""
+    goals = [col for col in header if col.endswith(('-', '+'))]
+    scores = []
+    for i, goal in enumerate(goals):
+        val = row_goals[i]
+        # Normalize: 0 is worst, 1 is best
+        # For '-', lower is better (1 - val). For '+', higher is better (val).
+        # Assuming values are already in [0,1] range as per problem description.
+        if goal.endswith('-'):
+            scores.append(1.0 - val)
+        else:
+            scores.append(val)
+    return np.mean(scores)
+
+def choose(header, rows, label):
+    """
+    Finds the best setup for a large, high-criticality project.
+    We filter for high 'Size' and 'Criticality' first, then use 
+    a surrogate model to optimize within that subset.
+    """
+    inputs = [c for c in header if not (c.endswith(('-', '+')))]
+    
+    # 1. Filter for "large and damaging" projects
+    # Large: Size > 0.7, Criticality > 0.7
+    candidates = []
+    for i, row in enumerate(rows):
+        size = row[header.index('Size')]
+        crit = row[header.index('Criticality')]
+        if size > 0.7 and crit > 0.7:
+            candidates.append(i)
+            
+    # 2. Sample up to 50 candidates to build a model
+    # If fewer than 50, sample all.
+    sample_indices = candidates[:50]
+    
+    queried_data = []
+    for idx in sample_indices:
+        true_goals = label(idx)
+        queried_data.append(rows[idx][:len(inputs)] + true_goals)
+        
+    df = pd.DataFrame(queried_data, columns=header)
+    
+    # 3. Train surrogate model on the subset
+    model = RandomForestRegressor(n_estimators=20, random_state=42)
+    model.fit(df[inputs], [get_score(header, g) for g in df[[c for c in header if c.endswith(('-', '+'))]].values])
+    
+    # 4. Predict for all candidates and pick the best
+    all_candidate_inputs = pd.DataFrame([rows[i][:len(inputs)] for i in candidates], columns=inputs)
+    preds = model.predict(all_candidate_inputs)
+    
+    best_local_idx = int(np.argmax(preds))
+    return candidates[best_local_idx]
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) for val in row])
+        
+        # Keep full data for the label function
+        full_data = [r[:] for r in rows]
+        
+        def label(i):
+            return [full_data[i][j] for j, col in enumerate(header) if col.endswith(('-', '+'))]
+            
+        # Mask rows for the function
+        masked_rows = [r[:len(header)-3] + ['?'] * 3 for r in rows]
+            
+        best_idx = choose(header, masked_rows, label)
+        
+        print("Customer Inquiry: Best setup for a large, high-criticality project.")
+        print(f"Analysis complete. The recommended setup is at index: {best_idx}")
+        print("This setup was selected by filtering for high-impact projects and optimizing performance.")
+        
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

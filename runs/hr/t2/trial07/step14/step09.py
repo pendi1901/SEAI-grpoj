@@ -1,0 +1,64 @@
+import csv
+
+def spot(header, rows):
+    """
+    Identifies rows that look 'wrong' by checking for outliers in numeric columns.
+    A row is considered suspicious if its values are significantly far from the 
+    mean (more than 3 standard deviations) for any numeric input column.
+    """
+    numeric_indices = [
+        i for i, name in enumerate(header) 
+        if name[0].isupper() and '+' not in name and '-' not in name
+    ]
+    
+    # Calculate means and standard deviations for each numeric column
+    stats = {}
+    for i in numeric_indices:
+        vals = [r[i] for r in rows if isinstance(r[i], (int, float))]
+        if not vals:
+            continue
+        mean = sum(vals) / len(vals)
+        std = (sum((x - mean) ** 2 for x in vals) / len(vals)) ** 0.5
+        stats[i] = (mean, std)
+    
+    # Score rows based on how many standard deviations they are from the mean
+    # We sum the absolute Z-scores across all numeric columns
+    suspicion_scores = []
+    for row_idx, row in enumerate(rows):
+        score = 0
+        for i in numeric_indices:
+            if i in stats:
+                mean, std = stats[i]
+                if std > 0:
+                    z_score = abs(row[i] - mean) / std
+                    if z_score > 3:  # Threshold for outlier
+                        score += z_score
+        if score > 0:
+            suspicion_scores.append((score, row_idx))
+            
+    # Sort by suspicion score descending
+    suspicion_scores.sort(key=lambda x: x[0], reverse=True)
+    
+    return [item[1] for item in suspicion_scores]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    suspicious_indices = spot(header, rows)
+    
+    print("Top 5 most suspicious records (potential data entry errors):")
+    for i in range(min(5, len(suspicious_indices))):
+        idx = suspicious_indices[i]
+        print(f"Row {idx} is highly suspicious due to extreme numeric values.")

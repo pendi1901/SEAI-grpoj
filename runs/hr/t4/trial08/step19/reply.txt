@@ -1,0 +1,42 @@
+```python
+import csv
+from step09 import spot as base_spot
+
+def spot(header, rows):
+    """
+    Identifies rows that look wrong (outliers) using the logic from step09.
+    The customer asks to identify when estimates cannot be trusted;
+    these are the rows that deviate significantly from the historical data.
+    """
+    # The logic in step09 uses IsolationForest to detect anomalies.
+    # These anomalies represent the records that are "unlike anyone we have employed",
+    # and therefore our model's estimates for them are the least trustworthy.
+    return base_spot(header, rows)
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    suspicious_indices = spot(header, rows)
+    
+    print("Analysis: Identifying records where estimates cannot be trusted.")
+    print("These are rows that significantly deviate from our historical employment patterns.")
+    print("The most suspicious row indices (top 5) are:")
+    for i in range(min(5, len(suspicious_indices))):
+        print(f"Row Index: {suspicious_indices[i]}")
+    
+    exit(0)
+```

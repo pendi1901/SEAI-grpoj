@@ -1,0 +1,50 @@
+import csv
+from step05 import blame as original_blame
+
+def blame(header, rows):
+    """
+    Identifies input columns that correlate most strongly with 'bad' rows.
+    The customer asks which settings can be left at factory defaults; 
+    these are the settings that have the least impact on performance 
+    (i.e., the ones that do NOT appear in the blame list).
+    """
+    # We reuse the blame logic from step05, which ranks inputs by 
+    # how much they differentiate 'bad' rows from 'good' rows.
+    # The columns NOT returned by blame are the ones that don't 
+    # significantly contribute to poor performance.
+    
+    # Get all input columns
+    input_cols = [h for h in header if not (h.endswith('-') or h.endswith('+'))]
+    
+    # Get the top culprits from step05
+    culprits = original_blame(header, rows)
+    
+    # The settings that can be left at defaults are those not in the culprits list
+    safe_settings = [col for col in input_cols if col not in culprits]
+    
+    return safe_settings
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed_row = []
+                for i, val in enumerate(row):
+                    if header[i] == 'criterion':
+                        processed_row.append(val)
+                    else:
+                        processed_row.append(float(val))
+                rows.append(processed_row)
+        
+        safe = blame(header, rows)
+        print("Analysis: Settings you can leave at factory defaults without hurting performance:")
+        for s in safe:
+            print(f"- {s}")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

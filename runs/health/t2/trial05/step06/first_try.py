@@ -1,0 +1,58 @@
+import csv
+import step02
+
+def justify(header, rows, row):
+    """
+    Estimates the performance of 'row' and compares it against all 'rows'.
+    Returns (fraction_better, reason_string).
+    """
+    # 1. Estimate the goals for the target row using k-NN from step02
+    # We need to provide a list containing just the target row for the guess function
+    estimated_goals = step02.guess(header, rows, [row])
+    
+    # 2. Define scoring logic (consistent with step01/step05)
+    # Goals: MRE- (min), ACC+ (max), PRED40+ (max)
+    mre_idx, acc_idx, pred_idx = 0, 1, 2
+    
+    def get_score(r):
+        # Use estimated values for the target row, actual for others
+        mre = estimated_goals[0] if r is row else r[mre_idx]
+        acc = estimated_goals[1] if r is row else r[acc_idx]
+        pred = estimated_goals[2] if r is row else r[pred_idx]
+        return -mre + acc + pred
+
+    target_score = get_score(row)
+    
+    # 3. Compare against all rows
+    better_count = 0
+    for r in rows:
+        if get_score(r) > target_score:
+            better_count += 1
+            
+    p = 1.0 - (better_count / len(rows))
+    reason = f"This setup outperforms {p:.1%} of all known configurations based on its predicted MRE, ACC, and PRED40 metrics."
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed_row = [val if header[i] == 'criterion' else float(val) 
+                                 for i, val in enumerate(row)]
+                rows.append(processed_row)
+        
+        # Test with the last row as a hidden query
+        test_row = ["?"] * 3 + rows[-1][3:]
+        p, reason = justify(header, rows, test_row)
+        
+        print(f"Justification: {reason}")
+        print(f"Score: {p:.4f}")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

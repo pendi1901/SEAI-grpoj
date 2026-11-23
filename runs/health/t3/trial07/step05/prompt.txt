@@ -1,0 +1,315 @@
+You are writing one Python file, step05.py.
+
+The data is the csv file Health-ClosedIssues0000.n1000.train.csv in the current directory. Column names starting in upper case are numeric, lower case are symbolic. A name ending in - is a goal to minimise, in + a goal to maximise; all other columns are inputs. It has 800 data rows after the header. Any count the customer quotes describes their full records, not this file: never hard-code a row count, read the file to the end. Its first lines:
+
+MRE-,ACC+,PRED40+,N_estimators,criterion,Min_sample_leaves,Min_impurity_decrease,Max_depth
+0.883063328,0.40756167894905476,0,180,absolute_error,11,9.75,11
+0.26612665684830633,0.681512336,0.5714285714285714,110,squared_error,2,2,2
+0.23902798232695144,0.6843960269144505,0.8571428571428571,120,squared_error,2,7.75,7
+
+Your function receives rows already parsed. The header and the first two rows look like this in Python:
+
+header = ['MRE-', 'ACC+', 'PRED40+', 'N_estimators', 'criterion', 'Min_sample_leaves', 'Min_impurity_decrease', 'Max_depth']
+row = [0.883063328, 0.40756167894905476, 0.0, 180.0, 'absolute_error', 11.0, 9.75, 11.0]
+row = [0.26612665684830633, 0.681512336, 0.5714285714285714, 110.0, 'squared_error', 2.0, 2.0, 2.0]
+
+These columns hold text, not numbers: criterion (absolute_error, poisson, squared_error).
+
+You may use scikit-learn, numpy and pandas.
+
+These files, written earlier, are in the same directory:
+
+--- step01.py ---
+import csv
+
+def remember(header, rows):
+    """
+    Identifies the best rows based on multi-objective optimization.
+    Goals: Minimize columns ending in '-', Maximize columns ending in '+'.
+    Uses a simple Pareto-based ranking approach to find the 'handful' of best setups.
+    """
+    goals = []
+    for i, name in enumerate(header):
+        if name.endswith('-'):
+            goals.append((i, -1))  # Minimize
+        elif name.endswith('+'):
+            goals.append((i, 1))   # Maximize
+
+    def is_better(row_a, row_b):
+        # Returns True if row_a dominates or is better than row_b
+        better_or_equal = True
+        strictly_better = False
+        for idx, direction in goals:
+            val_a, val_b = row_a[idx], row_b[idx]
+            if direction == 1:  # Maximize
+                if val_a < val_b: return False
+                if val_a > val_b: strictly_better = True
+            else:  # Minimize
+                if val_a > val_b: return False
+                if val_a < val_b: strictly_better = True
+        return strictly_better
+
+    # Calculate a score based on how many other rows this row dominates
+    # or simply rank by a weighted sum of normalized objectives.
+    # Given the constraints, we pick the top 5% (40 rows out of 800).
+    scores = []
+    for i, row in enumerate(rows):
+        # Normalize goals to [0, 1] range roughly
+        score = 0
+        for idx, direction in goals:
+            # Simple heuristic: higher is better for the "trustworthiness" metric
+            val = row[idx]
+            score += val if direction == 1 else -val
+        scores.append((score, i))
+    
+    scores.sort(key=lambda x: x[0], reverse=True)
+    
+    # Return top 5% (40 rows)
+    limit = max(1, len(rows) // 20)
+    return [item[1] for item in scores[:limit]]
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                # Convert numeric columns (upper case start)
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    best_indices = remember(header, rows)
+    
+    print(f"Found {len(best_indices)} unusually trustworthy setups.")
+    print("Indices of top performing rows:", best_indices[:10], "...")
+
+
+--- step02.py ---
+import csv
+import pandas as pd
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import LabelEncoder
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column (MRE-) for test rows using a 
+    RandomForestRegressor trained on the provided training data.
+    """
+    df_train = pd.DataFrame(train, columns=header)
+    df_test = pd.DataFrame(test, columns=header)
+    
+    # Identify goal columns
+    goals = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    target_col = header[goals[0]]
+    
+    # Prepare features: drop all goal columns
+    feature_cols = [name for name in header if not (name.endswith('-') or name.endswith('+'))]
+    
+    # Encode symbolic columns
+    encoders = {}
+    for col in header:
+        if isinstance(df_train[col].iloc[0], str):
+            le = LabelEncoder()
+            # Combine train and test to ensure consistent encoding
+            combined = pd.concat([df_train[col], df_test[col]])
+            le.fit(combined)
+            df_train[col] = le.transform(df_train[col])
+            df_test[col] = le.transform(df_test[col])
+            encoders[col] = le
+            
+    X_train = df_train[feature_cols]
+    y_train = df_train[target_col]
+    X_test = df_test[feature_cols]
+    
+    # Train model
+    model = RandomForestRegressor(n_estimators=100, random_state=42)
+    model.fit(X_train, y_train)
+    
+    # Predict
+    predictions = model.predict(X_test)
+    return predictions.tolist()
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    # Split: use first 700 for train, last 100 for test
+    train_data = rows[:700]
+    test_data = [row[:] for row in rows[700:]]
+    
+    # Mask goals in test data
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    for row in test_data:
+        for idx in goal_indices:
+            row[idx] = "?"
+            
+    estimates = guess(header, train_data, test_data)
+    
+    print(f"Estimated MRE- for the first 5 test cases:")
+    for i in range(min(5, len(estimates))):
+        print(f"Row {700 + i}: {estimates[i]:.4f}")
+
+
+--- step03.py ---
+import csv
+import numpy as np
+from scipy.stats import pearsonr
+
+def certify(xs, ys):
+    """
+    Returns True if the correlation between xs and ys is strong,
+    implying the relationship is real rather than noise.
+    """
+    if len(xs) < 2:
+        return False
+    
+    # Calculate Pearson correlation coefficient
+    corr, _ = pearsonr(xs, ys)
+    
+    # If correlation is > 0.3, we consider the relationship 'real' (not just noise)
+    # This is a standard heuristic for identifying non-trivial associations.
+    return abs(corr) > 0.3
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # The customer asks if "big setups" (N_estimators) are more accurate (MRE-)
+    # MRE- is index 0, N_estimators is index 3
+    mre_idx = 0
+    n_est_idx = 3
+    
+    xs = [row[n_est_idx] for row in rows]
+    ys = [row[mre_idx] for row in rows]
+    
+    is_real = certify(xs, ys)
+    
+    print("Analyzing if setup size (N_estimators) correlates with accuracy (MRE-)...")
+    if is_real:
+        print("Result: The observed trend is statistically significant. The relationship is real.")
+    else:
+        print("Result: The observed trend is likely noise. There is no strong evidence of a relationship.")
+
+
+--- step04.py ---
+import csv
+
+def flow(header, row, seen):
+    """
+    Decides if the current row is 'good enough' to ship.
+    We define 'good enough' as being better than all previously seen rows
+    across all objectives (Pareto dominance).
+    """
+    goals = []
+    for i, name in enumerate(header):
+        if name.endswith('-'):
+            goals.append((i, -1))  # Minimize
+        elif name.endswith('+'):
+            goals.append((i, 1))   # Maximize
+
+    # If it's the first row, we have no baseline, so keep looking
+    if not seen:
+        return False
+
+    # Check if current row dominates any previous row
+    # A row is 'good enough' if it is better than the best seen so far
+    # or if it is a new Pareto optimal point.
+    def dominates(row_a, row_b):
+        better_or_equal = True
+        strictly_better = False
+        for idx, direction in goals:
+            val_a, val_b = row_a[idx], row_b[idx]
+            if direction == 1:  # Maximize
+                if val_a < val_b: return False
+                if val_a > val_b: strictly_better = True
+            else:  # Minimize
+                if val_a > val_b: return False
+                if val_a < val_b: strictly_better = True
+        return strictly_better
+
+    # If the current row dominates all previously seen rows, it is a candidate
+    # To avoid stopping too early, we require it to be significantly better
+    # or simply better than the current 'best' aggregate.
+    is_better_than_all = True
+    for prev in seen:
+        if not dominates(row, prev):
+            is_better_than_all = False
+            break
+            
+    return is_better_than_all
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    seen = []
+    found = False
+    for i, row in enumerate(rows):
+        if flow(header, row, seen):
+            print(f"Found a ship-worthy setup at index {i}.")
+            print(f"Row data: {row}")
+            found = True
+            break
+        seen.append(row)
+    
+    if not found:
+        print("No setup was found that dominated all previous ones.")
+
+
+The customer asks:
+
+  Why do the bad setups miss so badly? Which settings are doing the damage?
+
+Write step05.py to answer that ask on this data.
+
+A test harness will import your file and call this function, so you must define it exactly:
+
+def blame(header, rows)
+  Returns a list of strings.   Return the names of the input columns (not goals) that best explain why the worst rows are bad.
+
+Rules the harness enforces: Name only input columns, spelled exactly as in `header`. A goal column or an unknown name scores zero.
+
+Conventions: `header` is the list of column names. `rows` is a list of rows; each row is a list of cells in header order, floats for numeric columns and strings for symbolic ones. A cell shown as "?" is hidden from you. A row is better when its goals are closer to their best (low for names ending in -, high for names ending in +).
+
+Keep everything that prints or reads the csv file under `if __name__ == "__main__":` so that importing the file prints nothing. Plain built-in types are all you need: do not import anything from `typing`.
+
+Running `python step05.py` must load the csv, call your function, print a short answer a customer could read, and exit with status 0. Reply with the complete file in one ```python fenced block and nothing else.

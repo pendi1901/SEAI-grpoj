@@ -1,0 +1,79 @@
+```python
+import ezr
+import random
+
+def choose(header, rows, label):
+    """
+    Finds a setup that balances performance (ydist) and efficiency (small N_estimators).
+    We use active learning to label rows, then select the one that minimizes
+    a combined score: ydist (performance) + normalized N_estimators (efficiency).
+    """
+    # 1. Setup: Prepare internal table for distance calculations
+    # We need to track original indices to return them later
+    indexed_rows = [r + [i] for i, r in enumerate(rows)]
+    internal_header = header + ["indexX"]
+    tbl = ezr.Tbl([internal_header] + indexed_rows)
+    
+    # 2. Define a custom oracle that tracks labels and updates the row
+    labeled = {}
+    def oracle_wrapper(row):
+        idx = int(row[-1])
+        if idx not in labeled:
+            labeled[idx] = label(idx)
+        true_vals = labeled[idx]
+        for i, name in enumerate(header):
+            if name[-1] in "+-":
+                row[i] = true_vals[i]
+        return row
+
+    # 3. Acquire: Use ezr's active learning to pick 50 informative rows
+    # This focuses on finding the best performance region
+    labeled_rows = ezr.acquire(tbl, cap=50, label=oracle_wrapper)
+    
+    # 4. Select: Find the best row based on a multi-objective trade-off.
+    # We want low ydist (performance) and low N_estimators (efficiency).
+    # We normalize N_estimators to 0..1 to make it comparable to ydist.
+    n_est_col = tbl.cols[header.index("N_estimators")]
+    
+    def combined_score(row):
+        # ydist is already 0..1 (distance to ideal)
+        perf = ezr.ydist(tbl, row)
+        # Normalize N_estimators to 0..1
+        eff = (row[n_est_col.at] - 100) / 100 # Rough scaling based on data range
+        eff = max(0, min(1, eff))
+        # Weight performance higher (0.7) than efficiency (0.3)
+        return 0.7 * perf + 0.3 * eff
+
+    best_row = min(labeled_rows, key=combined_score)
+    return int(best_row[-1])
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    all_data = list(ezr.csv(filename))
+    header = all_data[0]
+    rows = all_data[1:]
+    
+    # Oracle: returns the true row from the dataset
+    def label(i):
+        return all_data[i+1]
+
+    # Mask goals for the input to choose()
+    goal_indices = [i for i, name in enumerate(header) if name[-1] in "+-"]
+    masked_rows = []
+    for row in rows:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_rows.append(new_row)
+        
+    best_idx = choose(header, masked_rows, label)
+    
+    # Print summary
+    best_row = all_data[best_idx + 1]
+    print(f"Optimization complete. Best balanced configuration found at index {best_idx}.")
+    print("Performance and Efficiency Metrics:")
+    for i in goal_indices:
+        print(f" - {header[i]}: {best_row[i]:.4f}")
+    print(f" - N_estimators: {best_row[header.index('N_estimators')]}")
+    exit(0)
+```

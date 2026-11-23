@@ -1,0 +1,51 @@
+import ezr
+import step01
+
+def flow(header, row, seen):
+    """
+    Decide if the current row is 'good enough' to stop searching.
+    We define 'good enough' as being in the top 5% of the potential 
+    performance space, estimated by comparing the current row's 
+    ydist against the distribution of previously seen rows.
+    """
+    if not seen:
+        return False
+    
+    # Create a table to handle column roles and ydist calculation
+    # We use the current row and all seen rows to establish the context
+    data = [header] + seen + [row]
+    tbl = ezr.Tbl(data)
+    
+    # Calculate ydist for the current row
+    current_ydist = ezr.ydist(tbl, row)
+    
+    # Calculate ydist for all previously seen rows
+    seen_ydists = [ezr.ydist(tbl, r) for r in seen]
+    
+    # If the current row is better than 95% of what we have seen so far,
+    # we consider it 'good enough' to ship.
+    # We use a threshold of 5% (0.05) as the stopping criterion.
+    threshold = sorted(seen_ydists)[int(len(seen_ydists) * 0.05)]
+    
+    return current_ydist <= threshold
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    all_data = list(ezr.csv(filename))
+    header = all_data[0]
+    rows = all_data[1:]
+    
+    seen = []
+    found_at = -1
+    
+    for i, row in enumerate(rows):
+        if flow(header, row, seen):
+            found_at = i
+            break
+        seen.append(row)
+        
+    if found_at != -1:
+        print(f"Stopped at row {found_at}: Found a setup good enough to ship.")
+        print(f"Row details: {rows[found_at]}")
+    else:
+        print("Processed all rows without finding a 'good enough' setup.")

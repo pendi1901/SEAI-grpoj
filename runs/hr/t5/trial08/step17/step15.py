@@ -1,0 +1,67 @@
+import ezr
+import random
+
+def blame(header, rows):
+    """
+    Identifies input columns that have the least impact on retention.
+    We define 'bad' as having a high ydist (distance from ideal goals).
+    We compare the distribution of values in the worst 25% of rows 
+    against the best 25% of rows for each input column.
+    Columns with the smallest divergence between best and worst are 
+    candidates for removal.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Sort rows by ydist (lower is better)
+    sorted_rows = sorted(rows, key=lambda r: ezr.ydist(tbl, r))
+    
+    n = len(sorted_rows) // 4
+    best = sorted_rows[:n]
+    worst = sorted_rows[-n:]
+    
+    # Score columns by how much their distributions differ between best and worst
+    # We want to find columns with the LEAST difference (i.e., they don't matter)
+    scores = []
+    for col in tbl.x:
+        at = col.at
+        if isinstance(col, ezr.Num):
+            best_vals = [r[at] for r in best if r[at] != "?"]
+            worst_vals = [r[at] for r in worst if r[at] != "?"]
+            if best_vals and worst_vals:
+                # Normalize difference by range to make it comparable
+                diff = abs((sum(worst_vals)/len(worst_vals)) - (sum(best_vals)/len(best_vals)))
+                scores.append((diff, header[at]))
+        else:
+            # Symbolic: compare frequency of the most common value
+            worst_vals = [r[at] for r in worst if r[at] != "?"]
+            best_vals = [r[at] for r in best if r[at] != "?"]
+            if worst_vals and best_vals:
+                counts_w = {}
+                for v in worst_vals: counts_w[v] = counts_w.get(v, 0) + 1
+                mode = max(counts_w, key=counts_w.get)
+                w_freq = counts_w[mode] / len(worst_vals)
+                b_freq = best_vals.count(mode) / len(best_vals)
+                scores.append((abs(w_freq - b_freq), header[at]))
+    
+    # Sort by score ascending (smallest difference = least impact)
+    scores.sort(key=lambda x: x[0])
+    
+    # Return the names of the columns with the lowest impact
+    return [name for score, name in scores]
+
+if __name__ == "__main__":
+    data = list(ezr.csv("WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"))
+    header = data[0]
+    rows = data[1:]
+    
+    # Identify columns that have little to no impact on retention
+    # These are the ones with the smallest divergence between best and worst performers
+    low_impact_cols = blame(header, rows)
+    
+    print("Analysis: Which columns have the least impact on retention?")
+    print("The following columns show the smallest divergence between high-retention and low-retention employees,")
+    print("suggesting they may not be necessary to collect:")
+    print(", ".join(low_impact_cols[:5]))
+    print("\nThese columns are the best candidates for removal to simplify data collection.")
+    
+    exit(0)

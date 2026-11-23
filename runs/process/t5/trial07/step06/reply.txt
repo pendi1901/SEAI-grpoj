@@ -1,0 +1,62 @@
+```python
+import ezr
+import random
+
+def justify(header, rows, row):
+    """
+    Returns (p, reason): p is the fraction of rows that 'row' is better than,
+    and a sentence explaining why.
+    """
+    # Create a table to handle normalization and ydist
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate ydist for all known rows
+    # Lower ydist is better.
+    all_ydists = [ezr.ydist(tbl, r) for r in rows]
+    
+    # Estimate the goals for the target row.
+    # We use the mean of the leaf node in a tree trained on the full dataset.
+    # This provides a reasonable estimate for the '?' goal cells.
+    root = ezr.tree(tbl, rows)
+    leaf = ezr.leaf(root, row)
+    
+    # Create a temporary row with estimated goals to calculate its ydist
+    # We use the leaf's mean ydist as the proxy for the row's performance
+    estimated_ydist = leaf.mu
+    
+    # Calculate p: fraction of rows that are worse than our estimated row
+    # (i.e., have a higher ydist)
+    worse_count = sum(1 for d in all_ydists if d > estimated_ydist)
+    p = worse_count / len(rows)
+    
+    reason = (f"This setup is estimated to be in the top {int((1-p)*100)}% "
+              f"of all configurations based on its input characteristics.")
+    
+    return p, reason
+
+if __name__ == "__main__":
+    # Load data
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Pick a random row to justify
+    random.seed(1234567891)
+    target_row = random.choice(rows)
+    
+    # Mask the goals
+    masked_row = list(target_row)
+    for i, name in enumerate(header):
+        if name.endswith(('-', '+')):
+            masked_row[i] = "?"
+            
+    # Get justification
+    p, reason = justify(header, rows, masked_row)
+    
+    print(f"Justification for selected setup:")
+    print(f"Rank: {p:.4f}")
+    print(f"Reason: {reason}")
+    
+    exit(0)
+```

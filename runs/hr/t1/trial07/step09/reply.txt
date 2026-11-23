@@ -1,0 +1,70 @@
+```python
+import csv
+
+def spot(header, rows):
+    """
+    Identifies suspicious rows by looking for outliers in numeric columns.
+    A row is considered suspicious if it contains values that are statistically
+    improbable (e.g., beyond 3 standard deviations from the mean).
+    """
+    suspicious_scores = {}
+    
+    # Identify numeric columns
+    numeric_indices = [i for i, h in enumerate(header) if h[0].isupper()]
+    
+    # Calculate mean and std for each numeric column
+    stats = {}
+    for i in numeric_indices:
+        vals = [r[i] for r in rows if isinstance(r[i], (int, float))]
+        if not vals:
+            continue
+        mean = sum(vals) / len(vals)
+        std = (sum((x - mean) ** 2 for x in vals) / len(vals)) ** 0.5
+        stats[i] = (mean, std)
+    
+    # Score rows based on how many standard deviations they are from the mean
+    for row_idx, row in enumerate(rows):
+        score = 0.0
+        for i in numeric_indices:
+            if i in stats and isinstance(row[i], (int, float)):
+                mean, std = stats[i]
+                if std > 0:
+                    z_score = abs(row[i] - mean) / std
+                    # If a value is extremely far (e.g., > 5 std), it's highly suspicious
+                    if z_score > 5:
+                        score += z_score
+        
+        if score > 0:
+            suspicious_scores[row_idx] = score
+            
+    # Return row indices sorted by suspicion score descending
+    sorted_rows = sorted(suspicious_scores.items(), key=lambda x: x[1], reverse=True)
+    return [item[0] for item in sorted_rows]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    suspicious_indices = spot(header, rows)
+    
+    print(f"Data Integrity Audit: Found {len(suspicious_indices)} potentially erroneous records.")
+    print("Top 5 most suspicious rows:")
+    for idx in suspicious_indices[:5]:
+        print(f"- Row {idx}: Contains extreme outliers in numeric fields.")
+```

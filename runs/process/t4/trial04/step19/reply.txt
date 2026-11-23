@@ -1,0 +1,65 @@
+```python
+import csv
+import pandas as pd
+import numpy as np
+from sklearn.ensemble import IsolationForest
+
+def spot(header, rows):
+    """
+    Identifies rows that are 'unlike anything we have run' (outliers)
+    using Isolation Forest on the input columns.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    
+    # Identify goal columns and input columns
+    goals = [col for col in header if col.endswith(('-', '+'))]
+    inputs = [col for col in header if col not in goals]
+    
+    # Isolation Forest works on numeric data. 
+    # Select only numeric input columns for anomaly detection.
+    numeric_inputs = df[inputs].select_dtypes(include=[np.number])
+    
+    # Isolation Forest: contamination is the proportion of outliers.
+    # We use a small value to flag truly unusual setups.
+    model = IsolationForest(contamination=0.02, random_state=42)
+    
+    # Fit the model to the input data
+    model.fit(numeric_inputs)
+    
+    # decision_function returns the anomaly score. 
+    # Lower scores are more anomalous (less like what we have seen).
+    scores = model.decision_function(numeric_inputs)
+    
+    # Get indices sorted by score (ascending, so lowest scores/most suspicious first)
+    suspicious_indices = np.argsort(scores)
+    
+    return suspicious_indices.tolist()
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed_row = []
+                for val in row:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        outliers = spot(header, rows)
+        
+        print("Customer Inquiry: A new team lead proposes a setup unlike anything we have run.")
+        print("Analysis: I have identified the setups that deviate most from our historical data.")
+        print(f"The most suspicious (unseen) row index is: {outliers[0]}")
+        print(f"The top 5 most unusual setups are: {outliers[:5]}")
+        print("\nThese setups represent configurations that are statistically distant from our known operational patterns.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

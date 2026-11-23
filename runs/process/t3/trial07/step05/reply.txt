@@ -1,0 +1,72 @@
+```python
+import csv
+from sklearn.ensemble import RandomForestRegressor
+
+def blame(header, rows):
+    """
+    Identifies input columns that best explain high 'Idle-' values.
+    Uses a Random Forest to rank feature importance for the 'Idle-' goal.
+    """
+    # Identify goal columns and input columns
+    goal_cols = [col for col in header if col.endswith(('-', '+'))]
+    input_cols = [col for col in header if col not in goal_cols]
+    
+    # We are specifically looking at 'Idle-'
+    target = 'Idle-'
+    
+    # Prepare data
+    # We only care about the relationship between inputs and the target
+    X = []
+    y = []
+    for row in rows:
+        row_dict = dict(zip(header, row))
+        X.append([row_dict[col] for col in input_cols])
+        y.append(row_dict[target])
+    
+    # Train a Random Forest to find feature importance
+    # This identifies which inputs are most predictive of high Idle-
+    model = RandomForestRegressor(n_estimators=50, random_state=42)
+    model.fit(X, y)
+    
+    # Get feature importances
+    importances = model.feature_importances_
+    
+    # Pair inputs with their importance scores
+    features_with_importance = sorted(
+        zip(input_cols, importances), 
+        key=lambda x: x[1], 
+        reverse=True
+    )
+    
+    # Return the top 3 most influential input columns
+    return [feat for feat, score in features_with_importance[:3]]
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed_row = []
+                for val in row:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        # Get the blame analysis
+        top_factors = blame(header, rows)
+        
+        print("Customer Inquiry: Why do our worst setups leave so many people waiting around?")
+        print("Analysis: The following input factors are the primary drivers of high idle time:")
+        for i, factor in enumerate(top_factors):
+            print(f"  {i+1}. {factor}")
+        print("\nThese factors have the strongest correlation with the 'Idle-' goal in our data.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

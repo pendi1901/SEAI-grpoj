@@ -1,0 +1,70 @@
+```python
+import csv
+import step04
+
+def flow(header, row, seen):
+    """
+    Detects if a team's composition has shifted significantly.
+    We compare the current row's tenure metrics against the distribution
+    of the 'seen' rows. If the current row is an outlier (e.g., significantly
+    higher or lower than the established norm), we flag it as a change.
+    """
+    if not seen:
+        return False
+
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    
+    def get_score(r):
+        score = 0
+        for i in goal_indices:
+            val = r[i]
+            if isinstance(val, (int, float)):
+                if header[i].endswith('+'):
+                    score += val
+                else:
+                    score -= val
+        return score
+
+    current_score = get_score(row)
+    seen_scores = [get_score(r) for r in seen]
+    
+    # Calculate mean and standard deviation of seen scores
+    n = len(seen_scores)
+    mean = sum(seen_scores) / n
+    std = (sum((s - mean) ** 2 for s in seen_scores) / n) ** 0.5
+    
+    # If the current row is more than 2 standard deviations away from the mean,
+    # the team composition has shifted significantly.
+    if std > 0:
+        z_score = abs(current_score - mean) / std
+        return z_score > 2.0
+    
+    return False
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    seen = []
+    shifts = 0
+    for row in rows:
+        if flow(header, row, seen):
+            shifts += 1
+        seen.append(row)
+
+    print("Analysis: Detecting shifts in team composition.")
+    print(f"Total rows processed: {len(rows)}")
+    print(f"Number of significant team composition shifts detected: {shifts}")
+    print("A shift is flagged when a new employee's tenure metrics deviate significantly (2+ std dev) from the historical norm.")
+```

@@ -1,0 +1,59 @@
+import csv
+import pandas as pd
+import numpy as np
+from sklearn.neighbors import KNeighborsRegressor
+from step01 import remember
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column for test rows using K-Nearest Neighbors.
+    """
+    df_train = pd.DataFrame(train, columns=header)
+    df_test = pd.DataFrame(test, columns=header)
+    
+    # Identify input columns (those not ending in - or +)
+    inputs = [c for c in header if not (c.endswith('-') or c.endswith('+'))]
+    
+    # Identify goal columns
+    goals = [c for c in header if c.endswith('-') or c.endswith('+')]
+    first_goal = goals[0]
+    
+    # Prepare data for regression
+    X_train = df_train[inputs]
+    y_train = df_train[first_goal]
+    X_test = df_test[inputs]
+    
+    # Use KNN to predict the first goal
+    # n_neighbors=5 is a standard heuristic for small datasets
+    model = KNeighborsRegressor(n_neighbors=5)
+    model.fit(X_train, y_train)
+    
+    predictions = model.predict(X_test)
+    return predictions.tolist()
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) for val in row])
+        
+        # Split data: use 80% for training, 20% for testing
+        split = int(len(rows) * 0.8)
+        train_data = rows[:split]
+        test_data = [row[:len(header)-3] + ["?"]*3 for row in rows[split:]]
+        
+        predictions = guess(header, train_data, test_data)
+        
+        print("Customer Inquiry: Estimated Cost (first goal) for test setups:")
+        for i, val in enumerate(predictions[:5]):
+            print(f"  Setup {i+1}: {val:.4f}")
+        if len(predictions) > 5:
+            print("  ...")
+            
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

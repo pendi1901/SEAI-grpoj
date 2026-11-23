@@ -1,0 +1,73 @@
+```python
+import csv
+import random
+
+def choose(header, rows, label):
+    """
+    Finds the best working arrangement by sampling 50 rows.
+    We define 'best' as the highest 'YearsAtCompany+' (a goal to maximize).
+    """
+    tenure_idx = header.index('YearsAtCompany+')
+    
+    # We have a budget of 50 labels.
+    # We will sample 50 random rows to estimate the best working arrangement.
+    n = len(rows)
+    sample_size = min(n, 50)
+    indices = random.sample(range(n), sample_size)
+    
+    best_idx = -1
+    max_tenure = -1.0
+    
+    for i in indices:
+        # Label the row to get the true goal values
+        goals = label(i)
+        # The goal 'YearsAtCompany+' is the value we want to maximize
+        # Based on the header, it is the 32nd column (index 31)
+        current_tenure = goals[tenure_idx - 31] # Adjusting for the subset of goals returned
+        
+        # Note: The harness label() returns the list of goal values.
+        # Since 'YearsAtCompany+' is the only goal ending in '+', 
+        # we find its specific value.
+        
+        if current_tenure > max_tenure:
+            max_tenure = current_tenure
+            best_idx = i
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Define the label function for the harness
+    goal_indices = [i for i, h in enumerate(header) if h.endswith('+') or h.endswith('-')]
+    
+    def label(i):
+        return [rows[i][idx] for idx in goal_indices]
+
+    # Mask the goals
+    for row in rows:
+        for idx in goal_indices:
+            row[idx] = "?"
+
+    best_idx = choose(header, rows, label)
+    
+    print(f"Analysis complete. The best employee found is at row {best_idx}.")
+    print("This selection was based on maximizing 'YearsAtCompany+' using 50 sampled interviews.")
+```

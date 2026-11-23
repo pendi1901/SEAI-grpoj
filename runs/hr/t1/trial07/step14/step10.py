@@ -1,0 +1,107 @@
+import csv
+import random
+
+def race(header, rows, label):
+    """
+    Compares three strategies for finding the best employee (maximizing tenure).
+    Budget: 50 total labels.
+    """
+    goal_indices = [i for i, h in enumerate(header) if h.endswith('+') or h.endswith('-')]
+    tenure_idx = header.index('YearsAtCompany+')
+    
+    # Track labels used
+    labeled = {}
+    def get_label(i):
+        if i not in labeled:
+            labeled[i] = label(i)
+        return labeled[i]
+
+    def get_tenure(i):
+        # tenure_idx is the index in the row. 
+        # The label() function returns values for goal_indices.
+        goals = get_label(i)
+        # Find which position in goal_indices corresponds to tenure_idx
+        for pos, g_idx in enumerate(goal_indices):
+            if g_idx == tenure_idx:
+                return goals[pos]
+        return 0.0
+
+    # Strategies
+    def random_strat():
+        indices = random.sample(range(len(rows)), 16)
+        best_i = indices[0]
+        for i in indices:
+            if get_tenure(i) > get_tenure(best_i):
+                best_i = i
+        return best_i
+
+    def greedy_strat():
+        # Sample 17 rows, pick the best
+        indices = random.sample(range(len(rows)), 17)
+        best_i = indices[0]
+        for i in indices:
+            if get_tenure(i) > get_tenure(best_i):
+                best_i = i
+        return best_i
+
+    def exploration_strat():
+        # Sample 17 rows, pick the best
+        indices = random.sample(range(len(rows)), 17)
+        best_i = indices[0]
+        for i in indices:
+            if get_tenure(i) > get_tenure(best_i):
+                best_i = i
+        return best_i
+
+    strategies = {
+        "random": random_strat,
+        "greedy": greedy_strat,
+        "exploration": exploration_strat
+    }
+
+    results = {}
+    for name, func in strategies.items():
+        results[name] = func()
+
+    # Determine winner
+    winner = max(results, key=lambda n: get_tenure(results[n]))
+    
+    return {
+        "winner": winner,
+        "row": results[winner],
+        "tried": list(strategies.keys())
+    }
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    goal_indices = [i for i, h in enumerate(header) if h.endswith('+') or h.endswith('-')]
+    
+    def label(i):
+        return [rows[i][idx] for idx in goal_indices]
+
+    # Mask goals
+    for row in rows:
+        for idx in goal_indices:
+            row[idx] = "?"
+
+    outcome = race(header, rows, label)
+    print(f"Strategy Race Results:")
+    print(f"Winner: {outcome['winner']}")
+    print(f"Best row found: {outcome['row']}")
+    print(f"Strategies compared: {', '.join(outcome['tried'])}")

@@ -1,0 +1,67 @@
+import csv
+
+def guess(header, train, test):
+    """
+    Estimates the value of the first goal column for test rows.
+    Uses a simple k-nearest neighbors approach based on input columns.
+    """
+    # Identify input columns (those not ending in - or +)
+    input_indices = [i for i, name in enumerate(header) 
+                     if not (name.endswith('-') or name.endswith('+'))]
+    
+    # Identify the first goal column index
+    goal_idx = next(i for i, name in enumerate(header) 
+                    if name.endswith('-') or name.endswith('+'))
+
+    def dist(row1, row2):
+        d = 0
+        for i in input_indices:
+            v1, v2 = row1[i], row2[i]
+            if isinstance(v1, float) and isinstance(v2, float):
+                d += (v1 - v2) ** 2
+            else:
+                d += 0 if v1 == v2 else 1
+        return d ** 0.5
+
+    predictions = []
+    for t_row in test:
+        # Find the 3 nearest neighbors in the training set
+        distances = []
+        for train_row in train:
+            distances.append((dist(t_row, train_row), train_row[goal_idx]))
+        
+        distances.sort(key=lambda x: x[0])
+        
+        # Average the goal value of the 3 nearest neighbors
+        k = 3
+        avg = sum(d[1] for d in distances[:k]) / k
+        predictions.append(avg)
+        
+    return predictions
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed_row = [float(val) if val.replace('.','',1).isdigit() or (val.startswith('-') and val[1:].replace('.','',1).isdigit()) else val for val in row]
+                rows.append(processed_row)
+        
+        # Create a dummy test set by masking the first goal column of the first 5 rows
+        test_rows = [row[:] for row in rows[:5]]
+        goal_idx = next(i for i, name in enumerate(header) if name.endswith('-') or name.endswith('+'))
+        for row in test_rows:
+            row[goal_idx] = "?"
+            
+        results = guess(header, rows, test_rows)
+        
+        print("Estimates for the first goal column (Cost-):")
+        for i, val in enumerate(results):
+            print(f"  Test Row {i+1}: {val:.4f}")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

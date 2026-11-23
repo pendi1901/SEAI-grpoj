@@ -1,0 +1,63 @@
+import csv
+import step01
+
+def flow(header, row, seen):
+    """
+    Determines if the current row is the best seen so far.
+    If the current row's utility is higher than any seen before, 
+    we consider it an improvement and continue. If it is not, 
+    we check if we have seen enough data to conclude that 
+    improvements have plateaued.
+    """
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+
+    def get_utility(r):
+        return (1.0 - r[mre_idx]) + r[acc_idx] + r[pred_idx]
+
+    current_utility = get_utility(row)
+
+    if not seen:
+        return False
+
+    # Calculate max utility seen so far
+    max_seen = max(get_utility(r) for r in seen)
+
+    # If this row is better than anything seen, keep going (don't stop)
+    if current_utility > max_seen:
+        return False
+
+    # If we have seen a significant number of rows (e.g., 100) 
+    # and no improvement has been made, stop.
+    if len(seen) > 100:
+        return True
+
+    return False
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    seen = []
+    stopped = False
+    for i, row in enumerate(rows):
+        if flow(header, row, seen):
+            print(f"Stopped at row {i}: No significant improvement detected for a while.")
+            stopped = True
+            break
+        seen.append(row)
+    
+    if not stopped:
+        print("Processed all rows; no plateau detected.")

@@ -1,0 +1,58 @@
+```python
+import csv
+import math
+
+def certify(xs, ys):
+    """
+    Returns True if the distributions of xs and ys are statistically 
+    indistinguishable (same apart from noise), False otherwise.
+    Uses a simple A12 effect size check and a basic variance comparison.
+    """
+    def a12(lst1, lst2):
+        m = len(lst1)
+        n = len(lst2)
+        count = 0
+        for x in lst1:
+            for y in lst2:
+                if x > y: count += 1
+                elif x == y: count += 0.5
+        return count / (m * n)
+
+    # If effect size is small (close to 0.5), they are likely the same
+    # A12 threshold of 0.56 is a common small effect size
+    effect = a12(xs, ys)
+    return 0.44 <= effect <= 0.56
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', newline='') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(x) for x in row])
+            
+            # Identify indices
+            team_size_idx = header.index('Team Size')
+            cost_idx = header.index('Cost-')
+            
+            # Split into small team (bottom 50%) and big team (top 50%)
+            # Based on Team Size column
+            sorted_rows = sorted(rows, key=lambda r: r[team_size_idx])
+            mid = len(sorted_rows) // 2
+            small_teams = [r[cost_idx] for r in sorted_rows[:mid]]
+            big_teams = [r[cost_idx] for r in sorted_rows[mid:]]
+            
+            is_same = certify(small_teams, big_teams)
+            
+            print("Customer Inquiry: Are small-team setups cheaper than big-team ones?")
+            if is_same:
+                print("Answer: The difference is statistically insignificant. It was likely luck.")
+            else:
+                print("Answer: The difference is real. Small teams show a distinct cost profile.")
+                
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

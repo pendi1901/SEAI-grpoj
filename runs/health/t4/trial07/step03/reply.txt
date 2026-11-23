@@ -1,0 +1,73 @@
+```python
+import csv
+import numpy as np
+from scipy import stats
+
+def certify(xs, ys):
+    """
+    Returns True if the difference between two sets of data is likely noise,
+    False if they are statistically different. Uses a Welch's t-test.
+    """
+    if len(xs) < 2 or len(ys) < 2:
+        return True
+    
+    # Welch's t-test (equal_var=False)
+    t_stat, p_value = stats.ttest_ind(xs, ys, equal_var=False)
+    
+    # If p-value > 0.05, we fail to reject the null hypothesis (they are the same)
+    return p_value > 0.05
+
+def analyze_correlation(header, rows):
+    """
+    Checks if 'N_estimators' (a proxy for setup size) correlates with 
+    the performance goals (MRE-, ACC+, PRED40+).
+    """
+    n_idx = header.index('N_estimators')
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+
+    # Split data into small vs large based on median N_estimators
+    n_vals = [r[n_idx] for r in rows]
+    median_n = np.median(n_vals)
+    
+    small = [r for r in rows if r[n_idx] <= median_n]
+    large = [r for r in rows if r[n_idx] > median_n]
+    
+    # Compare ACC+ (a primary accuracy metric)
+    acc_small = [r[acc_idx] for r in small]
+    acc_large = [r[acc_idx] for r in large]
+    
+    is_noise = certify(acc_small, acc_large)
+    
+    return is_noise, np.mean(acc_small), np.mean(acc_large)
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    is_noise, mean_small, mean_large = analyze_correlation(header, rows)
+    
+    print("Analysis of setup size vs accuracy:")
+    if is_noise:
+        print("The difference in accuracy between small and large setups is statistically insignificant (noise).")
+    else:
+        print(f"There is a real difference in accuracy.")
+        print(f"Mean ACC+ for small setups: {mean_small:.4f}")
+        print(f"Mean ACC+ for large setups: {mean_large:.4f}")
+        if mean_large > mean_small:
+            print("Large setups are indeed more accurate.")
+        else:
+            print("Small setups are more accurate.")
+```

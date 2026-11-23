@@ -1,0 +1,49 @@
+import csv
+from scipy.stats import pearsonr
+
+def certify(xs, ys):
+    """
+    Determines if the correlation between two lists is statistically significant.
+    Returns True if the correlation is weak/noise (p-value > 0.05),
+    False if there is a statistically significant relationship.
+    """
+    if len(xs) < 2:
+        return True
+    corr, p_value = pearsonr(xs, ys)
+    # If p_value < 0.05, the relationship is statistically significant (not noise).
+    # The customer asks if it is "real" (significant) or "noise".
+    # Return True if it is noise (p > 0.05), False if it is real (p <= 0.05).
+    return p_value > 0.05
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                try:
+                    processed_row.append(float(val))
+                except ValueError:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # "Big setups" usually refers to N_estimators.
+    # "More accurate" refers to ACC+ (higher is better).
+    n_est_idx = header.index('N_estimators')
+    acc_idx = header.index('ACC+')
+    
+    xs = [r[n_est_idx] for r in rows]
+    ys = [r[acc_idx] for r in rows]
+    
+    is_noise = certify(xs, ys)
+    
+    print("Analysis: Is the relationship between setup size (N_estimators) and accuracy (ACC+) real?")
+    if is_noise:
+        print("Result: The observed trend is likely noise (no statistically significant correlation).")
+    else:
+        print("Result: The observed trend is real (statistically significant correlation found).")
+    
+    exit(0)

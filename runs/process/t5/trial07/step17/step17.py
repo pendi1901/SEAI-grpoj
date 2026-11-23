@@ -1,0 +1,89 @@
+import ezr
+import random
+
+def choose(header, rows, label):
+    """
+    Find the best setup for a large, high-criticality project.
+    We filter for rows where 'Size' and 'Criticality' are high,
+    then use the acquisition strategy to find the best within those constraints.
+    """
+    # 1. Filter for 'large' and 'high criticality' projects
+    # 'Size' and 'Criticality' are numeric columns.
+    size_idx = header.index("Size")
+    crit_idx = header.index("Criticality")
+    
+    # Define 'large' and 'high criticality' as being in the top 50%
+    size_vals = [r[size_idx] for r in rows]
+    crit_vals = [r[crit_idx] for r in rows]
+    med_size = sorted(size_vals)[len(size_vals) // 2]
+    med_crit = sorted(crit_vals)[len(crit_vals) // 2]
+    
+    candidates = [i for i, r in enumerate(rows) 
+                  if r[size_idx] >= med_size and r[crit_idx] >= med_crit]
+    
+    # If too few candidates, use all rows
+    if len(candidates) < 10:
+        candidates = list(range(len(rows)))
+        
+    # 2. Use acquisition strategy on the candidates
+    # We have a budget of 50 labels.
+    budget = 50
+    labeled_cache = {}
+    
+    def oracle_wrapper(row):
+        # Find index of this row in original rows
+        for i, r in enumerate(rows):
+            if r is row:
+                if i not in labeled_cache:
+                    if len(labeled_cache) >= budget:
+                        return row
+                    goals = label(i)
+                    goal_indices = [j for j, name in enumerate(header) if name.endswith(('-', '+'))]
+                    for idx, val in zip(goal_indices, goals):
+                        row[idx] = val
+                    labeled_cache[i] = row
+                return labeled_cache[i]
+        return row
+
+    # Initialize with a small random sample from candidates
+    start_indices = random.sample(candidates, min(len(candidates), ezr.the.Start))
+    initial_rows = [oracle_wrapper(rows[i]) for i in start_indices]
+    
+    tbl = ezr.Tbl([header] + initial_rows)
+    
+    # Acquire more labels
+    best_rows = ezr.acquire(tbl, cap=budget, label=oracle_wrapper)
+    
+    # 3. Find the best row among all labeled rows
+    best_row = min(best_rows, key=lambda r: ezr.ydist(tbl, r))
+    
+    for i, r in enumerate(rows):
+        if r is best_row:
+            return i
+    return candidates[0]
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    
+    # Keep a copy for the label function
+    full_data = [list(r) for r in rows]
+    
+    def label(i):
+        return [full_data[i][idx] for idx in goal_indices]
+    
+    # Mask rows
+    for row in rows:
+        for idx in goal_indices:
+            row[idx] = "?"
+            
+    best_idx = choose(header, rows, label)
+    
+    print("Optimization complete for high-criticality, large-scale projects.")
+    print(f"The recommended setup is at index: {best_idx}")
+    print(f"Goal values for this setup: {label(best_idx)}")
+    exit(0)

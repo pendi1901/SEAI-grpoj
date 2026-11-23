@@ -1,0 +1,85 @@
+```python
+import csv
+import random
+from step01 import remember
+from step07 import choose
+
+def race(header, rows, label):
+    """
+    Compares three strategies: random, greedy (best of sample), 
+    and a simple heuristic (best of first 50).
+    """
+    budget = 50
+    tried = ["random", "greedy", "first"]
+    
+    goal_indices = [(i, name[-1]) for i, name in enumerate(header) 
+                    if name.endswith('-') or name.endswith('+')]
+
+    def score_goals(goals):
+        total = 0
+        for i, (idx, op) in enumerate(goal_indices):
+            val = goals[i]
+            total += val if op == '-' else (1.0 - val)
+        return total
+
+    # Strategy 1: Random
+    random_indices = random.sample(range(len(rows)), 16)
+    best_random = min(random_indices, key=lambda i: score_goals(label(i)))
+    
+    # Strategy 2: Greedy (Sample 17, pick best)
+    greedy_indices = random.sample(range(len(rows)), 17)
+    best_greedy = min(greedy_indices, key=lambda i: score_goals(label(i)))
+    
+    # Strategy 3: First 17
+    first_indices = list(range(17))
+    best_first = min(first_indices, key=lambda i: score_goals(label(i)))
+    
+    # Compare winners
+    results = {
+        "random": (best_random, score_goals(label(best_random))),
+        "greedy": (best_greedy, score_goals(label(best_greedy))),
+        "first": (best_first, score_goals(label(best_first)))
+    }
+    
+    winner = min(results, key=lambda k: results[k][1])
+    
+    return {
+        "winner": winner,
+        "row": results[winner][0],
+        "tried": tried
+    }
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', newline='') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            true_data = []
+            for row in reader:
+                numeric_row = [float(x) for x in row]
+                rows.append(numeric_row)
+                true_data.append([numeric_row[i] for i, name in enumerate(header) 
+                                 if name.endswith(('-', '+'))])
+            
+            def label(i):
+                return true_data[i]
+            
+            # Mask goals
+            goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+            for row in rows:
+                for idx in goal_indices:
+                    row[idx] = "?"
+            
+            result = race(header, rows, label)
+            
+            print("Customer Inquiry: Which consultant's strategy wins?")
+            print(f"Winner: {result['winner']}")
+            print(f"Best row index found: {result['row']}")
+            print(f"Strategies compared: {', '.join(result['tried'])}")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

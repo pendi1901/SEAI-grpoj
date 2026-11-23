@@ -1,0 +1,69 @@
+```python
+import csv
+
+def get_score(header, row):
+    """Calculates a composite score for a row based on goal columns."""
+    score = 0
+    for i, val in enumerate(row):
+        if val == "?":
+            continue
+        name = header[i]
+        if name.endswith('+'):
+            score += val
+        elif name.endswith('-'):
+            score -= val
+    return score
+
+def estimate_row(header, rows, row):
+    """Estimates '?' values in a row using the average of the training set."""
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    new_row = list(row)
+    for i in goal_indices:
+        if new_row[i] == "?":
+            vals = [r[i] for r in rows if isinstance(r[i], (int, float))]
+            new_row[i] = sum(vals) / len(vals) if vals else 0
+    return new_row
+
+def justify(header, rows, row):
+    """
+    Returns the percentile rank of the row and a justification.
+    A row is better if its score is higher.
+    """
+    estimated_row = estimate_row(header, rows, row)
+    target_score = get_score(header, estimated_row)
+    
+    all_scores = [get_score(header, r) for r in rows]
+    better_than = [s for s in all_scores if target_score > s]
+    
+    p = len(better_than) / len(all_scores)
+    reason = f"This team's arrangement ranks in the {int(p * 100)}th percentile because its tenure-related metrics outperform {int(p * 100)}% of all recorded employee profiles."
+    
+    return (p, reason)
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for line in reader:
+            processed_row = []
+            for i, val in enumerate(line):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    # Test with the last row as a sample
+    test_row = list(rows[-1])
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    for i in goal_indices:
+        test_row[i] = "?"
+        
+    p, reason = justify(header, rows, test_row)
+    print(f"Percentile: {p:.2f}")
+    print(f"Justification: {reason}")
+```

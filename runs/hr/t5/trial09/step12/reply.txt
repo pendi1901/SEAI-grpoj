@@ -1,0 +1,79 @@
+```python
+import ezr
+import random
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column for test rows.
+    To answer the specific question about 'Sales' and 'overTime',
+    we build a model that captures the relationship between these
+    inputs and the goal metrics.
+    """
+    # Create a table object for the training data
+    tbl = ezr.Tbl([header] + train)
+    
+    # Build a tree on the training data
+    node = ezr.tree(tbl, tbl.rows)
+    
+    # Identify the index of the first goal column
+    goal_indices = [i for i, h in enumerate(header) if h.endswith(("+", "-"))]
+    first_goal_idx = goal_indices[0]
+    
+    results = []
+    for row in test:
+        # Walk the tree to find the leaf node for this test row
+        leaf_node = ezr.leaf(node, row)
+        
+        # Calculate the mean of the first goal column in this leaf
+        values = [r[first_goal_idx] for r in leaf_node.rows if r[first_goal_idx] != "?"]
+        if values:
+            estimate = sum(values) / len(values)
+        else:
+            # Fallback to global mean if leaf is empty
+            all_vals = [r[first_goal_idx] for r in train if r[first_goal_idx] != "?"]
+            estimate = sum(all_vals) / len(all_vals)
+        results.append(float(estimate))
+        
+    return results
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    idx_dept = header.index("department")
+    idx_ot = header.index("overTime")
+    idx_goal = [i for i, h in enumerate(header) if h.endswith(("+", "-"))][0]
+    
+    # Filter for Sales department
+    sales_rows = [r for r in rows if r[idx_dept] == "Sales"]
+    
+    # Create two scenarios: current state vs cutting overtime
+    # We use the full sales data to train the model
+    train = sales_rows
+    
+    # Scenario 1: Current state (keep overtime as is)
+    test_current = [list(r) for r in sales_rows]
+    for r in test_current: r[idx_goal] = "?"
+    
+    # Scenario 2: Cut overtime (set all to "No")
+    test_cut = [list(r) for r in sales_rows]
+    for r in test_cut:
+        r[idx_ot] = "No"
+        r[idx_goal] = "?"
+        
+    # Get estimates
+    est_current = guess(header, train, test_current)
+    est_cut = guess(header, train, test_cut)
+    
+    avg_current = sum(est_current) / len(est_current)
+    avg_cut = sum(est_cut) / len(est_cut)
+    
+    print("Analysis: Impact of cutting overtime in Sales on retention (YearsAtCompany+).")
+    print(f"Average years (Current): {avg_current:.2f}")
+    print(f"Average years (If overtime cut): {avg_cut:.2f}")
+    print(f"Predicted change: {avg_cut - avg_current:+.2f} years.")
+    print("Conclusion: Reducing overtime in the Sales department is projected to "
+          f"{'increase' if avg_cut > avg_current else 'decrease'} average tenure.")
+```

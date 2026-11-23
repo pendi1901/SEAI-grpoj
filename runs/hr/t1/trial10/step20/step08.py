@@ -1,0 +1,85 @@
+import csv
+
+def fix(header, row, levers):
+    """
+    Recommends changes to a 'bad' row to improve retention metrics.
+    We prioritize increasing 'YearsAtCompany+' by adjusting levers 
+    like pay, training, and work-life balance.
+    """
+    recommendations = {}
+    
+    # Strategy: 
+    # 1. If 'PercentSalaryHike' is low, increase it.
+    # 2. If 'TrainingTimesLastYear' is low, increase it.
+    # 3. If 'overTime' is 'Yes', change to 'No'.
+    # 4. If 'businessTravel' is 'Travel_Frequently', change to 'Travel_Rarely'.
+    
+    if 'PercentSalaryHike' in levers and 'PercentSalaryHike' in header:
+        idx = header.index('PercentSalaryHike')
+        low, high = levers['PercentSalaryHike']
+        if row[idx] < (low + high) / 2:
+            recommendations['PercentSalaryHike'] = high
+            
+    if 'TrainingTimesLastYear' in levers and 'TrainingTimesLastYear' in header:
+        idx = header.index('TrainingTimesLastYear')
+        low, high = levers['TrainingTimesLastYear']
+        if row[idx] < high:
+            recommendations['TrainingTimesLastYear'] = high
+            
+    if 'overTime' in levers and 'overTime' in header:
+        idx = header.index('overTime')
+        if row[idx] == 'Yes' and 'No' in levers['overTime']:
+            recommendations['overTime'] = 'No'
+            
+    if 'businessTravel' in levers and 'businessTravel' in header:
+        idx = header.index('businessTravel')
+        if row[idx] == 'Travel_Frequently' and 'Travel_Rarely' in levers['businessTravel']:
+            recommendations['businessTravel'] = 'Travel_Rarely'
+
+    # Ensure we return at least one recommendation if possible
+    if not recommendations and levers:
+        # Fallback: pick the first available lever and set to a reasonable value
+        first_key = list(levers.keys())[0]
+        val = levers[first_key]
+        recommendations[first_key] = val[1] if isinstance(val, tuple) else val[0]
+        
+    return recommendations
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    # Define levers based on customer request
+    levers = {
+        'businessTravel': ['Non-Travel', 'Travel_Rarely', 'Travel_Frequently'],
+        'overTime': ['No', 'Yes'],
+        'TrainingTimesLastYear': (0.0, 6.0),
+        'PercentSalaryHike': (11.0, 25.0),
+        'StockOptionLevel': (0.0, 3.0)
+    }
+    
+    # Example: Fix the first row as a test
+    bad_row = rows[0]
+    changes = fix(header, bad_row, levers)
+    
+    print("Retention Improvement Recommendations for at-risk staff:")
+    for col, val in changes.items():
+        print(f"- Change '{col}' to {val}")
+    
+    print("\nBy adjusting these factors, we aim to improve employee satisfaction and tenure.")

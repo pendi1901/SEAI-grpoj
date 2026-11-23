@@ -1,0 +1,66 @@
+```python
+import csv
+import pandas as pd
+from step01 import remember
+
+def flow(header, row, seen):
+    """
+    Decides whether to accept a row based on the 'Secretary Problem' logic:
+    1. Observe a sample (first 20%) to establish a baseline of 'good' performance.
+    2. Accept the first subsequent row that is better than the best seen in the sample.
+    """
+    # If this is the first row, we can't compare yet
+    if not seen:
+        return False
+    
+    # Define sample size (20% of total expected, but we use seen length)
+    # We need a baseline. If we haven't seen enough, keep looking.
+    sample_size = max(5, len(seen) // 5)
+    
+    # Calculate aggregate scores for all seen rows
+    all_rows = seen + [row]
+    df = pd.DataFrame(all_rows, columns=header)
+    
+    goals = [col for col in header if col.endswith(('-', '+'))]
+    scores = pd.DataFrame(index=df.index)
+    for goal in goals:
+        col_data = df[goal].astype(float)
+        min_val, max_val = col_data.min(), col_data.max()
+        normalized = (col_data - min_val) / (max_val - min_val + 1e-9)
+        scores[goal] = 1 - normalized if goal.endswith('-') else normalized
+            
+    df['agg'] = scores.mean(axis=1)
+    
+    # If we are still in the sampling phase, don't accept
+    if len(seen) < sample_size:
+        return False
+    
+    # If the current row is better than the best seen so far in the sample, accept
+    best_sample_score = df['agg'].iloc[:len(seen)].max()
+    return df['agg'].iloc[-1] > best_sample_score
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) for val in row])
+        
+        seen = []
+        accepted_count = 0
+        for row in rows:
+            if flow(header, row, seen):
+                accepted_count += 1
+            seen.append(row)
+            
+        print(f"Processed {len(rows)} proposals.")
+        print(f"Strategy accepted {accepted_count} proposals based on early-stage benchmarking.")
+        print("Decision: Accept only proposals that outperform the initial 20% sample baseline.")
+        
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
+```

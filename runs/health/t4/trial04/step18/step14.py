@@ -1,0 +1,61 @@
+import csv
+
+def get_score(header, row):
+    """
+    Calculates a composite score for a row.
+    Goals: MRE- (minimize), ACC+ (maximize), PRED40+ (maximize).
+    Score = (1 - MRE) + ACC + PRED40.
+    """
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+    return (1.0 - float(row[mre_idx])) + float(row[acc_idx]) + float(row[pred_idx])
+
+def flow(header, row, seen):
+    """
+    Returns True if the current row is significantly better than all previous rows,
+    or if we have reached a point of diminishing returns.
+    Here, we stop if the current row is the best seen so far AND we have 
+    processed enough data to be confident (e.g., at least 50 rows).
+    """
+    if not seen:
+        return False
+    
+    current_score = get_score(header, row)
+    best_seen_score = max(get_score(header, r) for r in seen)
+    
+    # If we haven't seen much, keep going
+    if len(seen) < 50:
+        return False
+    
+    # If the current row is better than anything seen before, 
+    # we consider it a significant improvement and stop.
+    return current_score > best_seen_score
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i] == 'criterion':
+                    processed_row.append(val)
+                else:
+                    processed_row.append(float(val))
+            rows.append(processed_row)
+
+    seen = []
+    stopped = False
+    for i, row in enumerate(rows):
+        if flow(header, row, seen):
+            print(f"Stopping criteria met at row {i+1}.")
+            print(f"The best setup found so far is: {row}")
+            stopped = True
+            break
+        seen.append(row)
+    
+    if not stopped:
+        print("Processed all rows without finding a significant improvement to stop early.")

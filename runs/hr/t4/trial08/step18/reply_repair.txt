@@ -1,0 +1,96 @@
+```python
+import csv
+from step02 import guess
+
+def fix(header, row, levers):
+    """
+    Recommends changes to a 'bad' row to improve its goal metrics.
+    We simulate the impact of changing each lever and pick the one 
+    that yields the best predicted outcome using the Random Forest model.
+    """
+    # Load the full dataset to train the model for predictions
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header_file = next(reader)
+        for r in reader:
+            processed_row = []
+            for i, val in enumerate(r):
+                if header_file[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    target_idx = goal_indices[0]
+    is_maximize = header[target_idx].endswith('+')
+    
+    best_change = {}
+    best_val = -float('inf') if is_maximize else float('inf')
+    
+    # Try each lever
+    for col, allowed in levers.items():
+        col_idx = header.index(col)
+        
+        # Generate candidates
+        candidates = []
+        if isinstance(allowed, tuple):
+            candidates = [allowed[0], allowed[1], (allowed[0] + allowed[1]) / 2]
+        else:
+            candidates = allowed
+            
+        for val in candidates:
+            # Create a test row with the change
+            test_row = list(row)
+            test_row[col_idx] = val
+            
+            # Ensure the goal column is masked as '?' for the guess function
+            for g_idx in goal_indices:
+                test_row[g_idx] = '?'
+            
+            # Predict the outcome
+            prediction = guess(header, rows, [test_row])[0]
+            
+            if is_maximize:
+                if prediction > best_val:
+                    best_val = prediction
+                    best_change = {col: val}
+            else:
+                if prediction < best_val:
+                    best_val = prediction
+                    best_change = {col: val}
+                    
+    return best_change
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Example: Recommend changes for a row with low tenure
+    bad_row = rows[0] 
+    levers = {
+        'businessTravel': ['Non-Travel', 'Travel_Rarely', 'Travel_Frequently'],
+        'overTime': ['No', 'Yes'],
+        'TrainingTimesLastYear': (0.0, 6.0),
+        'StockOptionLevel': (0.0, 3.0)
+    }
+    
+    recommendation = fix(header, bad_row, levers)
+    print("Since pay cannot be increased, we recommend the following change to improve retention:")
+    for col, val in recommendation.items():
+        print(f"Change '{col}' to: {val}")
+    exit(0)
+```

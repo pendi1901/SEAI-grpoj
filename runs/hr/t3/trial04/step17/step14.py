@@ -1,0 +1,56 @@
+import csv
+
+def flow(header, row, seen):
+    """
+    Detects if a new row deviates significantly from the distribution of 'seen' rows.
+    We use the 'YearsAtCompany+' column as a proxy for team stability.
+    If the new row's tenure is more than 2 standard deviations away from the 
+    mean of the seen rows, we flag it as a change in team composition.
+    """
+    if len(seen) < 30:
+        return False
+    
+    idx_tenure = header.index('YearsAtCompany+')
+    tenures = [r[idx_tenure] for r in seen]
+    
+    mean = sum(tenures) / len(tenures)
+    variance = sum((x - mean) ** 2 for x in tenures) / len(tenures)
+    std_dev = variance ** 0.5
+    
+    # If std_dev is 0, we can't detect deviation
+    if std_dev == 0:
+        return False
+    
+    # Flag if the new row is an outlier (more than 2 std devs from mean)
+    current_tenure = row[idx_tenure]
+    if abs(current_tenure - mean) > (2 * std_dev):
+        return True
+        
+    return False
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    seen = []
+    anomalies = 0
+    for row in rows:
+        if flow(header, row, seen):
+            anomalies += 1
+        seen.append(row)
+    
+    print("Team Composition Analysis:")
+    print(f"Processed {len(rows)} employee records.")
+    print(f"Detected {anomalies} instances where the team's tenure profile shifted significantly.")
+    print("These shifts indicate that the team's composition is no longer following the historical norm.")

@@ -1,0 +1,59 @@
+import csv
+
+def remember(header, rows):
+    """
+    Identifies the best-performing rows based on goal columns.
+    Goals ending in '-' are minimized, '+' are maximized.
+    Returns the indices of the top 5% of rows.
+    """
+    goal_indices = []
+    for i, name in enumerate(header):
+        if name.endswith('-') or name.endswith('+'):
+            goal_indices.append((i, name[-1]))
+
+    def get_score(row):
+        # Normalize goals to a 0-1 scale and sum them.
+        # Lower score is better.
+        score = 0
+        for idx, op in goal_indices:
+            val = float(row[idx])
+            if op == '-':
+                score += val
+            else:
+                score += (1.0 - val)
+        return score
+
+    # Calculate scores for all rows
+    scored_rows = []
+    for i, row in enumerate(rows):
+        scored_rows.append((get_score(row), i))
+    
+    # Sort by score ascending (lower is better)
+    scored_rows.sort(key=lambda x: x[0])
+    
+    # Return top 5% (at least 1)
+    limit = max(1, len(rows) // 20)
+    return [item[1] for item in scored_rows[:limit]]
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(x) for x in row])
+        
+        best_indices = remember(header, rows)
+        
+        print("Analysis: Identifying top-performing historical configurations.")
+        print(f"Found {len(best_indices)} configurations that performed best.")
+        print("These setups represent the most efficient outcomes based on your goals.")
+        print("\nTop 3 best-performing row indices:")
+        for idx in best_indices[:3]:
+            print(f"Row {idx} (Score: {sum(rows[idx][i] for i, n in enumerate(header) if n.endswith('-')):.4f})")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

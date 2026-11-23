@@ -1,0 +1,57 @@
+import csv
+import pandas as pd
+import numpy as np
+from sklearn.ensemble import IsolationForest
+
+def spot(header, rows):
+    """
+    Identifies rows that are outliers using Isolation Forest.
+    Returns the indices of rows, sorted by suspicion (highest anomaly score first).
+    """
+    df = pd.DataFrame(rows, columns=header)
+    
+    # IsolationForest requires numeric data. 
+    # Select only numeric columns for anomaly detection.
+    numeric_df = df.select_dtypes(include=[np.number])
+    
+    # Fit the model to the data
+    model = IsolationForest(contamination=0.05, random_state=42)
+    model.fit(numeric_df)
+    
+    # decision_function returns the anomaly score of the input samples
+    # Lower scores are more anomalous.
+    scores = model.decision_function(numeric_df)
+    
+    # Get indices sorted by score (ascending, so most negative/anomalous first)
+    suspicious_indices = np.argsort(scores)
+    
+    return suspicious_indices.tolist()
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                # Convert numeric columns to float
+                processed_row = []
+                for val in row:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        indices = spot(header, rows)
+        
+        print("Anomaly Detection Report:")
+        print(f"Identified {len(indices)} potentially mistyped or outlier records.")
+        print("The 5 most suspicious rows (by index) are:")
+        for idx in indices[:5]:
+            print(f"Row {idx}")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

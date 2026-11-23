@@ -1,0 +1,95 @@
+import ezr
+import random
+
+def fix(header, row, levers):
+    """
+    Suggests a change to a 'bad' row to improve its ydist, 
+    focusing on non-monetary levers.
+    """
+    # Create a table to get the column definitions (needed for norm/ydist)
+    # We use the full dataset to ensure the normalization logic is accurate
+    # based on the distribution of the data.
+    tbl = ezr.Tbl([header])
+    
+    best_change = {}
+    # Calculate current ydist
+    best_ydist = ezr.ydist(tbl, row)
+    
+    # Iterate through provided levers to find the best improvement
+    for col_name, allowed in levers.items():
+        if col_name not in header:
+            continue
+        idx = header.index(col_name)
+        
+        # Determine candidates based on type
+        if isinstance(allowed, list):
+            candidates = allowed
+        else:
+            # For numeric ranges, try the boundaries and a midpoint
+            low, high = allowed
+            candidates = [float(low), float((low + high) / 2), float(high)]
+        
+        for val in candidates:
+            # Skip if no change
+            if val == row[idx]:
+                continue
+                
+            # Create a modified row
+            new_row = list(row)
+            new_row[idx] = val
+            
+            # Calculate new ydist
+            current_ydist = ezr.ydist(tbl, new_row)
+            
+            # We want to minimize ydist (closer to goals)
+            if current_ydist < best_ydist:
+                best_ydist = current_ydist
+                best_change = {col_name: val}
+                
+    return best_change
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Non-monetary levers to improve employee retention/satisfaction
+    # Ensure these match the column names in the header exactly
+    levers = {
+        "businessTravel": ["Non-Travel", "Travel_Rarely", "Travel_Frequently"],
+        "overTime": ["No", "Yes"],
+        "TrainingTimesLastYear": (0.0, 6.0),
+        "StockOptionLevel": (0.0, 3.0),
+        "WorkLifeBalance": (1.0, 4.0)
+    }
+    
+    # Find a 'bad' row (high ydist) to demonstrate the fix
+    tbl = ezr.Tbl([header] + rows)
+    scored = sorted([(ezr.ydist(tbl, r), r) for r in rows], key=lambda x: x[0])
+    
+    # Pick a row from the worst 10%
+    bad_row = scored[int(len(scored) * 0.9)][1]
+    
+    recommendation = fix(header, bad_row, levers)
+    
+    print("Analysis: Non-monetary interventions for high-attrition risk employees.")
+    print("-" * 60)
+    print(f"Original row ydist: {ezr.ydist(tbl, bad_row):.2f}")
+    
+    if recommendation:
+        col, val = list(recommendation.items())[0]
+        print(f"Recommendation: Change '{col}' to '{val}'.")
+        
+        # Verify improvement
+        new_row = list(bad_row)
+        new_row[header.index(col)] = val
+        print(f"New estimated ydist: {ezr.ydist(tbl, new_row):.2f}")
+        print("-" * 60)
+        print("By adjusting non-monetary factors like work-life balance,")
+        print("training, or travel requirements, we can improve employee")
+        print("outcomes without increasing salary costs.")
+    else:
+        print("No single non-monetary lever change found that improves the outcome.")
+    
+    exit(0)

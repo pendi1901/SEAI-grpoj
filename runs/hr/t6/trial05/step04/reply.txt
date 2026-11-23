@@ -1,0 +1,50 @@
+```python
+import ezr
+import random
+
+def flow(header, row, seen):
+    """
+    Decide if the current row is worth a 'retention' conversation.
+    We use the 'wins' logic: if the row is significantly better than 
+    the average of what we have seen so far, we flag it.
+    """
+    if not seen:
+        return False
+    
+    # Create a table to use ezr's distance metrics
+    tbl = ezr.Tbl([header] + seen)
+    
+    # We want to identify high-potential employees (those with high tenure/satisfaction)
+    # The 'wins' function ranks rows based on their ydist (goal distance).
+    # A score > 50 indicates the row is performing better than the average seen.
+    ranker = ezr.wins(tbl)
+    score = ranker(row)
+    
+    # If the score is high (e.g., > 50), it's a candidate for retention
+    return score > 50
+
+if __name__ == "__main__":
+    # Load data
+    data = list(ezr.csv("WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"))
+    header = data[0]
+    rows = data[1:]
+    
+    # Simulate the arrival of rows one by one
+    random.seed(1234567891)
+    random.shuffle(rows)
+    
+    seen = []
+    flagged_count = 0
+    
+    for row in rows:
+        if flow(header, row, seen):
+            flagged_count += 1
+        seen.append(row)
+        
+    print(f"Processed {len(rows)} employee reviews.")
+    print(f"Flagged {flagged_count} employees for a 'what would keep you here' conversation.")
+    print("Decision logic: Flagged employees are those whose goal metrics (tenure, etc.)")
+    print("significantly outperform the average of previously reviewed employees.")
+    
+    exit(0)
+```

@@ -1,0 +1,50 @@
+```python
+import csv
+from step06 import justify as base_justify
+
+def justify(header, rows, row):
+    """
+    Answers why we don't just use the biggest, deepest setup.
+    We estimate the performance of the 'biggest' possible setup (max depth, 
+    max estimators) and compare it to the distribution of all rows.
+    """
+    # The customer asks why not use the biggest, deepest setup.
+    # We define 'biggest' as the max values found in the dataset for 
+    # N_estimators and Max_depth.
+    n_est_idx = header.index('N_estimators')
+    depth_idx = header.index('Max_depth')
+    
+    # Create a 'biggest' row based on the dataset's extremes
+    biggest_row = row[:]
+    biggest_row[n_est_idx] = max(r[n_est_idx] for r in rows)
+    biggest_row[depth_idx] = max(r[depth_idx] for r in rows)
+    
+    # Use the existing justify logic to evaluate this 'biggest' setup
+    p, _ = base_justify(header, rows, biggest_row)
+    
+    reason = (f"Using the biggest, deepest setup only outperforms {p:.1%} of "
+              "historical configurations, suggesting that complexity does not "
+              "guarantee superior performance.")
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = [val if header[i] == 'criterion' else float(val) 
+                             for i, val in enumerate(row)]
+            rows.append(processed_row)
+    
+    # Create a dummy row to pass to justify
+    # We use the first row's inputs but mask the goals
+    sample_row = rows[0][:]
+    for i in range(3):
+        sample_row[i] = "?"
+        
+    p, reason = justify(header, rows, sample_row)
+    print(reason)
+```

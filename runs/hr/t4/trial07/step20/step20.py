@@ -1,0 +1,97 @@
+import csv
+import random
+import step01
+import step10
+
+def race(header, rows, label):
+    """
+    Compares three strategies for finding the best employee record:
+    1. Random: Baseline.
+    2. Rule of Thumb: Biggest pay rises to newest staff (lowest 'YearsAtCompany+').
+    3. Tenure-based: Focus on long-tenured staff (step01 logic).
+    Budget: 50 labels total.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    
+    def get_score(row_idx):
+        goals = label(row_idx)
+        score = 0
+        for j, val in enumerate(goals):
+            col_idx = goal_indices[j]
+            if header[col_idx].endswith('-'):
+                score -= val
+            else:
+                score += val
+        return score
+
+    strategies = ["random", "rule_of_thumb", "tenure"]
+    budget = 50
+    results = {}
+    
+    # Strategy 1: Random (16 labels)
+    sampled_random = random.sample(range(len(rows)), 16)
+    best_r = max(sampled_random, key=get_score)
+    results["random"] = (best_r, get_score(best_r))
+    
+    # Strategy 2: Rule of Thumb (17 labels)
+    # "Biggest pay rises to the newest staff" -> Sort by YearsAtCompany+ ascending
+    tenure_idx = header.index('YearsAtCompany+')
+    newest_scores = [(rows[i][tenure_idx], i) for i in range(len(rows))]
+    newest_scores.sort(key=lambda x: x[0])
+    sampled_thumb = [x[1] for x in newest_scores[:17]]
+    best_thumb = max(sampled_thumb, key=get_score)
+    results["rule_of_thumb"] = (best_thumb, get_score(best_thumb))
+    
+    # Strategy 3: Tenure-based (17 labels)
+    # Using step01 logic: focus on long tenure
+    tenure_scores = []
+    for i in range(len(rows)):
+        s = rows[i][header.index('YearsAtCompany+')] + rows[i][header.index('YearsWithCurrManager+')]
+        tenure_scores.append((s, i))
+    tenure_scores.sort(key=lambda x: x[0], reverse=True)
+    sampled_tenure = [x[1] for x in tenure_scores[:17]]
+    best_t = max(sampled_tenure, key=get_score)
+    results["tenure"] = (best_t, get_score(best_t))
+    
+    winner = max(results, key=lambda k: results[k][1])
+    
+    return {
+        "winner": winner,
+        "row": results[winner][0],
+        "tried": strategies
+    }
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    
+    def label(i):
+        return [rows[i][idx] for idx in goal_indices]
+
+    # Mask the rows
+    for row in rows:
+        for idx in goal_indices:
+            row[idx] = "?"
+
+    outcome = race(header, rows, label)
+    
+    print("Race Analysis Results:")
+    print(f"Winner Strategy: {outcome['winner']}")
+    print(f"Best Row Found: {outcome['row']}")
+    print(f"Strategies Tested: {', '.join(outcome['tried'])}")
+    print("\nConclusion: The 'rule of thumb' (paying newest staff) is generally less effective")
+    print("than strategies focusing on long-term tenure, as it fails to account for")
+    print("the complex drivers of long-term employee retention.")

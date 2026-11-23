@@ -1,0 +1,47 @@
+```python
+import ezr
+import random
+import step10
+
+def race(header, rows, label):
+    """
+    Compares three strategies for finding the best configuration:
+    1. random: Random sampling.
+    2. acquire: The intelligent acquisition function from ezr.
+    3. greedy: Picking rows that are closest to the current best-known configuration.
+    
+    This implementation reuses the logic from step10 to ensure consistency.
+    """
+    return step10.race(header, rows, label)
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    all_data = list(ezr.csv(filename))
+    header = all_data[0]
+    rows = all_data[1:]
+    
+    # Mask goals for the race
+    goal_indices = [i for i, name in enumerate(header) if name[-1] in "+-"]
+    masked_rows = []
+    for row in rows:
+        new_row = list(row)
+        for idx in goal_indices: new_row[idx] = "?"
+        masked_rows.append(new_row)
+        
+    # Define the oracle that reveals the true values
+    def label(i):
+        return rows[i]
+    
+    # Run the race
+    res = race(header, masked_rows, label)
+    
+    print("Race complete: Does intelligent acquisition beat random selection?")
+    print(f"Winner: {res['winner']}")
+    print(f"Best configuration found at index: {res['row']}")
+    print(f"Strategies compared: {', '.join(res['tried'])}")
+    
+    if res['winner'] != 'random':
+        print("Conclusion: Yes, intelligent acquisition outperforms random selection.")
+    else:
+        print("Conclusion: Random selection performed best in this trial.")
+```

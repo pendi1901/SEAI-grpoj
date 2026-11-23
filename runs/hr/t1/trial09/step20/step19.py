@@ -1,0 +1,85 @@
+import csv
+
+def spot(header, rows):
+    """
+    Identifies rows that contain values unlike anything previously seen.
+    We define 'suspicious' as having input values that are outside the 
+    observed range (min, max) of the training data for numeric columns,
+    or containing a category not seen in the training data for symbolic columns.
+    """
+    input_indices = [i for i, name in enumerate(header) if not (name.endswith('+') or name.endswith('-'))]
+    
+    # Build a profile of the 'normal' data
+    profiles = {}
+    for i in input_indices:
+        col_data = [row[i] for row in rows if row[i] != "?"]
+        if not col_data:
+            continue
+            
+        if isinstance(col_data[0], float):
+            profiles[i] = {'min': min(col_data), 'max': max(col_data)}
+        else:
+            profiles[i] = {'categories': set(col_data)}
+
+    # Score rows based on how many 'unusual' values they contain
+    suspicion_scores = []
+    for idx, row in enumerate(rows):
+        score = 0
+        for i in input_indices:
+            if i not in profiles or row[i] == "?":
+                continue
+                
+            val = row[i]
+            p = profiles[i]
+            
+            if isinstance(val, float):
+                # If value is outside the observed range, it's suspicious
+                if val < p['min'] or val > p['max']:
+                    score += 1
+            else:
+                # If category is unknown, it's highly suspicious
+                if val not in p['categories']:
+                    score += 5
+        
+        if score > 0:
+            suspicion_scores.append((score, idx))
+    
+    # Sort by suspicion score descending
+    suspicion_scores.sort(key=lambda x: x[0], reverse=True)
+    
+    return [idx for score, idx in suspicion_scores]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for line in reader:
+            processed_row = []
+            for i, val in enumerate(line):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    suspicious_indices = spot(header, rows)
+    
+    print("Trust Analysis: Identifying Unusual Employee Profiles")
+    print("-----------------------------------------------------")
+    if not suspicious_indices:
+        print("All employee profiles fall within expected ranges.")
+    else:
+        print(f"Detected {len(suspicious_indices)} profiles that are unlike previous hires.")
+        print("These profiles may lead to unreliable estimates.")
+        print("Top 5 most suspicious row indices:")
+        for idx in suspicious_indices[:5]:
+            print(f"- Row index: {idx}")
+    
+    exit(0)

@@ -1,0 +1,52 @@
+import ezr
+import random
+
+def flow(header, row, seen):
+    """
+    Decide if the current row is worth a 'stay' conversation.
+    We use the 'seen' rows to build a model of what 'good' looks like.
+    If the current row is significantly better than the average of what we've seen,
+    we flag it (True).
+    """
+    # We need at least a small sample to make a reasonable decision
+    if len(seen) < 10:
+        return False
+    
+    # Create a table from seen rows to calculate the 'ideal' (mids)
+    # We use the header to define the columns
+    tbl = ezr.Tbl([header] + seen)
+    
+    # Calculate the distance of the current row from the ideal
+    # ydist returns 0 for perfect, higher for worse.
+    current_dist = ezr.ydist(tbl, row)
+    
+    # Calculate the average ydist of all seen rows
+    seen_dists = [ezr.ydist(tbl, r) for r in seen]
+    avg_dist = sum(seen_dists) / len(seen_dists)
+    
+    # If the current row is better (lower distance) than the average,
+    # flag it for a conversation.
+    return current_dist < avg_dist
+
+if __name__ == "__main__":
+    # Load the data
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Simulate the arrival process
+    random.seed(1234567891)
+    random.shuffle(rows)
+    
+    seen = []
+    flags = 0
+    
+    for row in rows:
+        if flow(header, row, seen):
+            flags += 1
+        seen.append(row)
+    
+    print(f"Processed {len(rows)} employee records.")
+    print(f"Flagged {flags} employees for a 'what would keep you here' conversation.")
+    print("Strategy: Flagged employees whose goal metrics are better than the historical average.")

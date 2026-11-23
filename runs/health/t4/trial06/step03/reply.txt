@@ -1,0 +1,60 @@
+```python
+import csv
+import numpy as np
+from scipy import stats
+from step01 import remember
+
+def certify(xs, ys):
+    """
+    Returns True if the difference between two distributions is likely noise,
+    False if they are statistically significantly different.
+    Uses Welch's t-test.
+    """
+    t_stat, p_value = stats.ttest_ind(xs, ys, equal_var=False)
+    # If p_value > 0.05, we fail to reject the null hypothesis (it's noise)
+    return p_value > 0.05
+
+def analyze_size_vs_accuracy(header, rows):
+    """
+    Determines if 'N_estimators' (size) correlates with 'ACC+' (accuracy).
+    We split data into 'small' and 'big' based on the median N_estimators.
+    """
+    n_idx = header.index('N_estimators')
+    acc_idx = header.index('ACC+')
+    
+    n_vals = [row[n_idx] for row in rows]
+    median_n = np.median(n_vals)
+    
+    small_acc = [row[acc_idx] for row in rows if row[n_idx] <= median_n]
+    big_acc = [row[acc_idx] for row in rows if row[n_idx] > median_n]
+    
+    is_noise = certify(small_acc, big_acc)
+    
+    return is_noise, np.mean(small_acc), np.mean(big_acc)
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i] == 'criterion':
+                    processed_row.append(val)
+                else:
+                    processed_row.append(float(val))
+            rows.append(processed_row)
+
+    is_noise, avg_small, avg_big = analyze_size_vs_accuracy(header, rows)
+    
+    print(f"Analysis of N_estimators vs ACC+:")
+    print(f"Average ACC+ for small setups: {avg_small:.4f}")
+    print(f"Average ACC+ for big setups:   {avg_big:.4f}")
+    
+    if is_noise:
+        print("Conclusion: The observed difference is likely noise (statistically insignificant).")
+    else:
+        print("Conclusion: The difference is statistically significant; big setups perform differently.")
+```

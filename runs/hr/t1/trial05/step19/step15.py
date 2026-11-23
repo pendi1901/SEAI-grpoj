@@ -1,0 +1,79 @@
+import csv
+
+def blame(header, rows):
+    """
+    Identifies input columns that have the least correlation with tenure metrics.
+    We define 'bad' rows as those with the lowest tenure scores.
+    We then calculate the correlation between each input column and the tenure score.
+    Columns with the lowest correlation are candidates for removal.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    input_indices = [i for i, name in enumerate(header) if not (name.endswith('+') or name.endswith('-'))]
+
+    def get_score(row):
+        score = 0
+        for i in goal_indices:
+            val = row[i]
+            if header[i].endswith('+'):
+                score += val
+            else:
+                score -= val
+        return score
+
+    # Calculate scores for all rows
+    scores = [get_score(row) for row in rows]
+    
+    # Calculate correlation (simple variance-based approach)
+    # We look for columns where the values are independent of the score
+    correlations = []
+    for i in input_indices:
+        col_vals = [r[i] for r in rows if isinstance(r[i], (int, float))]
+        if not col_vals:
+            continue
+            
+        # Calculate Pearson-like correlation coefficient
+        mean_x = sum(col_vals) / len(col_vals)
+        mean_y = sum(scores) / len(scores)
+        
+        num = sum((col_vals[j] - mean_x) * (scores[j] - mean_y) for j in range(len(col_vals)))
+        den_x = sum((x - mean_x) ** 2 for x in col_vals) ** 0.5
+        den_y = sum((y - mean_y) ** 2 for y in scores) ** 0.5
+        
+        if den_x * den_y == 0:
+            corr = 0
+        else:
+            corr = abs(num / (den_x * den_y))
+        
+        correlations.append((corr, header[i]))
+
+    # Sort by correlation ascending (lowest correlation = least relevant)
+    correlations.sort(key=lambda x: x[0])
+    
+    # Return the names of the 5 least relevant input columns
+    return [item[1] for item in correlations[:5]]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    useless_columns = blame(header, rows)
+    
+    print("Analysis: Which columns have little impact on employee tenure?")
+    print("The following input columns show the lowest correlation with tenure metrics")
+    print("and are candidates for removal from data collection:")
+    for col in useless_columns:
+        print(f"- {col}")

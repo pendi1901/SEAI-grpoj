@@ -1,0 +1,76 @@
+```python
+import csv
+import pandas as pd
+from sklearn.neighbors import KNeighborsRegressor
+
+def justify(header, rows, row):
+    """
+    Estimates the performance of a given row and returns its percentile rank
+    relative to the provided dataset.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    goals = [c for c in header if c.endswith('-') or c.endswith('+')]
+    inputs = [c for c in header if c not in goals]
+
+    # 1. Estimate the goals for the input row using KNN
+    X_train = df[inputs]
+    y_train = df[goals]
+    model = KNeighborsRegressor(n_neighbors=10)
+    model.fit(X_train, y_train)
+    
+    # Extract inputs from the test row
+    test_inputs = [row[i] for i, h in enumerate(header) if h in inputs]
+    pred_goals = model.predict([test_inputs])[0]
+    
+    # 2. Calculate aggregate score for all rows
+    # Normalize goals: 1 is best, 0 is worst
+    def get_aggregate(data_goals):
+        scores = []
+        for i, col in enumerate(goals):
+            vals = df[col]
+            norm = (data_goals[i] - vals.min()) / (vals.max() - vals.min() + 1e-9)
+            scores.append(1 - norm if col.endswith('-') else norm)
+        return sum(scores) / len(scores)
+
+    # Calculate scores for training set
+    train_scores = [get_aggregate(r[goals].values) for _, r in df.iterrows()]
+    
+    # Calculate score for the test row
+    test_score = get_aggregate(pred_goals)
+    
+    # 3. Calculate percentile (fraction of rows that this row is better than)
+    better_than = [s for s in train_scores if test_score > s]
+    p = len(better_than) / len(train_scores)
+    
+    reason = f"This setup is estimated to outperform {p:.4f} of all historical configurations based on its predicted goal metrics."
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) if header[i][0].isupper() else val for i, val in enumerate(row)])
+        
+        # Example: Compare a specific row (B) against the dataset
+        # We take an arbitrary row from the data to simulate 'B'
+        sample_row = list(rows[0])
+        goals = [i for i, h in enumerate(header) if h.endswith('-') or h.endswith('+')]
+        for g in goals:
+            sample_row[g] = "?"
+            
+        p, reason = justify(header, rows, sample_row)
+        
+        print("Customer Inquiry: Why was setup B not recommended?")
+        print("-" * 60)
+        print(f"Performance Rank: {p:.4f}")
+        print(f"Explanation: {reason}")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

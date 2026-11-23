@@ -1,0 +1,39 @@
+```python
+import ezr
+import step01
+
+def certify(xs, ys):
+    """
+    Returns True if the distributions are the same (noise), 
+    False if they really differ.
+    """
+    return ezr.same(xs, ys)
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Identify columns
+    idx_overtime = header.index("overTime")
+    # YearsInCurrentRole+ is a goal to maximize
+    idx_yicr = header.index("YearsInCurrentRole+")
+    
+    # Split data based on overtime status
+    no_overtime = [r[idx_yicr] for r in rows if r[idx_overtime] == "No"]
+    yes_overtime = [r[idx_yicr] for r in rows if r[idx_overtime] == "Yes"]
+    
+    # Check if the difference is statistically significant
+    # ezr.same returns True if they are indistinguishable (noise)
+    is_noise = certify(no_overtime, yes_overtime)
+    
+    print("Analysis: Do people who work overtime leave their role sooner?")
+    print(f"Mean YearsInCurrentRole (No Overtime): {sum(no_overtime)/len(no_overtime):.2f}")
+    print(f"Mean YearsInCurrentRole (Yes Overtime): {sum(yes_overtime)/len(yes_overtime):.2f}")
+    
+    if is_noise:
+        print("Result: The difference is statistically indistinguishable (noise).")
+    else:
+        print("Result: There is a statistically significant difference.")
+```

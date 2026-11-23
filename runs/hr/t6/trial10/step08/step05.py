@@ -1,0 +1,66 @@
+import ezr
+import step01
+
+def blame(header, rows):
+    """
+    Identifies input columns that best explain why the worst rows are bad.
+    We define 'worst' as the bottom 20% of rows based on ydist.
+    We then compare the distribution of input values in the worst rows 
+    against the rest of the population to find the most significant 
+    differences (using the tree-based split logic).
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate ydist for all rows and sort to find the worst
+    scored = []
+    for row in rows:
+        scored.append((ezr.ydist(tbl, row), row))
+    scored.sort(key=lambda x: x[0], reverse=True)
+    
+    # Bottom 20% are the "worst"
+    n = len(rows) // 5
+    worst = [x[1] for x in scored[:n]]
+    
+    # Find the best split that separates the worst rows from the rest
+    # We look for the column that provides the most information gain
+    # regarding the "badness" of the rows.
+    best_col_name = None
+    max_diff = -1
+    
+    for col in tbl.x:
+        # Calculate the distribution of this column in 'worst' vs 'rest'
+        # For symbolic, compare frequencies; for numeric, compare means
+        if isinstance(col, ezr.Sym):
+            # Simple heuristic: difference in mode frequency
+            w_vals = [r[col.at] for r in worst if r[col.at] != "?"]
+            if not w_vals: continue
+            mode = max(set(w_vals), key=w_vals.count)
+            freq = w_vals.count(mode) / len(w_vals)
+            if freq > max_diff:
+                max_diff = freq
+                best_col_name = col.txt
+        else:
+            # For numeric, compare mean difference
+            w_vals = [r[col.at] for r in worst if r[col.at] != "?"]
+            if not w_vals: continue
+            diff = abs(sum(w_vals)/len(w_vals) - col.mu)
+            if diff > max_diff:
+                max_diff = diff
+                best_col_name = col.txt
+                
+    return [best_col_name] if best_col_name else []
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    factors = blame(header, rows)
+    
+    print("Analysis: What explains short stays (worst performance)?")
+    if factors:
+        print(f"The primary factor identified is: {factors[0]}")
+        print("This column shows the most significant deviation in the worst-performing records.")
+    else:
+        print("No single clear factor identified.")

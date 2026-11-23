@@ -1,0 +1,61 @@
+import ezr
+import step01
+
+def choose(header, rows, label):
+    """
+    Find the best row by using the acquire logic from ezr.
+    We are allowed 50 labels. We use the acquire function which
+    intelligently samples the space to find the best configuration.
+    """
+    # Create a table object. The rows provided have '?' for goals.
+    # We need to wrap the label function to handle the row indices.
+    data = [header] + rows
+    tbl = ezr.Tbl(data)
+    
+    # The acquire function in ezr.py takes a TBL and an ORACLE.
+    # It returns a list of rows that have been labeled.
+    # We define a wrapper to map the label(index) to the row structure.
+    def oracle_wrapper(row):
+        # Find the index of this row in the original list
+        idx = rows.index(row)
+        labeled_row = label(idx)
+        # Update the row in-place with the true values
+        for i, val in enumerate(labeled_row):
+            row[i] = val
+        return row
+
+    # Use ezr.acquire to perform the search.
+    # It will call the oracle_wrapper up to 50 times.
+    labeled_rows = ezr.acquire(tbl, cap=50, label=oracle_wrapper)
+    
+    # Find the best row among the ones we labeled.
+    # A row is better if its ydist is lower.
+    best_row = min(labeled_rows, key=lambda r: ezr.ydist(tbl, r))
+    
+    # Return the index of the best row found.
+    return rows.index(best_row)
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    all_data = list(ezr.csv(filename))
+    header = all_data[0]
+    rows = all_data[1:]
+    
+    # Create a copy of rows with goals masked as '?'
+    masked_rows = []
+    goal_indices = [i for i, name in enumerate(header) if name[-1] in "+-"]
+    for row in rows:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_rows.append(new_row)
+        
+    # Define the oracle that reveals the true values
+    def label(i):
+        return rows[i]
+    
+    # Run the selection
+    best_idx = choose(header, masked_rows, label)
+    
+    print(f"Search complete. The best configuration found is at index {best_idx}.")
+    print(f"Row details: {rows[best_idx]}")

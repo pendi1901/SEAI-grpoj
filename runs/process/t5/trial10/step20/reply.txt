@@ -1,0 +1,102 @@
+```python
+import ezr
+import random
+
+def race(header, rows, label):
+    """
+    Compare strategies for finding the best row within a 50-label budget.
+    Strategies:
+    1. random: Picks rows at random.
+    2. big_teams: Picks rows with the highest 'Team Size' (customer's current approach).
+    3. acquire: Uses the intelligent acquisition strategy from ezr.
+    """
+    budget = 50
+    labeled_cache = {}
+
+    def oracle_wrapper(idx):
+        if idx not in labeled_cache:
+            if len(labeled_cache) >= budget:
+                raise Exception("Budget exceeded")
+            labeled_cache[idx] = label(idx)
+        return labeled_cache[idx]
+
+    tbl = ezr.Tbl([header] + rows)
+    team_size_idx = header.index("Team Size")
+
+    # Strategy 1: Random
+    def strategy_random(budget_left):
+        indices = random.sample(range(len(rows)), min(budget_left, len(rows)))
+        for i in indices: oracle_wrapper(i)
+        return indices
+
+    # Strategy 2: Big Teams (Customer's current approach)
+    def strategy_big_teams(budget_left):
+        # Sort by Team Size descending
+        indexed_rows = sorted(enumerate(rows), key=lambda x: x[1][team_size_idx], reverse=True)
+        indices = [x[0] for x in indexed_rows[:budget_left]]
+        for i in indices: oracle_wrapper(i)
+        return indices
+
+    # Strategy 3: Acquire
+    def strategy_acquire(budget_left):
+        # We need a local oracle that maps row objects to indices
+        row_to_idx = {id(r): i for i, r in enumerate(rows)}
+        def local_oracle(r):
+            return oracle_wrapper(row_to_idx[id(r)])
+        
+        labeled_rows = ezr.acquire(tbl, cap=budget_left, label=local_oracle)
+        return [row_to_idx[id(r)] for r in labeled_rows]
+
+    strategies = {
+        "random": strategy_random,
+        "big_teams": strategy_big_teams,
+        "acquire": strategy_acquire
+    }
+    
+    budget_per = budget // len(strategies)
+    results = {}
+    
+    for name, func in strategies.items():
+        indices = func(budget_per)
+        # Find best row found by this strategy
+        best_i = min(indices, key=lambda i: ezr.ydist(tbl, oracle_wrapper(i)))
+        results[name] = (best_i, ezr.ydist(tbl, oracle_wrapper(best_i)))
+
+    winner = min(results, key=lambda n: results[n][1])
+    
+    return {
+        "winner": winner,
+        "row": results[winner][0],
+        "tried": list(strategies.keys())
+    }
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    masked_rows = []
+    for r in rows:
+        new_row = list(r)
+        for i, name in enumerate(header):
+            if name[-1] in "+-":
+                new_row[i] = "?"
+        masked_rows.append(new_row)
+        
+    def label_func(i):
+        return rows[i]
+    
+    random.seed(1234567891)
+    result = race(header, masked_rows, label_func)
+    
+    print("Analysis: Is 'biggest teams' the best strategy?")
+    print(f"Winner: {result['winner']}")
+    print(f"Best row index found: {result['row']}")
+    print(f"Strategies tried: {', '.join(result['tried'])}")
+    
+    if result['winner'] == "big_teams":
+        print("Conclusion: Your current strategy of using the biggest teams is optimal.")
+    else:
+        print(f"Conclusion: The '{result['winner']}' strategy outperformed your current 'big_teams' approach.")
+```

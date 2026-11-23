@@ -1,0 +1,78 @@
+```python
+import csv
+
+def flow(header, row, seen):
+    """
+    Warns the customer if a project is going bad.
+    We define 'bad' as a row that is dominated by the best seen so far,
+    or specifically, if it performs significantly worse than the current 
+    Pareto frontier.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    
+    def get_goals(r):
+        return [r[i] for i in goal_indices]
+
+    def is_better(goals_a, goals_b):
+        # Returns True if goals_a dominates goals_b
+        better_in_at_least_one = False
+        for i, idx in enumerate(goal_indices):
+            name = header[idx]
+            val_a, val_b = goals_a[i], goals_b[i]
+            if name.endswith('-'):
+                if val_a > val_b: return False
+                if val_a < val_b: better_in_at_least_one = True
+            else:
+                if val_a < val_b: return False
+                if val_a > val_b: better_in_at_least_one = True
+        return better_in_at_least_one
+
+    # If we haven't seen enough, we can't judge
+    if len(seen) < 50:
+        return False
+
+    # Find the best in the seen data (Pareto frontier)
+    pareto = []
+    for s in seen:
+        s_goals = get_goals(s)
+        is_dominated = False
+        for other in seen:
+            if is_better(get_goals(other), s_goals):
+                is_dominated = True
+                break
+        if not is_dominated:
+            pareto.append(s_goals)
+
+    # If the current row is dominated by any of the Pareto-optimal rows,
+    # it is "going bad" relative to our best history.
+    row_goals = get_goals(row)
+    for p_goals in pareto:
+        if is_better(p_goals, row_goals):
+            return True
+            
+    return False
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(x) for x in row])
+        
+        warnings = 0
+        seen = []
+        for row in rows:
+            if flow(header, row, seen):
+                warnings += 1
+            seen.append(row)
+            
+        print(f"Monitoring complete. Detected {warnings} instances where a project setup performed worse than the established best-practice frontier.")
+        print("The system is configured to flag any incoming configuration that is dominated by previous optimal setups.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

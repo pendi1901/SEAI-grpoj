@@ -1,0 +1,57 @@
+```python
+import ezr
+import random
+
+def remember(header, rows):
+    """
+    Finds the best rows based on the goal columns.
+    Goals: YearsAtCompany+, YearsInCurrentRole+, YearsWithCurrManager+ (maximize)
+    Others: attrition (No is better), etc.
+    """
+    # Create a table object from the provided header and rows
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate ydist for all rows. 
+    # ydist measures how far a row is from the ideal goal values.
+    # Lower ydist is better.
+    scored = []
+    for i, row in enumerate(rows):
+        d = ezr.ydist(tbl, row)
+        scored.append((d, i))
+    
+    # Sort by distance (ascending, so best first)
+    scored.sort()
+    
+    # Return the top 5% of rows (800 rows * 0.05 = 40)
+    limit = max(1, int(len(rows) * 0.05))
+    return [item[1] for item in scored[:limit]]
+
+if __name__ == "__main__":
+    # Load data
+    data = list(ezr.csv("WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"))
+    header = data[0]
+    rows = data[1:]
+    
+    # Get indices of best rows
+    best_indices = remember(header, rows)
+    
+    # Print summary for the customer
+    print(f"Identified {len(best_indices)} employees with the longest tenure and best retention metrics.")
+    print("These employees typically exhibit:")
+    
+    # Sample a few to show characteristics
+    sample_idx = best_indices[0]
+    sample_row = rows[sample_idx]
+    
+    # Map indices to names for readability
+    col_map = {name: i for i, name in enumerate(header)}
+    
+    print(f"- Department: {sample_row[col_map['department']]}")
+    print(f"- Job Role: {sample_row[col_map['jobRole']]}")
+    print(f"- Years at Company: {sample_row[col_map['YearsAtCompany+']]}")
+    print(f"- Years in Current Role: {sample_row[col_map['YearsInCurrentRole+']]}")
+    print(f"- Years with Current Manager: {sample_row[col_map['YearsWithCurrManager+']]}")
+    print(f"- Job Satisfaction: {sample_row[col_map['JobSatisfaction']]}")
+    
+    exit(0)
+```

@@ -1,0 +1,62 @@
+import csv
+from step02 import guess
+from step01 import remember
+
+def justify(header, rows, row):
+    """
+    Estimates the performance of 'row' and compares it against all 'rows'.
+    Returns (p, reason) where p is the fraction of rows outperformed by 'row'.
+    """
+    # Identify goal indices
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+    
+    # Estimate goals for the target row using the guess logic (MRE-)
+    # For ACC+ and PRED40+, we use the average of the training set as a neutral baseline
+    # since the guess function only provides MRE- estimation.
+    estimated_mre = guess(header, rows, [row])[0]
+    avg_acc = sum(r[acc_idx] for r in rows) / len(rows)
+    avg_pred = sum(r[pred_idx] for r in rows) / len(rows)
+    
+    # Calculate a composite score for the target row
+    # Score = (1 - MRE) + ACC + PRED40 (higher is better)
+    target_score = (1.0 - estimated_mre) + avg_acc + avg_pred
+    
+    # Calculate scores for all existing rows
+    scores = [(1.0 - r[mre_idx]) + r[acc_idx] + r[pred_idx] for r in rows]
+    
+    # Count how many rows are worse than the target row
+    worse_count = sum(1 for s in scores if s < target_score)
+    p = worse_count / len(rows)
+    
+    reason = (f"Using the biggest, deepest setup is not always optimal because this "
+              f"configuration is estimated to outperform only {p:.1%} of all "
+              "available configurations.")
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = [val if header[i] == 'criterion' else float(val) 
+                             for i, val in enumerate(row)]
+            rows.append(processed_row)
+
+    # Define a "biggest, deepest" setup
+    # N_estimators=200, Max_depth=20, Min_sample_leaves=1
+    biggest_row = [0.0, 0.0, 0.0, 200.0, 'squared_error', 1.0, 1.0, 20.0]
+    
+    # Mask goals
+    test_row = list(biggest_row)
+    for i, h in enumerate(header):
+        if h.endswith('-') or h.endswith('+'):
+            test_row[i] = "?"
+            
+    p, reason = justify(header, rows, test_row)
+    print(reason)
+    print(f"Relative performance rank: {p:.4f}")

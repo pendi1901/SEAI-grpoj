@@ -1,0 +1,63 @@
+```python
+import csv
+
+def flow(header, row, seen):
+    """
+    Decides if the current employee needs a 'what would keep you here' conversation.
+    We target employees who are high-performers (YearsAtCompany+ is high) 
+    but might be at risk (e.g., low JobSatisfaction or high OverTime).
+    
+    Strategy: Use a simple threshold based on the distribution of seen data.
+    If the current row's 'YearsAtCompany+' is in the top 10% of what we've seen
+    AND they have low JobSatisfaction (<= 2), flag them for a conversation.
+    """
+    years_idx = header.index('YearsAtCompany+')
+    sat_idx = header.index('JobSatisfaction')
+    
+    current_years = row[years_idx]
+    current_sat = row[sat_idx]
+    
+    # If this is the first row, we can't compare, so let it go
+    if not seen:
+        return False
+    
+    # Get all seen years to determine the threshold
+    seen_years = [r[years_idx] for r in seen]
+    threshold = sorted(seen_years, reverse=True)[max(0, len(seen_years) // 10)]
+    
+    # Criteria: High tenure (top 10%) + Low satisfaction = High risk of attrition
+    if current_years >= threshold and current_sat <= 2:
+        return True
+    
+    return False
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    # Simulate the arrival process
+    seen = []
+    selected_count = 0
+    for row in rows:
+        if flow(header, row, seen):
+            selected_count += 1
+        seen.append(row)
+    
+    print(f"Processed {len(rows)} employees.")
+    print(f"Identified {selected_count} employees requiring a 'what would keep you here' conversation.")
+    print("Logic: Flagged high-tenure employees (top 10%) with low job satisfaction (<= 2).")
+```

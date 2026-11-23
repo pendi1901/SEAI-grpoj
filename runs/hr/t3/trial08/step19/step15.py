@@ -1,0 +1,82 @@
+import csv
+
+def blame(header, rows):
+    """
+    Identifies input columns that have the least correlation with the goal 
+    'YearsAtCompany+'. We identify columns that are 'useless' by checking 
+    if their values are statistically independent of the goal.
+    
+    We return the names of columns that have the lowest impact on the goal,
+    suggesting they are candidates to stop collecting.
+    """
+    goal_idx = -1
+    for i, name in enumerate(header):
+        if name.endswith('+') or name.endswith('-'):
+            goal_idx = i
+            break
+            
+    input_indices = [i for i, name in enumerate(header) if not (name.endswith('+') or name.endswith('-'))]
+    
+    # Calculate correlation between each input and the goal
+    # For numeric inputs, use absolute correlation. For symbolic, use variance in goal.
+    scores = []
+    goal_vals = [float(r[goal_idx]) for r in rows]
+    
+    for i in input_indices:
+        col_vals = [r[i] for r in rows]
+        
+        if isinstance(col_vals[0], (int, float)):
+            # Numeric: Correlation
+            mean_x = sum(col_vals) / len(col_vals)
+            mean_y = sum(goal_vals) / len(goal_vals)
+            num = sum((col_vals[j] - mean_x) * (goal_vals[j] - mean_y) for j in range(len(rows)))
+            den = (sum((col_vals[j] - mean_x)**2 for j in range(len(rows))) * 
+                   sum((goal_vals[j] - mean_y)**2 for j in range(len(rows))))**0.5
+            corr = abs(num / den) if den != 0 else 0
+            scores.append((corr, header[i]))
+        else:
+            # Symbolic: Group by category and check mean goal difference
+            categories = set(col_vals)
+            if len(categories) > 1:
+                cat_means = {cat: [] for cat in categories}
+                for j, cat in enumerate(col_vals):
+                    cat_means[cat].append(goal_vals[j])
+                # Score is the variance of the means
+                means = [sum(v)/len(v) for v in cat_means.values()]
+                var_means = sum((m - sum(means)/len(means))**2 for m in means)
+                scores.append((var_means / 1000, header[i])) # Scale down
+            else:
+                scores.append((0, header[i]))
+                
+    # Sort by score ascending (lowest correlation is most useless)
+    scores.sort(key=lambda x: x[0])
+    
+    # Return the bottom 5 columns that have the least to do with the goal
+    return [name for score, name in scores[:5]]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    useless_cols = blame(header, rows)
+    
+    print("The following columns have the least correlation with employee tenure")
+    print("and are candidates to stop collecting:")
+    for col in useless_cols:
+        print(f"- {col}")

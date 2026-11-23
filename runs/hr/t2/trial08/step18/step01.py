@@ -1,0 +1,61 @@
+import csv
+
+def remember(header, rows):
+    """
+    Identify staff who stay 'unusually long'.
+    'YearsAtCompany+' is a goal to maximize.
+    We return the indices of the top 5% of rows based on this metric.
+    """
+    # Identify the index of the goal column
+    goal_col = "YearsAtCompany+"
+    try:
+        idx = header.index(goal_col)
+    except ValueError:
+        return []
+
+    # Create a list of (value, original_index)
+    indexed_rows = []
+    for i, row in enumerate(rows):
+        val = row[idx]
+        if isinstance(val, (int, float)):
+            indexed_rows.append((val, i))
+
+    # Sort by value descending (maximize)
+    indexed_rows.sort(key=lambda x: x[0], reverse=True)
+
+    # Calculate 5% limit (at least 1, max 5% of total rows)
+    limit = max(1, len(rows) // 20)
+    
+    # Return the indices of the top performers
+    return [item[1] for item in indexed_rows[:limit]]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            # Convert numeric columns (starting with uppercase) to floats
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    best_indices = remember(header, rows)
+    
+    print("Staff with the longest tenure (YearsAtCompany+):")
+    idx_years = header.index("YearsAtCompany+")
+    for i in best_indices:
+        row = rows[i]
+        print(f"Row {i}: Tenure={row[idx_years]}, Role={row[header.index('jobRole')]}, "
+              f"Department={row[header.index('department')]}, "
+              f"BusinessTravel={row[header.index('businessTravel')]}")

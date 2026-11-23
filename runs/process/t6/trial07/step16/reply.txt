@@ -1,0 +1,42 @@
+```python
+import ezr
+import step06
+
+def justify(header, rows, row):
+    """
+    Returns a pair (p, reason): p is the fraction of rows that 'row' is better than;
+    reason is a sentence explaining why 'row' is not as good as the best-performing
+    configurations (like 'A').
+    """
+    # Reuse the logic from step06 to estimate the ydist of the proposed row
+    # and calculate its percentile rank.
+    p, reason = step06.justify(header, rows, row)
+    
+    # The customer asks why B is not as good as A.
+    # We provide a reason based on the performance ranking.
+    # If p is low, it means many rows are better than this one.
+    rank_percent = int((1 - p) * 100)
+    new_reason = (f"Setup B is estimated to be in the top {rank_percent}% of configurations, "
+                  f"whereas Setup A was chosen because it consistently achieves "
+                  f"a lower distance to the ideal goals.")
+    
+    return p, new_reason
+
+if __name__ == "__main__":
+    file_path = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(file_path))
+    header = data[0]
+    rows = data[1:]
+    
+    # Pick a sample row (Setup B) and mask its goals
+    target_row = list(rows[1]) # Example: row 1 as "Setup B"
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    for idx in goal_indices:
+        target_row[idx] = "?"
+        
+    p, reason = justify(header, rows, target_row)
+    
+    print(f"Ranking of Setup B: {p:.4f}")
+    print(f"Explanation: {reason}")
+    exit(0)
+```

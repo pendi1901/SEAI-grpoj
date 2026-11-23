@@ -1,0 +1,58 @@
+import csv
+import step01
+
+def find_similar(target_row, rows, header):
+    """
+    Finds the 5 rows most similar to the target_row based on Euclidean distance
+    of input columns.
+    """
+    input_indices = [i for i, name in enumerate(header) 
+                     if not (name.endswith('-') or name.endswith('+'))]
+    
+    def dist(r1, r2):
+        d = 0
+        for i in input_indices:
+            d += (r1[i] - r2[i])**2
+        return d**0.5
+
+    # Calculate distances to all rows
+    distances = []
+    for i, row in enumerate(rows):
+        distances.append((dist(target_row, row), i))
+    
+    # Return indices of 5 closest rows
+    distances.sort()
+    return [item[1] for item in distances[:5]]
+
+def get_score(row, header):
+    """Calculates a normalized score for a row."""
+    total = 0
+    for i, name in enumerate(header):
+        if name.endswith('-'):
+            total += row[i]
+        elif name.endswith('+'):
+            total += (1.0 - row[i])
+    return total
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [[float(x) for x in row] for row in reader]
+        
+        # Use the first row as the proposed setup
+        proposal = rows[0]
+        similar_indices = find_similar(proposal, rows[1:], header)
+        
+        print("Customer Inquiry: Here is the setup I am about to propose. Show me the past ones most like it, and how they turned out.")
+        print("Answer: The 5 most similar past configurations were found at indices:", [i+1 for i in similar_indices])
+        print("\nPerformance of similar setups (lower score is better):")
+        for idx in similar_indices:
+            score = get_score(rows[idx], header)
+            print(f"  Setup {idx+1}: Score = {score:.4f}")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

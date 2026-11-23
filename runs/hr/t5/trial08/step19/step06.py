@@ -1,0 +1,51 @@
+import ezr
+import random
+
+def justify(header, rows, row):
+    """
+    Returns (p, reason): p is the fraction of rows that 'row' is better than,
+    and reason is a sentence explaining the ranking.
+    """
+    # Create a table to use ydist for ranking
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Estimate the goal values for the input row.
+    # We use the tree-based approach: find the leaf for the input row
+    # and use the median ydist of that leaf as the estimate.
+    root = ezr.tree(tbl, tbl.rows)
+    leaf_node = ezr.leaf(root, row)
+    
+    # The estimated ydist for the input row is the mean ydist of its leaf
+    estimated_ydist = leaf_node.mu
+    
+    # Calculate ydist for all existing rows
+    all_ydists = [ezr.ydist(tbl, r) for r in rows]
+    
+    # p is the fraction of rows that have a higher (worse) ydist than our estimate
+    # (i.e., our row is better than them)
+    better_than = [y for y in all_ydists if y > estimated_ydist]
+    p = len(better_than) / len(all_ydists)
+    
+    reason = (f"This arrangement ranks in the top {int((1-p)*100)}% of all observed "
+              f"retention outcomes, based on its alignment with key tenure metrics.")
+    
+    return p, reason
+
+if __name__ == "__main__":
+    # Load data
+    data = list(ezr.csv("WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"))
+    header = data[0]
+    rows = data[1:]
+    
+    # Pick a sample row to justify (masking its goals)
+    sample_row = list(rows[0])
+    goal_indices = [i for i, name in enumerate(header) if name[-1] in "+-"]
+    for idx in goal_indices:
+        sample_row[idx] = "?"
+        
+    p, reason = justify(header, rows, sample_row)
+    
+    print(f"Ranking: {p:.2f}")
+    print(f"Justification: {reason}")
+    
+    exit(0)

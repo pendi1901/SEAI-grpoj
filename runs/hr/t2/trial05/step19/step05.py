@@ -1,0 +1,66 @@
+import csv
+import step01
+
+def blame(header, rows):
+    """
+    Identifies input columns that correlate with low 'YearsAtCompany+' (short stays).
+    We define 'worst rows' as the bottom 20% of employees by 'YearsAtCompany+'.
+    We then compare the average of input features in these 'worst' rows 
+    against the global average to see which features are most 'off'.
+    """
+    years_idx = header.index('YearsAtCompany+')
+    
+    # Filter out rows with valid numeric years
+    valid_rows = [r for r in rows if isinstance(r[years_idx], (int, float))]
+    valid_rows.sort(key=lambda x: x[years_idx])
+    
+    # Worst 20%
+    worst = valid_rows[:max(1, len(valid_rows) // 5)]
+    
+    # Identify input columns (not goals)
+    input_indices = [
+        i for i, name in enumerate(header)
+        if not (name.endswith('+') or name.endswith('-'))
+    ]
+    
+    # Calculate global averages and worst-group averages
+    scores = []
+    for i in input_indices:
+        col_data = [r[i] for r in valid_rows if isinstance(r[i], (int, float))]
+        if not col_data:
+            continue
+        
+        global_avg = sum(col_data) / len(col_data)
+        worst_avg = sum(r[i] for r in worst if isinstance(r[i], (int, float))) / len(worst)
+        
+        # We look for features where the worst group deviates significantly
+        # from the global average.
+        diff = abs(global_avg - worst_avg)
+        scores.append((diff, header[i]))
+    
+    # Return top 3 columns that explain the difference
+    scores.sort(key=lambda x: x[0], reverse=True)
+    return [s[1] for s in scores[:3]]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    factors = blame(header, rows)
+    print("Factors explaining short stays (worst performers):")
+    for factor in factors:
+        print(f"- {factor}")

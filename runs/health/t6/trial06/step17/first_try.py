@@ -1,0 +1,75 @@
+import ezr
+import step07
+import step08
+
+def choose(header, rows, label):
+    """
+    Finds a setup that is both accurate (low ydist) and small (low complexity).
+    We use the acquire strategy to find accurate rows, then filter for 
+    low complexity (e.g., small Max_depth or N_estimators) to ensure it 
+    runs quickly.
+    """
+    # Use the acquisition strategy from step07 to find a set of high-performing rows
+    # We label up to 50 rows to build a model of performance
+    labeled_indices = []
+    
+    def oracle_wrapper(idx):
+        labeled_indices.append(idx)
+        return label(idx)
+    
+    # Get the best index using the acquisition logic
+    best_idx = step07.choose(header, rows, oracle_wrapper)
+    
+    # Now, among the labeled rows, we look for one that is 'small'
+    # 'Small' is defined by low N_estimators and low Max_depth
+    # We prioritize the best performing ones, but apply a penalty for complexity
+    tbl = ezr.Tbl([header] + [label(i) if i in labeled_indices else rows[i] for i in range(len(rows))])
+    
+    # We want to minimize ydist (performance) AND complexity
+    # Complexity proxy: normalized N_estimators + normalized Max_depth
+    def complexity(row):
+        n_est = row[header.index("N_estimators")]
+        depth = row[header.index("Max_depth")]
+        return (n_est / 200.0) + (depth / 20.0)
+    
+    # Score candidates: weighted sum of performance and complexity
+    # We only consider the rows we have labeled
+    candidates = labeled_indices
+    
+    def score(idx):
+        row = label(idx)
+        return ezr.ydist(tbl, row) + 0.5 * complexity(row)
+    
+    best_idx = min(candidates, key=score)
+    return best_idx
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    
+    try:
+        header = next(data_gen)
+        all_rows = list(data_gen)
+        
+        # Mask the goals
+        masked_rows = []
+        for r in all_rows:
+            new_row = list(r)
+            for i, name in enumerate(header):
+                if name[-1] in "+-":
+                    new_row[i] = "?"
+            masked_rows.append(new_row)
+            
+        def label(i):
+            return all_rows[i]
+            
+        best_idx = choose(header, masked_rows, label)
+        print(f"Recommended configuration found at index: {best_idx}")
+        print(f"Configuration details: {all_rows[best_idx]}")
+        print("This setup balances high forecast accuracy with low computational overhead.")
+        
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
+        
+    exit(0)

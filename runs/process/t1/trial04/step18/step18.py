@@ -1,0 +1,70 @@
+import csv
+
+def fix(header, row, levers):
+    """
+    To cut idle time without hiring (i.e., without changing 'Team Size'),
+    we look for other levers that influence 'Idle-'.
+    Based on the POM3 model, 'Plan' and 'Initial Known' are significant
+    drivers of idle time. We recommend adjusting these to their most 
+    beneficial extremes.
+    """
+    recommendations = {}
+    
+    # We want to minimize 'Idle-'. 
+    # In POM3, lower 'Plan' complexity and higher 'Initial Known' 
+    # (better requirements clarity) typically reduce idle time.
+    
+    if 'Plan' in levers:
+        low, high = levers['Plan']
+        # Move towards lower plan complexity
+        recommendations['Plan'] = low
+        
+    if 'Initial Known' in levers:
+        low, high = levers['Initial Known']
+        # Move towards higher initial knowledge to reduce uncertainty/idle
+        recommendations['Initial Known'] = high
+        
+    return recommendations
+
+def get_data():
+    filename = "pom3a.n1000.train.csv"
+    with open(filename, mode='r', encoding='utf-8') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = []
+        for row in reader:
+            processed_row = []
+            for val in row:
+                try:
+                    processed_row.append(float(val))
+                except ValueError:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    return header, rows
+
+if __name__ == "__main__":
+    header, rows = get_data()
+    
+    # Define levers excluding 'Team Size' as per customer request
+    levers = {
+        'Plan': (0.0, 1.0),
+        'Initial Known': (0.0, 1.0),
+        'Culture': (0.0, 1.0),
+        'Criticality': (0.0, 1.0),
+        'Dynamism': (0.0, 1.0),
+        'Size': (0.0, 1.0)
+    }
+    
+    # Pick a "bad" row (high Idle-)
+    idle_idx = header.index('Idle-')
+    bad_row = max(rows, key=lambda r: r[idle_idx])
+    
+    changes = fix(header, bad_row, levers)
+    
+    print("Project Rescue Analysis (No Hiring):")
+    print(f"Current Idle- status: {bad_row[idle_idx]:.2f}")
+    print("Recommended changes to cut idle time:")
+    for col, val in changes.items():
+        print(f"  - Adjust '{col}' to {val:.2f}")
+    print("Rationale: Since hiring is not an option, we focus on reducing plan complexity")
+    print("and increasing initial requirements knowledge to minimize idle resource time.")

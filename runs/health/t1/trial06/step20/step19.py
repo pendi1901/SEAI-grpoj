@@ -1,0 +1,71 @@
+import csv
+
+def spot(header, rows):
+    """
+    Identifies rows containing input values that are 'far outside' 
+    the range of what has been seen in the dataset.
+    Returns a list of row indices, most suspicious first.
+    """
+    # Identify input columns (those not ending in - or +)
+    input_indices = [i for i, name in enumerate(header) if not (name.endswith('-') or name.endswith('+'))]
+    
+    # Calculate bounds for numeric inputs to identify extreme values
+    bounds = {}
+    for i in input_indices:
+        if header[i] == 'criterion':
+            continue
+        vals = [r[i] for r in rows if isinstance(r[i], (int, float))]
+        if vals:
+            bounds[i] = (min(vals), max(vals))
+
+    suspicion_scores = []
+    for row_idx, row in enumerate(rows):
+        score = 0
+        
+        # Check for values outside the observed range
+        for i in input_indices:
+            if i in bounds:
+                min_v, max_v = bounds[i]
+                # If a value is outside the range seen in the rest of the data,
+                # it is highly suspicious.
+                if row[i] < min_v or row[i] > max_v:
+                    score += 10
+                # Also flag values at the extreme edges as potentially suspicious
+                elif row[i] == min_v or row[i] == max_v:
+                    score += 1
+
+        if score > 0:
+            suspicion_scores.append((score, row_idx))
+            
+    # Sort by suspicion score descending
+    suspicion_scores.sort(key=lambda x: x[0], reverse=True)
+    
+    return [item[1] for item in suspicion_scores]
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed = []
+                for i, val in enumerate(row):
+                    if header[i] == 'criterion':
+                        processed.append(val)
+                    else:
+                        processed.append(float(val))
+                rows.append(processed)
+        
+        suspicious_indices = spot(header, rows)
+        
+        print(f"Analysis: Identified {len(suspicious_indices)} rows with settings outside the observed range.")
+        print("These configurations are 'unseen' and potentially risky.")
+        print("Top 5 most suspicious row indices:")
+        for idx in suspicious_indices[:5]:
+            print(f"Row {idx}: {rows[idx]}")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

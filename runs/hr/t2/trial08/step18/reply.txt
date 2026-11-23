@@ -1,0 +1,58 @@
+```python
+import csv
+import random
+import step08
+
+def fix(header, row, levers):
+    """
+    Recommends changes for a 'bad' row to improve it, excluding salary-related
+    levers (like PercentSalaryHike) since the customer stated there is no money.
+    """
+    # Filter out salary-related levers
+    allowed_levers = {k: v for k, v in levers.items() if 'Salary' not in k}
+    
+    # Use the logic from step08 to pick a lever and move it
+    return step08.fix(header, row, allowed_levers)
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Define levers excluding salary hikes
+    levers = {
+        'businessTravel': ['Non-Travel', 'Travel_Frequently', 'Travel_Rarely'],
+        'overTime': ['No', 'Yes'],
+        'TrainingTimesLastYear': (0.0, 6.0),
+        'StockOptionLevel': (0.0, 3.0),
+        'JobInvolvement': (1.0, 4.0),
+        'EnvironmentSatisfaction': (1.0, 4.0)
+    }
+
+    # Identify a 'bad' row (shortest tenure)
+    tenure_idx = header.index('YearsAtCompany+')
+    bad_row = min(rows, key=lambda r: r[tenure_idx])
+    
+    recommendation = fix(header, bad_row, levers)
+    
+    print("Customer Question: There is no money for pay this year. What else can we change?")
+    print(f"Analysis: For an employee with {bad_row[tenure_idx]} years of tenure, we recommend:")
+    for col, val in recommendation.items():
+        print(f"- Change '{col}' to: {val}")
+    print("These non-monetary adjustments are intended to improve retention metrics.")
+```

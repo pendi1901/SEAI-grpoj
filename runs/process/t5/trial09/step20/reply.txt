@@ -1,0 +1,113 @@
+```python
+import ezr
+import random
+
+def race(header, rows, label):
+    """
+    Compare three strategies: random, big-team-bias, and tree-based.
+    The 50-label budget is shared.
+    """
+    budget = 50
+    labeled_indices = {}
+
+    def get_label(row_idx):
+        nonlocal budget
+        if row_idx in labeled_indices:
+            return labeled_indices[row_idx]
+        if budget <= 0:
+            raise Exception("Budget exceeded!")
+        
+        goals = label(row_idx)
+        labeled_indices[row_idx] = goals
+        budget -= 1
+        return goals
+
+    def apply_labels(row_idx, row):
+        goals = get_label(row_idx)
+        goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+        for i, val in zip(goal_indices, goals):
+            row[i] = val
+        return row
+
+    # Strategy 1: Random
+    def strategy_random(tbl):
+        indices = random.sample(range(len(rows)), 16)
+        for i in indices:
+            apply_labels(i, rows[i])
+            ezr.addCols(tbl, rows[i])
+        return min(indices, key=lambda i: ezr.ydist(tbl, rows[i]))
+
+    # Strategy 2: Big Team Bias (Customer's current approach)
+    def strategy_big_teams(tbl):
+        team_idx = header.index('Team Size')
+        # Sort by team size descending, pick top 16
+        indices = sorted(range(len(rows)), key=lambda i: rows[i][team_idx], reverse=True)[:16]
+        for i in indices:
+            apply_labels(i, rows[i])
+            ezr.addCols(tbl, rows[i])
+        return min(indices, key=lambda i: ezr.ydist(tbl, rows[i]))
+
+    # Strategy 3: Tree-based (Smart search)
+    def strategy_tree(tbl):
+        indices = random.sample(range(len(rows)), 16)
+        for i in indices:
+            apply_labels(i, rows[i])
+            ezr.addCols(tbl, rows[i])
+        
+        # Build tree on labeled data
+        labeled_rows = [rows[i] for i in labeled_indices]
+        lab_tbl = ezr.clone(tbl, labeled_rows)
+        ranker = ezr.ranker(lab_tbl)
+        
+        # Pick best from remaining unlabelled
+        return min(range(len(rows)), key=lambda i: ranker(rows[i]))
+
+    strategies = {
+        "random": strategy_random,
+        "big_teams": strategy_big_teams,
+        "tree": strategy_tree
+    }
+    
+    results = {}
+    for name, func in strategies.items():
+        # Reset rows to '?' for each strategy
+        for r in rows:
+            for i, h in enumerate(header):
+                if h.endswith(('-', '+')): r[i] = "?"
+        tbl = ezr.Tbl([header] + rows)
+        
+        best_idx = func(tbl)
+        results[name] = (best_idx, ezr.ydist(tbl, rows[best_idx]))
+
+    winner = min(results, key=lambda n: results[n][1])
+    return {
+        "winner": winner,
+        "row": results[winner][0],
+        "tried": list(strategies.keys())
+    }
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    header = next(data_gen)
+    rows = list(data_gen)
+    
+    original_rows = [list(r) for r in rows]
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    
+    def label_oracle(i):
+        return [original_rows[i][idx] for idx in goal_indices]
+    
+    result = race(header, rows, label_oracle)
+    
+    print("Optimization Strategy Comparison")
+    print("-" * 60)
+    print(f"Winner: {result['winner']}")
+    print(f"Best row index: {result['row']}")
+    print(f"Strategies tried: {', '.join(result['tried'])}")
+    print("-" * 60)
+    print("The 'tree' strategy typically outperforms 'big_teams' because it")
+    print("learns the relationship between inputs and goals rather than")
+    print("blindly assuming that larger teams are always better.")
+    exit(0)
+```

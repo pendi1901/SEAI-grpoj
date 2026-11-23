@@ -1,0 +1,58 @@
+import csv
+import pandas as pd
+import numpy as np
+from sklearn.neighbors import NearestNeighbors
+from step01 import remember as step01_remember
+
+def find_similar(header, rows, target_row, n=5):
+    """
+    Finds the n most similar rows to the target_row based on input columns.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    inputs = [c for c in header if not (c.endswith('-') or c.endswith('+'))]
+    
+    # Use NearestNeighbors on input columns
+    nn = NearestNeighbors(n_neighbors=n)
+    nn.fit(df[inputs])
+    
+    # Target row inputs
+    target_inputs = [target_row[header.index(c)] for c in inputs]
+    distances, indices = nn.kneighbors([target_inputs])
+    
+    return indices[0].tolist()
+
+def remember(header, rows):
+    """
+    Required interface: returns indices of the best rows.
+    """
+    return step01_remember(header, rows)
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [[float(val) for val in row] for row in reader]
+        
+        # Customer's proposed setup (using the first row as an example)
+        proposal = rows[0]
+        
+        # 1. Find similar past setups
+        similar_indices = find_similar(header, rows, proposal, n=3)
+        
+        # 2. Show how they turned out
+        goals = [c for c in header if c.endswith(('-', '+'))]
+        print("Customer Inquiry: Past setups most similar to your proposal:")
+        for idx in similar_indices:
+            row_data = rows[idx]
+            goal_vals = {g: row_data[header.index(g)] for g in goals}
+            print(f"  - Row {idx}: {goal_vals}")
+            
+        # 3. Identify the best overall setups for context
+        best_indices = remember(header, rows)
+        print(f"\nFor context, the best performing setups in our history are: {best_indices[:3]}...")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

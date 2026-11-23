@@ -1,0 +1,94 @@
+```python
+import ezr
+import random
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column for each test row.
+    To account for the 'changing requirements' scenario, we weight the training
+    data: rows that appear later in the training set are given more influence
+    on the tree's leaf predictions, simulating the impact of increased dynamism.
+    """
+    # Build a table from the training data
+    data = [header] + train
+    tbl = ezr.Tbl(data)
+    
+    # Build a tree on the training data
+    node = ezr.tree(tbl, tbl.rows)
+    
+    # Identify the index of the first goal column
+    goal_col = tbl.y[0]
+    goal_idx = goal_col.at
+    
+    # To simulate requirements changing twice as fast halfway through,
+    # we calculate a weighted mean for each leaf.
+    # Rows in the second half of the training set are weighted 2x.
+    n_train = len(train)
+    midpoint = n_train // 2
+    
+    results = []
+    for row in test:
+        leaf_node = ezr.leaf(node, row)
+        
+        # Calculate weighted mean of the first goal column in this leaf
+        weighted_sum = 0
+        total_weight = 0
+        found = False
+        
+        for r in leaf_node.rows:
+            # Find original index in training set to apply weight
+            # We assume the order in leaf_node.rows matches the input order
+            # or we can check identity
+            try:
+                idx = train.index(r)
+                weight = 2.0 if idx >= midpoint else 1.0
+                if r[goal_idx] != "?":
+                    weighted_sum += r[goal_idx] * weight
+                    total_weight += weight
+                    found = True
+            except ValueError:
+                continue
+        
+        if not found or total_weight == 0:
+            # Fallback to global mean
+            mean_val = sum(r[goal_idx] for r in tbl.rows if r[goal_idx] != "?") / len(tbl.rows)
+        else:
+            mean_val = weighted_sum / total_weight
+        results.append(mean_val)
+        
+    return results
+
+if __name__ == "__main__":
+    # Load the data
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Split into train and test
+    random.seed(1234567891)
+    random.shuffle(rows)
+    n = int(len(rows) * 0.8)
+    train = rows[:n]
+    test_full = rows[n:]
+    
+    # Mask the goals in the test set
+    test_masked = []
+    for row in test_full:
+        new_row = list(row)
+        # Mask all goal columns (ending in - or +)
+        for i, name in enumerate(header):
+            if name[-1] in "+-":
+                new_row[i] = "?"
+        test_masked.append(new_row)
+        
+    # Get estimates
+    estimates = guess(header, train, test_masked)
+    
+    # Print summary
+    print("Analysis: Impact of changing requirements on Cost-.")
+    print(f"Estimated Cost- for {len(estimates)} test rows using weighted dynamism model.")
+    print(f"Sample estimate: {estimates[0]:.4f}")
+    print(f"Sample estimate: {estimates[1]:.4f}")
+    print("The model accounts for increased volatility by weighting recent training data higher.")
+```

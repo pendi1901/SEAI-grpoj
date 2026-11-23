@@ -1,0 +1,72 @@
+import csv
+import step01
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column (YearsAtCompany+) for test rows
+    by finding the average value of that column for rows in the training
+    set that share the same 'jobRole'.
+    """
+    goal_idx = -1
+    for i, name in enumerate(header):
+        if name.endswith('+'):
+            goal_idx = i
+            break
+    
+    role_idx = header.index('jobRole')
+    
+    # Build a map of jobRole -> list of goal values
+    role_map = {}
+    for row in train:
+        role = row[role_idx]
+        val = row[goal_idx]
+        if role not in role_map:
+            role_map[role] = []
+        role_map[role].append(val)
+    
+    # Calculate averages per role
+    averages = {role: sum(vals) / len(vals) for role, vals in role_map.items()}
+    
+    # Default to global average if role is unknown
+    global_avg = sum(averages.values()) / len(averages)
+    
+    predictions = []
+    for row in test:
+        role = row[role_idx]
+        predictions.append(averages.get(role, global_avg))
+        
+    return predictions
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    # Split: use first 700 for training, next 100 for testing
+    train_data = rows[:700]
+    test_data = rows[700:]
+    
+    # Mask the goals in test data to simulate "?"
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    masked_test = []
+    for row in test_data:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_test.append(new_row)
+    
+    predictions = guess(header, train_data, masked_test)
+    
+    print("Estimation of 'YearsAtCompany+' for new hires (first 5 test cases):")
+    for i in range(min(5, len(predictions))):
+        print(f"Test Row {i+1}: Predicted YearsAtCompany+ = {predictions[i]:.2f}")

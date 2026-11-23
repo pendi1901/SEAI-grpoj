@@ -1,0 +1,71 @@
+```python
+import csv
+
+def blame(header, rows):
+    """
+    Identifies the input columns that most strongly correlate with high costs.
+    We define 'bad' rows as those in the top 25% of 'Cost-' values.
+    We then calculate the difference in mean values between these bad rows
+    and the rest of the population to identify key drivers.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    input_indices = [i for i, name in enumerate(header) if not (name.endswith('-') or name.endswith('+'))]
+    
+    cost_idx = header.index('Cost-')
+    
+    # Sort rows by Cost- descending to find the worst performers
+    sorted_rows = sorted(rows, key=lambda r: r[cost_idx], reverse=True)
+    worst_rows = sorted_rows[:len(rows) // 4]
+    
+    # Calculate mean of inputs for the whole population and the worst rows
+    all_means = [sum(r[i] for r in rows) / len(rows) for i in input_indices]
+    worst_means = [sum(r[i] for r in worst_rows) / len(worst_rows) for i in input_indices]
+    
+    # Calculate the impact score: (mean_worst - mean_all)
+    # A high positive difference means this input is higher in expensive projects.
+    # A high negative difference means this input is lower in expensive projects.
+    # We take the absolute value to find the "most important" factors.
+    impacts = []
+    for idx, i in enumerate(input_indices):
+        diff = abs(worst_means[idx] - all_means[idx])
+        impacts.append((header[i], diff))
+    
+    # Sort by impact descending
+    impacts.sort(key=lambda x: x[1], reverse=True)
+    
+    # Return the top 2 most important and the bottom 2 (safest to ignore)
+    top_two = [name for name, score in impacts[:2]]
+    return top_two
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) for val in row])
+        
+        important_factors = blame(header, rows)
+        
+        print("Customer Inquiry Analysis: Cost Drivers")
+        print("Based on historical data, the factors that matter most to project cost are:")
+        for factor in important_factors:
+            print(f"- {factor}")
+        
+        # Identify factors that matter least (the ones with the smallest impact)
+        input_indices = [i for i, name in enumerate(header) if not (name.endswith('-') or name.endswith('+'))]
+        all_means = [sum(r[i] for r in rows) / len(rows) for i in input_indices]
+        worst_rows = sorted(rows, key=lambda r: r[header.index('Cost-')], reverse=True)[:len(rows) // 4]
+        worst_means = [sum(r[i] for r in worst_rows) / len(worst_rows) for i in input_indices]
+        impacts = [(header[input_indices[idx]], abs(worst_means[idx] - all_means[idx])) for idx in range(len(input_indices))]
+        impacts.sort(key=lambda x: x[1])
+        
+        print(f"\nYou can safely focus less on: {impacts[0][0]} and {impacts[1][0]}.")
+        print("These factors show the least correlation with cost fluctuations.")
+        
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        exit(1)
+```

@@ -1,0 +1,58 @@
+import ezr
+import step02
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column for test rows by building a tree
+    on the training data and returning the leaf's mean for that goal.
+    """
+    return step02.guess(header, train, test)
+
+def evaluate_impact(header, all_rows):
+    """
+    Compares the accuracy of a full-sized forecaster vs a halved one.
+    'Halving' is simulated by reducing the tree's Leaf parameter.
+    """
+    # Split data
+    split_idx = int(len(all_rows) * 0.8)
+    train = all_rows[:split_idx]
+    test = all_rows[split_idx:]
+    
+    # Prepare test data (mask goals)
+    goal_indices = [i for i, name in enumerate(header) if name[-1] in "+-"]
+    test_masked = []
+    for row in test:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        test_masked.append(new_row)
+    
+    # Baseline: Default Leaf size (ezr.the.Leaf)
+    est_full = guess(header, train, test_masked)
+    
+    # Halved: Increase Leaf size to reduce tree depth/complexity
+    original_leaf = ezr.the.Leaf
+    ezr.the.Leaf = original_leaf * 2
+    est_halved = guess(header, train, test_masked)
+    ezr.the.Leaf = original_leaf
+    
+    # Calculate mean absolute error difference
+    actuals = [r[goal_indices[0]] for r in test]
+    err_full = sum(abs(a - e) for a, e in zip(actuals, est_full)) / len(actuals)
+    err_halved = sum(abs(a - e) for a, e in zip(actuals, est_halved)) / len(actuals)
+    
+    return err_full, err_halved
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    all_rows = data[1:]
+    
+    err_full, err_halved = evaluate_impact(header, all_rows)
+    
+    print("Impact of halving forecaster size:")
+    print(f"Full-size model Mean Absolute Error: {err_full:.4f}")
+    print(f"Halved-size model Mean Absolute Error: {err_halved:.4f}")
+    print(f"Performance degradation: {((err_halved - err_full) / err_full) * 100:.2f}%")
+    exit(0)

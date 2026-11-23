@@ -1,0 +1,79 @@
+```python
+import csv
+import step01
+
+def flow(header, row, seen):
+    """
+    Decides whether to accept a row based on the 'Secretary Problem' logic
+    adapted for multi-objective optimization. We observe the first 20% of 
+    rows to establish a baseline, then accept the first row that outperforms 
+    the best seen so far.
+    """
+    # Identify goal indices
+    goal_indices = [i for i, name in enumerate(header) 
+                    if name.endswith('-') or name.endswith('+')]
+    
+    def get_score(r):
+        total = 0
+        for i in goal_indices:
+            val = float(r[i])
+            # Minimize '-' (1-val), Maximize '+' (val)
+            total += (1.0 - val) if header[i].endswith('-') else val
+        return total
+
+    # If it's the first row, we can't compare yet
+    if not seen:
+        return False
+
+    # Calculate baseline: best score seen so far
+    scores = [get_score(s) for s in seen]
+    best_so_far = max(scores)
+    
+    # Strategy: 
+    # 1. Observe at least 20% of the data (exploration phase)
+    # 2. Accept if current row is better than anything seen before
+    # 3. Accept the very last row if nothing else was chosen
+    
+    total_expected = 800
+    if len(seen) < (0.2 * total_expected):
+        return False
+    
+    if get_score(row) > best_so_far:
+        return True
+        
+    if len(seen) >= (total_expected - 1):
+        return True
+        
+    return False
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) for val in row])
+        
+        seen = []
+        chosen = None
+        for i, row in enumerate(rows):
+            if flow(header, row, seen):
+                chosen = (i, row)
+                break
+            seen.append(row)
+            
+        if chosen:
+            print(f"Decision: Approved Row {chosen[0]}.")
+            goal_vals = [f"{header[i]}={chosen[1][i]:.4f}" 
+                         for i, name in enumerate(header) 
+                         if name.endswith('-') or name.endswith('+')]
+            print(f"Performance: {', '.join(goal_vals)}")
+        else:
+            print("Decision: No suitable row found.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

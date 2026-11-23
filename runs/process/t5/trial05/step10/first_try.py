@@ -1,0 +1,96 @@
+import ezr
+import random
+
+def race(header, rows, label):
+    """
+    Compares three strategies: random, greedy (nearest to best), 
+    and tree-based (using the tree to guide search).
+    """
+    budget = 50
+    labeled_indices = {}
+
+    def get_label(i):
+        if i not in labeled_indices:
+            if len(labeled_indices) >= budget:
+                raise Exception("Budget exceeded")
+            labeled_indices[i] = label(i)
+        return labeled_indices[i]
+
+    # Strategy 1: Random
+    def strategy_random(tbl):
+        indices = random.sample(range(len(rows)), min(16, len(rows)))
+        for i in indices:
+            get_label(i)
+        return min(labeled_indices.keys(), key=lambda i: ezr.ydist(tbl, rows[i]))
+
+    # Strategy 2: Greedy (Nearest to current best)
+    def strategy_greedy(tbl):
+        # Start with one random
+        idx = random.choice(range(len(rows)))
+        get_label(idx)
+        
+        # Hill climb
+        for _ in range(15):
+            best_i = min(labeled_indices.keys(), key=lambda i: ezr.ydist(tbl, rows[i]))
+            # Find unlabelled row closest to current best
+            unlabeled = [i for i in range(len(rows)) if i not in labeled_indices]
+            if not unlabeled: break
+            next_i = min(unlabeled, key=lambda i: ezr.xdist(tbl, rows[i], rows[best_i]))
+            get_label(next_i)
+        return min(labeled_indices.keys(), key=lambda i: ezr.ydist(tbl, rows[i]))
+
+    # Strategy 3: Tree-based (using ezr.acquire)
+    def strategy_tree(tbl):
+        # We use a subset of the budget for the tree strategy
+        # We need to pass a wrapper to acquire that uses our shared label budget
+        def oracle_wrapper(row):
+            # Find index of row in original list
+            for i, r in enumerate(rows):
+                if r is row:
+                    vals = get_label(i)
+                    for j, v in enumerate(vals): row[j] = v
+                    return row
+            return row
+        
+        # Use acquire to pick 17 rows
+        ezr.acquire(tbl, cap=17, label=oracle_wrapper)
+        return min(labeled_indices.keys(), key=lambda i: ezr.ydist(tbl, rows[i]))
+
+    # Run the race
+    tbl = ezr.Tbl([header] + rows)
+    results = {}
+    
+    # Reset for each strategy
+    strategies = {"random": strategy_random, "greedy": strategy_greedy, "tree": strategy_tree}
+    for name, func in strategies.items():
+        labeled_indices = {}
+        best_idx = func(tbl)
+        results[name] = ezr.ydist(tbl, rows[best_idx])
+    
+    winner = min(results, key=results.get)
+    return {"winner": winner, "row": min(labeled_indices.keys(), key=lambda i: ezr.ydist(tbl, rows[i])), "tried": list(strategies.keys())}
+
+if __name__ == "__main__":
+    file_path = "pom3a.n1000.train.csv"
+    rows_gen = ezr.csv(file_path)
+    header = next(rows_gen)
+    all_rows = list(rows_gen)
+    
+    # Mask goals
+    goal_indices = [i for i, h in enumerate(header) if h.endswith(('-', '+'))]
+    masked_rows = []
+    for r in all_rows:
+        new_row = list(r)
+        for idx in goal_indices: new_row[idx] = "?"
+        masked_rows.append(new_row)
+        
+    def label_func(i):
+        return all_rows[i]
+    
+    random.seed(1234567891)
+    result = race(header, masked_rows, label_func)
+    
+    print(f"Race Results:")
+    print(f"Winner: {result['winner']}")
+    print(f"Best row found at index: {result['row']}")
+    print(f"Strategies compared: {', '.join(result['tried'])}")

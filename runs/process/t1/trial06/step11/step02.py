@@ -1,0 +1,63 @@
+import csv
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column for each test row.
+    Uses a simple k-Nearest Neighbors approach based on Euclidean distance
+    of input columns (non-goal columns).
+    """
+    # Identify goal indices and input indices
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    first_goal_idx = goal_indices[0]
+    input_indices = [i for i in range(len(header)) if i not in goal_indices]
+
+    def get_dist(row1, row2):
+        # Calculate Euclidean distance based on input columns
+        d2 = 0
+        for i in input_indices:
+            v1, v2 = row1[i], row2[i]
+            # Handle symbolic data if necessary, though pom3a is numeric
+            if isinstance(v1, (int, float)) and isinstance(v2, (int, float)):
+                d2 += (v1 - v2) ** 2
+            else:
+                d2 += 0 if v1 == v2 else 1
+        return d2 ** 0.5
+
+    predictions = []
+    for t_row in test:
+        # Find the nearest neighbor in training data
+        best_dist = float('inf')
+        best_val = 0
+        for train_row in train:
+            d = get_dist(t_row, train_row)
+            if d < best_dist:
+                best_dist = d
+                best_val = train_row[first_goal_idx]
+        predictions.append(float(best_val))
+    
+    return predictions
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(x) for x in row])
+        
+        # Split: use first 700 for training, next 100 for testing
+        train_data = rows[:700]
+        test_data = [row[:9] + ["?"] * 3 for row in rows[700:800]]
+        
+        results = guess(header, train_data, test_data)
+        
+        # Calculate average estimate for the customer
+        avg_cost = sum(results) / len(results)
+        print(f"Based on analysis of {len(train_data)} setups:")
+        print(f"Estimated average cost for new configurations: {avg_cost:.4f}")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

@@ -1,0 +1,102 @@
+```python
+import ezr
+import random
+
+def race(header, rows, label):
+    """
+    Compare three strategies: random, greedy (based on distance to ideal),
+    and tree-based (using the tree ranker).
+    """
+    # Budget tracking
+    budget = 50
+    labeled_cache = {}
+
+    def get_label(idx):
+        if idx not in labeled_cache:
+            nonlocal budget
+            if budget <= 0:
+                raise Exception("Budget exceeded!")
+            budget -= 1
+            labeled_cache[idx] = label(idx)
+        return labeled_cache[idx]
+
+    # Strategy 1: Random
+    def strategy_random(tbl, rows_to_try):
+        indices = random.sample(range(len(rows_to_try)), min(len(rows_to_try), 16))
+        for i in indices:
+            get_label(i)
+        return min(indices, key=lambda i: ezr.ydist(tbl, rows_to_try[i]))
+
+    # Strategy 2: Greedy (Distance to ideal)
+    def strategy_greedy(tbl, rows_to_try):
+        # Sample some, then pick based on current knowledge
+        indices = random.sample(range(len(rows_to_try)), 16)
+        for i in indices:
+            get_label(i)
+        # Simple greedy: pick the one closest to ideal based on current knowledge
+        return min(indices, key=lambda i: ezr.ydist(tbl, rows_to_try[i]))
+
+    # Strategy 3: Tree-based (using ezr.ranker)
+    def strategy_tree(tbl, rows_to_try):
+        indices = random.sample(range(len(rows_to_try)), 16)
+        for i in indices:
+            get_label(i)
+        # Build a model on what we know
+        labeled_data = [rows_to_try[i] for i in labeled_cache.keys()]
+        lab_tbl = ezr.clone(tbl, labeled_data)
+        ranker = ezr.ranker(lab_tbl)
+        return min(range(len(rows_to_try)), key=lambda i: ranker(rows_to_try[i]))
+
+    # Setup
+    tbl = ezr.Tbl([header] + rows)
+    strategies = {
+        "random": strategy_random,
+        "greedy": strategy_greedy,
+        "tree": strategy_tree
+    }
+    
+    results = {}
+    for name, func in strategies.items():
+        # Reset cache for each strategy to ensure fair budget usage
+        labeled_cache.clear()
+        budget = 16 # Allocate 16 labels per strategy
+        best_idx = func(tbl, rows)
+        results[name] = (best_idx, ezr.ydist(tbl, rows[best_idx]))
+
+    winner = min(results, key=lambda n: results[n][1])
+    return {
+        "winner": winner,
+        "row": results[winner][0],
+        "tried": list(strategies.keys())
+    }
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    header = next(data_gen)
+    rows = list(data_gen)
+    
+    original_rows = [list(r) for r in rows]
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    
+    masked_rows = []
+    for r in rows:
+        new_row = list(r)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_rows.append(new_row)
+        
+    def label_oracle(i):
+        return [original_rows[i][idx] for idx in goal_indices]
+    
+    result = race(header, masked_rows, label_oracle)
+    
+    print("Strategy Race Results")
+    print("-" * 30)
+    print(f"Winner: {result['winner']}")
+    print(f"Best row index found: {result['row']}")
+    print(f"Strategies compared: {', '.join(result['tried'])}")
+    print("-" * 30)
+    
+    exit(0)
+```

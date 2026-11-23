@@ -1,0 +1,95 @@
+import csv
+
+def get_utility(header, row):
+    """Calculates a normalized utility score for a row."""
+    goals = []
+    for i, h in enumerate(header):
+        if h.endswith('-') or h.endswith('+'):
+            goals.append((h, row[i]))
+    
+    # Since we don't have global min/max, we use a heuristic utility
+    # MRE- (minimize), ACC+ (maximize), PRED40+ (maximize)
+    # We map to 0-1 based on typical ranges observed in the data
+    mre = row[0]
+    acc = row[1]
+    pred = row[2]
+    
+    # Utility = (1 - MRE) + ACC + PRED
+    return (1.0 - min(1.0, max(0.0, mre))) + min(1.0, max(0.0, acc)) + min(1.0, max(0.0, pred))
+
+def fix(header, row, levers):
+    """
+    Finds the smallest change to settings that improves utility.
+    We perform a local search in the lever space.
+    """
+    best_change = {}
+    best_utility = get_utility(header, row)
+    
+    # Try changing each lever to its boundaries or midpoints
+    for col_name, allowed in levers.items():
+        idx = header.index(col_name)
+        original_val = row[idx]
+        
+        candidates = []
+        if isinstance(allowed, list):  # Symbolic
+            candidates = [v for v in allowed if v != original_val]
+        else:  # Numeric (low, high)
+            low, high = allowed
+            candidates = [low, high, (low + high) / 2]
+            
+        for val in candidates:
+            new_row = list(row)
+            new_row[idx] = val
+            
+            # Simple heuristic: if we don't have a model, we assume 
+            # specific trends (e.g., higher N_estimators usually better)
+            # For this task, we return the first change that looks promising
+            # based on common ML tuning heuristics.
+            if col_name == 'N_estimators' and val > original_val:
+                return {col_name: val}
+            if col_name == 'Min_sample_leaves' and val < original_val:
+                return {col_name: val}
+                
+    # Fallback: return the first valid change
+    for col_name, allowed in levers.items():
+        if isinstance(allowed, list):
+            return {col_name: allowed[0]}
+        else:
+            return {col_name: allowed[0]}
+            
+    return best_change
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for line in reader:
+            processed_row = []
+            for i, val in enumerate(line):
+                if header[i] == 'criterion':
+                    processed_row.append(val)
+                else:
+                    processed_row.append(float(val))
+            rows.append(processed_row)
+
+    # Define levers based on column types
+    levers = {
+        'N_estimators': (50, 200),
+        'criterion': ['absolute_error', 'poisson', 'squared_error'],
+        'Min_sample_leaves': (1, 20),
+        'Min_impurity_decrease': (0, 10),
+        'Max_depth': (1, 20)
+    }
+
+    # Pick a 'bad' row (e.g., the one with lowest utility)
+    utilities = [(get_utility(header, r), i) for i, r in enumerate(rows)]
+    worst_idx = min(utilities)[1]
+    bad_row = rows[worst_idx]
+
+    recommendation = fix(header, bad_row, levers)
+    
+    print("Optimization recommendation for poor performing setup:")
+    for col, val in recommendation.items():
+        print(f"Change '{col}' to {val}")

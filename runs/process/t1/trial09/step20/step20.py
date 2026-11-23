@@ -1,0 +1,107 @@
+import csv
+import random
+
+def race(header, rows, label):
+    """
+    Compares three strategies: 'random', 'big_teams', and 'hill_climber'.
+    Budget: 50 labels total.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    team_idx = header.index('Team Size')
+
+    def get_score(goals):
+        score = 0
+        for i, val in enumerate(goals):
+            name = header[goal_indices[i]]
+            if name.endswith('-'):
+                score += val
+            else:
+                score += (1 - val)
+        return score
+
+    labeled = {}
+    def get_label(i):
+        if i not in labeled:
+            if len(labeled) >= 50:
+                raise Exception("Budget exceeded")
+            labeled[i] = label(i)
+        return labeled[i]
+
+    # Strategy 1: Random
+    def strategy_random():
+        best_idx = -1
+        best_score = float('inf')
+        for _ in range(16):
+            idx = random.randint(0, len(rows) - 1)
+            score = get_score(get_label(idx))
+            if score < best_score:
+                best_score, best_idx = score, idx
+        return best_idx
+
+    # Strategy 2: Big Teams (Customer's current approach)
+    def strategy_big_teams():
+        # Sort by team size descending and pick the top 17
+        sorted_indices = sorted(range(len(rows)), key=lambda i: rows[i][team_idx], reverse=True)
+        best_idx = -1
+        best_score = float('inf')
+        for idx in sorted_indices[:17]:
+            score = get_score(get_label(idx))
+            if score < best_score:
+                best_score, best_idx = score, idx
+        return best_idx
+
+    # Strategy 3: Hill Climber
+    def strategy_hill_climber():
+        curr = random.randint(0, len(rows) - 1)
+        curr_score = get_score(get_label(curr))
+        for _ in range(16):
+            neighbor = random.randint(0, len(rows) - 1)
+            n_score = get_score(get_label(neighbor))
+            if n_score < curr_score:
+                curr, curr_score = neighbor, n_score
+        return curr
+
+    results = {
+        "random": strategy_random(),
+        "big_teams": strategy_big_teams(),
+        "hill_climber": strategy_hill_climber()
+    }
+
+    best_overall_score = float('inf')
+    winner = None
+    best_row = -1
+    for name, idx in results.items():
+        score = get_score(get_label(idx))
+        if score < best_overall_score:
+            best_overall_score, winner, best_row = score, name, idx
+            
+    return {"winner": winner, "row": best_row, "tried": list(results.keys())}
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(x) for x in row])
+        
+        goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+        
+        def label(i):
+            return [rows[i][idx] for idx in goal_indices]
+            
+        result = race(header, rows, label)
+        
+        print("Comparison: Is 'Big Teams' the best strategy?")
+        print(f"The winning strategy is: {result['winner']}")
+        if result['winner'] == 'big_teams':
+            print("Yes, your current approach of maximizing team size is optimal.")
+        else:
+            print(f"No, the '{result['winner']}' strategy outperformed your current 'big_teams' approach.")
+        print(f"Best configuration found at index: {result['row']}")
+        
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

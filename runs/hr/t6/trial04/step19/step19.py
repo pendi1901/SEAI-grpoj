@@ -1,0 +1,39 @@
+import ezr
+import step09
+
+def spot(header, rows):
+    """
+    Identifies rows that are 'untrustworthy' by detecting outliers in the 
+    input space. A new hire unlike anyone else will have a high xdist 
+    from the centroid of the existing data.
+    """
+    # We reuse the logic from step09 which calculates xdist from the centroid
+    # of the input space. Rows with high xdist are outliers.
+    return step09.spot(header, rows)
+
+if __name__ == "__main__":
+    # Load data
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Identify suspicious rows
+    suspicious_indices = spot(header, rows)
+    
+    print("Analysis: Identifying untrustworthy estimates.")
+    print("Our estimates are based on historical patterns. When a new hire's profile "
+          "deviates significantly from these patterns (high distance from the "
+          "historical centroid), our model's predictions become unreliable.")
+    print("\nThe following row indices represent profiles that are 'unlike anyone "
+          "we have employed' and should be treated with caution:")
+    
+    # Print the top 5 most suspicious
+    tbl = ezr.Tbl([header] + rows)
+    mids = ezr.mids(tbl)
+    for idx in suspicious_indices[:5]:
+        dist = ezr.xdist(tbl, rows[idx], mids)
+        print(f" - Row {idx}: Distance from historical norm = {dist:.2f}")
+    
+    print("\nConclusion: Estimates for these rows cannot be trusted as they fall "
+          "outside the range of our historical training data.")

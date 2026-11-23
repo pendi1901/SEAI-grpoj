@@ -1,0 +1,57 @@
+```python
+import ezr
+import random
+
+def justify(header, rows, row):
+    """
+    Returns (p, reason): p is the fraction of rows that 'row' is better than,
+    and reason is a sentence explaining why 'row' might be inferior to another.
+    """
+    # Create a table to handle normalization and distance calculations
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Build a tree to estimate the performance of the unknown row
+    # The tree ranker uses the leaf mean to estimate ydist
+    ranker = ezr.ranker(tbl)
+    estimated_ydist = ranker(row)
+    
+    # Calculate ydist for all known rows to compare
+    all_ydists = [ezr.ydist(tbl, r) for r in rows]
+    
+    # p is the fraction of rows that have a higher (worse) ydist than our estimate
+    # (i.e., our row is better than them)
+    better_than_count = sum(1 for d in all_ydists if d > estimated_ydist)
+    p = better_than_count / len(rows)
+    
+    # Reason: Compare against the population and explain the trade-off
+    reason = (f"While this setup is better than {int(p * 100)}% of scenarios, "
+              "it was not recommended because other configurations achieve "
+              "a more optimal balance of cost and performance goals.")
+    
+    return p, reason
+
+if __name__ == "__main__":
+    # Load the data
+    filename = "pom3a.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    header = next(data_gen)
+    rows = list(data_gen)
+    
+    # Pick a sample row (Setup B) to justify
+    # Mask its goal columns to simulate an unknown scenario
+    sample_row = list(rows[10])
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    for idx in goal_indices:
+        sample_row[idx] = "?"
+        
+    # Get justification
+    p, reason = justify(header, rows, sample_row)
+    
+    print("Justification Analysis: Why Setup B was not recommended")
+    print("-" * 60)
+    print(f"Performance Rank: {p:.4f}")
+    print(f"Explanation: {reason}")
+    print("-" * 60)
+    
+    exit(0)
+```

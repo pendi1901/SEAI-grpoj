@@ -1,0 +1,39 @@
+import ezr
+import step09
+
+def spot(header, rows):
+    """
+    Identifies rows that are 'unlike anything we have run'.
+    We use the logic from step09, which calculates the distance of each row
+    from the centroid of the dataset. Rows with the largest distance from the
+    centroid are the most 'unusual' or 'unlike' the typical configurations.
+    """
+    # step09.spot already implements the logic to identify suspicious/outlier rows
+    # by calculating the xdist from the centroid of the input space.
+    return step09.spot(header, rows)
+
+if __name__ == "__main__":
+    file_path = "pom3a.n1000.train.csv"
+    rows_gen = ezr.csv(file_path)
+    
+    try:
+        header = next(rows_gen)
+        rows = list(rows_gen)
+        
+        # Identify the most suspicious/unusual rows
+        suspicious_indices = spot(header, rows)
+        
+        print("Analysis of unusual project setups:")
+        if suspicious_indices:
+            print(f"Found {len(suspicious_indices)} setups that are significantly different from historical data.")
+            print("The most unusual setups (top 3 indices):")
+            for idx in suspicious_indices[:3]:
+                print(f"- Row {idx}")
+        else:
+            print("No unusual setups detected.")
+            
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
+        
+    exit(0)

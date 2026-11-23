@@ -1,0 +1,76 @@
+```python
+import csv
+import random
+from step01 import remember
+
+def choose(header, rows, label):
+    """
+    Finds the best setup by sampling 50 rows, labeling them to get their 
+    true goal values, and returning the index of the best one.
+    """
+    # Identify indices
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+
+    # We have a budget of 50 labels.
+    # We will sample 50 random indices from the available rows.
+    indices = list(range(len(rows)))
+    sample_size = min(50, len(rows))
+    sampled_indices = random.sample(indices, sample_size)
+
+    best_utility = -float('inf')
+    best_idx = -1
+
+    for i in sampled_indices:
+        # Get true goal values
+        goals = label(i)
+        mre, acc, pred = goals[mre_idx], goals[acc_idx], goals[pred_idx]
+        
+        # Calculate utility: -MRE + ACC + PRED40
+        utility = -mre + acc + pred
+        
+        if utility > best_utility:
+            best_utility = utility
+            best_idx = i
+
+    return best_idx
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i] in ['MRE-', 'ACC+', 'PRED40+', 'N_estimators', 
+                                 'Min_sample_leaves', 'Min_impurity_decrease', 'Max_depth']:
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Create a hidden version of rows for the choose function
+    hidden_rows = []
+    for r in rows:
+        new_row = []
+        for i, val in enumerate(r):
+            if header[i].endswith('-') or header[i].endswith('+'):
+                new_row.append("?")
+            else:
+                new_row.append(val)
+        hidden_rows.append(new_row)
+
+    # Define the label function for the harness
+    def label(i):
+        return rows[i]
+
+    best_index = choose(header, hidden_rows, label)
+    
+    print(f"Optimization complete. Best setup found at index {best_index}.")
+    print(f"MRE: {rows[best_index][0]:.4f}, ACC: {rows[best_index][1]:.4f}, PRED40: {rows[best_index][2]:.4f}")
+```

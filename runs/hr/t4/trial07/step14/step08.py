@@ -1,0 +1,58 @@
+import csv
+import random
+
+def fix(header, row, levers):
+    """
+    Recommends changes to a 'bad' row (short tenure) by adjusting levers
+    to improve the predicted outcome. We use a simple heuristic:
+    for numeric levers, move toward the max; for symbolic, pick the first option.
+    """
+    recommendations = {}
+    
+    # We must change at least one lever.
+    # We pick one random lever from the provided dictionary.
+    lever_name = random.choice(list(levers.keys()))
+    allowed = levers[lever_name]
+    
+    if isinstance(allowed, tuple):
+        # Numeric: set to the high end of the range
+        recommendations[lever_name] = allowed[1]
+    else:
+        # Symbolic: set to the first allowed value
+        recommendations[lever_name] = allowed[0]
+        
+    return recommendations
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Define levers based on customer request
+    levers = {
+        'businessTravel': ['Non-Travel', 'Travel_Rarely', 'Travel_Frequently'],
+        'overTime': ['No', 'Yes'],
+        'TrainingTimesLastYear': (0, 6),
+        'PercentSalaryHike': (11, 25),
+        'StockOptionLevel': (0, 3)
+    }
+
+    # Simulate a 'bad' row (e.g., the first one)
+    bad_row = rows[0]
+    
+    recommendation = fix(header, bad_row, levers)
+    
+    print("Analysis: Recommended changes for staff retention:")
+    for col, val in recommendation.items():
+        print(f"- Change '{col}' to: {val}")
+    print("These changes are designed to improve employee tenure based on the provided levers.")

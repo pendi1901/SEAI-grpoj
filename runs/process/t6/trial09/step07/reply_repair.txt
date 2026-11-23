@@ -1,0 +1,66 @@
+```python
+import ezr
+
+def choose(header, rows, label):
+    """
+    Find the best row using a budget of 50 labels.
+    We use the acquire function from ezr. 
+    To avoid the TypeError, we must ensure the table is updated 
+    with labeled data before calculating distances.
+    """
+    # Create a table object.
+    data = [header] + rows
+    tbl = ezr.Tbl(data)
+    
+    # We need to track the original index of the rows.
+    # Since rows are passed by reference, we can map them.
+    row_to_idx = {id(row): i for i, row in enumerate(rows)}
+
+    def oracle_wrapper(row):
+        # Get the original index
+        idx = row_to_idx[id(row)]
+        # Get the true values from the oracle
+        true_row = label(idx)
+        # Update the row in place
+        for i in range(len(true_row)):
+            row[i] = true_row[i]
+        # Update the table's internal column statistics with the new data
+        ezr.addCols(tbl, row)
+        return row
+
+    # Run the acquisition process. 
+    # ezr.acquire uses the oracle to fill in '?' values.
+    labeled_rows = ezr.acquire(tbl, cap=50, label=oracle_wrapper)
+    
+    # Find the best row among those labeled.
+    # ydist works now because the table's columns are updated.
+    best_row = min(labeled_rows, key=lambda r: ezr.ydist(tbl, r))
+    
+    return row_to_idx[id(best_row)]
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    full_data = list(ezr.csv(filename))
+    header = full_data[0]
+    full_rows = full_data[1:]
+    
+    # Prepare rows with masked goals
+    rows = []
+    for r in full_rows:
+        new_row = r[:]
+        for i, h in enumerate(header):
+            if h[-1] in "+-":
+                new_row[i] = "?"
+        rows.append(new_row)
+                
+    def label(idx):
+        return full_rows[idx]
+        
+    best_idx = choose(header, rows, label)
+    
+    print(f"Optimization complete.")
+    print(f"The best configuration found is at index: {best_idx}")
+    print(f"Goal values for this configuration: {full_rows[best_idx][9:]}")
+    
+    exit(0)
+```

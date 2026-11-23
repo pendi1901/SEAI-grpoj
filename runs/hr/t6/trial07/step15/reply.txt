@@ -1,0 +1,41 @@
+```python
+import ezr
+import step05
+
+def blame(header, rows):
+    """
+    Identifies input columns that have the least impact on performance.
+    We reuse the 'blame' logic from step05 to find the most important drivers,
+    then return the inverse: the columns that were NOT identified as top drivers.
+    """
+    # Get the top drivers of performance
+    top_drivers = step05.blame(header, rows)
+    
+    # Identify all input columns (those that are not goals)
+    # Goals end in '+' or '-'
+    input_cols = [h for h in header if not (h.endswith("+") or h.endswith("-"))]
+    
+    # The columns that have "nothing to do" with performance are those
+    # not in the top drivers list.
+    unimportant = [col for col in input_cols if col not in top_drivers]
+    
+    return unimportant
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Get the list of columns that have little impact on performance
+    unimportant_cols = blame(header, rows)
+    
+    print("Analysis: Which columns have little impact on employee tenure/performance?")
+    print("The following columns appear to have the least correlation with our performance goals:")
+    # Print a subset to keep the output readable
+    for col in unimportant_cols[:10]:
+        print(f"- {col}")
+    
+    print(f"\n...and {len(unimportant_cols) - 10} others.")
+    print("Consider reviewing these for potential removal to simplify data collection.")
+```

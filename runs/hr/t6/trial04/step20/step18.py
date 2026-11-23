@@ -1,0 +1,80 @@
+import ezr
+import step08
+
+def fix(header, row, levers):
+    """
+    Suggests a change to one of the provided levers to improve the row's ydist,
+    excluding 'MonthlyIncome' as per the customer's constraint.
+    """
+    # Load the full dataset to get accurate column distributions for normalization
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header_data = data[0]
+    rows_data = data[1:]
+    tbl = ezr.Tbl([header_data] + rows_data)
+    
+    best_ydist = ezr.ydist(tbl, row)
+    recommendation = {}
+
+    # Filter out MonthlyIncome from the allowed levers
+    allowed_levers = {k: v for k, v in levers.items() if k != "MonthlyIncome"}
+
+    for col_name, allowed in allowed_levers.items():
+        if col_name not in header:
+            continue
+        idx = header.index(col_name)
+        
+        candidates = []
+        if isinstance(allowed, list):  # Symbolic
+            candidates = [v for v in allowed if v != row[idx]]
+        else:  # Numeric (low, high)
+            low, high = allowed
+            # Try discrete steps in the range to ensure we find a valid improvement
+            # We use a few more points to increase the chance of finding an improvement
+            steps = 5
+            for i in range(steps + 1):
+                val = low + (high - low) * (i / steps)
+                if val != row[idx]:
+                    candidates.append(val)
+
+        for val in candidates:
+            test_row = list(row)
+            test_row[idx] = val
+            d = ezr.ydist(tbl, test_row)
+            if d < best_ydist:
+                best_ydist = d
+                recommendation = {col_name: val}
+                
+    return recommendation
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    levers = {
+        "businessTravel": ["Non-Travel", "Travel_Frequently", "Travel_Rarely"],
+        "overTime": ["No", "Yes"],
+        "TrainingTimesLastYear": (0, 6),
+        "PercentSalaryHike": (11, 25),
+        "StockOptionLevel": (0, 3),
+        "JobInvolvement": (1, 4),
+        "WorkLifeBalance": (1, 4)
+    }
+    
+    # Identify a "bad" row (high ydist)
+    tbl = ezr.Tbl([header] + rows)
+    scored = sorted([(ezr.ydist(tbl, r), r) for r in rows], key=lambda x: x[0])
+    bad_row = scored[-1][1]
+    
+    suggestion = fix(header, bad_row, levers)
+    
+    print("Analysis: Recommended changes for employee retention (excluding pay).")
+    if suggestion:
+        col, val = list(suggestion.items())[0]
+        print(f"Recommendation: Change '{col}' to '{val}'.")
+        print("Logic: This change optimizes the employee's goal-distance metrics "
+              "without requiring any salary adjustments.")
+    else:
+        print("No improvement found within the provided non-monetary levers.")

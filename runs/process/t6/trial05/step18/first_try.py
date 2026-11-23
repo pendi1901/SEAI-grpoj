@@ -1,0 +1,81 @@
+import ezr
+import step08
+
+def fix(header, row, levers):
+    """
+    Finds a change to the 'levers' that minimizes the row's 'Idle-' goal.
+    We evaluate the impact of changing each lever to its boundary values
+    and return the one that results in the lowest ydist.
+    """
+    # Load the full dataset to establish normalization bounds for ydist
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    tbl = ezr.Tbl(data)
+    
+    best_change = {}
+    best_ydist = ezr.ydist(tbl, row)
+    
+    # Try changing each lever
+    for col_name, allowed in levers.items():
+        if col_name not in header:
+            continue
+        idx = header.index(col_name)
+        original_val = row[idx]
+        
+        # Try boundary values for numeric levers
+        if isinstance(allowed, tuple):
+            low, high = allowed
+            for val in [low, high]:
+                if val != original_val:
+                    row[idx] = val
+                    current_ydist = ezr.ydist(tbl, row)
+                    if current_ydist < best_ydist:
+                        best_ydist = current_ydist
+                        best_change = {col_name: val}
+                    row[idx] = original_val # backtrack
+        
+        # Try each allowed value for symbolic levers
+        elif isinstance(allowed, list):
+            for val in allowed:
+                if val != original_val:
+                    row[idx] = val
+                    current_ydist = ezr.ydist(tbl, row)
+                    if current_ydist < best_ydist:
+                        best_ydist = current_ydist
+                        best_change = {col_name: val}
+                    row[idx] = original_val # backtrack
+                    
+    return best_change
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Identify a "bad" row (high Idle- time)
+    tbl = ezr.Tbl(data)
+    idle_idx = header.index("Idle-")
+    # Sort by Idle- descending (worst first)
+    scored = sorted([(r[idle_idx], r) for r in rows], key=lambda x: x[0], reverse=True)
+    bad_row = scored[0][1]
+    
+    # The customer cannot hire (Team Size is off-limits).
+    # We suggest changes to other project management levers.
+    levers = {
+        "Culture": (0.0, 1.0),
+        "Plan": (0.0, 1.0),
+        "Size": (0.0, 1.0),
+        "Dynamism": (0.0, 1.0)
+    }
+    
+    recommendation = fix(header, bad_row, levers)
+    
+    print("Analysis: How to cut idle time without hiring more staff?")
+    if recommendation:
+        for col, val in recommendation.items():
+            print(f"Recommendation: Adjust '{col}' to {val:.3f}")
+    else:
+        print("No single lever change found to improve idle time.")
+        
+    exit(0)

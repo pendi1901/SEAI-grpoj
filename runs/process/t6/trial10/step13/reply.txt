@@ -1,0 +1,52 @@
+```python
+import ezr
+import step03
+
+def certify(xs, ys):
+    """
+    Returns True if the distributions are statistically indistinguishable,
+    False if they differ significantly.
+    """
+    # Reuse the statistical testing logic from step03
+    return step03.certify(xs, ys)
+
+def analyze_shift(header, rows):
+    """
+    Compares the first half of the data (pre-change) with the second half (post-change)
+    to see if the performance (ydist) has shifted significantly.
+    """
+    # Create a table to calculate ydist
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate ydist for all rows
+    ydists = [ezr.ydist(tbl, row) for row in rows]
+    
+    # Split into two halves
+    mid = len(ydists) // 2
+    pre_change = ydists[:mid]
+    post_change = ydists[mid:]
+    
+    is_same = certify(pre_change, post_change)
+    
+    print(f"Pre-change mean ydist:  {sum(pre_change)/len(pre_change):.4f}")
+    print(f"Post-change mean ydist: {sum(post_change)/len(post_change):.4f}")
+    
+    if is_same:
+        print("Result: The performance shift is not statistically significant (likely noise).")
+    else:
+        print("Result: The performance shift is statistically significant.")
+    
+    return is_same
+
+if __name__ == "__main__":
+    file_path = "pom3a.n1000.train.csv"
+    rows_gen = ezr.csv(file_path)
+    try:
+        header = next(rows_gen)
+        rows = list(rows_gen)
+        analyze_shift(header, rows)
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
+    exit(0)
+```

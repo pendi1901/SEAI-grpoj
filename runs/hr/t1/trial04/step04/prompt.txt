@@ -1,0 +1,263 @@
+You are writing one Python file, step04.py.
+
+The data is the csv file WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv in the current directory. Column names starting in upper case are numeric, lower case are symbolic. A name ending in - is a goal to minimise, in + a goal to maximise; all other columns are inputs. It has 800 data rows after the header. Any count the customer quotes describes their full records, not this file: never hard-code a row count, read the file to the end. Its first lines:
+
+Age,attrition,businessTravel,DailyRate,department,DistanceFromHome,Education,educationField,EmployeeCount,EmployeeNumber,EnvironmentSatisfaction,gender,HourlyRate,JobInvolvement,JobLevel,jobRole,JobSatisfaction,maritalStatus,MonthlyIncome,MonthlyRate,NumCompaniesWorked,over18,overTime,PercentSalaryHike,PerformanceRating,RelationshipSatisfaction,StandardHours,StockOptionLevel,TotalWorkingYears,TrainingTimesLastYear,WorkLifeBalance,YearsAtCompany+,YearsInCurrentRole+,YearsSinceLastPromotion,YearsWithCurrManager+
+32,No,Travel_Rarely,548,Research & Development,1,3,Life Sciences,1,96,2,Male,66,3,2,Research Scientist,2,Married,6220,7346,1,Y,No,17,3,2,80,2,10,3,3,10,4,0,9
+34,No,Travel_Frequently,560,Research & Development,1,4,Other,1,1431,4,Male,91,3,1,Research Scientist,1,Divorced,2996,20284,5,Y,No,14,3,3,80,2,10,2,3,4,3,1,3
+36,No,Travel_Rarely,917,Research & Development,6,4,Life Sciences,1,1221,3,Male,60,1,1,Laboratory Technician,3,Divorced,2741,6865,1,Y,No,14,3,3,80,1,7,4,3,7,7,1,7
+
+Your function receives rows already parsed. The header and the first two rows look like this in Python:
+
+header = ['Age', 'attrition', 'businessTravel', 'DailyRate', 'department', 'DistanceFromHome', 'Education', 'educationField', 'EmployeeCount', 'EmployeeNumber', 'EnvironmentSatisfaction', 'gender', 'HourlyRate', 'JobInvolvement', 'JobLevel', 'jobRole', 'JobSatisfaction', 'maritalStatus', 'MonthlyIncome', 'MonthlyRate', 'NumCompaniesWorked', 'over18', 'overTime', 'PercentSalaryHike', 'PerformanceRating', 'RelationshipSatisfaction', 'StandardHours', 'StockOptionLevel', 'TotalWorkingYears', 'TrainingTimesLastYear', 'WorkLifeBalance', 'YearsAtCompany+', 'YearsInCurrentRole+', 'YearsSinceLastPromotion', 'YearsWithCurrManager+']
+row = [32.0, 'No', 'Travel_Rarely', 548.0, 'Research & Development', 1.0, 3.0, 'Life Sciences', 1.0, 96.0, 2.0, 'Male', 66.0, 3.0, 2.0, 'Research Scientist', 2.0, 'Married', 6220.0, 7346.0, 1.0, 'Y', 'No', 17.0, 3.0, 2.0, 80.0, 2.0, 10.0, 3.0, 3.0, 10.0, 4.0, 0.0, 9.0]
+row = [34.0, 'No', 'Travel_Frequently', 560.0, 'Research & Development', 1.0, 4.0, 'Other', 1.0, 1431.0, 4.0, 'Male', 91.0, 3.0, 1.0, 'Research Scientist', 1.0, 'Divorced', 2996.0, 20284.0, 5.0, 'Y', 'No', 14.0, 3.0, 3.0, 80.0, 2.0, 10.0, 2.0, 3.0, 4.0, 3.0, 1.0, 3.0]
+
+These columns hold text, not numbers: attrition (No, Yes); businessTravel (Non-Travel, Travel_Frequently, Travel_Rarely); department (Human Resources, Research & Development, Sales); educationField (Human Resources, Life Sciences, Marketing, Medical, Other, Technical Degree); gender (Female, Male); jobRole (Healthcare Representative, Human Resources, Laboratory Technician, Manager, Manufacturing Director, Research Director, Research Scientist, Sales Executive, ...); maritalStatus (Divorced, Married, Single); over18 (Y); overTime (No, Yes).
+
+Use only the Python standard library.
+
+These files, written earlier, are in the same directory:
+
+--- step01.py ---
+import csv
+
+def remember(header, rows):
+    """
+    Identify staff who stay 'unusually long'.
+    'YearsAtCompany+' is a goal to maximize.
+    We return the indices of the top 5% (max) of rows based on this metric.
+    """
+    # Identify the index for 'YearsAtCompany+'
+    target_col = "YearsAtCompany+"
+    try:
+        idx = header.index(target_col)
+    except ValueError:
+        return []
+
+    # Create a list of (index, value)
+    indexed_rows = []
+    for i, row in enumerate(rows):
+        val = row[idx]
+        if isinstance(val, (int, float)):
+            indexed_rows.append((i, val))
+
+    # Sort by value descending
+    indexed_rows.sort(key=lambda x: x[1], reverse=True)
+
+    # Calculate 5% limit (at least 1, max 5% of total rows)
+    limit = max(1, len(rows) // 20)
+    
+    # Return the indices of the top performers
+    return [item[0] for item in indexed_rows[:limit]]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                # Convert numeric columns (starting with uppercase)
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    best_indices = remember(header, rows)
+    
+    print("Staff records with unusually long tenure (YearsAtCompany+):")
+    for i in best_indices:
+        row = rows[i]
+        # Displaying key working arrangement columns
+        tenure = row[header.index("YearsAtCompany+")]
+        role = row[header.index("jobRole")]
+        dept = row[header.index("department")]
+        print(f"Row {i}: {role} in {dept}, Tenure: {tenure} years")
+
+
+--- step02.py ---
+import csv
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column ('YearsAtCompany+') for test rows.
+    Uses a K-Nearest Neighbors approach based on numeric input columns.
+    """
+    # Identify goal column (first one ending in + or -)
+    goal_idx = -1
+    for i, col in enumerate(header):
+        if col.endswith('+') or col.endswith('-'):
+            goal_idx = i
+            break
+    
+    if goal_idx == -1:
+        return [0.0] * len(test)
+
+    # Identify numeric input columns (excluding the goal column)
+    # Ensure we only use columns that are actually numeric (float)
+    input_indices = [
+        i for i, col in enumerate(header) 
+        if col[0].isupper() and i != goal_idx
+    ]
+
+    predictions = []
+    for t_row in test:
+        distances = []
+        for r_row in train:
+            dist = 0.0
+            for i in input_indices:
+                # Ensure both values are numeric before subtraction
+                val_t = t_row[i]
+                val_r = r_row[i]
+                if isinstance(val_t, (int, float)) and isinstance(val_r, (int, float)):
+                    dist += abs(val_t - val_r)
+                else:
+                    # If data is missing or non-numeric, add a penalty
+                    dist += 1.0
+            distances.append((dist, r_row[goal_idx]))
+        
+        # Find the average of the goal value for the 5 nearest neighbors
+        distances.sort(key=lambda x: x[0])
+        k = 5
+        neighbors = distances[:k]
+        avg_val = sum(n[1] for n in neighbors) / k
+        predictions.append(float(avg_val))
+        
+    return predictions
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                # Convert numeric columns (starting with uppercase)
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Split data: use first 700 for training, next 100 for testing
+    train_data = rows[:700]
+    test_data = rows[700:]
+    
+    # Mask the goal column in test data
+    goal_idx = next(i for i, h in enumerate(header) if h.endswith('+') or h.endswith('-'))
+    masked_test = []
+    for row in test_data:
+        new_row = list(row)
+        new_row[goal_idx] = "?"
+        masked_test.append(new_row)
+    
+    results = guess(header, train_data, masked_test)
+    
+    print(f"Estimated tenure for the first 5 test cases:")
+    for i in range(min(5, len(results))):
+        print(f"Test Row {i}: Estimated {header[goal_idx]} = {results[i]:.2f} years")
+
+
+--- step03.py ---
+import csv
+
+def certify(xs, ys):
+    """
+    Performs a simple two-sample t-test (Welch's) to determine if two
+    distributions are significantly different.
+    Returns True if they are statistically similar (p > 0.05),
+    False if they are significantly different (p <= 0.05).
+    """
+    n1, n2 = len(xs), len(ys)
+    if n1 < 2 or n2 < 2:
+        return True
+    
+    m1, m2 = sum(xs) / n1, sum(ys) / n2
+    v1 = sum((x - m1) ** 2 for x in xs) / (n1 - 1)
+    v2 = sum((y - m2) ** 2 for y in ys) / (n2 - 1)
+    
+    # Standard error
+    se = ((v1 / n1) + (v2 / n2)) ** 0.5
+    if se == 0:
+        return m1 == m2
+    
+    # t-statistic
+    t_stat = abs(m1 - m2) / se
+    
+    # For a large sample size (n=800), a t-stat > 1.96 roughly corresponds to p < 0.05
+    return t_stat < 1.96
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Goal: YearsInCurrentRole+ (higher is better)
+    # Compare 'YearsInCurrentRole+' for those who work overtime vs those who don't
+    ot_idx = header.index('overTime')
+    role_idx = header.index('YearsInCurrentRole+')
+    
+    yes_ot = [r[role_idx] for r in rows if r[ot_idx] == 'Yes']
+    no_ot = [r[role_idx] for r in rows if r[ot_idx] == 'No']
+    
+    is_noise = certify(yes_ot, no_ot)
+    
+    print("Analysis: Does overtime affect tenure in current role?")
+    print(f"Average tenure (Overtime): {sum(yes_ot)/len(yes_ot):.2f} years")
+    print(f"Average tenure (No Overtime): {sum(no_ot)/len(no_ot):.2f} years")
+    
+    if is_noise:
+        print("Conclusion: The observed difference is likely just noise.")
+    else:
+        print("Conclusion: There is a statistically significant difference.")
+
+
+The customer asks:
+
+  Annual reviews reach me one at a time. Tell me the same day whether this person needs a "what would keep you here" conversation; I will not get to revisit the pile.
+
+Write step04.py to answer that ask on this data.
+
+A test harness will import your file and call this function, so you must define it exactly:
+
+def flow(header, row, seen)
+  Returns True or False.   Rows arrive one at a time. `row` is the one that just arrived; `seen` is the list of rows that arrived before it. Return True to choose `row` and stop, False to let it go. You cannot go back.
+
+Rules the harness enforces: The harness replays many arrival orders through the same imported function, so do not keep state between calls: decide from `row` and `seen` alone.
+
+Conventions: `header` is the list of column names. `rows` is a list of rows; each row is a list of cells in header order, floats for numeric columns and strings for symbolic ones. A cell shown as "?" is hidden from you. A row is better when its goals are closer to their best (low for names ending in -, high for names ending in +).
+
+Keep everything that prints or reads the csv file under `if __name__ == "__main__":` so that importing the file prints nothing. Plain built-in types are all you need: do not import anything from `typing`.
+
+Running `python step04.py` must load the csv, call your function, print a short answer a customer could read, and exit with status 0. Reply with the complete file in one ```python fenced block and nothing else.

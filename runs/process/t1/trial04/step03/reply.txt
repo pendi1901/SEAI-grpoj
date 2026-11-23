@@ -1,0 +1,80 @@
+```python
+import csv
+import math
+
+def certify(xs, ys):
+    """
+    Returns True if the two distributions are statistically similar (same population),
+    False if they differ significantly. Uses a simple A12 effect size check.
+    """
+    def a12(lst1, lst2):
+        m, n = len(lst1), len(lst2)
+        lst1 = sorted(lst1)
+        lst2 = sorted(lst2)
+        
+        # Count how many times items in lst1 are greater than items in lst2
+        greater = 0
+        j = 0
+        for i in range(m):
+            while j < n and lst2[j] < lst1[i]:
+                j += 1
+            greater += j
+            
+        # Count ties
+        ties = 0
+        for i in range(m):
+            for j in range(n):
+                if lst1[i] == lst2[j]:
+                    ties += 1
+        
+        return (greater + 0.5 * ties) / (m * n)
+
+    # If A12 is close to 0.5, they are likely the same.
+    # Threshold 0.56 is a common small effect size threshold.
+    score = a12(xs, ys)
+    return 0.44 <= score <= 0.56
+
+def analyze(header, rows):
+    # Find indices
+    team_size_idx = header.index('Team Size')
+    cost_idx = header.index('Cost-')
+    
+    # Split into small team (bottom 50%) and big team (top 50%)
+    # Based on Team Size column
+    team_sizes = [row[team_size_idx] for row in rows]
+    median = sorted(team_sizes)[len(team_sizes) // 2]
+    
+    small_team_costs = [row[cost_idx] for row in rows if row[team_size_idx] <= median]
+    big_team_costs = [row[cost_idx] for row in rows if row[team_size_idx] > median]
+    
+    is_same = certify(small_team_costs, big_team_costs)
+    
+    print(f"Analysis of Cost- vs Team Size:")
+    print(f"  Small team avg cost: {sum(small_team_costs)/len(small_team_costs):.4f}")
+    print(f"  Big team avg cost:   {sum(big_team_costs)/len(big_team_costs):.4f}")
+    if is_same:
+        print("  Conclusion: The difference is likely due to noise (not real).")
+    else:
+        print("  Conclusion: The difference is statistically significant.")
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed_row = []
+                for val in row:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        analyze(header, rows)
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

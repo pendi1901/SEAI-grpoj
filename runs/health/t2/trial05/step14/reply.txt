@@ -1,0 +1,43 @@
+```python
+import csv
+import step04
+
+def flow(header, row, seen):
+    """
+    Decides if the current row is 'good enough' to stop searching.
+    We use the logic from step04 to determine if the current row
+    outperforms the average of the history, indicating a plateau or
+    a sufficiently good result to stop paying for further runs.
+    """
+    return step04.flow(header, row, seen)
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed_row = [val if header[i] == 'criterion' else float(val) 
+                                 for i, val in enumerate(row)]
+                rows.append(processed_row)
+        
+        seen = []
+        found = False
+        for i, row in enumerate(rows):
+            if flow(header, row, seen):
+                print(f"Optimization stopped at row {i}.")
+                print(f"The setup found is sufficiently good: MRE={row[0]:.4f}, ACC={row[1]:.4f}, PRED40={row[2]:.4f}")
+                print("You can stop paying for further runs.")
+                found = True
+                break
+            seen.append(row)
+        
+        if not found:
+            print("Processed all runs. No setup reached the 'good enough' threshold to stop early.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

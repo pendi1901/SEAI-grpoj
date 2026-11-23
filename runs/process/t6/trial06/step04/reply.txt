@@ -1,0 +1,51 @@
+```python
+import ezr
+import step01
+
+def flow(header, row, seen):
+    """
+    Decide whether to accept a row based on whether it is better than 
+    the best seen so far. Since we cannot go back, we accept the first 
+    row that is 'good enough' (e.g., in the top 5% of the potential 
+    distribution, or simply better than the current best).
+    """
+    if not seen:
+        return True
+    
+    # Create a table to calculate ydist
+    tbl = ezr.Tbl([header] + seen + [row])
+    
+    # Calculate ydist for the new row and all seen rows
+    # Lower ydist is better
+    new_ydist = ezr.ydist(tbl, row)
+    seen_ydists = [ezr.ydist(tbl, r) for r in seen]
+    
+    # If the new row is better than the best seen so far, accept it
+    if new_ydist < min(seen_ydists):
+        return True
+    
+    return False
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    seen = []
+    accepted = []
+    
+    for row in rows:
+        if flow(header, row, seen):
+            accepted.append(row)
+        seen.append(row)
+        
+    print(f"Processed {len(rows)} proposals.")
+    print(f"Accepted {len(accepted)} proposals based on the 'better than previous' rule.")
+    
+    if accepted:
+        # Show the first few accepted to the customer
+        print("\nSample of accepted proposals:")
+        for i, row in enumerate(accepted[:3]):
+            print(f"Accepted {i+1}: {row}")
+```

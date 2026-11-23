@@ -1,0 +1,72 @@
+import ezr
+import step07
+
+def choose(header, rows, label):
+    """
+    Find the best setup for a large, high-criticality project.
+    We filter for rows where 'Size' and 'Criticality' are high,
+    then use the acquire strategy to find the best within the budget.
+    """
+    # Identify indices for Size (6) and Criticality (1)
+    size_idx = 6
+    crit_idx = 1
+    
+    # Filter for "large" and "high criticality" projects
+    # We define high as above the median
+    all_sizes = [r[size_idx] for r in rows]
+    all_crits = [r[crit_idx] for r in rows]
+    med_size = sum(all_sizes) / len(all_sizes)
+    med_crit = sum(all_crits) / len(all_crits)
+    
+    # Identify candidate indices
+    candidates = [i for i, r in enumerate(rows) 
+                  if r[size_idx] >= med_size and r[crit_idx] >= med_crit]
+    
+    # If no candidates match, fall back to all rows
+    if not candidates:
+        candidates = list(range(len(rows)))
+        
+    # Create a subset of rows for the acquire function
+    subset_rows = [rows[i] for i in candidates]
+    
+    # Use the logic from step07 to label and find the best
+    # We map the subset back to the original indices
+    def oracle_wrapper(row):
+        # Find original index
+        idx = rows.index(row)
+        true_goals = label(idx)
+        for i in range(len(true_goals)):
+            row[9 + i] = true_goals[i]
+        return row
+
+    # Use acquire to find the best within the budget
+    tbl = ezr.Tbl([header] + subset_rows)
+    labeled = ezr.acquire(tbl, cap=50, label=oracle_wrapper)
+    
+    # Find the best among the labeled rows
+    best_row = min(labeled, key=lambda r: ezr.ydist(tbl, r))
+    
+    # Return the original index
+    return rows.index(best_row)
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Mask goals
+    for r in rows:
+        r[9] = r[10] = r[11] = "?"
+        
+    full_data = list(ezr.csv(filename))
+    full_rows = full_data[1:]
+    
+    def label_func(i):
+        return [full_rows[i][9], full_rows[i][10], full_rows[i][11]]
+    
+    best_idx = choose(header, rows, label_func)
+    
+    print(f"Analysis: For large, high-criticality projects, the best setup is at index {best_idx}.")
+    print(f"Row details: {rows[best_idx]}")
+    exit(0)

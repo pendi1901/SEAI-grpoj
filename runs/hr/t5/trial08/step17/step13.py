@@ -1,0 +1,60 @@
+import ezr
+import random
+
+def certify(xs, ys):
+    """
+    Returns True if the two distributions are statistically indistinguishable 
+    (i.e., the difference is likely just noise), False if they really differ.
+    """
+    # Sort the lists as required by the statistical tests
+    xs_sorted = sorted(xs)
+    ys_sorted = sorted(ys)
+    
+    # Use the statistical tests provided in ezr.
+    # If both tests pass, the distributions are considered the same.
+    return ezr.cliffs(xs_sorted, ys_sorted) and ezr.ks(xs_sorted, ys_sorted)
+
+if __name__ == "__main__":
+    # Load data
+    data = list(ezr.csv("WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"))
+    header = data[0]
+    rows = data[1:]
+    
+    # Identify column indices
+    # TrainingTimesLastYear is numeric, YearsWithCurrManager+ is numeric
+    col_names = {name: i for i, name in enumerate(header)}
+    train_idx = col_names['TrainingTimesLastYear']
+    manager_idx = col_names['YearsWithCurrManager+']
+    
+    # Split data into two groups: Low training vs High training
+    # We use the median training days as the split point
+    all_train_days = [r[train_idx] for r in rows if r[train_idx] != "?"]
+    median_train = sorted(all_train_days)[len(all_train_days) // 2]
+    
+    low_training = []
+    high_training = []
+    
+    for row in rows:
+        val = row[manager_idx]
+        train_days = row[train_idx]
+        if val != "?" and train_days != "?":
+            if train_days <= median_train:
+                low_training.append(val)
+            else:
+                high_training.append(val)
+                
+    # Perform the certification
+    is_same = certify(low_training, high_training)
+    
+    print("Analysis: Do more training days correlate with longer tenure with manager?")
+    print(f"Average years with manager (Low Training <= {median_train}): {sum(low_training)/len(low_training):.2f}")
+    print(f"Average years with manager (High Training > {median_train}): {sum(high_training)/len(high_training):.2f}")
+    
+    if is_same:
+        print("Result: The difference is statistically insignificant (noise).")
+        print("Conclusion: More training does not significantly change tenure with manager.")
+    else:
+        print("Result: The difference is statistically significant (real).")
+        print("Conclusion: Training levels appear to have a real impact on manager tenure.")
+    
+    exit(0)

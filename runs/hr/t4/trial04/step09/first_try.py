@@ -1,0 +1,53 @@
+import csv
+import pandas as pd
+from sklearn.ensemble import IsolationForest
+from sklearn.preprocessing import LabelEncoder
+
+def spot(header, rows):
+    """
+    Identifies rows that look wrong (outliers) using an Isolation Forest.
+    Returns the indices of the rows, sorted by suspicion (most suspicious first).
+    """
+    df = pd.DataFrame(rows, columns=header)
+    
+    # Prepare features: encode symbolic columns
+    X = df.copy()
+    for col in X.columns:
+        if X[col].dtype == 'object':
+            le = LabelEncoder()
+            X[col] = le.fit_transform(X[col].astype(str))
+        else:
+            X[col] = X[col].astype(float).fillna(0)
+            
+    # Isolation Forest detects anomalies (contamination set to 0.05)
+    clf = IsolationForest(n_estimators=100, contamination=0.05, random_state=42)
+    
+    # decision_function returns anomaly score; lower values are more abnormal
+    scores = clf.decision_function(X)
+    
+    # Get indices sorted by score (ascending, so most negative/abnormal first)
+    suspicious_indices = sorted(range(len(scores)), key=lambda i: scores[i])
+    
+    # Return only those identified as outliers (score < 0)
+    return [i for i in suspicious_indices if scores[i] < 0]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = [float(val) if header[i][0].isupper() else val for i, val in enumerate(row)]
+            rows.append(processed_row)
+            
+    outliers = spot(header, rows)
+    
+    print("Suspicious rows (potential data entry errors):")
+    print(f"{'Row Index':<10} | {'Suspicion Rank'}")
+    print("-" * 30)
+    for rank, idx in enumerate(outliers[:10]):
+        print(f"{idx:<10} | {rank + 1}")
+    
+    if not outliers:
+        print("No suspicious rows detected.")

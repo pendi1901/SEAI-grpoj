@@ -1,0 +1,87 @@
+import csv
+from step01 import remember
+from sklearn.neighbors import KNeighborsRegressor
+import numpy as np
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column (MRE-) for test rows using k-Nearest Neighbors.
+    """
+    # Identify goal index (first column)
+    goal_idx = 0
+    
+    # Identify input columns (all columns except goals)
+    # Goals are columns where name ends in '-' or '+'
+    input_indices = [i for i, name in enumerate(header) if not (name.endswith('-') or name.endswith('+'))]
+    
+    # Prepare training data
+    X_train = []
+    y_train = []
+    for row in train:
+        # Convert symbolic columns to numeric for KNN
+        features = []
+        for i in input_indices:
+            val = row[i]
+            if isinstance(val, str):
+                # Simple encoding for criterion: absolute_error=0, poisson=1, squared_error=2
+                mapping = {'absolute_error': 0, 'poisson': 1, 'squared_error': 2}
+                features.append(mapping.get(val, 0))
+            else:
+                features.append(val)
+        X_train.append(features)
+        y_train.append(row[goal_idx])
+        
+    # Prepare test data
+    X_test = []
+    for row in test:
+        features = []
+        for i in input_indices:
+            val = row[i]
+            if isinstance(val, str):
+                mapping = {'absolute_error': 0, 'poisson': 1, 'squared_error': 2}
+                features.append(mapping.get(val, 0))
+            else:
+                features.append(val)
+        X_test.append(features)
+        
+    # Fit model
+    knn = KNeighborsRegressor(n_neighbors=5)
+    knn.fit(X_train, y_train)
+    
+    return knn.predict(X_test).tolist()
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    # Use a subset of rows as a mock test set to demonstrate functionality
+    train_data = rows[:700]
+    test_data = rows[700:705]
+    
+    # Mask goals in test data
+    for row in test_data:
+        for i in range(len(header)):
+            if header[i].endswith('-') or header[i].endswith('+'):
+                row[i] = "?"
+                
+    predictions = guess(header, train_data, test_data)
+    
+    print("Forecasts for test setups (MRE-):")
+    for i, pred in enumerate(predictions):
+        print(f"Setup {i+1}: Estimated MRE = {pred:.4f}")
+    
+    exit(0)

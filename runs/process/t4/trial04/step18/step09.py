@@ -1,0 +1,60 @@
+import csv
+import pandas as pd
+import numpy as np
+from sklearn.ensemble import IsolationForest
+
+def spot(header, rows):
+    """
+    Identifies rows that are outliers using Isolation Forest.
+    Returns the indices of the rows, sorted by suspicion (most suspicious first).
+    """
+    df = pd.DataFrame(rows, columns=header)
+    
+    # IsolationForest works on numeric data. 
+    # Select only numeric columns for anomaly detection.
+    numeric_df = df.select_dtypes(include=[np.number])
+    
+    # Isolation Forest: contamination is the proportion of outliers in the data.
+    # We set it to 0.05 (5%) as a reasonable heuristic for "mistyped" data.
+    model = IsolationForest(contamination=0.05, random_state=42)
+    
+    # Fit the model to the data
+    model.fit(numeric_df)
+    
+    # decision_function returns the anomaly score. 
+    # Lower scores are more anomalous.
+    scores = model.decision_function(numeric_df)
+    
+    # Get indices sorted by score (ascending, so lowest scores first)
+    suspicious_indices = np.argsort(scores)
+    
+    return suspicious_indices.tolist()
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                # Convert to float, handle potential non-numeric if necessary
+                processed_row = []
+                for val in row:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        outliers = spot(header, rows)
+        
+        print("Customer Inquiry: Which records look mistyped or made up?")
+        print(f"Analysis: Identified {len(outliers)} potentially suspicious records.")
+        print("The top 5 most suspicious row indices are:")
+        print(outliers[:5])
+        print("\nThese rows deviate significantly from the patterns observed in the rest of the dataset.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

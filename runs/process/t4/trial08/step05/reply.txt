@@ -1,0 +1,52 @@
+```python
+import csv
+import pandas as pd
+from sklearn.ensemble import RandomForestRegressor
+from step01 import remember
+
+def blame(header, rows):
+    """
+    Identifies input columns that best explain why the worst rows are bad.
+    We define 'bad' as having a high 'Idle-' value.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    
+    # Identify input columns (those not ending in - or +)
+    inputs = [col for col in header if not (col.endswith('-') or col.endswith('+'))]
+    target = 'Idle-'
+    
+    # Train a Random Forest to find feature importance regarding 'Idle-'
+    # We want to see what drives the 'Idle-' goal
+    rf = RandomForestRegressor(n_estimators=100, random_state=42)
+    rf.fit(df[inputs], df[target])
+    
+    # Get feature importances
+    importances = rf.feature_importances_
+    
+    # Pair inputs with their importance scores
+    feat_imp = sorted(zip(inputs, importances), key=lambda x: x[1], reverse=True)
+    
+    # Return the top 3 most influential inputs
+    return [name for name, score in feat_imp[:3]]
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) for val in row])
+        
+        influential_factors = blame(header, rows)
+        
+        print("Customer Inquiry: Why do our worst setups leave so many people waiting around?")
+        print("Analysis: We identified the input factors that most strongly correlate with high 'Idle-' values.")
+        print(f"The primary drivers for idle time are: {', '.join(influential_factors)}.")
+        print("Conclusion: Focusing on optimizing these specific parameters will help reduce idle time in future setups.")
+        
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
+```

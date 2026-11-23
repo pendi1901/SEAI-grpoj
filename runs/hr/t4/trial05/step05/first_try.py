@@ -1,0 +1,62 @@
+import csv
+from sklearn.ensemble import RandomForestRegressor
+
+def blame(header, rows):
+    """
+    Identifies input columns that best explain low tenure ('YearsAtCompany+').
+    We use a Random Forest to rank feature importance for predicting tenure.
+    """
+    # Identify goal and input columns
+    goal_name = 'YearsAtCompany+'
+    goal_idx = header.index(goal_name)
+    
+    # Prepare data: encode symbolic columns
+    encoded_rows = []
+    for row in rows:
+        new_row = []
+        for i, val in enumerate(row):
+            if isinstance(val, str):
+                # Simple mapping for symbolic columns
+                new_row.append(float(hash(val) % 1000))
+            else:
+                new_row.append(float(val))
+        encoded_rows.append(new_row)
+    
+    # Separate features and target
+    X = [r[:goal_idx] + r[goal_idx+1:] for r in encoded_rows]
+    y = [r[goal_idx] for r in encoded_rows]
+    
+    # Train a regressor to find feature importance
+    model = RandomForestRegressor(n_estimators=50, random_state=42)
+    model.fit(X, y)
+    
+    # Get feature importances
+    importances = model.feature_importances_
+    
+    # Map importances back to column names
+    feature_names = header[:goal_idx] + header[goal_idx+1:]
+    ranked = sorted(zip(feature_names, importances), key=lambda x: x[1], reverse=True)
+    
+    # Return the top 3 features that explain the variance in tenure
+    return [name for name, score in ranked[:3]]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    top_factors = blame(header, rows)
+    
+    print("Analysis: What factors best explain short employee tenure?")
+    print(f"The primary drivers identified are: {', '.join(top_factors)}.")
+    print("These columns show the strongest correlation with how long an employee stays.")

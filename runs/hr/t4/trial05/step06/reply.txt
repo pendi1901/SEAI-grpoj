@@ -1,0 +1,67 @@
+```python
+import csv
+from step02 import guess
+
+def justify(header, rows, row):
+    """
+    Estimates the goal columns for the target row and calculates its 
+    percentile rank against the existing population.
+    """
+    # Identify goal columns
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    
+    # Prepare training data (rows with known goals)
+    # We need to estimate the goals for the target 'row'
+    # Use step02's guess logic, but we need to handle multiple goals if they exist
+    # For this task, we focus on the first goal column as per step02
+    goal_idx = goal_indices[0]
+    
+    # Create a temporary dataset including the target row to predict its value
+    # We use the full dataset to train the regressor
+    train_data = [r for r in rows]
+    test_data = [row]
+    
+    # Predict the goal value for the target row
+    predictions = guess(header, train_data, test_data)
+    estimated_val = predictions[0]
+    
+    # Calculate percentile rank
+    # If goal ends in +, higher is better. If -, lower is better.
+    all_vals = [r[goal_idx] for r in rows]
+    
+    if header[goal_idx].endswith('+'):
+        better_than = [v for v in all_vals if v < estimated_val]
+    else:
+        better_than = [v for v in all_vals if v > estimated_val]
+        
+    p = len(better_than) / len(all_vals)
+    
+    reason = (f"This team arrangement is estimated to perform better than {p:.0%} "
+              f"of the existing staff based on the '{header[goal_idx]}' metric.")
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    # Pick a sample row to justify
+    target_row = rows[0][:]
+    goal_idx = next(i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-'))
+    target_row[goal_idx] = "?"
+    
+    p, reason = justify(header, rows, target_row)
+    print(f"Rank: {p:.4f}")
+    print(f"Reason: {reason}")
+```

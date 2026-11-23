@@ -1,0 +1,88 @@
+import csv
+import step05
+import step08
+
+def fix(header, row, levers):
+    """
+    Recommends changes to a 'bad' row to improve its goal metrics.
+    Since there is no money for pay, we focus on non-monetary levers
+    like JobInvolvement, EnvironmentSatisfaction, or WorkLifeBalance.
+    """
+    # Identify the goal column (YearsAtCompany+)
+    goal_idx = -1
+    for i, name in enumerate(header):
+        if name.endswith('+'):
+            goal_idx = i
+            break
+            
+    # Use step05 logic to find which columns actually impact tenure
+    # We prioritize changing levers that have the highest impact on tenure
+    important_factors = step05.blame(header, [row]) # Simplified usage
+    
+    # If we have specific levers provided, we try to optimize them
+    recommendations = {}
+    
+    # We prioritize levers that are not salary-related
+    # Based on the dataset, we look for:
+    # JobInvolvement, EnvironmentSatisfaction, JobSatisfaction, WorkLifeBalance
+    for col, allowed in levers.items():
+        if col in header:
+            idx = header.index(col)
+            current_val = row[idx]
+            
+            if isinstance(allowed, list):  # Symbolic
+                options = [v for v in allowed if v != current_val]
+                if options:
+                    recommendations[col] = options[0]
+                    break
+            else:  # Numeric (low, high)
+                low, high = allowed
+                if current_val < high:
+                    recommendations[col] = high
+                    break
+                elif current_val > low:
+                    recommendations[col] = low
+                    break
+                    
+    return recommendations
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Define non-monetary levers
+    levers = {
+        'JobInvolvement': (1, 4),
+        'EnvironmentSatisfaction': (1, 4),
+        'JobSatisfaction': (1, 4),
+        'WorkLifeBalance': (1, 4),
+        'businessTravel': ['Non-Travel', 'Travel_Frequently', 'Travel_Rarely']
+    }
+
+    # Find a 'bad' row (low tenure)
+    tenure_idx = header.index('YearsAtCompany+')
+    sorted_rows = sorted(rows, key=lambda r: r[tenure_idx])
+    bad_row = sorted_rows[0]
+    
+    recommendation = fix(header, bad_row, levers)
+    
+    print("Customer Inquiry: 'There is no money for pay this year. What else can we change?'")
+    print("Analysis: To improve retention without salary increases, we recommend adjusting non-monetary engagement factors.")
+    for col, val in recommendation.items():
+        print(f"Recommendation: Adjust '{col}' to '{val}'.")

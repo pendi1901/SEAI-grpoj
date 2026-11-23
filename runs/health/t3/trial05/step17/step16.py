@@ -1,0 +1,83 @@
+import csv
+import numpy as np
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import LabelEncoder
+
+def justify(header, rows, row):
+    """
+    Estimates the performance of a 'big/deep' configuration and compares it 
+    to the rest of the data to explain why 'bigger' isn't always better.
+    """
+    goal_indices = [i for i, h in enumerate(header) if h.endswith('-') or h.endswith('+')]
+    input_indices = [i for i, h in enumerate(header) if not (h.endswith('-') or h.endswith('+'))]
+
+    # Encode symbolic inputs
+    encoders = {}
+    for i in input_indices:
+        if isinstance(rows[0][i], str):
+            le = LabelEncoder()
+            le.fit([str(r[i]) for r in rows])
+            encoders[i] = le
+
+    def get_features(r):
+        feat = []
+        for i in input_indices:
+            if i in encoders:
+                feat.append(encoders[i].transform([str(r[i])])[0])
+            else:
+                feat.append(float(r[i]))
+        return feat
+
+    # Calculate aggregate score for all rows (lower is better for -, higher for +)
+    def get_score(r):
+        score = 0
+        for i in goal_indices:
+            col_vals = [row[i] for row in rows]
+            min_v, max_v = min(col_vals), max(col_vals)
+            rng = max_v - min_v + 1e-9
+            norm = (r[i] - min_v) / rng
+            score += norm if header[i].endswith('-') else (1 - norm)
+        return score
+
+    # Train a model to estimate performance
+    X = [get_features(r) for r in rows]
+    y_scores = [get_score(r) for r in rows]
+    
+    model = RandomForestRegressor(n_estimators=100, random_state=42)
+    model.fit(X, y_scores)
+    
+    estimated_score = model.predict([get_features(row)])[0]
+    
+    # Calculate fraction of rows better than estimated row
+    better_count = sum(1 for s in y_scores if s < estimated_score)
+    p = better_count / len(rows)
+    
+    reason = "Bigger and deeper setups often lead to overfitting or diminishing returns, making this configuration perform worse than " + f"{p:.0%} of simpler alternatives."
+    return (p, reason)
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            for row in reader:
+                processed_row = []
+                for i, val in enumerate(row):
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        # Define a 'big/deep' setup: high N_estimators, high Max_depth
+        # N_estimators index: 3, Max_depth index: 7
+        test_row = [0.0, 0.0, 0.0, 500.0, 'squared_error', 2.0, 1.0, 50.0]
+        
+        p, reason = justify(header, rows, test_row)
+        print(reason)
+        exit(0)
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

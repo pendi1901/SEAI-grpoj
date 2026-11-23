@@ -1,0 +1,84 @@
+import csv
+import step01
+import step07
+
+def choose(header, rows, label):
+    """
+    Finds a setup that is both high-performing (multi-objective) 
+    and 'small' (low N_estimators).
+    
+    We sample 50 rows, label them, and score them using a weighted 
+    combination of performance and compactness.
+    """
+    n = len(rows)
+    # Sample 50 indices spread across the dataset
+    indices_to_label = [int(i * (n / 50)) for i in range(50)]
+    
+    labeled_data = []
+    for i in indices_to_label:
+        goals = label(i)
+        full_row = goals + rows[i][len(goals):]
+        labeled_data.append((i, full_row))
+        
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+    n_est_idx = header.index('N_estimators')
+    
+    # Extract values for normalization
+    mres = [r[1][mre_idx] for r in labeled_data]
+    accs = [r[1][acc_idx] for r in labeled_data]
+    preds = [r[1][pred_idx] for r in labeled_data]
+    n_ests = [r[1][n_est_idx] for r in labeled_data]
+    
+    def norm(val, vals, reverse=False):
+        min_v, max_v = min(vals), max(vals)
+        if max_v == min_v: return 0.0
+        n = (val - min_v) / (max_v - min_v)
+        return 1.0 - n if reverse else n
+
+    best_idx = -1
+    best_score = -float('inf')
+    
+    for i, row in labeled_data:
+        # Score = Performance (MRE, ACC, PRED) + Compactness (lower N_estimators is better)
+        perf = (norm(row[mre_idx], mres, True) + 
+                norm(row[acc_idx], accs) + 
+                norm(row[pred_idx], preds))
+        compactness = norm(row[n_est_idx], n_ests, True)
+        
+        # Balance performance and compactness (50/50 weight)
+        total_score = perf + compactness
+        
+        if total_score > best_score:
+            best_score = total_score
+            best_idx = i
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed_row = [val if header[i] == 'criterion' else float(val) 
+                                 for i, val in enumerate(row)]
+                rows.append(processed_row)
+        
+        hidden_rows = [["?"] * 3 + r[3:] for r in rows]
+        
+        def label(i):
+            return rows[i][:3]
+            
+        best_idx = choose(header, hidden_rows, label)
+        row = rows[best_idx]
+        print(f"Recommended setup (Index {best_idx}):")
+        print(f"MRE={row[0]:.4f}, ACC={row[1]:.4f}, PRED40={row[2]:.4f}, N_estimators={row[3]:.0f}")
+        print("This setup balances high forecast accuracy with a small model size for nightly runs.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

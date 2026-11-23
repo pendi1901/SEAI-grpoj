@@ -1,0 +1,61 @@
+import ezr
+import random
+
+def guess(header, train, test):
+    """
+    Estimates the value of the first goal column for test rows
+    by building a tree on the training data and using the leaf mean.
+    """
+    # Create table from training data
+    tbl = ezr.Tbl([header] + train)
+    
+    # Build a tree on the training data
+    # The tree nodes store the mean ydist, but we need the mean of the 
+    # specific goal column. We can use the tree structure to find the leaf.
+    root = ezr.tree(tbl, tbl.rows)
+    
+    # Pre-calculate the mean of the first goal column for each leaf
+    goal_idx = -1
+    for i, name in enumerate(header):
+        if name.endswith('+') or name.endswith('-'):
+            goal_idx = i
+            break
+            
+    for leaf in ezr.leafs(root):
+        vals = [r[goal_idx] for r in leaf.rows if r[goal_idx] != "?"]
+        leaf.goal_mu = sum(vals) / len(vals) if vals else 0
+        
+    # Predict for each test row
+    results = []
+    for row in test:
+        leaf = ezr.leaf(root, row)
+        results.append(float(leaf.goal_mu))
+    return results
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Split data: 80% train, 20% test
+    random.seed(1234567891)
+    random.shuffle(rows)
+    n = int(len(rows) * 0.8)
+    train = rows[:n]
+    test = rows[n:]
+    
+    # Mask the goal columns in test data
+    goal_indices = [i for i, h in enumerate(header) if h.endswith('+') or h.endswith('-')]
+    masked_test = []
+    for row in test:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_test.append(new_row)
+        
+    predictions = guess(header, train, masked_test)
+    
+    # Print a summary
+    print(f"Estimated {header[goal_indices[0]]} for {len(predictions)} employees.")
+    print(f"Sample prediction: {predictions[0]:.2f}")

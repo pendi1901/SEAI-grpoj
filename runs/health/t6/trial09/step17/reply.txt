@@ -1,0 +1,78 @@
+```python
+import ezr
+import step07
+import step08
+
+def choose(header, rows, label):
+    """
+    Find a setup that forecasts well (low ydist) and is small.
+    We define 'small' as having low N_estimators and low Max_depth.
+    We use the acquire strategy to find good setups, then filter for 
+    those that are also 'small' to satisfy the nightly run constraint.
+    """
+    # Use the acquisition logic to find a set of high-performing rows
+    # We use the same budget of 50 labels as in step07
+    labeled_rows = []
+    labeled_indices = set()
+
+    def oracle_wrapper(i):
+        if i not in labeled_indices:
+            labeled_indices.add(i)
+            row_with_goals = label(i)
+            for j, val in enumerate(row_with_goals):
+                rows[i][j] = val
+        return rows[i]
+
+    # Use acquire to find good candidates
+    tbl = ezr.Tbl([header] + rows)
+    best_rows = ezr.acquire(tbl, cap=50, label=oracle_wrapper)
+    
+    # Define 'small' as being below the median for N_estimators and Max_depth
+    n_est_idx = header.index('N_estimators')
+    max_depth_idx = header.index('Max_depth')
+    
+    all_n_est = [r[n_est_idx] for r in rows]
+    all_depth = [r[max_depth_idx] for r in rows]
+    
+    med_n = sorted(all_n_est)[len(all_n_est) // 2]
+    med_d = sorted(all_depth)[len(all_depth) // 2]
+    
+    # Filter for rows that are both high-performing and 'small'
+    # We rank by ydist (performance) first
+    candidates = []
+    for i, row in enumerate(rows):
+        if i in labeled_indices:
+            if row[n_est_idx] <= med_n and row[max_depth_idx] <= med_d:
+                candidates.append((ezr.ydist(tbl, row), i))
+    
+    # If no small rows were found in the labeled set, return the best overall
+    if not candidates:
+        return min(range(len(rows)), key=lambda i: ezr.ydist(tbl, rows[i]))
+    
+    # Return the index of the best small row
+    candidates.sort(key=lambda x: x[0])
+    return candidates[0][1]
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    all_rows = data[1:]
+    
+    # Mask goals
+    goal_indices = [i for i, name in enumerate(header) if name[-1] in "+-"]
+    masked_rows = [list(r) for r in all_rows]
+    for row in masked_rows:
+        for idx in goal_indices:
+            row[idx] = "?"
+            
+    def label_func(i):
+        return all_rows[i]
+        
+    best_idx = choose(header, masked_rows, label_func)
+    
+    print(f"Analysis complete. Found a high-performing, small setup at index: {best_idx}")
+    print(f"Setup details: N_estimators={all_rows[best_idx][header.index('N_estimators')]}, "
+          f"Max_depth={all_rows[best_idx][header.index('Max_depth')]}")
+    exit(0)
+```

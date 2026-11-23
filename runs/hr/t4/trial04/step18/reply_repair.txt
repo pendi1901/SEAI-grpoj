@@ -1,0 +1,97 @@
+```python
+import csv
+import pandas as pd
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import LabelEncoder
+
+def fix(header, row, levers):
+    """
+    Recommends changes to a 'bad' row to improve its goal columns,
+    excluding 'MonthlyIncome' as per the customer's constraint.
+    """
+    # Filter out MonthlyIncome from levers if present
+    if 'MonthlyIncome' in levers:
+        del levers['MonthlyIncome']
+
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header_full = next(reader)
+        for r in reader:
+            rows.append([float(val) if header_full[i][0].isupper() else val for i, val in enumerate(r)])
+    
+    goal_col = next(c for c in header if c.endswith('+') or c.endswith('-'))
+    is_maximize = goal_col.endswith('+')
+    
+    df = pd.DataFrame(rows, columns=header)
+    X = df.drop(columns=[goal_col])
+    y = df[goal_col]
+    
+    # Encode all symbolic columns to numeric for the regressor
+    encoders = {}
+    X_encoded = X.copy()
+    for col in X.columns:
+        if X[col].dtype == 'object':
+            le = LabelEncoder()
+            X_encoded[col] = le.fit_transform(X[col].astype(str))
+            encoders[col] = le
+        else:
+            X_encoded[col] = X[col].astype(float)
+            
+    model = RandomForestRegressor(n_estimators=50, random_state=42)
+    model.fit(X_encoded, y)
+    
+    best_val = -float('inf') if is_maximize else float('inf')
+    best_change = {}
+    
+    for col, allowed in levers.items():
+        idx = header.index(col)
+        test_vals = []
+        if isinstance(allowed, tuple):
+            test_vals = [allowed[0], allowed[1], (allowed[0] + allowed[1]) / 2]
+        else:
+            test_vals = allowed
+            
+        for val in test_vals:
+            temp_row = list(row)
+            temp_row[idx] = val
+            
+            input_df = pd.DataFrame([temp_row], columns=header).drop(columns=[goal_col])
+            input_encoded = input_df.copy()
+            for c in input_encoded.columns:
+                if c in encoders:
+                    input_encoded[c] = encoders[c].transform(input_df[c].astype(str))
+                else:
+                    input_encoded[c] = input_df[c].astype(float)
+            
+            pred = model.predict(input_encoded)[0]
+            if (is_maximize and pred > best_val) or (not is_maximize and pred < best_val):
+                best_val = pred
+                best_change = {col: val}
+                
+    return best_change
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            rows.append([float(val) if header[i][0].isupper() else val for i, val in enumerate(row)])
+            
+    bad_row = rows[1]
+    levers = {
+        'businessTravel': ['Non-Travel', 'Travel_Rarely', 'Travel_Frequently'],
+        'overTime': ['No', 'Yes'],
+        'TrainingTimesLastYear': (0.0, 6.0),
+        'PercentSalaryHike': (11.0, 25.0),
+        'StockOptionLevel': (0.0, 3.0)
+    }
+    
+    recommendation = fix(header, bad_row, levers)
+    print("Since pay increases are not possible, we recommend the following changes to improve retention:")
+    for col, val in recommendation.items():
+        print(f"- Adjust '{col}' to {val}")
+```

@@ -1,0 +1,70 @@
+```python
+import csv
+import numpy as np
+from sklearn.ensemble import IsolationForest
+from sklearn.preprocessing import LabelEncoder
+
+def flow(header, row, seen):
+    """
+    Detects if the current row is an outlier compared to the 'seen' history.
+    We use an Isolation Forest to determine if the new row deviates 
+    significantly from the distribution of the previously seen data.
+    """
+    if len(seen) < 20:
+        return False
+
+    # Prepare data: combine seen rows and current row
+    all_data = seen + [row]
+    X = []
+    encoders = {}
+
+    for r in all_data:
+        processed_row = []
+        for i, val in enumerate(r):
+            if not header[i][0].isupper():
+                if i not in encoders:
+                    encoders[i] = LabelEncoder()
+                    # Fit on all seen data
+                    encoders[i].fit([str(x[i]) for x in all_data])
+                processed_row.append(float(encoders[i].transform([str(val)])[0]))
+            else:
+                processed_row.append(float(val))
+        X.append(processed_row)
+
+    # Train Isolation Forest on history
+    # We use a small subset of history to detect if the new row is an anomaly
+    model = IsolationForest(n_estimators=50, contamination=0.05, random_state=42)
+    model.fit(X[:-1])
+    
+    # Predict anomaly score for the new row
+    score = model.decision_function([X[-1]])
+    
+    # If score is negative, it's considered an outlier
+    return score[0] < 0
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    seen = []
+    anomalies = 0
+    for row in rows:
+        if flow(header, row, seen):
+            anomalies += 1
+        seen.append(row)
+
+    print("Analysis: Detecting team composition shifts.")
+    print(f"Detected {anomalies} instances where a new record significantly deviated from historical patterns.")
+    exit(0)
+```

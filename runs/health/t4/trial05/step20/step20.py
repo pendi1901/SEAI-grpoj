@@ -1,0 +1,95 @@
+import csv
+import random
+from step01 import remember
+
+def race(header, rows, label):
+    """
+    Compares strategies to see if a 'smart' selection beats random.
+    Budget: 50 labels total.
+    """
+    budget = 50
+    labeled_count = 0
+    
+    def get_labeled(idx):
+        nonlocal labeled_count
+        if rows[idx][0] == "?":
+            if labeled_count >= budget:
+                return None
+            goals = label(idx)
+            rows[idx][0], rows[idx][1], rows[idx][2] = goals[0], goals[1], goals[2]
+            labeled_count += 1
+        return rows[idx]
+
+    # Strategy 1: Random
+    random_indices = random.sample(range(len(rows)), 16)
+    for idx in random_indices:
+        get_labeled(idx)
+    
+    # Strategy 2: Smart (pick rows with high N_estimators and low depth, as a heuristic)
+    # We pick 17 rows that are 'diverse' in the input space
+    smart_indices = [int(i * (len(rows) - 1) / 16) for i in range(17)]
+    for idx in smart_indices:
+        get_labeled(idx)
+        
+    # Strategy 3: Greedy (first 17)
+    greedy_indices = list(range(17))
+    for idx in greedy_indices:
+        get_labeled(idx)
+
+    # Evaluate
+    strategies = {
+        "random": random_indices,
+        "smart": smart_indices,
+        "greedy": greedy_indices
+    }
+    
+    best_overall_score = -float('inf')
+    winner = None
+    best_row_idx = -1
+    
+    for name, indices in strategies.items():
+        # Filter out indices that weren't labeled (if budget hit)
+        valid_rows = [rows[i] for i in indices if rows[i][0] != "?"]
+        if not valid_rows:
+            continue
+            
+        # Find best in this strategy
+        best_local_idx = remember(header, valid_rows)[0]
+        actual_row = valid_rows[best_local_idx]
+        
+        # Score it
+        score = remember(header, [actual_row])[0]
+        if score > best_overall_score:
+            best_overall_score = score
+            winner = name
+            # Find original index
+            for i in indices:
+                if rows[i] == actual_row:
+                    best_row_idx = i
+                    break
+                    
+    return {"winner": winner, "row": best_row_idx, "tried": list(strategies.keys())}
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = [float(val) if header[i] not in ['criterion'] else val 
+                             for i, val in enumerate(row)]
+            rows.append(processed_row)
+
+    true_data = [list(r) for r in rows]
+    for r in rows:
+        r[0] = r[1] = r[2] = "?"
+
+    def label(i):
+        return [true_data[i][0], true_data[i][1], true_data[i][2]]
+
+    outcome = race(header, rows, label)
+    print(f"The winning strategy is: {outcome['winner']}")
+    print(f"Best row found at index: {outcome['row']}")
+    print(f"Strategies compared: {', '.join(outcome['tried'])}")
+    exit(0)

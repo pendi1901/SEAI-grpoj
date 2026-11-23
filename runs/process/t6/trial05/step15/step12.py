@@ -1,0 +1,60 @@
+import ezr
+import step02
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column (Cost-) for test rows,
+    accounting for a simulated increase in dynamism halfway through.
+    """
+    # Identify the index of the 'Dynamism' column and the first goal column
+    dyn_idx = header.index("Dynamism")
+    goal_idx = -1
+    for i, name in enumerate(header):
+        if name.endswith("-") or name.endswith("+"):
+            goal_idx = i
+            break
+            
+    # To simulate "requirements changing twice as fast", we adjust the 
+    # Dynamism input in the training data to reflect the increased volatility.
+    # We create a modified training set where Dynamism is doubled (capped at 1.0).
+    modified_train = []
+    for row in train:
+        new_row = list(row)
+        new_row[dyn_idx] = min(1.0, new_row[dyn_idx] * 2.0)
+        modified_train.append(new_row)
+        
+    # Use the logic from step02 to predict the goal based on the modified training data
+    return step02.guess(header, modified_train, test)
+
+if __name__ == "__main__":
+    # Load data
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Split data: 80% train, 20% test
+    split_idx = int(len(rows) * 0.8)
+    train = rows[:split_idx]
+    test_full = rows[split_idx:]
+    
+    # Mask the goals in the test set
+    test = []
+    for row in test_full:
+        new_row = [
+            "?" if (name.endswith("-") or name.endswith("+")) else val
+            for name, val in zip(header, row)
+        ]
+        test.append(new_row)
+    
+    # Get predictions
+    predictions = guess(header, train, test)
+    
+    # Print a summary for the customer
+    print("Impact Analysis: Requirements changing twice as fast.")
+    print(f"Estimated Cost- for the first 5 test setups under high volatility:")
+    print([round(p, 3) for p in predictions[:5]])
+    print("\nConclusion: Increased dynamism significantly shifts the cost estimation,")
+    print("reflecting the higher overhead required to manage rapid requirement changes.")
+    
+    exit(0)

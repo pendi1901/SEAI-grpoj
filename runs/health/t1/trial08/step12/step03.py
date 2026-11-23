@@ -1,0 +1,58 @@
+import csv
+
+def certify(xs, ys):
+    """
+    Returns True if the distributions of xs and ys are statistically similar
+    (i.e., the difference is likely just noise), False if they differ.
+    Uses a simple A12 effect size test (non-parametric).
+    """
+    if not xs or not ys:
+        return True
+    
+    def a12(lst1, lst2):
+        m, n = len(lst1), len(lst2)
+        greater = 0
+        for x in lst1:
+            for y in lst2:
+                if x > y: greater += 1
+                elif x == y: greater += 0.5
+        return greater / (m * n)
+
+    # A12 threshold: 0.56 is a small effect size, 0.64 medium, 0.71 large.
+    # If the effect size is small, we consider them "the same apart from noise".
+    score = a12(xs, ys)
+    return abs(0.5 - score) < 0.14
+
+def analyze():
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed = []
+            for i, val in enumerate(row):
+                processed.append(val if header[i] == 'criterion' else float(val))
+            rows.append(processed)
+
+    # "Big" setups: N_estimators > median
+    # "Accurate": ACC+ (index 1)
+    n_est_idx = header.index('N_estimators')
+    acc_idx = header.index('ACC+')
+    
+    n_ests = [r[n_est_idx] for r in rows]
+    median_n = sorted(n_ests)[len(n_ests) // 2]
+    
+    small_setups = [r[acc_idx] for r in rows if r[n_est_idx] <= median_n]
+    big_setups = [r[acc_idx] for r in rows if r[n_est_idx] > median_n]
+    
+    is_noise = certify(small_setups, big_setups)
+    
+    print("Analysis: Is the difference in accuracy between big and small setups real?")
+    if is_noise:
+        print("Result: The difference is likely just noise. Setup size does not significantly impact accuracy.")
+    else:
+        print("Result: The difference is statistically significant. Setup size does impact accuracy.")
+
+if __name__ == "__main__":
+    analyze()

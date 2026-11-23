@@ -1,0 +1,64 @@
+import ezr
+import step07
+
+def choose(header, rows, label):
+    """
+    Find a setup that forecasts well (low ydist) and is small.
+    We define 'small' as having a low N_estimators (index 3) and low Max_depth (index 7).
+    We use the acquisition strategy to find good performers, then filter for 
+    simplicity to ensure it runs quickly every night.
+    """
+    # Use the acquisition logic from step07 to find a set of high-performing rows
+    # We pass the label function to the acquisition process
+    best_idx = step07.choose(header, rows, label)
+    
+    # The acquisition process in step07 returns the index of the best row found.
+    # To satisfy the "small enough to run every night" requirement, we check
+    # if the found row is 'small'. If it's too complex, we look for a 
+    # simpler alternative among the rows that performed well.
+    
+    # For this specific dataset, we define 'small' as N_estimators <= 100 
+    # and Max_depth <= 5.
+    def is_small(row):
+        n_est = row[3]
+        max_d = row[7]
+        return n_est <= 100 and max_d <= 5
+
+    # If the best row is not small, we search for the best row that IS small.
+    # Since we have already labeled 50 rows, we can evaluate the small ones 
+    # among the labeled set.
+    
+    # Re-evaluate all rows that were labeled during the choose process.
+    # Note: step07.choose populates the rows with goals.
+    
+    labeled_rows = [i for i, r in enumerate(rows) if r[0] != "?"]
+    
+    small_candidates = [i for i in labeled_rows if is_small(rows[i])]
+    
+    if small_candidates:
+        # Return the best small candidate
+        tbl = ezr.Tbl([header] + rows)
+        return min(small_candidates, key=lambda i: ezr.ydist(tbl, rows[i]))
+    
+    return best_idx
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    all_data = list(ezr.csv(filename))
+    header = all_data[0]
+    rows = all_data[1:]
+    
+    # Keep a copy of the original goals to simulate the oracle
+    original_goals = [[r[0], r[1], r[2]] for r in rows]
+    
+    # Mask the goals in the rows passed to choose()
+    for row in rows:
+        row[0] = row[1] = row[2] = "?"
+        
+    def mock_label(i):
+        return original_goals[i]
+    
+    best_idx = choose(header, rows, mock_label)
+    
+    print(f"Optimization complete. The recommended setup for nightly runs is at index: {best_idx}")
+    print("This setup balances high forecast accuracy with low computational complexity.")

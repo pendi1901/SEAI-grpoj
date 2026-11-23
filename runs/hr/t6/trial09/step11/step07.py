@@ -1,0 +1,84 @@
+import ezr
+import random
+
+def choose(header, rows, label):
+    """
+    Find the best working arrangement using a budget of 50 labels.
+    We use the 'acquire' strategy from ezr to intelligently sample 
+    the most informative rows.
+    """
+    # Create a table object to manage the data
+    tbl = ezr.Tbl([header] + rows)
+    
+    # The acquire function expects an oracle that takes a row and returns a row.
+    # Since the harness provides a label(i) function, we wrap it.
+    # We need to map the row back to its index to call the harness's label(i).
+    # We store the original index in the row object temporarily or use a lookup.
+    indexed_rows = []
+    for i, r in enumerate(rows):
+        # Create a copy and attach the index to it
+        new_r = list(r)
+        new_r.append(i) 
+        indexed_rows.append(new_r)
+    
+    # Update header for the internal table to handle the index column
+    new_header = header + ["_idx"]
+    tbl = ezr.Tbl([new_header] + indexed_rows)
+    
+    # Define the oracle that uses the harness's label function
+    def oracle(row):
+        idx = row[-1]
+        true_vals = label(idx)
+        # Update the row with true values
+        for i, val in enumerate(true_vals):
+            row[i] = val
+        return row
+
+    # Run acquisition
+    labeled_rows = ezr.acquire(tbl, cap=50, label=oracle)
+    
+    # Find the row with the best (lowest) ydist in the labeled set
+    # We use the labeled_rows to evaluate quality
+    lab_tbl = ezr.clone(tbl, labeled_rows)
+    best_row = min(labeled_rows, key=lambda r: ezr.ydist(lab_tbl, r))
+    
+    # Return the index stored in the last column
+    return int(best_row[-1])
+
+if __name__ == "__main__":
+    # Load data
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Prepare rows by masking the goal columns
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(("+", "-"))]
+    masked_rows = []
+    for row in rows:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_rows.append(new_row)
+        
+    # Define the oracle for the harness
+    labeled_count = 0
+    labeled_indices = set()
+    
+    def label_harness(i):
+        global labeled_count
+        if i not in labeled_indices:
+            labeled_count += 1
+            labeled_indices.add(i)
+        if labeled_count > 50:
+            raise Exception("Budget exceeded")
+        return rows[i]
+
+    # Run the selection
+    best_idx = choose(header, masked_rows, label_harness)
+    
+    print(f"Analysis complete. Best working arrangement found at index {best_idx}.")
+    print(f"This arrangement has 'YearsAtCompany+': {rows[best_idx][31]}")
+    print(f"This arrangement has 'YearsInCurrentRole+': {rows[best_idx][32]}")
+    
+    exit(0)

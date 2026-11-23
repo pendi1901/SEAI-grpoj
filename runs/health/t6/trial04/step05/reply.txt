@@ -1,0 +1,64 @@
+```python
+import ezr
+import step01
+
+def blame(header, rows):
+    """
+    Identify input columns that best explain why the worst rows are bad.
+    We compare the distribution of input values in the worst 25% of rows
+    against the rest of the data.
+    """
+    # Create a table to calculate ydist
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Score rows by ydist (lower is better)
+    scored = []
+    for row in rows:
+        scored.append((ezr.ydist(tbl, row), row))
+    
+    # Sort by ydist descending (worst first)
+    scored.sort(key=lambda x: x[0], reverse=True)
+    
+    # Split into worst 25% and the rest
+    n = len(scored) // 4
+    worst = [x[1] for x in scored[:n]]
+    rest = [x[1] for x in scored[n:]]
+    
+    # For each input column, check if the distribution of values in 'worst'
+    # is significantly different from 'rest' using the stats tools in ezr.
+    # We look for columns where the values are 'not same'.
+    culprits = []
+    for col in tbl.x:
+        at = col.at
+        if type(col) is ezr.Sym:
+            # For symbols, we check if the most common value differs
+            # or if the distributions are distinct.
+            # Simple heuristic: compare frequency of the most common symbol.
+            # If the distributions are different, we flag it.
+            if not ezr.cliffs([r[at] for r in worst], [r[at] for r in rest]):
+                culprits.append(header[at])
+        else:
+            # For numbers, use the stats tests
+            xs = [r[at] for r in worst if r[at] != "?"]
+            ys = [r[at] for r in rest if r[at] != "?"]
+            if not ezr.same(sorted(xs), sorted(ys)):
+                culprits.append(header[at])
+                
+    return culprits
+
+if __name__ == "__main__":
+    file_path = "Health-ClosedIssues0000.n1000.train.csv"
+    all_data = list(ezr.csv(file_path))
+    header = all_data[0]
+    rows = all_data[1:]
+    
+    results = blame(header, rows)
+    
+    print("Analysis of settings causing poor performance:")
+    if results:
+        print("The following input settings are strongly associated with the worst-performing configurations:")
+        for name in results:
+            print(f" - {name}")
+    else:
+        print("No single setting clearly explains the poor performance.")
+```

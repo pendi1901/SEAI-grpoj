@@ -1,0 +1,55 @@
+import csv
+import math
+
+def certify(xs, ys):
+    """
+    Returns True if the two distributions are statistically similar 
+    (i.e., the difference is likely noise), False if they differ.
+    Uses a simple A12 effect size check (non-parametric).
+    """
+    def a12(lst1, lst2):
+        m, n = len(lst1), len(lst2)
+        count = 0
+        for x in lst1:
+            for y in lst2:
+                if x > y: count += 1
+                elif x == y: count += 0.5
+        return count / (m * n)
+
+    # If A12 is close to 0.5, they are similar (True). 
+    # If it deviates significantly (e.g., < 0.3 or > 0.7), they differ (False).
+    effect = a12(xs, ys)
+    return 0.3 <= effect <= 0.7
+
+def get_data():
+    filename = "pom3a.n1000.train.csv"
+    with open(filename, mode='r', encoding='utf-8') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = [[float(val) for val in row] for row in reader]
+    return header, rows
+
+if __name__ == "__main__":
+    header, rows = get_data()
+    
+    # Identify indices
+    team_size_idx = header.index('Team Size')
+    cost_idx = header.index('Cost-')
+    
+    # Split into small and big teams (median split)
+    team_sizes = [r[team_size_idx] for r in rows]
+    median = sum(team_sizes) / len(team_sizes)
+    
+    small_teams = [r[cost_idx] for r in rows if r[team_size_idx] < median]
+    big_teams = [r[cost_idx] for r in rows if r[team_size_idx] >= median]
+    
+    is_same = certify(small_teams, big_teams)
+    
+    print(f"Analysis of Cost- by Team Size:")
+    print(f"Small team average cost: {sum(small_teams)/len(small_teams):.4f}")
+    print(f"Big team average cost: {sum(big_teams)/len(big_teams):.4f}")
+    
+    if is_same:
+        print("Conclusion: The difference is likely due to noise; the setups are statistically similar.")
+    else:
+        print("Conclusion: The difference is significant; small-team setups are genuinely cheaper.")

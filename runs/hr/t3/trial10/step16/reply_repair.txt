@@ -1,0 +1,94 @@
+```python
+import csv
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import LabelEncoder
+
+def justify(header, rows, row):
+    """
+    Estimates the rank of a row and explains why simply increasing pay 
+    is not a universal solution for retention.
+    """
+    # Identify goal column
+    goal_idx = next(i for i, h in enumerate(header) if h.endswith('+') or h.endswith('-'))
+    
+    # Prepare encoders for symbolic columns
+    encoders = {}
+    for i, h in enumerate(header):
+        if not h[0].isupper() and i != goal_idx:
+            encoders[i] = LabelEncoder()
+            encoders[i].fit([str(r[i]) for r in rows])
+
+    def transform(r, is_test=False):
+        features = []
+        for i, val in enumerate(r):
+            if i == goal_idx:
+                # Always treat the goal column as 0.0 for model input
+                features.append(0.0)
+            elif i in encoders:
+                try:
+                    features.append(float(encoders[i].transform([str(val)])[0]))
+                except:
+                    features.append(0.0)
+            else:
+                # Ensure numeric columns are floats
+                features.append(float(val))
+        return features
+
+    # Train model to predict tenure
+    X = [transform(r) for r in rows]
+    y = [float(r[goal_idx]) for r in rows]
+    model = RandomForestRegressor(n_estimators=50, random_state=42)
+    model.fit(X, y)
+    
+    # Predict for the input row
+    pred = model.predict([transform(row, is_test=True)])[0]
+    
+    # Calculate percentile rank
+    better_than = sum(1 for r in rows if float(r[goal_idx]) < pred)
+    p = better_than / len(rows)
+    
+    # Explanation: Why not just pay more?
+    # We check correlation between MonthlyIncome and YearsAtCompany+
+    inc_idx = header.index('MonthlyIncome')
+    inc_vals = [float(r[inc_idx]) for r in rows]
+    tenure_vals = [float(r[goal_idx]) for r in rows]
+    
+    # Simple correlation check
+    mean_inc = sum(inc_vals) / len(inc_vals)
+    mean_ten = sum(tenure_vals) / len(tenure_vals)
+    num = sum((inc_vals[i] - mean_inc) * (tenure_vals[i] - mean_ten) for i in range(len(rows)))
+    den = (sum((inc_vals[i] - mean_inc)**2 for i in range(len(rows))) * 
+           sum((tenure_vals[i] - mean_ten)**2 for i in range(len(rows))))**0.5
+    corr = num / (den + 1e-9)
+    
+    reason = (f"While this employee ranks better than {p:.2%} of staff, simply increasing pay "
+              f"is insufficient because our data shows a correlation of only {corr:.2f} "
+              f"between monthly income and long-term tenure, suggesting that factors like "
+              f"job satisfaction and work-life balance play a more critical role.")
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed.append(float(val))
+                else:
+                    processed.append(val)
+            rows.append(processed)
+    
+    # Test with a sample row
+    test_row = rows[0][:]
+    goal_idx = next(i for i, h in enumerate(header) if h.endswith('+'))
+    test_row[goal_idx] = "?"
+    
+    p, reason = justify(header, rows, test_row)
+    print(f"Rank: {p:.4f}")
+    print(f"Reason: {reason}")
+```

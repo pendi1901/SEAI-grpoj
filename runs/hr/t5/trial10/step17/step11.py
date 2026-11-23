@@ -1,0 +1,53 @@
+import ezr
+import random
+
+def remember(header, rows):
+    """
+    Finds the people most like the first employee in the dataset 
+    and reports their 'YearsAtCompany+' (index 31).
+    """
+    # Create a table to use ezr's distance functions
+    tbl = ezr.Tbl([header] + rows)
+    
+    # The target is the first employee
+    target = rows[0]
+    
+    # Calculate xdist for all rows (excluding the target itself)
+    # xdist measures similarity based on input columns
+    distances = []
+    for i in range(1, len(rows)):
+        d = ezr.xdist(tbl, target, rows[i])
+        distances.append((d, i))
+    
+    # Sort by distance (ascending) to find the most similar people
+    distances.sort(key=lambda x: x[0])
+    
+    # Return the top 5% of rows (or at least 1)
+    limit = max(1, len(rows) // 20)
+    return [idx for d, idx in distances[:limit]]
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Get the indices of the most similar employees
+    similar_indices = remember(header, rows)
+    
+    print("Analysis: People most similar to the first employee record.")
+    print(f"Target Employee (Index 0): Age={rows[0][0]}, JobRole={rows[0][15]}")
+    print("-" * 50)
+    
+    # YearsAtCompany+ is at index 31
+    years_idx = 31
+    
+    print(f"{'Index':<10} | {'Years at Company':<20}")
+    for idx in similar_indices:
+        print(f"{idx:<10} | {rows[idx][years_idx]:<20}")
+        
+    print("-" * 50)
+    avg_stay = sum(rows[i][years_idx] for i in similar_indices) / len(similar_indices)
+    print(f"Average stay for these similar employees: {avg_stay:.2f} years.")
+    
+    exit(0)

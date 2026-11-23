@@ -1,0 +1,71 @@
+```python
+import csv
+import pandas as pd
+from sklearn.ensemble import RandomForestRegressor
+
+def blame(header, rows):
+    """
+    Identifies the input columns that most strongly correlate with high costs.
+    The top 2 are returned as the ones that 'matter most'.
+    The columns not in the top 2 are those the customer can 'stop worrying about'.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    
+    # Identify input columns (not ending in - or +)
+    input_cols = [col for col in header if not (col.endswith('-') or col.endswith('+'))]
+    
+    # The customer asks about 'Cost-', which is a goal to minimize.
+    # We want to find what inputs correlate with high 'Cost-' values.
+    target = 'Cost-'
+    
+    # Train a regressor to predict 'Cost-' using input columns
+    # Feature importance will tell us which inputs drive the cost
+    X = df[input_cols]
+    y = df[target]
+    
+    model = RandomForestRegressor(n_estimators=50, random_state=42)
+    model.fit(X, y)
+    
+    # Get feature importances
+    importances = model.feature_importances_
+    
+    # Pair columns with their importance scores
+    feat_imp = sorted(zip(input_cols, importances), key=lambda x: x[1], reverse=True)
+    
+    # Return the top 2 columns that explain the variance in 'Cost-'
+    return [feat[0] for feat in feat_imp[:2]]
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                # Convert numeric columns to floats
+                processed_row = []
+                for val in row:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        important_factors = blame(header, rows)
+        
+        # Identify factors to stop worrying about
+        input_cols = [col for col in header if not (col.endswith('-') or col.endswith('+'))]
+        unimportant_factors = [col for col in input_cols if col not in important_factors]
+        
+        print("Customer Inquiry: Project Cost Drivers")
+        print("Based on our analysis of your project data:")
+        print(f"1. The factors that matter most to cost are: {', '.join(important_factors)}.")
+        print(f"2. You can safely stop worrying about: {', '.join(unimportant_factors)}.")
+        print("\nFocusing your management efforts on the top factors will yield the")
+        print("most significant impact on reducing project costs.")
+        
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        exit(1)
+```

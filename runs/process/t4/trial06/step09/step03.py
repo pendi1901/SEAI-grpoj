@@ -1,0 +1,49 @@
+import csv
+import pandas as pd
+import numpy as np
+from scipy import stats
+
+def certify(xs, ys):
+    """
+    Returns True if the difference between two distributions is statistically 
+    insignificant (p > 0.05), False otherwise.
+    """
+    # Use Welch's t-test (equal_var=False) to compare means
+    t_stat, p_value = stats.ttest_ind(xs, ys, equal_var=False)
+    
+    # If p > 0.05, we fail to reject the null hypothesis (they are the same)
+    return p_value > 0.05
+
+def analyze_teams(header, rows):
+    df = pd.DataFrame(rows, columns=header)
+    
+    # Define "small" vs "big" based on the median of 'Team Size'
+    median_team = df['Team Size'].median()
+    small_teams = df[df['Team Size'] <= median_team]['Cost-']
+    big_teams = df[df['Team Size'] > median_team]['Cost-']
+    
+    is_same = certify(small_teams.tolist(), big_teams.tolist())
+    
+    return is_same, small_teams.mean(), big_teams.mean()
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [[float(val) for val in row] for row in reader]
+        
+        is_same, small_avg, big_avg = analyze_teams(header, rows)
+        
+        print(f"Small team average cost: {small_avg:.4f}")
+        print(f"Big team average cost: {big_avg:.4f}")
+        
+        if is_same:
+            print("Conclusion: The difference is statistically insignificant. It was likely luck.")
+        else:
+            print("Conclusion: The difference is statistically significant. The trend is real.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

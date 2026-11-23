@@ -1,0 +1,88 @@
+```python
+import csv
+import random
+
+def choose(header, rows, label):
+    """
+    Finds the best arrangement for 'Laboratory Technician' staff by sampling 
+    up to 50 rows, labeling them, and picking the one that maximizes 
+    'YearsAtCompany+'.
+    """
+    # Identify goal indices and the specific goal we want to maximize
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    yac_idx = header.index('YearsAtCompany+')
+    job_role_idx = header.index('jobRole')
+    
+    # Filter rows to only consider 'Laboratory Technician'
+    lab_indices = [i for i, row in enumerate(rows) if row[job_role_idx] == 'Laboratory Technician']
+    
+    # If no lab staff found, return a safe default
+    if not lab_indices:
+        return 0
+    
+    # Sample up to 50 indices from the lab staff
+    sample_size = min(50, len(lab_indices))
+    sample_indices = random.sample(lab_indices, sample_size)
+    
+    best_idx = -1
+    max_yac = -1.0
+    
+    for i in sample_indices:
+        # Label the row to get the true goal values
+        true_goals = label(i)
+        
+        # Find the value of 'YearsAtCompany+' in the returned goals
+        yac_val = 0.0
+        for g_pos, col_idx in enumerate(goal_indices):
+            if col_idx == yac_idx:
+                yac_val = true_goals[g_pos]
+                break
+        
+        if yac_val > max_yac:
+            max_yac = yac_val
+            best_idx = i
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    # Prepare hidden rows
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    hidden_rows = [row[:] for row in rows]
+    for row in hidden_rows:
+        for g in goal_indices:
+            row[g] = "?"
+            
+    # Define the label function for the harness
+    labeled_count = 0
+    def label(i):
+        global labeled_count
+        labeled_count += 1
+        if labeled_count > 50:
+            raise Exception("Label limit exceeded")
+        return [rows[i][g] for g in goal_indices]
+    
+    best_idx = choose(header, hidden_rows, label)
+    
+    print(f"Best Laboratory Technician arrangement found at Row {best_idx}.")
+    print(f"Years at company: {rows[best_idx][header.index('YearsAtCompany+')]}")
+    print(f"Job Role: {rows[best_idx][header.index('jobRole')]}")
+```

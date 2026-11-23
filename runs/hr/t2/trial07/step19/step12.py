@@ -1,0 +1,72 @@
+import csv
+import step02
+import step03
+
+def guess(header, train, test):
+    """
+    Estimates 'YearsAtCompany+' for test rows.
+    To answer the customer's question about cutting overtime in Sales,
+    we simulate the effect by setting 'overTime' to 'No' for all test rows
+    and using the k-NN approach from step02.
+    """
+    # Create a modified test set where overTime is 'No'
+    idx_overtime = header.index('overTime')
+    modified_test = []
+    for row in test:
+        new_row = list(row)
+        new_row[idx_overtime] = 'No'
+        modified_test.append(new_row)
+    
+    # Use the k-NN logic from step02 to estimate the goal
+    return step02.guess(header, train, modified_test)
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Filter for Sales department
+    idx_dept = header.index('department')
+    sales_rows = [r for r in rows if r[idx_dept] == 'Sales']
+    
+    # Split into train and test
+    train_data = sales_rows[:int(len(sales_rows) * 0.8)]
+    test_data = sales_rows[int(len(sales_rows) * 0.8):]
+    
+    # Mask goals
+    goal_indices = [i for i, h in enumerate(header) if '+' in h or '-' in h]
+    masked_test = []
+    for row in test_data:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_test.append(new_row)
+
+    # Get estimates if overtime were cut to 'No'
+    estimates = guess(header, train_data, masked_test)
+    
+    # Compare with current average tenure in Sales
+    idx_years = header.index('YearsAtCompany+')
+    current_avg = sum(r[idx_years] for r in sales_rows) / len(sales_rows)
+    projected_avg = sum(estimates) / len(estimates)
+    
+    print("Impact Analysis: Cutting overtime in Sales")
+    print(f"Current average tenure: {current_avg:.2f} years")
+    print(f"Projected average tenure (if overtime is removed): {projected_avg:.2f} years")
+    
+    # Use step03 to check if the difference is significant
+    is_noise = step03.certify([r[idx_years] for r in sales_rows], estimates)
+    if is_noise:
+        print("Result: The projected change in tenure is likely statistically insignificant.")
+    else:
+        print("Result: There is a projected significant change in tenure.")

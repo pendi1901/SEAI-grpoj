@@ -1,0 +1,67 @@
+```python
+import csv
+import math
+
+def certify(xs, ys):
+    """
+    Returns True if the difference between two distributions is likely noise,
+    False if they are statistically distinct. Uses a simple A12 effect size test.
+    """
+    def a12(lst1, lst2):
+        m, n = len(lst1), len(lst2)
+        count = 0
+        for x in lst1:
+            for y in lst2:
+                if x > y: count += 1
+                elif x == y: count += 0.5
+        return count / (m * n)
+
+    # A12 threshold: 0.56 is a small effect size, 0.64 medium, 0.71 large.
+    # If A12 is close to 0.5, they are likely the same (noise).
+    score = a12(xs, ys)
+    return 0.44 <= score <= 0.56
+
+def analyze_size_vs_accuracy(header, rows):
+    """
+    Compares the accuracy (ACC+) of 'big' setups vs 'small' setups.
+    'Big' is defined as N_estimators > median.
+    """
+    acc_idx = header.index('ACC+')
+    n_idx = header.index('N_estimators')
+    
+    vals = [r[n_idx] for r in rows]
+    median = sorted(vals)[len(vals) // 2]
+    
+    big = [r[acc_idx] for r in rows if r[n_idx] > median]
+    small = [r[acc_idx] for r in rows if r[n_idx] <= median]
+    
+    is_noise = certify(big, small)
+    
+    print(f"Analysis: Comparing ACC+ for {len(big)} big setups vs {len(small)} small setups.")
+    if is_noise:
+        print("Result: The difference is likely just noise.")
+    else:
+        print("Result: The difference is statistically significant.")
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            for row in reader:
+                processed_row = []
+                for i, val in enumerate(row):
+                    if header[i] in ['MRE-', 'ACC+', 'PRED40+', 'N_estimators', 
+                                     'Min_sample_leaves', 'Min_impurity_decrease', 'Max_depth']:
+                        processed_row.append(float(val))
+                    else:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        analyze_size_vs_accuracy(header, rows)
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
+```

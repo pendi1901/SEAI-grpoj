@@ -1,0 +1,52 @@
+import ezr
+import step01
+
+def remember(header, rows):
+    """
+    Find the past rows most similar to the current configuration.
+    We use the distance from the centroid of the data to find 
+    the most representative/similar rows.
+    """
+    # Create a table to calculate column statistics
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate the centroid (mids) of the data
+    centroid = ezr.mids(tbl)
+    
+    # Calculate the distance of each row from the centroid
+    # We want rows that are "most like" the typical configuration
+    # (i.e., smallest xdist)
+    scores = []
+    for i, row in enumerate(rows):
+        d = ezr.xdist(tbl, row, centroid)
+        scores.append((d, i))
+    
+    # Sort by distance ascending (most similar first)
+    scores.sort(key=lambda x: x[0])
+    
+    # Return the indices of the top 5% most similar rows
+    limit = max(1, len(rows) // 20)
+    return [item[1] for item in scores[:limit]]
+
+if __name__ == "__main__":
+    # Load the data
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Identify similar rows
+    similar_indices = remember(header, rows)
+    
+    print(f"Analysis: Found {len(similar_indices)} past configurations most similar to the current setup.")
+    print("Indices of the most similar past rows:")
+    print(similar_indices)
+    
+    if similar_indices:
+        print("\nSample of similar past rows and their outcomes (Cost-, Score-, Idle-):")
+        for i in similar_indices[:3]:
+            row = rows[i]
+            # Goals are at indices 9, 10, 11
+            print(f"Row {i}: Goals={row[9:12]}")
+    
+    exit(0)

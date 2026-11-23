@@ -1,0 +1,80 @@
+import ezr
+import random
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column for test rows by simulating a 
+    'no overtime' policy across the 'Sales' department.
+    """
+    # Identify indices
+    goal_indices = [i for i, name in enumerate(header) if name[-1] in "+-"]
+    first_goal_idx = goal_indices[0]
+    dept_idx = header.index("department")
+    overtime_idx = header.index("overTime")
+    
+    # Filter training data: only keep rows where department is Sales
+    # and overtime is 'No' to learn the behavior of that specific group.
+    sales_no_ot = [r for r in train if r[dept_idx] == "Sales" and r[overtime_idx] == "No"]
+    
+    # If we don't have enough specific data, fall back to all training data
+    if len(sales_no_ot) < 10:
+        training_set = train
+    else:
+        training_set = sales_no_ot
+        
+    # Build a tree on the relevant training data
+    tbl = ezr.Tbl([header] + training_set)
+    root = ezr.tree(tbl, tbl.rows)
+    
+    results = []
+    for row in test:
+        # Create a copy and apply the 'no overtime' policy
+        modified_row = list(row)
+        if modified_row[dept_idx] == "Sales":
+            modified_row[overtime_idx] = "No"
+            
+        # Walk the tree to find the leaf
+        node = ezr.leaf(root, modified_row)
+        
+        # Estimate based on the mean of the first goal in that leaf
+        vals = [r[first_goal_idx] for r in node.rows if r[first_goal_idx] != "?"]
+        if vals:
+            results.append(sum(vals) / len(vals))
+        else:
+            # Fallback to global mean of the training set
+            all_vals = [r[first_goal_idx] for r in training_set if r[first_goal_idx] != "?"]
+            results.append(sum(all_vals) / len(all_vals) if all_vals else 0.0)
+            
+    return results
+
+if __name__ == "__main__":
+    # Load data
+    data = list(ezr.csv("WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"))
+    header = data[0]
+    all_rows = data[1:]
+    
+    # Split into train (80%) and test (20%)
+    random.seed(1234567891)
+    random.shuffle(all_rows)
+    n = int(len(all_rows) * 0.8)
+    train = all_rows[:n]
+    test_full = all_rows[n:]
+    
+    # Mask the goals in the test set
+    goal_indices = [i for i, name in enumerate(header) if name[-1] in "+-"]
+    test_masked = []
+    for row in test_full:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        test_masked.append(new_row)
+        
+    # Get estimates
+    estimates = guess(header, train, test_masked)
+    
+    # Print summary
+    print("Analysis: Impact of cutting overtime in Sales on tenure (YearsAtCompany+).")
+    print(f"Estimated average tenure after policy change: {sum(estimates)/len(estimates):.2f} years.")
+    print("The model suggests that enforcing 'No Overtime' in Sales shifts the expected retention.")
+    
+    exit(0)

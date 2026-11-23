@@ -1,0 +1,78 @@
+```python
+import csv
+
+def spot(header, rows):
+    """
+    Identifies rows containing input values that are 'far outside' 
+    the observed distribution (outliers).
+    
+    We calculate the range [min, max] for each numeric input column 
+    and the set of unique values for each symbolic column.
+    A row is suspicious if it contains a value outside these bounds.
+    """
+    input_indices = [i for i, name in enumerate(header) if not name.endswith(('-', '+'))]
+    
+    # Build profiles of what we have seen
+    numeric_bounds = {}
+    symbolic_sets = {}
+    
+    for i in input_indices:
+        col_vals = [row[i] for row in rows if row[i] != "?"]
+        if header[i][0].isupper():
+            numeric_bounds[i] = (min(col_vals), max(col_vals))
+        else:
+            symbolic_sets[i] = set(col_vals)
+            
+    # Score rows: count how many inputs are 'out of bounds'
+    # A row with more out-of-bounds values is more suspicious.
+    suspicion_scores = []
+    for idx, row in enumerate(rows):
+        score = 0
+        for i in input_indices:
+            val = row[i]
+            if val == "?":
+                continue
+            
+            if i in numeric_bounds:
+                low, high = numeric_bounds[i]
+                if val < low or val > high:
+                    score += 1
+            elif i in symbolic_sets:
+                if val not in symbolic_sets[i]:
+                    score += 1
+        
+        if score > 0:
+            suspicion_scores.append((score, idx))
+            
+    # Sort by score descending (most suspicious first)
+    suspicion_scores.sort(key=lambda x: x[0], reverse=True)
+    
+    return [item[1] for item in suspicion_scores]
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    suspicious_indices = spot(header, rows)
+    
+    if not suspicious_indices:
+        print("No suspicious rows found; all inputs are within observed ranges.")
+    else:
+        print(f"Found {len(suspicious_indices)} rows with values outside the observed range.")
+        print("The most suspicious rows (by index) are:")
+        for idx in suspicious_indices[:10]:
+            print(f"- Row {idx}")
+    
+    exit(0)
+```

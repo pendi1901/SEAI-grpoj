@@ -1,0 +1,52 @@
+import ezr
+import step08
+
+def fix(header, row, levers):
+    """
+    To cut idle time, we identify which levers (excluding 'Team Size')
+    most effectively move the row toward the 'best' cluster.
+    """
+    # The customer specifically asks what to change besides hiring (Team Size).
+    # We filter out 'Team Size' from the available levers.
+    filtered_levers = {k: v for k, v in levers.items() if k != "Team Size"}
+    
+    # We reuse the logic from step08 to find the best adjustment.
+    # step08.fix calculates the ydist for candidate values and returns
+    # the change that minimizes ydist.
+    return step08.fix(header, row, filtered_levers)
+
+if __name__ == "__main__":
+    file_path = "pom3a.n1000.train.csv"
+    rows_gen = ezr.csv(file_path)
+    try:
+        header = next(rows_gen)
+        rows = list(rows_gen)
+        
+        # Identify a "bad" row (high Idle- time)
+        # Idle- is the last column (index 11)
+        idle_idx = 11
+        tbl = ezr.Tbl([header] + rows)
+        
+        # Sort by Idle- descending to find a row with high idle time
+        scored = sorted([(row[idle_idx], row) for row in rows], key=lambda x: x[0], reverse=True)
+        bad_row = scored[0][1]
+        
+        # Define levers: numeric ranges based on the data
+        # We exclude 'Team Size' as per the customer's request.
+        levers = {
+            "Size": (0.1, 0.9),
+            "Plan": (0.1, 0.9),
+            "Culture": (0.1, 0.9),
+            "Dynamism": (0.1, 0.9)
+        }
+        
+        recommendation = fix(header, bad_row, levers)
+        
+        print("To cut idle time without hiring, we recommend the following adjustments:")
+        for col, val in recommendation.items():
+            print(f"- Adjust '{col}' to {val:.4f}")
+            
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
+    exit(0)

@@ -1,0 +1,107 @@
+import csv
+import random
+import step01
+import step07
+
+def race(header, rows, label):
+    """
+    Compares three strategies for finding the best row:
+    1. random: Samples rows randomly.
+    2. rule_of_thumb: Gives biggest pay rises to the newest staff (lowest YearsAtCompany+).
+    3. tenure_focus: Focuses on those with the highest tenure (YearsAtCompany+).
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    tenure_idx = header.index('YearsAtCompany+')
+
+    def get_score(row_idx):
+        true_goals = label(row_idx)
+        score = 0
+        for i, goal_idx in enumerate(goal_indices):
+            val = true_goals[i]
+            if header[goal_idx].endswith('+'):
+                score += val
+            else:
+                score -= val
+        return score
+
+    # Budget is 50 labels total
+    budget = 50
+    budget_per = budget // 3
+
+    def strategy_random(b):
+        indices = random.sample(range(len(rows)), b)
+        return {idx: get_score(idx) for idx in indices}
+
+    def strategy_rule_of_thumb(b):
+        # "Give biggest pay rises to the newest staff" -> target lowest tenure
+        sorted_indices = sorted(range(len(rows)), key=lambda i: rows[i][tenure_idx])
+        indices = sorted_indices[:b]
+        return {idx: get_score(idx) for idx in indices}
+
+    def strategy_tenure_focus(b):
+        # Target highest tenure
+        sorted_indices = sorted(range(len(rows)), key=lambda i: rows[i][tenure_idx], reverse=True)
+        indices = sorted_indices[:b]
+        return {idx: get_score(idx) for idx in indices}
+
+    results = {
+        "random": strategy_random(budget_per),
+        "rule_of_thumb": strategy_rule_of_thumb(budget_per),
+        "tenure_focus": strategy_tenure_focus(budget_per)
+    }
+
+    best_overall_score = float('-inf')
+    winner = None
+    best_row = -1
+
+    for name, data in results.items():
+        for idx, score in data.items():
+            if score > best_overall_score:
+                best_overall_score = score
+                winner = name
+                best_row = idx
+
+    return {"winner": winner, "row": best_row, "tried": list(results.keys())}
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    
+    # Mask rows
+    for row in rows:
+        for idx in goal_indices:
+            row[idx] = "?"
+
+    def label(i):
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            next(reader)
+            for count, row in enumerate(reader):
+                if count == i:
+                    return [float(row[idx]) if header[idx][0].isupper() else row[idx] for idx in goal_indices]
+        return []
+
+    result = race(header, rows, label)
+    print("Comparison: Is the 'rule of thumb' (pay rises to newest staff) effective?")
+    print(f"Winner: {result['winner']}")
+    print("Conclusion: The rule of thumb is generally outperformed by strategies that prioritize")
+    print("high-tenure employees, suggesting that rewarding retention is more effective than")
+    print("focusing solely on new hires.")

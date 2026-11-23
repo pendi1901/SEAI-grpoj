@@ -1,0 +1,72 @@
+```python
+import ezr
+import random
+
+def certify(xs, ys):
+    """
+    Returns True if xs and ys are statistically indistinguishable,
+    False if they really differ.
+    """
+    # Use the stats functions from ezr to check for differences.
+    # same() checks cliffs delta and KS test, and optionally Cohen's d.
+    # We use a standard effect size threshold (0.35) for Cohen's d.
+    return ezr.same(xs, ys, eps=0.35)
+
+def compare_rules(header, rows):
+    """
+    Compare the two built-in rules:
+    1. The default tree-based ranker (ezr.ranker).
+    2. The 'wins' rule (ezr.wins).
+    We compare the distribution of ydist for rows identified as 'best'
+    by each rule.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Rule 1: Tree-based ranker
+    # Rule 2: Wins-based ranker
+    ranker_tree = ezr.ranker(tbl)
+    ranker_wins = ezr.wins(tbl)
+    
+    # Get scores for all rows
+    scores_tree = [ranker_tree(r) for r in rows]
+    scores_wins = [ranker_wins(r) for r in rows]
+    
+    # Identify the top 10% of rows according to each rule
+    def get_top_rows(scores):
+        indexed = sorted(enumerate(scores), key=lambda x: x[1], reverse=True)
+        top_indices = [i for i, _ in indexed[:len(rows)//10]]
+        return [ezr.ydist(tbl, rows[i]) for i in top_indices]
+    
+    dist_tree = get_top_rows(scores_tree)
+    dist_wins = get_top_rows(scores_wins)
+    
+    return dist_tree, dist_wins
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    try:
+        data = list(ezr.csv(filename))
+        header = data[0]
+        rows = data[1:]
+        
+        dist_tree, dist_wins = compare_rules(header, rows)
+        
+        is_same = certify(dist_tree, dist_wins)
+        
+        print("Analysis: Comparing the 'tree' ranker vs the 'wins' ranker.")
+        print(f"Mean ydist (Tree): {sum(dist_tree)/len(dist_tree):.4f}")
+        print(f"Mean ydist (Wins): {sum(dist_wins)/len(dist_wins):.4f}")
+        
+        if is_same:
+            print("\nConclusion: The difference is not statistically significant.")
+            print("You can stop arguing about it; the choice of rule makes no real difference.")
+        else:
+            print("\nConclusion: The difference is statistically significant.")
+            print("The choice of rule does matter for your results.")
+            
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
+    
+    exit(0)
+```

@@ -1,0 +1,73 @@
+```python
+import csv
+import step01
+
+def blame(header, rows):
+    """
+    Identifies input columns that correlate with 'bad' outcomes (low tenure).
+    'Bad' is defined as the bottom 20% of rows based on the sum of goal columns.
+    We return the names of the input columns that have the highest correlation
+    with being in the 'bad' group.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    input_indices = [i for i, name in enumerate(header) if not (name.endswith('+') or name.endswith('-'))]
+
+    # Calculate score for each row (higher is better)
+    def get_score(r):
+        score = 0
+        for i in goal_indices:
+            val = r[i]
+            if header[i].endswith('+'):
+                score += val
+            else:
+                score -= val
+        return score
+
+    # Sort rows by score and pick bottom 20%
+    scored_rows = sorted([(get_score(r), r) for r in rows], key=lambda x: x[0])
+    limit = max(1, int(len(rows) * 0.2))
+    bad_rows = [x[1] for x in scored_rows[:limit]]
+    
+    # For each input column, calculate the frequency of values in bad_rows
+    # vs the whole dataset to find 'blame' (over-representation in bad group)
+    blame_scores = []
+    for i in input_indices:
+        col_name = header[i]
+        # Count values in bad rows
+        bad_counts = {}
+        for r in bad_rows:
+            val = r[i]
+            bad_counts[val] = bad_counts.get(val, 0) + 1
+        
+        # Find the value most associated with bad rows
+        max_freq = 0
+        for val, count in bad_counts.items():
+            # Simple heuristic: frequency in bad group
+            max_freq = max(max_freq, count)
+        
+        blame_scores.append((max_freq, col_name))
+    
+    # Return top 3 columns that correlate with short stays
+    blame_scores.sort(key=lambda x: x[0], reverse=True)
+    return [item[1] for item in blame_scores[:3]]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    results = blame(header, rows)
+    print("Factors contributing to short employee tenure:")
+    for factor in results:
+        print(f"- {factor}")
+```

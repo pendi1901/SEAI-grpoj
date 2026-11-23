@@ -1,0 +1,68 @@
+import csv
+
+def certify(xs, ys):
+    """
+    Performs a simple two-sample t-test (Welch's) to determine if two 
+    distributions are significantly different. Returns True if they are 
+    statistically similar (p > 0.05), False if they differ significantly.
+    """
+    n1, n2 = len(xs), len(ys)
+    if n1 < 2 or n2 < 2:
+        return True
+    
+    m1, m2 = sum(xs) / n1, sum(ys) / n2
+    v1 = sum((x - m1) ** 2 for x in xs) / (n1 - 1)
+    v2 = sum((y - m2) ** 2 for y in ys) / (n2 - 1)
+    
+    # Standard error
+    se = ((v1 / n1) + (v2 / n2)) ** 0.5
+    if se == 0:
+        return m1 == m2
+    
+    t_stat = abs(m1 - m2) / se
+    # For large samples, t-distribution approaches normal. 
+    # Critical value for 95% confidence is ~1.96.
+    return t_stat < 1.96
+
+def analyze_training_impact(header, rows):
+    """
+    Compares 'YearsWithCurrManager+' for employees with high training 
+    vs low training.
+    """
+    idx_train = header.index('TrainingTimesLastYear')
+    idx_mgr = header.index('YearsWithCurrManager+')
+    
+    # Split into two groups based on median training days
+    all_training = [r[idx_train] for r in rows]
+    median_train = sorted(all_training)[len(all_training) // 2]
+    
+    high_training = [r[idx_mgr] for r in rows if r[idx_train] > median_train]
+    low_training = [r[idx_mgr] for r in rows if r[idx_train] <= median_train]
+    
+    is_similar = certify(high_training, low_training)
+    
+    print("Analysis: Do people with more training stay longer with their manager?")
+    print(f"Average years with manager (High Training > {median_train}): {sum(high_training)/len(high_training):.2f}")
+    print(f"Average years with manager (Low Training <= {median_train}): {sum(low_training)/len(low_training):.2f}")
+    
+    if not is_similar:
+        print("Result: The difference is statistically significant. Training appears to correlate with tenure with the manager.")
+    else:
+        print("Result: The difference is not statistically significant. The observation is likely noise.")
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    analyze_training_impact(header, rows)

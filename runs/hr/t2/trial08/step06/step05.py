@@ -1,0 +1,67 @@
+import csv
+import step01
+
+def blame(header, rows):
+    """
+    Identifies input columns that correlate with the worst-performing rows
+    (those with the lowest 'YearsAtCompany+').
+    """
+    goal_col = "YearsAtCompany+"
+    goal_idx = header.index(goal_col)
+    
+    # Sort rows by goal (ascending) to find the "worst" (shortest tenure)
+    sorted_rows = sorted(rows, key=lambda r: r[goal_idx])
+    
+    # Focus on the bottom 10% (short stays)
+    limit = max(1, len(rows) // 10)
+    worst_rows = sorted_rows[:limit]
+    
+    # Identify input columns (exclude goals and IDs)
+    input_cols = []
+    for i, name in enumerate(header):
+        if not (name.endswith('+') or name.endswith('-') or 'Number' in name):
+            input_cols.append((i, name))
+            
+    # Simple heuristic: find columns where the worst rows have a distinct 
+    # distribution compared to the whole dataset.
+    # For symbolic, we look for the most frequent value in the worst rows.
+    # For numeric, we look for the lowest average.
+    
+    scores = []
+    for idx, name in input_cols:
+        vals = [r[idx] for r in worst_rows]
+        if isinstance(vals[0], (int, float)):
+            avg = sum(vals) / len(vals)
+            scores.append((avg, name))
+        else:
+            # For symbolic, count frequency of the most common value
+            most_common = max(set(vals), key=vals.count)
+            # Score based on how dominant this value is in the worst group
+            freq = vals.count(most_common) / len(vals)
+            scores.append((1.0 - freq, name)) # Lower score is "more explanatory"
+            
+    scores.sort()
+    return [s[1] for s in scores[:3]]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    reasons = blame(header, rows)
+    print("Factors explaining short stays (lowest tenure):")
+    for reason in reasons:
+        print(f"- {reason}")

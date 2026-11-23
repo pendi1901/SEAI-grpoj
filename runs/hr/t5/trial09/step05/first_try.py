@@ -1,0 +1,58 @@
+import ezr
+import random
+
+def blame(header, rows):
+    """
+    Identifies input columns that correlate with 'bad' outcomes.
+    'Bad' is defined as the bottom 25% of rows based on ydist.
+    We compare the distribution of input values in these 'bad' rows
+    against the rest of the population using a simple heuristic:
+    the difference in the mean (for numbers) or mode (for symbols).
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Sort rows by ydist (ascending: best to worst)
+    # Worst rows are at the end
+    sorted_rows = sorted(rows, key=lambda r: ezr.ydist(tbl, r))
+    n = len(sorted_rows)
+    worst = sorted_rows[int(0.75 * n):]
+    rest = sorted_rows[:int(0.75 * n)]
+    
+    # Identify input columns (not goals)
+    # Input columns are those not ending in +, -, or !
+    input_cols = [c for c in tbl.x]
+    
+    scores = []
+    for col in input_cols:
+        # Calculate a simple "badness" score for the column
+        # For symbols: difference in frequency of the most common value
+        # For numbers: difference in mean
+        if isinstance(col, ezr.Sym):
+            w_counts = {v: worst.count(v) for v in set(r[col.at] for r in worst)}
+            r_counts = {v: rest.count(v) for v in set(r[col.at] for r in rest)}
+            # Heuristic: how much more common is the mode in 'worst' vs 'rest'
+            score = abs(ezr.mid(ezr.adds([r[col.at] for r in worst])) == ezr.mid(ezr.adds([r[col.at] for r in rest])))
+            scores.append((1 - score, col.txt))
+        else:
+            w_mu = sum(r[col.at] for r in worst if r[col.at] != "?") / len(worst)
+            r_mu = sum(r[col.at] for r in rest if r[col.at] != "?") / len(rest)
+            scores.append((abs(w_mu - r_mu), col.txt))
+            
+    # Return top 3 columns that best explain the badness
+    scores.sort(key=lambda x: x[0], reverse=True)
+    return [s[1] for s in scores[:3]]
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    results = blame(header, rows)
+    
+    print("Analysis: What factors contribute to short stays (worst performing rows)?")
+    print("The following input columns show the strongest correlation with poor retention metrics:")
+    for i, name in enumerate(results, 1):
+        print(f"{i}. {name}")
+    
+    print("\nThese factors are the primary drivers identified by comparing the worst 25% of employees against the rest.")

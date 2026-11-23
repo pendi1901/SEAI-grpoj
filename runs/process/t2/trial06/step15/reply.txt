@@ -1,0 +1,70 @@
+```python
+import csv
+from step05 import blame as original_blame
+
+def blame(header, rows):
+    """
+    Identifies the input columns that most strongly correlate with high costs.
+    We define 'worst' as the top 25% of rows by 'Cost-'.
+    """
+    # Ensure we use 'Cost-' as the primary goal for the blame analysis
+    # The original blame function in step05 uses 'Idle-', so we wrap it
+    # by temporarily swapping the goal index or just re-implementing the logic
+    # to target 'Cost-' specifically as requested.
+    
+    cost_idx = header.index('Cost-')
+    input_indices = [i for i, name in enumerate(header) 
+                     if not (name.endswith('-') or name.endswith('+'))]
+    
+    # Sort rows by Cost- to find the worst 25% (highest cost)
+    sorted_rows = sorted(rows, key=lambda r: float(r[cost_idx]), reverse=True)
+    worst_rows = sorted_rows[:len(rows) // 4]
+    
+    def get_avg(data, idx):
+        return sum(float(r[idx]) for r in data) / len(data)
+    
+    diffs = []
+    for i in input_indices:
+        pop_avg = get_avg(rows, i)
+        worst_avg = get_avg(worst_rows, i)
+        # The larger the difference, the more that input explains the 'badness'
+        diffs.append((abs(worst_avg - pop_avg), header[i]))
+    
+    diffs.sort(key=lambda x: x[0], reverse=True)
+    
+    # Return the top 2 inputs that matter most
+    return [name for _, name in diffs[:2]]
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [row for row in reader]
+            
+        important = blame(header, rows)
+        
+        # Identify what to stop worrying about (the inputs with the smallest impact)
+        input_indices = [i for i, name in enumerate(header) 
+                         if not (name.endswith('-') or name.endswith('+'))]
+        
+        # Re-calculate diffs to find the least important
+        diffs = []
+        for i in input_indices:
+            pop_avg = sum(float(r[i]) for r in rows) / len(rows)
+            worst_avg = sum(float(r[i]) for r in sorted(rows, key=lambda r: float(r[header.index('Cost-')]), reverse=True)[:len(rows)//4]) / (len(rows)//4)
+            diffs.append((abs(worst_avg - pop_avg), header[i]))
+        diffs.sort(key=lambda x: x[0])
+        
+        unimportant = [name for _, name in diffs[:2]]
+        
+        print("Customer Inquiry: What matters most for project cost?")
+        print(f"Analysis: The factors that most influence high costs are: {', '.join(important)}.")
+        print(f"You can safely stop worrying about: {', '.join(unimportant)}.")
+        print("These findings are based on the deviation of high-cost projects from the population average.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

@@ -1,0 +1,58 @@
+import ezr
+import random
+
+def choose(header, rows, label):
+    """
+    Find the best row by using the acquire function from ezr.
+    We are allowed 50 labels. We use the acquire logic which
+    intelligently samples rows to find the best configuration.
+    """
+    # Create a table object. The rows currently have '?' in goal columns.
+    # We need to wrap the label function to handle the row indexing.
+    tbl = ezr.Tbl([header] + rows)
+    
+    # The acquire function takes a TBL and an ORACLE.
+    # Our label function is an ORACLE that takes a row and returns the full row.
+    # We need to map the index-based label function to the row-based oracle.
+    def oracle_wrapper(row):
+        # Find the index of this row in the original list to call label(i)
+        # Since rows are passed by reference, we can find the index.
+        idx = rows.index(row)
+        return label(idx)
+
+    # Use ezr.acquire to perform the search.
+    # It will label up to the.Stop (default 50) rows.
+    labeled_rows = ezr.acquire(tbl, cap=50, label=oracle_wrapper)
+    
+    # After labeling, find the best row among the labeled ones.
+    # We use the full table (with labeled data) to calculate ydist.
+    best_row = min(labeled_rows, key=lambda r: ezr.ydist(tbl, r))
+    
+    return rows.index(best_row)
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Mask the goals for the simulation
+    masked_rows = []
+    for row in rows:
+        masked_rows.append([
+            "?" if (name.endswith("-") or name.endswith("+")) else val
+            for name, val in zip(header, row)
+        ])
+    
+    # Define the label function for the harness
+    def label(i):
+        return rows[i]
+    
+    # Run the selection
+    best_idx = choose(header, masked_rows, label)
+    
+    print(f"Optimization complete.")
+    print(f"Best setup found at index: {best_idx}")
+    print(f"Best setup values: {rows[best_idx]}")
+    
+    exit(0)

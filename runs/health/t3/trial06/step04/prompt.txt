@@ -1,0 +1,254 @@
+You are writing one Python file, step04.py.
+
+The data is the csv file Health-ClosedIssues0000.n1000.train.csv in the current directory. Column names starting in upper case are numeric, lower case are symbolic. A name ending in - is a goal to minimise, in + a goal to maximise; all other columns are inputs. It has 800 data rows after the header. Any count the customer quotes describes their full records, not this file: never hard-code a row count, read the file to the end. Its first lines:
+
+MRE-,ACC+,PRED40+,N_estimators,criterion,Min_sample_leaves,Min_impurity_decrease,Max_depth
+0.883063328,0.40756167894905476,0,180,absolute_error,11,9.75,11
+0.26612665684830633,0.681512336,0.5714285714285714,110,squared_error,2,2,2
+0.23902798232695144,0.6843960269144505,0.8571428571428571,120,squared_error,2,7.75,7
+
+Your function receives rows already parsed. The header and the first two rows look like this in Python:
+
+header = ['MRE-', 'ACC+', 'PRED40+', 'N_estimators', 'criterion', 'Min_sample_leaves', 'Min_impurity_decrease', 'Max_depth']
+row = [0.883063328, 0.40756167894905476, 0.0, 180.0, 'absolute_error', 11.0, 9.75, 11.0]
+row = [0.26612665684830633, 0.681512336, 0.5714285714285714, 110.0, 'squared_error', 2.0, 2.0, 2.0]
+
+These columns hold text, not numbers: criterion (absolute_error, poisson, squared_error).
+
+You may use scikit-learn, numpy and pandas.
+
+These files, written earlier, are in the same directory:
+
+--- step01.py ---
+import csv
+
+def remember(header, rows):
+    """
+    Identifies rows that are 'unusually trustworthy' by finding the Pareto frontier
+    or high-performing candidates based on the goals.
+    Goals: MRE- (minimize), ACC+ (maximize), PRED40+ (maximize).
+    """
+    # Identify column indices
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+
+    # Normalize scores to a 0-1 range to compare them
+    # Since we want low MRE, high ACC, high PRED, we define a utility score
+    # Utility = (1 - MRE_norm) + ACC_norm + PRED_norm
+    
+    mre_vals = [r[mre_idx] for r in rows]
+    acc_vals = [r[acc_idx] for r in rows]
+    pred_vals = [r[pred_idx] for r in rows]
+    
+    min_mre, max_mre = min(mre_vals), max(mre_vals)
+    min_acc, max_acc = min(acc_vals), max(acc_vals)
+    min_pred, max_pred = min(pred_vals), max(pred_vals)
+    
+    def norm(val, mi, ma):
+        return (val - mi) / (ma - mi) if ma > mi else 0
+
+    scores = []
+    for i, row in enumerate(rows):
+        s = (1 - norm(row[mre_idx], min_mre, max_mre)) + \
+            norm(row[acc_idx], min_acc, max_acc) + \
+            norm(row[pred_idx], min_pred, max_pred)
+        scores.append((s, i))
+    
+    # Sort by score descending
+    scores.sort(key=lambda x: x[0], reverse=True)
+    
+    # Return top 5% (800 rows * 0.05 = 40)
+    limit = max(1, int(len(rows) * 0.05))
+    return [item[1] for item in scores[:limit]]
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for line in reader:
+            # Convert numeric columns to float, keep symbolic as strings
+            processed_row = []
+            for i, val in enumerate(line):
+                if header[i] in ['criterion']:
+                    processed_row.append(val)
+                else:
+                    processed_row.append(float(val))
+            rows.append(processed_row)
+    
+    best_indices = remember(header, rows)
+    
+    print(f"Analysis complete. Found {len(best_indices)} trustworthy setups.")
+    print("Top indices:", best_indices[:10], "...")
+    
+    # Print details of the top 3
+    for idx in best_indices[:3]:
+        print(f"Row {idx}: MRE={rows[idx][0]:.4f}, ACC={rows[idx][1]:.4f}, PRED40={rows[idx][2]:.4f}")
+
+
+--- step02.py ---
+import csv
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import LabelEncoder
+
+def guess(header, train, test):
+    """
+    Predicts the first goal column (MRE-) for test rows using a Random Forest.
+    """
+    # Identify goal column (first column is MRE-)
+    goal_idx = 0
+    
+    # Prepare training data
+    # Convert symbolic columns to numeric for scikit-learn
+    def prepare_data(data):
+        X = []
+        y = []
+        for row in data:
+            # Features: everything except goals (all columns except first 3)
+            # Note: The prompt implies goals are the first 3 columns
+            features = []
+            for i, val in enumerate(row):
+                if i >= 3:  # Skip MRE-, ACC+, PRED40+
+                    if isinstance(val, str):
+                        # Simple label encoding for symbolic columns
+                        features.append(hash(val) % 1000)
+                    else:
+                        features.append(val)
+            X.append(features)
+            if len(row) > 3:
+                y.append(row[goal_idx])
+        return X, y
+
+    X_train, y_train = prepare_data(train)
+    
+    # Prepare test data
+    X_test = []
+    for row in test:
+        features = []
+        for i, val in enumerate(row):
+            if i >= 3:
+                if isinstance(val, str):
+                    features.append(hash(val) % 1000)
+                else:
+                    features.append(val)
+        X_test.append(features)
+
+    # Train model
+    model = RandomForestRegressor(n_estimators=100, random_state=42)
+    model.fit(X_train, y_train)
+    
+    # Predict
+    return model.predict(X_test).tolist()
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for line in reader:
+            processed_row = []
+            for i, val in enumerate(line):
+                if header[i] == 'criterion':
+                    processed_row.append(val)
+                else:
+                    processed_row.append(float(val))
+            rows.append(processed_row)
+
+    # Split into train and a small test set to demonstrate
+    train_data = rows[:700]
+    test_data = rows[700:710]
+    
+    # Mask goals in test data
+    masked_test = []
+    for row in test_data:
+        masked_row = ["?"] * 3 + row[3:]
+        masked_test.append(masked_row)
+        
+    predictions = guess(header, train_data, masked_test)
+    
+    print("Forecasts for the first 10 test rows (MRE-):")
+    for i, pred in enumerate(predictions):
+        actual = test_data[i][0]
+        print(f"Row {i+1}: Predicted MRE={pred:.4f}, Actual MRE={actual:.4f}")
+
+
+--- step03.py ---
+import csv
+from scipy import stats
+
+def certify(xs, ys):
+    """
+    Returns True if the difference between two distributions is statistically 
+    insignificant (noise), False if they are significantly different.
+    Uses Welch's t-test to compare the means of two independent samples.
+    """
+    # If samples are too small, assume noise (True)
+    if len(xs) < 2 or len(ys) < 2:
+        return True
+    
+    # Welch's t-test (equal_var=False)
+    t_stat, p_value = stats.ttest_ind(xs, ys, equal_var=False)
+    
+    # If p-value > 0.05, we fail to reject the null hypothesis (they are the same)
+    return p_value > 0.05
+
+def load_data(filename):
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for line in reader:
+            processed_row = []
+            for i, val in enumerate(line):
+                if header[i] == 'criterion':
+                    processed_row.append(val)
+                else:
+                    processed_row.append(float(val))
+            rows.append(processed_row)
+    return header, rows
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    header, rows = load_data(filename)
+    
+    # Define "big" vs "small" based on N_estimators (index 3)
+    # Median split to compare two groups
+    n_est_idx = header.index('N_estimators')
+    acc_idx = header.index('ACC+')
+    
+    n_ests = [r[n_est_idx] for r in rows]
+    median_n = sum(n_ests) / len(n_ests)
+    
+    small_setups_acc = [r[acc_idx] for r in rows if r[n_est_idx] <= median_n]
+    big_setups_acc = [r[acc_idx] for r in rows if r[n_est_idx] > median_n]
+    
+    is_noise = certify(small_setups_acc, big_setups_acc)
+    
+    print(f"Analysis of ACC+ for small vs big setups (N_estimators split at {median_n:.1f}):")
+    if is_noise:
+        print("Result: The observed difference is likely just noise (statistically insignificant).")
+    else:
+        print("Result: The difference is statistically significant; big setups perform differently.")
+
+
+The customer asks:
+
+  Results come back from the build farm one setup at a time. Tell me the moment I have seen one good enough to ship; I will not rerun the others.
+
+Write step04.py to answer that ask on this data.
+
+A test harness will import your file and call this function, so you must define it exactly:
+
+def flow(header, row, seen)
+  Returns True or False.   Rows arrive one at a time. `row` is the one that just arrived; `seen` is the list of rows that arrived before it. Return True to choose `row` and stop, False to let it go. You cannot go back.
+
+Rules the harness enforces: The harness replays many arrival orders through the same imported function, so do not keep state between calls: decide from `row` and `seen` alone.
+
+Conventions: `header` is the list of column names. `rows` is a list of rows; each row is a list of cells in header order, floats for numeric columns and strings for symbolic ones. A cell shown as "?" is hidden from you. A row is better when its goals are closer to their best (low for names ending in -, high for names ending in +).
+
+Keep everything that prints or reads the csv file under `if __name__ == "__main__":` so that importing the file prints nothing. Plain built-in types are all you need: do not import anything from `typing`.
+
+Running `python step04.py` must load the csv, call your function, print a short answer a customer could read, and exit with status 0. Reply with the complete file in one ```python fenced block and nothing else.

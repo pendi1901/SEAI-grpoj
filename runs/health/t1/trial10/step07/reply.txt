@@ -1,0 +1,72 @@
+```python
+import csv
+import random
+
+def choose(header, rows, label):
+    """
+    Finds the best setup by sampling 50 rows, labeling them, 
+    and returning the index of the best performing one.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    
+    def get_score(goals):
+        # Normalize goals: MRE- (min), ACC+ (max), PRED40+ (max)
+        # Since we don't have the full distribution, we use the labeled values
+        # to rank the 50 sampled rows relative to each other.
+        scores = []
+        for i, val in enumerate(goals):
+            # For simplicity in ranking, we treat the sampled set as the population
+            # A goal ending in '-' is minimized, '+' is maximized.
+            if header[goal_indices[i]].endswith('-'):
+                scores.append(-val)
+            else:
+                scores.append(val)
+        return sum(scores)
+
+    # Sample 50 random indices
+    indices = random.sample(range(len(rows)), min(50, len(rows)))
+    
+    best_idx = -1
+    best_score = float('-inf')
+    
+    for i in indices:
+        goals = label(i)
+        score = get_score(goals)
+        if score > best_score:
+            best_score = score
+            best_idx = i
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            all_rows = []
+            true_goals = []
+            for row in reader:
+                processed = [float(val) if header[i] not in ['criterion'] else val 
+                             for i, val in enumerate(row)]
+                # Store true goals separately and mask them in the rows
+                goals = [processed[i] for i, name in enumerate(header) if name.endswith(('-', '+'))]
+                true_goals.append(goals)
+                
+                masked = list(processed)
+                for i in range(len(header)):
+                    if header[i].endswith(('-', '+')):
+                        masked[i] = "?"
+                all_rows.append(masked)
+
+        def label(i):
+            return true_goals[i]
+
+        best_index = choose(header, all_rows, label)
+        print(f"The best setup found after 50 trials is at index {best_index}.")
+        print(f"True goal values for this setup: {true_goals[best_index]}")
+        exit(0)
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

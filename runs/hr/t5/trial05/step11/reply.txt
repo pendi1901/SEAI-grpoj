@@ -1,0 +1,55 @@
+```python
+import ezr
+import random
+
+def remember(header, rows):
+    """
+    Find the 5% of employees most similar to the first employee in the dataset.
+    Similarity is based on the input (x) columns.
+    """
+    # Create a table to handle column definitions and distance calculations
+    tbl = ezr.Tbl([header] + rows)
+    
+    # The reference employee is the first row
+    ref_row = rows[0]
+    
+    # Calculate distance of every row from the reference row
+    # We use xdist to measure distance across input columns
+    distances = []
+    for i, row in enumerate(rows):
+        # Skip the reference row itself
+        if i == 0:
+            continue
+        d = ezr.xdist(tbl, row, ref_row)
+        distances.append((i, d))
+    
+    # Sort by distance ascending (most similar first)
+    distances.sort(key=lambda x: x[1])
+    
+    # Return top 5% (max 40 rows for 800 input rows)
+    limit = max(1, int(len(rows) * 0.05))
+    return [item[0] for item in distances[:limit]]
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Get indices of similar employees
+    similar_indices = remember(header, rows)
+    
+    # Print results
+    print("Employees most similar to the first record:")
+    print("-" * 60)
+    print(f"{'Index':<10} | {'YearsAtCompany+':<20}")
+    print("-" * 60)
+    
+    idx_tenure = header.index('YearsAtCompany+')
+    for i in similar_indices:
+        row = rows[i]
+        print(f"{i:<10} | {row[idx_tenure]:<20}")
+        
+    print("-" * 60)
+    print(f"Found {len(similar_indices)} similar employees.")
+```

@@ -1,0 +1,56 @@
+import ezr
+import step07
+
+def choose(header, rows, label):
+    """
+    Finds the best row for laboratory staff by filtering the dataset
+    and using the acquire strategy to find the best arrangement.
+    """
+    # Identify the jobRole column
+    col_map = {name: i for i, name in enumerate(header)}
+    role_idx = col_map['jobRole']
+    
+    # Filter rows for 'Laboratory Technician'
+    lab_staff_indices = [i for i, r in enumerate(rows) if r[role_idx] == 'Laboratory Technician']
+    lab_staff_rows = [rows[i] for i in lab_staff_indices]
+    
+    # Define a local label function that maps back to the original index
+    def local_label(i):
+        # i is the index in lab_staff_rows, map back to original index
+        original_idx = lab_staff_indices[i]
+        return label(original_idx)
+    
+    # Use the logic from step07 to choose the best row
+    best_local_idx = step07.choose(header, lab_staff_rows, local_label)
+    
+    # Return the original index
+    return lab_staff_indices[best_local_idx]
+
+if __name__ == "__main__":
+    # Load data
+    data = list(ezr.csv("WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"))
+    header = data[0]
+    rows = data[1:]
+    
+    # Mask goals
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    masked_rows = []
+    for row in rows:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_rows.append(new_row)
+        
+    # Define the label function for the harness
+    def label(i):
+        return rows[i]
+    
+    # Run the selection
+    best_idx = choose(header, masked_rows, label)
+    
+    # Print result
+    print(f"Best laboratory staff arrangement found at index: {best_idx}")
+    print("This row was identified using targeted interviews within the lab staff group.")
+    print(f"Goal metrics (tenure/role duration) for this row: {rows[best_idx][-4:]}")
+    
+    exit(0)

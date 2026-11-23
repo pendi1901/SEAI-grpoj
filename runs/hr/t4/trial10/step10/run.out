@@ -1,0 +1,59 @@
+
+--- stderr ---
+Traceback (most recent call last):
+  File "<repo>\runs\hr\t4\trial10\step10\step10.py", line 101, in <module>
+    result = race(header, rows, label)
+  File "<repo>\runs\hr\t4\trial10\step10\step10.py", line 71, in race
+    "model_based": strategy_model()
+                   ~~~~~~~~~~~~~~^^
+  File "<repo>\runs\hr\t4\trial10\step10\step10.py", line 64, in strategy_model
+    preds = guess(header, train_data, test_data)
+  File "<repo>\runs\hr\t4\trial10\step10\step02.py", line 40, in guess
+    model.fit(X_train, y_train)
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "C:\Python314\Lib\site-packages\sklearn\base.py", line 1403, in wrapper
+    return fit_method(estimator, *args, **kwargs)
+  File "C:\Python314\Lib\site-packages\sklearn\ensemble\_forest.py", line 334, in fit
+    X, y = validate_data(
+           ~~~~~~~~~~~~~^
+        self,
+        ^^^^^
+    ...<5 lines>...
+        ensure_all_finite=False,
+        ^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Python314\Lib\site-packages\sklearn\utils\validation.py", line 3058, in validate_data
+    X, y = check_X_y(X, y, **check_params)
+           ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python314\Lib\site-packages\sklearn\utils\validation.py", line 1347, in check_X_y
+    y = _check_y(y, multi_output=multi_output, y_numeric=y_numeric, estimator=estimator)
+  File "C:\Python314\Lib\site-packages\sklearn\utils\validation.py", line 1357, in _check_y
+    y = check_array(
+        y,
+    ...<5 lines>...
+        estimator=estimator,
+    )
+  File "C:\Python314\Lib\site-packages\sklearn\utils\validation.py", line 1090, in check_array
+    _assert_all_finite(
+    ~~~~~~~~~~~~~~~~~~^
+        array,
+        ^^^^^^
+    ...<2 lines>...
+        allow_nan=ensure_all_finite == "allow-nan",
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Python314\Lib\site-packages\sklearn\utils\validation.py", line 137, in _assert_all_finite
+    _assert_all_finite_element_wise(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        X,
+        ^^
+    ...<4 lines>...
+        input_name=input_name,
+        ^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Python314\Lib\site-packages\sklearn\utils\validation.py", line 186, in _assert_all_finite_element_wise
+    raise ValueError(msg_err)
+ValueError: Input y contains infinity or a value too large for dtype('float64').

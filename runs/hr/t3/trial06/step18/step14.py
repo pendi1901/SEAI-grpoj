@@ -1,0 +1,60 @@
+import csv
+
+def flow(header, row, seen):
+    """
+    Detects if a new row represents a 'drift' in team composition.
+    We compare the distribution of key numeric features (Age, MonthlyIncome, 
+    TotalWorkingYears) of the new row against the historical average of 
+    the 'seen' rows. If the new row is an outlier (e.g., > 2 standard 
+    deviations from the mean), we flag it as a change in team profile.
+    """
+    if not seen:
+        return False
+
+    # Identify numeric features to monitor for drift
+    numeric_indices = [i for i, col in enumerate(header) if header[i][0].isupper()]
+    
+    # Calculate means and standard deviations of seen data
+    means = []
+    stds = []
+    for i in numeric_indices:
+        vals = [s[i] for s in seen]
+        m = sum(vals) / len(vals)
+        s = (sum((x - m) ** 2 for x in vals) / len(vals)) ** 0.5
+        means.append(m)
+        stds.append(s if s > 0 else 1.0) # Avoid division by zero
+
+    # Calculate Z-score for the new row
+    z_scores = []
+    for idx, i in enumerate(numeric_indices):
+        z = abs(row[i] - means[idx]) / stds[idx]
+        z_scores.append(z)
+    
+    # If the average Z-score across features is high, the row is an outlier
+    avg_z = sum(z_scores) / len(z_scores)
+    
+    # Threshold: 2.5 standard deviations indicates a significant shift
+    return avg_z > 2.5
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = [float(val) if header[i][0].isupper() else val for i, val in enumerate(row)]
+            rows.append(processed_row)
+
+    seen = []
+    drift_count = 0
+    for i, row in enumerate(rows):
+        if flow(header, row, seen):
+            drift_count += 1
+        seen.append(row)
+
+    print("Team Composition Drift Analysis:")
+    print(f"Total records processed: {len(rows)}")
+    print(f"Number of records flagged as 'drift' (outliers): {drift_count}")
+    print("Conclusion: When the count of flagged records increases, the team's "
+          "demographic or performance profile is shifting away from historical norms.")

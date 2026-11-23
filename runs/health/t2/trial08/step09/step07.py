@@ -1,0 +1,71 @@
+import csv
+from step01 import remember
+from step02 import guess
+
+def choose(header, rows, label):
+    """
+    Finds the best setup by sampling 50 rows, labeling them, 
+    and selecting the one with the highest score.
+    """
+    # We have 800 rows. We can label 50.
+    # We pick 50 indices spread across the dataset.
+    n = len(rows)
+    indices_to_label = [int(i * (n / 50)) for i in range(50)]
+    
+    best_idx = -1
+    best_score = -1.0
+    
+    # Identify goal indices
+    goal_indices = [i for i, h in enumerate(header) if h.endswith('-') or h.endswith('+')]
+    
+    # Label the selected rows
+    labeled_data = []
+    for i in indices_to_label:
+        true_goals = label(i)
+        # Create a copy of the row with true goals filled in
+        row_with_goals = list(rows[i])
+        for j, g_idx in enumerate(goal_indices):
+            row_with_goals[g_idx] = true_goals[j]
+        labeled_data.append(row_with_goals)
+    
+    # Use remember from step01 to find the best among the labeled ones
+    # We need to pass the full header and the labeled rows
+    # Note: remember expects all rows, but we only have 50 labeled.
+    # We will use the labeled subset to find the best.
+    best_in_subset = remember(header, labeled_data)
+    
+    # Return the original index of the best row found
+    best_idx = indices_to_label[best_in_subset[0]]
+    return best_idx
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            true_goals_map = {}
+            for i, row in enumerate(reader):
+                processed = []
+                goals = []
+                for j, val in enumerate(row):
+                    if header[j] == 'criterion':
+                        processed.append(val)
+                    elif header[j].endswith('-') or header[j].endswith('+'):
+                        processed.append("?")
+                        goals.append(float(val))
+                    else:
+                        processed.append(float(val))
+                rows.append(processed)
+                true_goals_map[i] = goals
+        
+        def label(i):
+            return true_goals_map[i]
+            
+        best_pos = choose(header, rows, label)
+        print(f"Analysis complete. The best setup found is at index {best_pos}.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

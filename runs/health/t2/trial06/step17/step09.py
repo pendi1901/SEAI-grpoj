@@ -1,0 +1,51 @@
+import csv
+
+def spot(header, rows):
+    """
+    Identifies suspicious rows by checking for outliers in numeric input columns.
+    Rows with values significantly outside the range (e.g., > 3 standard deviations)
+    are flagged as potentially erroneous entries.
+    """
+    input_indices = [i for i, h in enumerate(header) 
+                     if not (h.endswith('-') or h.endswith('+')) 
+                     and isinstance(rows[0][i], (int, float))]
+    
+    suspicion_scores = [0.0] * len(rows)
+    
+    for i in input_indices:
+        col_vals = [r[i] for r in rows]
+        mean = sum(col_vals) / len(col_vals)
+        variance = sum((x - mean) ** 2 for x in col_vals) / len(col_vals)
+        std = variance ** 0.5
+        
+        if std > 0:
+            for row_idx, row in enumerate(rows):
+                z_score = abs(row[i] - mean) / std
+                # If a value is more than 3 standard deviations away, it's suspicious
+                if z_score > 3:
+                    suspicion_scores[row_idx] += z_score
+                    
+    # Return indices of rows with suspicion scores > 0, sorted by score descending
+    indexed_scores = [(suspicion_scores[i], i) for i in range(len(rows)) if suspicion_scores[i] > 0]
+    indexed_scores.sort(key=lambda x: x[0], reverse=True)
+    
+    return [idx for score, idx in indexed_scores]
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = [val if header[i] == 'criterion' else float(val) 
+                             for i, val in enumerate(row)]
+            rows.append(processed_row)
+            
+    suspicious_indices = spot(header, rows)
+    
+    print(f"Found {len(suspicious_indices)} potentially erroneous rows.")
+    if suspicious_indices:
+        print("Top 5 most suspicious row indices:")
+        for idx in suspicious_indices[:5]:
+            print(f"  Row {idx}")

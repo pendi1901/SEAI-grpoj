@@ -1,0 +1,72 @@
+```python
+import csv
+import random
+
+def choose(header, rows, label):
+    """
+    Finds the working arrangement that keeps people longest by sampling 50 rows.
+    We use a simple exploration strategy: sample 50 random rows, 
+    query their true 'YearsAtCompany+' values, and return the index of the best one.
+    """
+    # Identify goal column
+    goal_idx = -1
+    for i, name in enumerate(header):
+        if name.endswith('+'):
+            goal_idx = i
+            break
+            
+    # Select 50 random indices to sample
+    num_samples = min(50, len(rows))
+    indices = random.sample(range(len(rows)), num_samples)
+    
+    best_val = -1.0
+    best_idx = -1
+    
+    for i in indices:
+        # Query the true value
+        true_values = label(i)
+        # The label function returns the true goal values for the row
+        val = true_values[goal_idx]
+        
+        if val > best_val:
+            best_val = val
+            best_idx = i
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    # Create a copy of rows with goals masked for the choose function
+    goal_idx = next(i for i, name in enumerate(header) if name.endswith('+'))
+    masked_rows = []
+    for row in rows:
+        new_row = list(row)
+        new_row[goal_idx] = "?"
+        masked_rows.append(new_row)
+        
+    # Define the label function for the harness
+    def label(i):
+        return rows[i]
+        
+    best_idx = choose(header, masked_rows, label)
+    
+    print(f"Analysis complete.")
+    print(f"The best working arrangement found is at row index: {best_idx}")
+    print(f"Years at company for this employee: {rows[best_idx][goal_idx]}")
+    print("Strategy: Sampled 50 random employees to identify the longest tenure.")
+```

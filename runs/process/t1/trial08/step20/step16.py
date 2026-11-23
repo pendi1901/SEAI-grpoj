@@ -1,0 +1,84 @@
+import csv
+
+def justify(header, rows, row):
+    """
+    Estimates the goals of 'row' using a 1-NN approach, then calculates
+    the percentile rank of that row against the provided 'rows'.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    input_indices = [i for i, name in enumerate(header) if not name.endswith(('-', '+'))]
+
+    def get_score(r):
+        s = 0
+        for i in goal_indices:
+            val = float(r[i])
+            s += val if header[i].endswith('-') else (1.0 - val)
+        return s
+
+    def dist(r1, r2):
+        d = 0
+        for i in input_indices:
+            v1, v2 = r1[i], r2[i]
+            # Handle numeric vs symbolic
+            if isinstance(v1, (int, float)) and isinstance(v2, (int, float)):
+                d += (v1 - v2) ** 2
+            else:
+                d += 0 if v1 == v2 else 1
+        return d ** 0.5
+
+    # Estimate goals for the input row using 1-NN
+    best_d = float('inf')
+    best_row = None
+    for r in rows:
+        d = dist(row, r)
+        if d < best_d:
+            best_d = d
+            best_row = r
+    
+    # Create a copy of the row with estimated goals
+    estimated_row = list(row)
+    for i in goal_indices:
+        estimated_row[i] = best_row[i]
+    
+    est_score = get_score(estimated_row)
+    
+    # Calculate how many rows are worse than this one
+    worse_count = 0
+    for r in rows:
+        if get_score(r) > est_score:
+            worse_count += 1
+            
+    p = worse_count / len(rows)
+    reason = f"This setup is estimated to outperform {p:.1%} of all historical configurations based on its input characteristics."
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        rows = []
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            for row in reader:
+                processed_row = []
+                for val in row:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        # Example: Justify why a specific setup (e.g., the first row) is recommended
+        test_row = list(rows[0])
+        for i in range(len(header)):
+            if header[i].endswith(('-', '+')):
+                test_row[i] = "?"
+        
+        p, reason = justify(header, rows, test_row)
+        print(f"Rank: {p:.4f}")
+        print(f"Justification: {reason}")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

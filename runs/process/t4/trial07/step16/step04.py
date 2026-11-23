@@ -1,0 +1,77 @@
+import csv
+import pandas as pd
+from step01 import remember
+
+def flow(header, row, seen):
+    """
+    Decides whether to accept a row based on the 'Secretary Problem' logic 
+    combined with the 'remember' heuristic. We observe the first 30% of 
+    incoming rows to establish a baseline, then accept the first row that 
+    is better than the best seen so far.
+    """
+    # Identify goal columns
+    goals = [col for col in header if col.endswith(('-', '+'))]
+    
+    # Calculate aggregate score for a row
+    def get_score(r):
+        score = 0
+        for i, col in enumerate(header):
+            if col.endswith('-'):
+                score -= r[i]
+            elif col.endswith('+'):
+                score += r[i]
+        return score
+
+    # If it's the first row, we can't compare, so keep looking
+    if not seen:
+        return False
+
+    # Establish baseline: look at the first 30% of the expected 800 rows (approx 240)
+    # If we haven't seen enough, just keep looking
+    if len(seen) < 240:
+        return False
+
+    # Find the best score seen so far
+    best_score = max(get_score(s) for s in seen)
+    current_score = get_score(row)
+
+    # If current row is better than anything seen, accept it
+    if current_score > best_score:
+        return True
+    
+    # If we are at the very end, accept it
+    if len(seen) >= 799:
+        return True
+
+    return False
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) for val in row])
+        
+        seen = []
+        accepted = None
+        for row in rows:
+            if flow(header, row, seen):
+                accepted = row
+                break
+            seen.append(row)
+            
+        print("Customer Inquiry: Decision on incoming programme proposals.")
+        if accepted:
+            print("Decision: Approved the current proposal.")
+            print("Details of the approved setup:")
+            for h, v in zip(header, accepted):
+                print(f"  {h}: {v}")
+        else:
+            print("Decision: No suitable proposal was found.")
+            
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

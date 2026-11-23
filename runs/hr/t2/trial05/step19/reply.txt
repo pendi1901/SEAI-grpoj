@@ -1,0 +1,45 @@
+```python
+import csv
+import step09
+
+def spot(header, rows):
+    """
+    Identifies rows that are 'unlike anyone we have employed'.
+    We use the logic from step09 to find outliers. If a new hire is 
+    an outlier (Z-score > 3) in numeric inputs, our estimation 
+    model (which relies on k-NN) cannot be trusted because there 
+    are no similar historical records to base the estimate on.
+    """
+    # Reuse the outlier detection logic from step09
+    return step09.spot(header, rows)
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    suspicious_indices = spot(header, rows)
+    
+    print("Trust Analysis for New Hires:")
+    print("Our estimates rely on finding similar historical employees (k-Nearest Neighbors).")
+    print("If a new hire is an outlier compared to our existing staff, our estimates cannot be trusted.")
+    print(f"We have identified {len(suspicious_indices)} records that are highly dissimilar to the norm.")
+    
+    if suspicious_indices:
+        print(f"The most suspicious row (least trustworthy estimate) is index: {suspicious_indices[0]}")
+    else:
+        print("No highly suspicious records found; our current model is well-calibrated for the existing population.")
+```

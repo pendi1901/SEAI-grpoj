@@ -1,0 +1,76 @@
+```python
+import csv
+
+def flow(header, row, seen):
+    """
+    Detects if a team's composition has shifted significantly.
+    We compare the current row's 'tenure score' against the distribution
+    of scores from previously seen rows. If the current row is an outlier
+    (outside 2 standard deviations of the mean of seen rows), we flag it.
+    """
+    if not seen:
+        return False
+
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    
+    def get_score(r):
+        score = 0
+        for i in goal_indices:
+            val = r[i]
+            if isinstance(val, (int, float)):
+                if header[i].endswith('+'):
+                    score += val
+                else:
+                    score -= val
+        return score
+
+    current_score = get_score(row)
+    seen_scores = [get_score(r) for r in seen]
+    
+    if len(seen_scores) < 10:
+        return False
+        
+    mean = sum(seen_scores) / len(seen_scores)
+    variance = sum((s - mean) ** 2 for s in seen_scores) / len(seen_scores)
+    std = variance ** 0.5
+    
+    # Flag if the new row is significantly different (outside 2 standard deviations)
+    if std > 0 and abs(current_score - mean) > (2 * std):
+        return True
+        
+    return False
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for line in reader:
+            processed_row = []
+            for i, val in enumerate(line):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    seen = []
+    anomalies = 0
+    for row in rows:
+        if flow(header, row, seen):
+            anomalies += 1
+        seen.append(row)
+        
+    print("Team Composition Analysis:")
+    print(f"Total records processed: {len(rows)}")
+    print(f"Number of shifts in team composition detected: {anomalies}")
+    print("A 'shift' is detected when a new employee's tenure profile is")
+    print("statistically inconsistent with the established team average.")
+    exit(0)
+```

@@ -1,0 +1,67 @@
+import csv
+
+def spot(header, rows):
+    """
+    Identifies suspicious rows by checking for logical inconsistencies in 
+    tenure-related columns. Specifically, we look for rows where 
+    'YearsInCurrentRole+' or 'YearsWithCurrManager+' exceed 'YearsAtCompany+'.
+    These are physically impossible and suggest data entry errors.
+    """
+    idx_at = header.index('YearsAtCompany+')
+    idx_role = header.index('YearsInCurrentRole+')
+    idx_mgr = header.index('YearsWithCurrManager+')
+    
+    suspicious = []
+    
+    for i, row in enumerate(rows):
+        # Skip rows with missing data
+        if row[idx_at] == "?" or row[idx_role] == "?" or row[idx_mgr] == "?":
+            continue
+            
+        # Logic check: Years in role or with manager cannot exceed total years at company
+        # We assign a "suspicion score" based on the magnitude of the violation
+        violation_score = 0
+        if row[idx_role] > row[idx_at]:
+            violation_score += (row[idx_role] - row[idx_at])
+        if row[idx_mgr] > row[idx_at]:
+            violation_score += (row[idx_mgr] - row[idx_at])
+            
+        if violation_score > 0:
+            suspicious.append((violation_score, i))
+            
+    # Sort by suspicion score descending
+    suspicious.sort(key=lambda x: x[0], reverse=True)
+    
+    return [item[1] for item in suspicious]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    suspect_indices = spot(header, rows)
+    
+    print("Data Integrity Audit: Suspicious Records Found")
+    print(f"Total rows checked: {len(rows)}")
+    print(f"Number of suspicious rows identified: {len(suspect_indices)}")
+    print("\nTop 5 most suspicious rows (Logical inconsistencies in tenure):")
+    for idx in suspect_indices[:5]:
+        row = rows[idx]
+        print(f"Row {idx}: YearsAtCompany={row[header.index('YearsAtCompany+')]}, "
+              f"YearsInRole={row[header.index('YearsInCurrentRole+')]}, "
+              f"YearsWithManager={row[header.index('YearsWithCurrManager+')]}")
+    
+    print("\nNote: These rows contain tenure metrics that are logically impossible.")

@@ -1,0 +1,56 @@
+import csv
+from step01 import remember
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column for each test row by finding the 
+    average of the first goal column in the training set.
+    """
+    # Identify the index of the first goal column
+    goal_idx = -1
+    for i, name in enumerate(header):
+        if name.endswith('-') or name.endswith('+'):
+            goal_idx = i
+            break
+    
+    # Calculate the average of the first goal column from the training data
+    total_val = sum(row[goal_idx] for row in train)
+    avg_val = total_val / len(train)
+    
+    # Return the average for every test row
+    return [avg_val for _ in test]
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', newline='') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(x) for x in row])
+            
+            # Split into train and test (using last 100 as test for demonstration)
+            train = rows[:-100]
+            test = rows[-100:]
+            
+            # Mask the goals in the test set as per requirements
+            goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+            masked_test = []
+            for row in test:
+                new_row = list(row)
+                for idx in goal_indices:
+                    new_row[idx] = "?"
+                masked_test.append(new_row)
+            
+            predictions = guess(header, train, masked_test)
+            
+            # Print a summary for the customer
+            first_goal = header[goal_indices[0]]
+            print(f"Customer Inquiry: Estimating '{first_goal}' for test setups.")
+            print(f"Average estimated {first_goal}: {sum(predictions)/len(predictions):.4f}")
+            print(f"Generated {len(predictions)} estimates.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

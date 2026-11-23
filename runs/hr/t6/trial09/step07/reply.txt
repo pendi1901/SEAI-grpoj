@@ -1,0 +1,68 @@
+```python
+import ezr
+import random
+
+def choose(header, rows, label):
+    """
+    Find the best working arrangement using a budget of 50 labels.
+    We use the 'acquire' strategy from ezr to intelligently sample 
+    the most informative rows to build a model, then pick the best.
+    """
+    # Create a table object to manage the data
+    tbl = ezr.Tbl([header] + rows)
+    
+    # The acquire function uses the oracle (label) to fill in missing goals.
+    # It returns a list of rows that have been labeled.
+    # We set the budget to 50 as per the customer's request.
+    labeled_rows = ezr.acquire(tbl, cap=50, label=label)
+    
+    # Create a new table from the labeled data to evaluate the best arrangement
+    lab_tbl = ezr.clone(tbl, labeled_rows)
+    
+    # Find the row with the best (lowest) ydist in the labeled set
+    best_row = min(labeled_rows, key=lambda r: ezr.ydist(lab_tbl, r))
+    
+    # Return the index of this row in the original rows list
+    # We find the index by matching the row content (assuming unique rows)
+    for i, row in enumerate(rows):
+        if row == best_row:
+            return i
+    return 0
+
+if __name__ == "__main__":
+    # Load data
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Prepare rows by masking the goal columns
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(("+", "-"))]
+    masked_rows = []
+    for row in rows:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_rows.append(new_row)
+        
+    # Define the oracle to reveal the true values
+    def oracle(row_idx):
+        return rows[row_idx]
+    
+    # Wrapper to match the expected signature: label(i) returns the row
+    def label_wrapper(row):
+        # Find index of the row in masked_rows to label it
+        for i, r in enumerate(masked_rows):
+            if r == row:
+                return rows[i]
+        return row
+
+    # Run the selection
+    best_idx = choose(header, masked_rows, label_wrapper)
+    
+    print(f"Analysis complete. Best working arrangement found at index {best_idx}.")
+    print(f"This arrangement has 'YearsAtCompany+': {rows[best_idx][31]}")
+    print(f"This arrangement has 'YearsInCurrentRole+': {rows[best_idx][32]}")
+    
+    exit(0)
+```

@@ -1,0 +1,68 @@
+```python
+import csv
+import random
+from step07 import choose as base_choose
+
+def choose(header, rows, label):
+    """
+    Finds the best working arrangement for 'Laboratory Technician' staff 
+    by sampling up to 50 rows from that subset.
+    """
+    # Identify the jobRole column
+    role_idx = header.index('jobRole')
+    
+    # Filter rows for 'Laboratory Technician'
+    lab_indices = [i for i, row in enumerate(rows) if row[role_idx] == 'Laboratory Technician']
+    
+    if not lab_indices:
+        return 0
+        
+    # We have a budget of 50 labels.
+    # Sample up to 50 indices from the laboratory staff
+    sample_indices = random.sample(lab_indices, min(50, len(lab_indices)))
+    
+    best_idx = -1
+    best_val = -float('inf')
+    
+    # Identify goal column (YearsAtCompany+)
+    goal_indices = [i for i, h in enumerate(header) if h.endswith('+') or h.endswith('-')]
+    target_idx = goal_indices[0]
+    
+    for i in sample_indices:
+        # Label the row to get the true goal values
+        true_goals = label(i)
+        val = true_goals[0] # YearsAtCompany+
+        
+        if val > best_val:
+            best_val = val
+            best_idx = i
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = [float(val) if header[i][0].isupper() else val for i, val in enumerate(row)]
+            rows.append(processed_row)
+
+    # Mock label function for the test harness
+    def label(i):
+        goal_indices = [idx for idx, h in enumerate(header) if h.endswith('+') or h.endswith('-')]
+        return [rows[i][idx] for idx in goal_indices]
+
+    # Mask goals
+    goal_indices = [i for i, h in enumerate(header) if h.endswith('+') or h.endswith('-')]
+    for row in rows:
+        for idx in goal_indices:
+            row[idx] = "?"
+
+    best_index = choose(header, rows, label)
+    
+    print("Analysis: Best arrangement for Laboratory Technicians.")
+    print(f"The best arrangement found within the 50-interview budget is at index {best_index}.")
+    print(f"This employee has been with the company for {label(best_index)[0]} years.")
+```

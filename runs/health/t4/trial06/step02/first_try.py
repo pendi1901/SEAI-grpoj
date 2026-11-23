@@ -1,0 +1,85 @@
+import csv
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import LabelEncoder
+import numpy as np
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column (MRE-) using a Random Forest Regressor.
+    Handles symbolic columns by encoding them.
+    """
+    # Identify goal columns and input columns
+    goal_idx = 0  # MRE- is the first column
+    
+    # Prepare training data
+    X_train = []
+    y_train = []
+    
+    # Identify symbolic columns for encoding
+    symbolic_cols = [i for i, name in enumerate(header) if name == 'criterion']
+    
+    # Fit encoders for symbolic columns
+    encoders = {}
+    for col in symbolic_cols:
+        le = LabelEncoder()
+        all_vals = [row[col] for row in train]
+        le.fit(all_vals)
+        encoders[col] = le
+
+    def transform_row(row):
+        new_row = []
+        for i, val in enumerate(row):
+            if i in symbolic_cols:
+                new_row.append(encoders[i].transform([val])[0])
+            else:
+                new_row.append(float(val))
+        return new_row
+
+    for row in train:
+        X_train.append(transform_row(row)[1:]) # All columns except goal
+        y_train.append(float(row[goal_idx]))
+
+    # Prepare test data (replace '?' with 0 or mean, but here we just need inputs)
+    X_test = []
+    for row in test:
+        # For test rows, we skip the goal column index
+        processed = []
+        for i, val in enumerate(row):
+            if i == goal_idx: continue
+            if i in symbolic_cols:
+                processed.append(encoders[i].transform([val])[0])
+            else:
+                processed.append(float(val))
+        X_test.append(processed)
+
+    # Train model
+    model = RandomForestRegressor(n_estimators=100, random_state=42)
+    model.fit(X_train, y_train)
+    
+    return model.predict(X_test).tolist()
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i] == 'criterion':
+                    processed_row.append(val)
+                else:
+                    processed_row.append(float(val))
+            rows.append(processed_row)
+
+    # Split: 80% train, 20% test
+    split = int(len(rows) * 0.8)
+    train_data = rows[:split]
+    test_data = [[row[0] if i != 0 else "?" for i, val in enumerate(row)] for row in rows[split:]]
+    
+    predictions = guess(header, train_data, test_data)
+    
+    print("Forecasts for the first 5 test configurations:")
+    for i in range(min(5, len(predictions))):
+        print(f"Setup {i+1}: Estimated MRE- = {predictions[i]:.4f}")

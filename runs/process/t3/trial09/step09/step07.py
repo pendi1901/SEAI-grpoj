@@ -1,0 +1,79 @@
+import csv
+import random
+
+def choose(header, rows, label):
+    """
+    Finds the best row by sampling and labeling.
+    We use a simple strategy: sample 50 rows, label them, 
+    and return the index of the best one.
+    """
+    goal_indices = [i for i, h in enumerate(header) if h.endswith('-') or h.endswith('+')]
+    
+    # We can label at most 50 rows.
+    # We will pick 50 random indices to sample.
+    indices = list(range(len(rows)))
+    sample_size = min(50, len(indices))
+    chosen_indices = random.sample(indices, sample_size)
+    
+    best_idx = -1
+    best_score = -float('inf')
+    
+    for idx in chosen_indices:
+        # Get true values from the oracle
+        goals = label(idx)
+        
+        # Calculate score: 
+        # Normalize goals to [0, 1] relative to the sample set
+        # Since we don't know the global min/max, we use the sample's min/max
+        # as a proxy for the objective function.
+        
+        # For this specific task, we can just compute a simple weighted sum
+        # where '-' goals are inverted and '+' are kept as is.
+        # We'll assume values are roughly in [0, 1] based on the data description.
+        current_score = 0
+        for i, val in enumerate(goals):
+            col_name = header[goal_indices[i]]
+            if col_name.endswith('-'):
+                current_score -= val
+            else:
+                current_score += val
+        
+        if current_score > best_score:
+            best_score = current_score
+            best_idx = idx
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed_row = []
+                for val in row:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        # Create a local label function for the harness
+        def label(i):
+            goal_indices = [j for j, h in enumerate(header) if h.endswith('-') or h.endswith('+')]
+            return [rows[i][j] for j in goal_indices]
+        
+        # Mask the rows as per instructions
+        for row in rows:
+            for i, h in enumerate(header):
+                if h.endswith('-') or h.endswith('+'):
+                    row[i] = "?"
+        
+        best_idx = choose(header, rows, label)
+        print(f"Analysis complete. The best row found among 50 trials is index: {best_idx}")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

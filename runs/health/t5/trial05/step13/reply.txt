@@ -1,0 +1,56 @@
+```python
+import ezr
+import random
+
+def certify(xs, ys):
+    """
+    Returns True if xs and ys are statistically indistinguishable,
+    False if they differ significantly.
+    """
+    # Sort the lists as required by the statistical tests in ezr
+    xs_sorted = sorted(xs)
+    ys_sorted = sorted(ys)
+    
+    # Use the same() function from ezr which combines cliffs, ks, and cohen tests
+    # eps=0.35 is a standard effect size for Cohen's d
+    return ezr.same(xs_sorted, ys_sorted, eps=0.35)
+
+if __name__ == "__main__":
+    # Load the data
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data_iter = ezr.csv(filename)
+    header = next(data_iter)
+    rows = list(data_iter)
+    
+    # The two built-in rules in ezr for acquisition are:
+    # 1. 'acquire' (the smart multi-objective strategy)
+    # 2. 'grabs' (the random straw man strategy)
+    
+    # We compare the performance (ydist) of rows found by these two strategies
+    # to see if the "smart" rule makes a real difference.
+    
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Run both strategies
+    random.seed(1234567891)
+    smart_rows = ezr.acquire(tbl, cap=50)
+    
+    random.seed(1234567891)
+    random_rows = ezr.grabs(tbl, cap=50)
+    
+    # Extract ydist scores for both sets
+    smart_scores = [ezr.ydist(tbl, r) for r in smart_rows]
+    random_scores = [ezr.ydist(tbl, r) for r in random_rows]
+    
+    # Certify if they are statistically the same
+    is_same = certify(smart_scores, random_scores)
+    
+    print("--- Analysis: Smart Acquisition vs Random Grabs ---")
+    print(f"Smart strategy (n={len(smart_scores)}), Random strategy (n={len(random_scores)})")
+    print(f"Are they statistically the same? {is_same}")
+    
+    if is_same:
+        print("Conclusion: The choice of rule makes no real difference; you can stop arguing.")
+    else:
+        print("Conclusion: There is a statistically significant difference; the choice of rule matters.")
+```

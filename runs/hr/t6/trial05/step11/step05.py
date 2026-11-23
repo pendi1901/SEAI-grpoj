@@ -1,0 +1,54 @@
+import ezr
+import random
+
+def blame(header, rows):
+    """
+    Identify input columns that best explain why the worst rows are bad.
+    We compare the distribution of input values in the worst 25% of rows
+    against the best 25% of rows.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Sort rows by ydist (ascending: best to worst)
+    sorted_rows = sorted(rows, key=lambda r: ezr.ydist(tbl, r))
+    
+    n = len(sorted_rows) // 4
+    best = sorted_rows[:n]
+    worst = sorted_rows[-n:]
+    
+    explanations = []
+    for col in tbl.x:
+        if isinstance(col, ezr.Num):
+            xs = [r[col.at] for r in best if r[col.at] != "?"]
+            ys = [r[col.at] for r in worst if r[col.at] != "?"]
+            if len(xs) > 1 and len(ys) > 1:
+                if not ezr.same(xs, ys):
+                    explanations.append(col.txt)
+        else:
+            # For symbols, compare distributions using the same logic as ezr.same
+            # We create two temporary Sym columns to hold the distributions
+            best_col = ezr.Sym(col.txt, col.at)
+            worst_col = ezr.Sym(col.txt, col.at)
+            for r in best: ezr.add(best_col, r[col.at])
+            for r in worst: ezr.add(worst_col, r[col.at])
+            
+            # If the most common symbol differs, it's a candidate explanation
+            if ezr.mid(best_col) != ezr.mid(worst_col):
+                explanations.append(col.txt)
+                
+    return explanations
+
+if __name__ == "__main__":
+    data = list(ezr.csv("WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"))
+    header = data[0]
+    rows = data[1:]
+    
+    reasons = blame(header, rows)
+    
+    print("Analysis: What factors correlate with short employee stays?")
+    print("The following input columns show significant differences between")
+    print("the best-performing and worst-performing employees:")
+    for reason in reasons:
+        print(f"- {reason}")
+    
+    exit(0)

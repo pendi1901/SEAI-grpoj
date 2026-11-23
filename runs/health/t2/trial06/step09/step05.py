@@ -1,0 +1,70 @@
+import csv
+from step01 import remember
+
+def blame(header, rows):
+    """
+    Identifies input columns that correlate most strongly with 'bad' performance.
+    'Bad' is defined as the bottom 25% of rows based on the remember() logic.
+    We compare the average value of inputs in the worst 25% vs the best 25%.
+    """
+    # Identify input columns
+    input_indices = [i for i, h in enumerate(header) if not (h.endswith('-') or h.endswith('+'))]
+    
+    # Use remember logic to rank rows (remember returns indices of top 5%)
+    # We need a full ranking to find the bottom 25%
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+    
+    def get_score(row):
+        # Simple score: (1-norm_mre) + norm_acc + norm_pred
+        # Using fixed min/max from the whole dataset for consistency
+        mres = [r[mre_idx] for r in rows]
+        accs = [r[acc_idx] for r in rows]
+        preds = [r[pred_idx] for r in rows]
+        
+        def norm(v, vals):
+            mn, mx = min(vals), max(vals)
+            return (v - mn) / (mx - mn) if mx > mn else 0
+        
+        return (1 - norm(row[mre_idx], mres)) + norm(row[acc_idx], accs) + norm(row[pred_idx], preds)
+
+    scored_rows = sorted([(get_score(r), r) for r in rows], key=lambda x: x[0])
+    
+    n = len(scored_rows)
+    worst = [r for _, r in scored_rows[:n // 4]]
+    best = [r for _, r in scored_rows[-n // 4:]]
+    
+    # Calculate "damage" score: difference in means between worst and best
+    damages = []
+    for i in input_indices:
+        if isinstance(worst[0][i], str):
+            # For symbolic, check frequency difference
+            w_val = max(set(r[i] for r in worst), key=lambda x: [r[i] for r in worst].count(x))
+            b_val = max(set(r[i] for r in best), key=lambda x: [r[i] for r in best].count(x))
+            diff = 1.0 if w_val != b_val else 0.0
+        else:
+            w_avg = sum(r[i] for r in worst) / len(worst)
+            b_avg = sum(r[i] for r in best) / len(best)
+            diff = abs(w_avg - b_avg)
+        damages.append((diff, header[i]))
+    
+    # Return top 3 columns that contribute most to the difference
+    damages.sort(key=lambda x: x[0], reverse=True)
+    return [name for _, name in damages[:3]]
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = [val if header[i] == 'criterion' else float(val) 
+                             for i, val in enumerate(row)]
+            rows.append(processed_row)
+            
+    results = blame(header, rows)
+    print("The settings causing the most damage (worst performance) are:")
+    for name in results:
+        print(f" - {name}")

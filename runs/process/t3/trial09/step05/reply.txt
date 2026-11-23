@@ -1,0 +1,73 @@
+```python
+import csv
+import pandas as pd
+from sklearn.ensemble import RandomForestRegressor
+
+def blame(header, rows):
+    """
+    Identifies input columns that correlate most strongly with the 'Idle-' goal
+    in the worst-performing rows.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    
+    # Identify goal columns and input columns
+    goals = [c for c in header if c.endswith('-') or c.endswith('+')]
+    inputs = [c for c in header if c not in goals]
+    
+    # Define "worst" rows as those with high 'Idle-' (since it is a minimize goal)
+    # We look at the top 25% of rows where 'Idle-' is highest
+    worst_rows = df.nlargest(int(len(df) * 0.25), 'Idle-')
+    
+    # Use a Random Forest to find feature importance regarding 'Idle-'
+    # This helps identify which input variables drive the 'Idle-' value
+    X = worst_rows[inputs]
+    y = worst_rows['Idle-']
+    
+    # Convert symbolic columns to numeric codes for the model
+    X_encoded = pd.get_dummies(X)
+    
+    model = RandomForestRegressor(n_estimators=50, random_state=42)
+    model.fit(X_encoded, y)
+    
+    # Get feature importances
+    importances = dict(zip(X_encoded.columns, model.feature_importances_))
+    
+    # Aggregate importance back to original input column names
+    final_importances = {col: 0.0 for col in inputs}
+    for feat, imp in importances.items():
+        # Handle one-hot encoded column names
+        base_col = feat.split('_')[0]
+        if base_col in final_importances:
+            final_importances[base_col] += imp
+            
+    # Return inputs sorted by importance
+    sorted_inputs = sorted(final_importances, key=final_importances.get, reverse=True)
+    return sorted_inputs
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed_row = []
+                for val in row:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        top_blame = blame(header, rows)
+        
+        print("Customer Inquiry: Why do our worst setups leave so many people waiting around?")
+        print("Analysis: The following input factors are the primary drivers of high 'Idle-' times:")
+        for i, factor in enumerate(top_blame[:3]):
+            print(f"{i+1}. {factor}")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

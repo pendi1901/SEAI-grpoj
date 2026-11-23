@@ -1,0 +1,66 @@
+import csv
+import pandas as pd
+import numpy as np
+
+def flow(header, row, seen):
+    """
+    Warns the customer if a new row is 'going bad'.
+    A row is 'going bad' if its performance is significantly worse 
+    than the historical average of the 'seen' rows.
+    """
+    if not seen:
+        return False
+
+    goals = [col for col in header if col.endswith(('-', '+'))]
+    
+    def calculate_score(r):
+        # Normalize goals based on the 'seen' data context
+        df_seen = pd.DataFrame(seen, columns=header)
+        scores = []
+        for goal in goals:
+            val = r[header.index(goal)]
+            # Use min/max from seen data to normalize
+            c_min = df_seen[goal].min()
+            c_max = df_seen[goal].max()
+            rng = c_max - c_min if c_max != c_min else 1.0
+            norm = (val - c_min) / rng
+            scores.append((1 - norm) if goal.endswith('-') else norm)
+        return sum(scores) / len(scores)
+
+    # Calculate score for the new row and the average of seen rows
+    current_score = calculate_score(row)
+    seen_scores = [calculate_score(r) for r in seen]
+    avg_seen_score = sum(seen_scores) / len(seen_scores)
+    
+    # If the new row is significantly worse than the average (e.g., 2 standard deviations)
+    # we flag it as "going bad".
+    if len(seen_scores) > 5:
+        std_dev = np.std(seen_scores)
+        if current_score < (avg_seen_score - 2 * std_dev):
+            return True
+            
+    return False
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) for val in row])
+        
+        seen = []
+        warnings = 0
+        for i, row in enumerate(rows):
+            if flow(header, row, seen):
+                warnings += 1
+                print(f"Warning: Row {i} is performing significantly worse than previous trends.")
+            seen.append(row)
+            
+        print(f"Analysis complete. Total warnings issued: {warnings}")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

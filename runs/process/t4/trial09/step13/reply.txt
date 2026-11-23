@@ -1,0 +1,72 @@
+```python
+import csv
+import numpy as np
+from scipy import stats
+from step03 import certify as step03_certify
+
+def certify(xs, ys):
+    """
+    Returns True if the difference between two distributions is statistically 
+    insignificant (p > 0.05), False otherwise.
+    """
+    return step03_certify(xs, ys)
+
+def analyze_shift(header, rows):
+    """
+    Compares the performance of the first half of the data (pre-change)
+    vs the second half (post-change) to see if results shifted.
+    """
+    # Identify goal columns
+    goal_indices = [i for i, h in enumerate(header) if h.endswith(('-', '+'))]
+    
+    # Calculate aggregate performance for each row
+    # (Using the logic from step01: normalize goals and average)
+    data = np.array(rows)
+    goals = data[:, goal_indices]
+    
+    # Normalize goals
+    col_min = goals.min(axis=0)
+    col_max = goals.max(axis=0)
+    norm = (goals - col_min) / (col_max - col_min + 1e-9)
+    
+    # Adjust for minimization/maximization
+    scores = []
+    for i, idx in enumerate(goal_indices):
+        if header[idx].endswith('-'):
+            scores.append(1 - norm[:, i])
+        else:
+            scores.append(norm[:, i])
+    
+    aggregate_scores = np.mean(scores, axis=0)
+    
+    # Split into two halves
+    mid = len(aggregate_scores) // 2
+    pre_change = aggregate_scores[:mid]
+    post_change = aggregate_scores[mid:]
+    
+    is_same = certify(pre_change.tolist(), post_change.tolist())
+    return is_same, np.mean(pre_change), np.mean(post_change)
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [[float(val) for val in row] for row in reader]
+        
+        is_same, mean_pre, mean_post = analyze_shift(header, rows)
+        
+        print("Customer Inquiry: Did results shift after the spring change?")
+        print(f"  Mean Performance (Pre-change):  {mean_pre:.4f}")
+        print(f"  Mean Performance (Post-change): {mean_post:.4f}")
+        
+        if is_same:
+            print("Conclusion: The results are statistically the same. The change had no significant impact.")
+        else:
+            print("Conclusion: The results are statistically different. The change caused a real shift in performance.")
+            
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
+```

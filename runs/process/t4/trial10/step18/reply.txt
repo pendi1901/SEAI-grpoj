@@ -1,0 +1,76 @@
+```python
+import csv
+import pandas as pd
+import numpy as np
+from sklearn.ensemble import RandomForestRegressor
+
+def fix(header, row, levers):
+    """
+    Identifies the most impactful lever to change to minimize 'Idle-'.
+    Uses a Random Forest to predict the impact of changing levers on 'Idle-'.
+    """
+    filename = 'pom3a.n1000.train.csv'
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header_csv = next(reader)
+        rows = [[float(val) for val in row] for row in reader]
+    
+    df = pd.DataFrame(rows, columns=header_csv)
+    inputs = [c for c in header if c in levers]
+    target = 'Idle-'
+    
+    # Train model to predict Idle-
+    model = RandomForestRegressor(n_estimators=50, random_state=42)
+    model.fit(df[inputs], df[target])
+    
+    best_change = {}
+    min_idle = float('inf')
+    
+    current_row_df = pd.DataFrame([row], columns=header)
+    
+    for col, bounds in levers.items():
+        # Try a few points in the range to find the one that minimizes Idle-
+        low, high = bounds
+        for val in [low, (low + high) / 2, high]:
+            test_row = current_row_df.copy()
+            test_row[col] = val
+            pred = model.predict(test_row[inputs])[0]
+            if pred < min_idle:
+                min_idle = pred
+                best_change = {col: val}
+                
+    return best_change
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [[float(val) for val in row] for row in reader]
+        
+        # Levers excluding Team Size (since customer cannot hire)
+        # We focus on project management parameters
+        levers = {
+            'Culture': (0.0, 1.0),
+            'Criticality': (0.0, 1.0),
+            'Inter-Dependency': (0.0, 1.0),
+            'Dynamism': (0.0, 1.0),
+            'Size': (0.0, 1.0),
+            'Plan': (0.0, 1.0)
+        }
+        
+        # Pick a "bad" row (high idle time)
+        bad_row = max(rows, key=lambda r: r[header.index('Idle-')])
+        
+        recommendation = fix(header, bad_row, levers)
+        
+        print("To cut idle time without hiring:")
+        for col, val in recommendation.items():
+            print(f"Adjust '{col}' to {val:.4f}.")
+        print("This change is predicted to reduce idle resources.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

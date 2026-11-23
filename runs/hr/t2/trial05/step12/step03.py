@@ -1,0 +1,65 @@
+import csv
+import math
+
+def certify(xs, ys):
+    """
+    Returns True if the two lists of numbers are statistically similar 
+    (i.e., they do not differ significantly), False otherwise.
+    Uses a simple T-test approach (Welch's T-test logic).
+    """
+    n1, n2 = len(xs), len(ys)
+    if n1 < 2 or n2 < 2:
+        return True
+    
+    m1, m2 = sum(xs) / n1, sum(ys) / n2
+    v1 = sum((x - m1) ** 2 for x in xs) / (n1 - 1)
+    v2 = sum((y - m2) ** 2 for y in ys) / (n2 - 1)
+    
+    denom = math.sqrt((v1 / n1) + (v2 / n2))
+    if denom == 0:
+        return m1 == m2
+    
+    t_stat = abs(m1 - m2) / denom
+    # Threshold for 95% confidence (approx 2.0 for large samples)
+    return t_stat < 2.0
+
+def analyze_attrition(header, rows):
+    """
+    Compares 'YearsAtCompany+' for employees who work overtime vs those who don't.
+    """
+    ot_idx = header.index('overTime')
+    years_idx = header.index('YearsAtCompany+')
+    
+    yes_ot = [row[years_idx] for row in rows if row[ot_idx] == 'Yes']
+    no_ot = [row[years_idx] for row in rows if row[ot_idx] == 'No']
+    
+    is_similar = certify(yes_ot, no_ot)
+    
+    return is_similar, len(yes_ot), len(no_ot)
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    similar, count_yes, count_no = analyze_attrition(header, rows)
+    
+    print("Analysis: Do people who work overtime leave their role sooner?")
+    if similar:
+        print("Result: The difference is likely just noise.")
+    else:
+        print("Result: There is a statistically significant difference.")
+    print(f"(Based on {count_yes} overtime employees vs {count_no} non-overtime employees)")

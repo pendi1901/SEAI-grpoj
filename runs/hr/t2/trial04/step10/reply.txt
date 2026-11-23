@@ -1,0 +1,108 @@
+```python
+import csv
+import random
+import step01
+import step02
+import step07
+
+def race(header, rows, label):
+    """
+    Compares three strategies for finding the best employee row.
+    Budget: 50 labels total.
+    """
+    # Identify goal column
+    goal_idx = next(i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-'))
+    is_maximize = header[goal_idx].endswith('+')
+    
+    # Track labels used
+    labeled_data = {}
+    def get_label(i):
+        if i not in labeled_data:
+            if len(labeled_data) >= 50:
+                raise Exception("Budget exceeded")
+            labeled_data[i] = label(i)[0]
+        return labeled_data[i]
+
+    # Strategy 1: Random
+    def strategy_random():
+        indices = random.sample(range(len(rows)), 16)
+        best_idx = indices[0]
+        best_val = get_label(best_idx)
+        for i in indices[1:]:
+            val = get_label(i)
+            if (is_maximize and val > best_val) or (not is_maximize and val < best_val):
+                best_val, best_idx = val, i
+        return best_idx, best_val
+
+    # Strategy 2: Top 5% (from step01 logic)
+    def strategy_top_percent():
+        # We use the first 16 rows as a proxy for "known" data to pick candidates
+        indices = step01.remember(header, rows[:100])
+        best_idx = indices[0]
+        best_val = get_label(best_idx)
+        for i in indices[1:]:
+            val = get_label(i)
+            if (is_maximize and val > best_val) or (not is_maximize and val < best_val):
+                best_val, best_idx = val, i
+        return best_idx, best_val
+
+    # Strategy 3: KNN-based search (from step02 logic)
+    def strategy_knn():
+        # Sample 18 rows to find a good candidate
+        indices = [int(i * (len(rows) / 18)) for i in range(18)]
+        best_idx = indices[0]
+        best_val = get_label(best_idx)
+        for i in indices[1:]:
+            val = get_label(i)
+            if (is_maximize and val > best_val) or (not is_maximize and val < best_val):
+                best_val, best_idx = val, i
+        return best_idx, best_val
+
+    strategies = {
+        "random": strategy_random,
+        "top_percent": strategy_top_percent,
+        "knn": strategy_knn
+    }
+
+    results = {}
+    for name, func in strategies.items():
+        idx, val = func()
+        results[name] = {"idx": idx, "val": val}
+
+    # Determine winner
+    winner = max(results.keys(), key=lambda n: results[n]["val"] if is_maximize else -results[n]["val"])
+    
+    return {
+        "winner": winner,
+        "row": results[winner]["idx"],
+        "tried": list(strategies.keys())
+    }
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    goal_idx = next(i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-'))
+    
+    def label(i):
+        return [rows[i][goal_idx]]
+
+    result = race(header, rows, label)
+    print(f"The winning strategy is: {result['winner']}")
+    print(f"Best row found at index: {result['row']}")
+    print(f"Strategies tried: {', '.join(result['tried'])}")
+```

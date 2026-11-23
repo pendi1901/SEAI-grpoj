@@ -1,0 +1,47 @@
+import ezr
+import step01
+
+def spot(header, rows):
+    """
+    Identify rows that look like 'failed runs'.
+    A failed run is defined as a row that is an outlier in the input space
+    (x-columns) but performs poorly in the objective space (y-columns).
+    We use the distance from the centroid of the input space as a measure
+    of 'unusualness' and correlate it with ydist.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate the centroid of the input space (x-columns)
+    # We use the cached mids from the table
+    mids = ezr.mids(tbl)
+    
+    # Calculate two metrics for each row:
+    # 1. xdist: How far the input configuration is from the average configuration
+    # 2. ydist: How far the performance is from the ideal
+    # A 'failed run' is a row that is very far from the average input (xdist)
+    # but still has a poor performance (high ydist).
+    
+    scores = []
+    for i, row in enumerate(rows):
+        xd = ezr.xdist(tbl, row, mids)
+        yd = ezr.ydist(tbl, row)
+        # Suspicion score: high xdist (unusual) * high ydist (poor performance)
+        scores.append((xd * yd, i))
+    
+    # Sort by suspicion score descending
+    scores.sort(key=lambda x: x[0], reverse=True)
+    
+    return [item[1] for item in scores]
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    all_data = list(ezr.csv(filename))
+    header = all_data[0]
+    rows = all_data[1:]
+    
+    suspects = spot(header, rows)
+    
+    print("Analysis of potentially failed runs:")
+    print(f"Identified {len(suspects)} rows that appear to be outliers.")
+    print("Top 5 most suspicious row indices (0-based):", suspects[:5])
+    print("These rows combine unusual input configurations with poor performance outcomes.")

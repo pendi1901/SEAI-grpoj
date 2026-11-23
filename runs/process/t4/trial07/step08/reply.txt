@@ -1,0 +1,84 @@
+```python
+import csv
+import pandas as pd
+import numpy as np
+from sklearn.ensemble import RandomForestRegressor
+
+def fix(header, row, levers):
+    """
+    Finds the smallest change to levers that improves the row's aggregate score.
+    Uses a Random Forest surrogate model to predict the impact of changes.
+    """
+    # Load data to train a surrogate model
+    filename = 'pom3a.n1000.train.csv'
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header_csv = next(reader)
+        rows = [[float(val) for val in r] for r in reader]
+    
+    df = pd.DataFrame(rows, columns=header_csv)
+    inputs = [c for c in header_csv if not (c.endswith('-') or c.endswith('+'))]
+    goals = [c for c in header_csv if c.endswith(('-', '+'))]
+    
+    # Calculate aggregate score for training
+    scores = pd.DataFrame(index=df.index)
+    for g in goals:
+        norm = (df[g] - df[g].min()) / (df[g].max() - df[g].min() + 1e-9)
+        scores[g] = 1 - norm if g.endswith('-') else norm
+    df['aggregate'] = scores.mean(axis=1)
+    
+    # Train surrogate
+    model = RandomForestRegressor(n_estimators=20, random_state=42)
+    model.fit(df[inputs], df['aggregate'])
+    
+    # Find best lever change
+    best_change = {}
+    best_score = -1
+    
+    # Try small perturbations for each lever
+    for col, bounds in levers.items():
+        idx = header.index(col)
+        original_val = row[idx]
+        
+        # Test a few points within the allowed range
+        if isinstance(bounds, (tuple, list)):
+            low, high = bounds
+            test_vals = np.linspace(low, high, 5)
+        else:
+            test_vals = bounds
+            
+        for val in test_vals:
+            if val == original_val: continue
+            
+            new_row = list(row)
+            new_row[idx] = val
+            
+            # Predict score
+            pred = model.predict([new_row[:len(inputs)]])[0]
+            if pred > best_score:
+                best_score = pred
+                best_change = {col: val}
+                
+    return best_change
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = [[float(val) for val in r] for r in reader]
+    
+    # Define levers based on problem context (Plan and Team Size)
+    levers = {'Plan': (0.0, 1.0), 'Team Size': (0.0, 1.0)}
+    
+    # Pick a "bad" row (e.g., one with high Cost- and Idle-)
+    bad_row = rows[0] 
+    
+    recommendation = fix(header, bad_row, levers)
+    
+    print("Customer Inquiry: How to rescue the over-budget, idle programme?")
+    print("Recommendation: To improve performance, adjust the following parameters:")
+    for col, val in recommendation.items():
+        print(f"  - {col}: set to {val:.4f}")
+    print("This change is predicted to optimize the balance between cost and idle time.")
+```

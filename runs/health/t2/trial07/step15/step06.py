@@ -1,0 +1,94 @@
+import csv
+import step01
+import step02
+
+def justify(header, rows, row):
+    """
+    Estimates the performance of 'row' relative to 'rows' and returns
+    the percentile rank and a justification string.
+    """
+    # 1. Estimate the goals for the target row using KNN from step02
+    # guess() returns a list of values for the first goal column only.
+    # We need to estimate all goals. Let's adapt the logic.
+    goal_indices = [i for i, h in enumerate(header) if h.endswith(('-', '+'))]
+    
+    # Reconstruct the full row with estimates
+    full_row = list(row)
+    for g_idx in goal_indices:
+        # Use the KNN logic from step02 to estimate each goal individually
+        # We temporarily treat the current goal as the target
+        target_idx = g_idx
+        input_indices = [i for i in range(len(header)) if i not in goal_indices]
+
+        def dist(r1, r2):
+            d = 0
+            for i in input_indices:
+                v1, v2 = r1[i], r2[i]
+                if isinstance(v1, str):
+                    d += 0 if v1 == v2 else 1
+                else:
+                    d += (v1 - v2)**2
+            return d**0.5
+
+        # Find nearest neighbor
+        best_d = float('inf')
+        best_val = 0
+        for train_row in rows:
+            d = dist(row, train_row)
+            if d < best_d:
+                best_d = d
+                best_val = train_row[target_idx]
+        full_row[g_idx] = best_val
+    
+    # 2. Calculate scores for all rows (including the estimated one)
+    all_rows = rows + [full_row]
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+    
+    def get_score(r, dataset):
+        mres = [x[mre_idx] for x in dataset]
+        accs = [x[acc_idx] for x in dataset]
+        preds = [x[pred_idx] for x in dataset]
+        
+        def norm(val, vals, rev=False):
+            lo, hi = min(vals), max(vals)
+            if hi == lo: return 0.5
+            n = (val - lo) / (hi - lo)
+            return (1 - n) if rev else n
+        
+        return (norm(r[mre_idx], mres, True) + 
+                norm(r[acc_idx], accs, False) + 
+                norm(r[pred_idx], preds, False)) / 3
+
+    target_score = get_score(full_row, all_rows)
+    scores = [get_score(r, all_rows) for r in rows]
+    
+    # 3. Calculate fraction of rows that are worse than the target
+    better_than_count = sum(1 for s in scores if target_score > s)
+    p = better_than_count / len(rows)
+    
+    reason = f"This setup outperforms {p:.1%} of all historical configurations based on its estimated multi-objective score."
+    return p, reason
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed = [val if header[i] == 'criterion' else float(val) 
+                             for i, val in enumerate(row)]
+                rows.append(processed)
+        
+        # Pick a sample row to justify (e.g., the last one)
+        sample_row = [val if i not in [0, 1, 2] else "?" for i, val in enumerate(rows[-1])]
+        
+        p, reason = justify(header, rows, sample_row)
+        print(f"Percentile: {p:.4f}")
+        print(f"Justification: {reason}")
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

@@ -1,0 +1,55 @@
+import ezr
+import random
+
+def choose(header, rows, label):
+    """
+    Find the best working arrangement by using a budget of 50 labels.
+    We use the 'acquire' strategy from ezr to intelligently sample the
+    rows that are most likely to be optimal based on the goal columns.
+    """
+    # Create a table structure to handle the data
+    tbl = ezr.Tbl([header] + rows)
+    
+    # The harness provides a label function that returns the full row
+    # when given an index. We need to map the row back to its index.
+    # Since rows are objects, we can use their identity or index.
+    row_to_idx = {id(r): i for i, r in enumerate(rows)}
+
+    def oracle_wrapper(row):
+        # Retrieve the true row from the harness using the index
+        idx = row_to_idx[id(row)]
+        true_row = label(idx)
+        # Update the row in-place with the true goal values
+        for i, name in enumerate(header):
+            if name.endswith('+') or name.endswith('-'):
+                row[i] = true_row[i]
+        return row
+
+    # Use ezr.acquire to perform the active learning
+    # It returns the rows that were labeled
+    labeled_rows = ezr.acquire(tbl, cap=50, label=oracle_wrapper)
+    
+    # Find the best row among the labeled ones
+    # Best is defined by the lowest ydist (closest to ideal goals)
+    best_row = min(labeled_rows, key=lambda r: ezr.ydist(tbl, r))
+    
+    # Return the index of the best row
+    return row_to_idx[id(best_row)]
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # The harness provides a label function that reveals the hidden goals
+    # We simulate this for the standalone run
+    def mock_label(i):
+        return rows[i]
+
+    # Run the selection process
+    best_idx = choose(header, rows, mock_label)
+    
+    print(f"Analysis complete.")
+    print(f"The best working arrangement was found at row index: {best_idx}")
+    print(f"This row was identified as having the most optimal goal metrics after 50 targeted interviews.")

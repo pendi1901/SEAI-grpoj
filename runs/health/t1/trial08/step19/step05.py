@@ -1,0 +1,66 @@
+import csv
+
+def blame(header, rows):
+    """
+    Identifies input columns that correlate with 'bad' performance.
+    A row is 'bad' if its goals (MRE-, ACC+, PRED40+) are poor.
+    We calculate a 'badness' score for each row and correlate it with input settings.
+    """
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+    
+    input_cols = [i for i, name in enumerate(header) if name not in ['MRE-', 'ACC+', 'PRED40+']]
+    
+    # Calculate badness: High MRE, Low ACC, Low PRED
+    # Normalize: MRE + (1-ACC) + (1-PRED)
+    def get_badness(row):
+        return row[mre_idx] + (1.0 - row[acc_idx]) + (1.0 - row[pred_idx])
+
+    # Sort rows by badness and take the worst 20%
+    rows_with_badness = sorted([(get_badness(r), r) for r in rows], key=lambda x: x[0], reverse=True)
+    worst_rows = [r for _, r in rows_with_badness[:len(rows)//5]]
+    
+    # For each input column, calculate the average value in the worst rows
+    # vs the average in the whole dataset. High deviation suggests the setting
+    # is contributing to the 'badness'.
+    impacts = []
+    for i in input_cols:
+        col_name = header[i]
+        if isinstance(worst_rows[0][i], str):
+            # For symbolic, check frequency of specific values
+            continue
+        else:
+            avg_all = sum(r[i] for r in rows) / len(rows)
+            avg_worst = sum(r[i] for r in worst_rows) / len(worst_rows)
+            # Impact is the absolute difference in means
+            impacts.append((abs(avg_worst - avg_all), col_name))
+            
+    # Return names of inputs sorted by impact
+    impacts.sort(key=lambda x: x[0], reverse=True)
+    return [name for _, name in impacts]
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i] == 'criterion':
+                    processed_row.append(val)
+                else:
+                    processed_row.append(float(val))
+            rows.append(processed_row)
+            
+    blame_list = blame(header, rows)
+    
+    print("Analysis: Which settings contribute most to poor performance?")
+    print("The following input settings show the strongest correlation with bad outcomes:")
+    for i, name in enumerate(blame_list):
+        print(f"{i+1}. {name}")
+    print("\nThese settings deviate most significantly in the worst-performing setups.")

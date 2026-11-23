@@ -1,0 +1,53 @@
+import ezr
+import random
+
+def spot(header, rows):
+    """
+    Identifies rows that are 'suspicious' by finding outliers in the 
+    input space. A row is suspicious if it is far from its nearest 
+    neighbors in the input space (xdist), suggesting it might be an 
+    erroneous entry or an anomaly.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate the distance of each row to its nearest neighbor in the input space.
+    # Rows that are very far from all other rows are likely outliers/errors.
+    suspicious = []
+    for i, r1 in enumerate(rows):
+        # Find distance to the nearest neighbor (excluding self)
+        min_dist = 1e30
+        for j, r2 in enumerate(rows):
+            if i == j:
+                continue
+            d = ezr.xdist(tbl, r1, r2)
+            if d < min_dist:
+                min_dist = d
+        suspicious.append((min_dist, i))
+    
+    # Sort by distance descending: the rows with the largest "nearest neighbor" 
+    # distance are the most isolated/suspicious.
+    suspicious.sort(key=lambda x: x[0], reverse=True)
+    
+    return [idx for dist, idx in suspicious]
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Identify the most suspicious rows
+    suspects = spot(header, rows)
+    
+    print("Analysis: Identifying potential data entry errors.")
+    print("-" * 60)
+    print("The following rows are the most suspicious (most isolated in input space):")
+    
+    # Print the top 5 most suspicious rows
+    for i in range(min(5, len(suspects))):
+        idx = suspects[i]
+        print(f" - Row index {idx} (most suspicious rank {i+1})")
+        
+    print("-" * 60)
+    print("These rows contain input combinations that are rare or inconsistent")
+    print("with the rest of the dataset, suggesting potential manual entry errors.")

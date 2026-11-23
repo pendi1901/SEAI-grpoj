@@ -1,0 +1,49 @@
+import ezr
+import random
+
+def flow(header, row, seen):
+    """
+    Detects if a new team record deviates from the historical norm.
+    We use the distance to the centroid of the 'seen' data (xdist).
+    If the new row is an outlier (in the top 5% of distance from the 
+    centroid of previous records), we return True to flag it.
+    """
+    if len(seen) < 30:
+        return False
+    
+    # Create a table from the history to calculate the centroid
+    tbl = ezr.Tbl([header] + seen)
+    centroid = ezr.mids(tbl)
+    
+    # Calculate how far the current row is from the historical centroid
+    current_dist = ezr.xdist(tbl, row, centroid)
+    
+    # Calculate distances for all seen rows to establish a distribution
+    seen_dists = [ezr.xdist(tbl, r, centroid) for r in seen]
+    
+    # Flag if the current row is in the top 5% of distance (outlier)
+    threshold = sorted(seen_dists)[int(len(seen_dists) * 0.95)]
+    
+    return current_dist > threshold
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Simulate the arrival of rows one by one
+    random.seed(1234567891)
+    random.shuffle(rows)
+    
+    seen = []
+    anomalies = 0
+    
+    for row in rows:
+        if flow(header, row, seen):
+            anomalies += 1
+        seen.append(row)
+        
+    print(f"Processed {len(rows)} employee records.")
+    print(f"Detected {anomalies} records that deviate from the historical team norm.")
+    print("Logic: A record is flagged if its input features are in the top 5% of distance from the historical centroid.")

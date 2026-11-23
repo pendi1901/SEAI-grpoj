@@ -1,0 +1,83 @@
+import ezr
+
+def choose(header, rows, label):
+    """
+    Find the best row by using the acquire function from ezr.
+    We label up to 50 rows and return the index of the best one found.
+    """
+    # The error occurred because ezr.acquire uses ydist, which requires 
+    # normalized goal values. Since our input rows have '?' in goal columns,
+    # we must ensure the table knows these are goals but doesn't try to 
+    # normalize '?' values during the acquisition process.
+    
+    # We create a wrapper that handles the labeling and updates the row.
+    # We must ensure the table is aware of the goal columns correctly.
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Track which rows have been labeled to avoid re-labeling
+    labeled_cache = {}
+
+    def oracle_wrapper(row):
+        # Find the index of the row in the original list
+        # Since rows are passed by reference, we can identify them by identity
+        # or by finding the index in the original list.
+        idx = -1
+        for i, r in enumerate(rows):
+            if r is row:
+                idx = i
+                break
+        
+        if idx not in labeled_cache:
+            real_vals = label(idx)
+            # Update the row with real values
+            for i, val in enumerate(real_vals):
+                row[i] = val
+            labeled_cache[idx] = row
+            # Update the table's column statistics with the new values
+            ezr.addCols(tbl, row)
+            
+        return row
+
+    # Use ezr.acquire to intelligently pick 50 rows to label.
+    # Note: acquire expects rows to have values. We provide the rows
+    # and the oracle_wrapper will fill them as needed.
+    best_rows = ezr.acquire(tbl, cap=50, label=oracle_wrapper)
+    
+    # After labeling, find the best row among all labeled ones.
+    # We use ydist which now works because the rows are populated.
+    best_row = min(best_rows, key=lambda r: ezr.ydist(tbl, r))
+    
+    return rows.index(best_row)
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Keep a copy of original rows to simulate the oracle
+    full_rows = [list(r) for r in rows]
+    
+    # Mask the goals for the rows passed to choose
+    masked_rows = []
+    for r in rows:
+        new_row = list(r)
+        for i, name in enumerate(header):
+            if name.endswith(('-', '+')):
+                new_row[i] = "?"
+        masked_rows.append(new_row)
+    
+    # Define the label function for the harness
+    labeled_indices = set()
+    
+    def label_func(idx):
+        labeled_indices.add(idx)
+        if len(labeled_indices) > 50:
+            raise Exception("Label budget exceeded!")
+        return full_rows[idx]
+    
+    best_idx = choose(header, masked_rows, label_func)
+    
+    print(f"Best setup found at index: {best_idx}")
+    print(f"Total setups labeled: {len(labeled_indices)}")
+    print(f"Best row values: {full_rows[best_idx]}")

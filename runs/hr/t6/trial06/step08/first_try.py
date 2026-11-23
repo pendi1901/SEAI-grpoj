@@ -1,0 +1,73 @@
+import ezr
+import random
+
+def fix(header, row, levers):
+    """
+    Suggests a change to a 'bad' row to improve its goal performance.
+    We evaluate potential changes by simulating the row's new ydist
+    using the current row's context.
+    """
+    # Create a dummy table to use ezr's ydist logic
+    # We need a table with the same structure to calculate ydist
+    tbl = ezr.Tbl([header])
+    
+    best_change = {}
+    best_ydist = ezr.ydist(tbl, row)
+    
+    # Try each lever
+    for col_name, allowed in levers.items():
+        idx = header.index(col_name)
+        original_val = row[idx]
+        
+        # Generate candidates based on lever type
+        candidates = []
+        if isinstance(allowed, list):  # Symbolic
+            candidates = [v for v in allowed if v != original_val]
+        else:  # Numeric (low, high)
+            low, high = allowed
+            # Try a few points in the range
+            candidates = [low, (low + high) / 2, high]
+            
+        for val in candidates:
+            # Create a hypothetical row
+            new_row = list(row)
+            new_row[idx] = val
+            
+            # Calculate new ydist
+            # We use the same tbl context
+            d = ezr.ydist(tbl, new_row)
+            
+            if d < best_ydist:
+                best_ydist = d
+                best_change = {col_name: val}
+                
+    return best_change
+
+if __name__ == "__main__":
+    file_path = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(file_path))
+    header = data[0]
+    rows = data[1:]
+    
+    # Define levers as per customer request
+    levers = {
+        "businessTravel": ["Non-Travel", "Travel_Frequently", "Travel_Rarely"],
+        "overTime": ["No", "Yes"],
+        "TrainingTimesLastYear": (0, 6),
+        "PercentSalaryHike": (11, 25),
+        "StockOptionLevel": (0, 3)
+    }
+    
+    # Pick a "bad" row (e.g., one with high ydist)
+    tbl = ezr.Tbl([header] + rows)
+    sorted_rows = sorted(rows, key=lambda r: ezr.ydist(tbl, r), reverse=True)
+    bad_row = sorted_rows[0]
+    
+    # Get recommendation
+    recommendation = fix(header, bad_row, levers)
+    
+    print("Analysis: How to improve retention for high-risk staff?")
+    print(f"Original row (sample): {bad_row[:3]}...")
+    print(f"Recommended change: {recommendation}")
+    print("Strategy: We tested available levers to find the one that minimizes")
+    print("the distance to the ideal retention goals (YearsAtCompany+, etc).")

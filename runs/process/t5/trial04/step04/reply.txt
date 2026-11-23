@@ -1,0 +1,57 @@
+```python
+import ezr
+import random
+
+def flow(header, row, seen):
+    """
+    Decide whether to approve a row.
+    We approve if the row is significantly better than the average 
+    of what we have seen so far.
+    """
+    if not seen:
+        return True
+    
+    # Create a table to handle normalization and distance calculations
+    # We use the seen rows to establish the context of "good"
+    data = [header] + seen
+    tbl = ezr.Tbl(data)
+    
+    # Calculate the ydist of the current row relative to the seen data
+    # Note: We need to handle the fact that the current row might have '?'
+    # but the goal columns are usually provided in the input stream.
+    current_ydist = ezr.ydist(tbl, row)
+    
+    # Calculate the average ydist of all seen rows
+    seen_ydists = [ezr.ydist(tbl, r) for r in seen]
+    avg_ydist = sum(seen_ydists) / len(seen_ydists)
+    
+    # Approve if the current row is better (lower ydist) than the average
+    # We add a small buffer to be selective
+    return current_ydist < (avg_ydist * 0.95)
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    
+    try:
+        header = next(data_gen)
+        all_rows = list(data_gen)
+    except StopIteration:
+        print("Error: File is empty.")
+        exit(1)
+        
+    # Simulate the arrival process
+    seen = []
+    approved_count = 0
+    
+    for row in all_rows:
+        if flow(header, row, seen):
+            approved_count += 1
+        seen.append(row)
+        
+    print(f"Processed {len(all_rows)} proposals.")
+    print(f"Approved {approved_count} proposals based on real-time evaluation.")
+    print("Decision logic: Approved if ydist is better than the running average.")
+    
+    exit(0)
+```

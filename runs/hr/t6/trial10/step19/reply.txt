@@ -1,0 +1,37 @@
+```python
+import ezr
+import step09
+
+def spot(header, rows):
+    """
+    Identifies rows that are 'unlike anyone we have employed' by measuring
+    the distance of each row from the centroid of the existing population.
+    Rows with high xdist are outliers and thus our estimates for them
+    cannot be trusted.
+    """
+    # We use the logic from step09 which identifies rows that are 
+    # furthest from the population centroid.
+    return step09.spot(header, rows)
+
+if __name__ == "__main__":
+    # Load data
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Identify suspicious rows
+    suspicious_indices = spot(header, rows)
+    
+    print("Analysis: Identifying records where estimates cannot be trusted.")
+    print("Logic: Flagging rows that are 'unlike anyone we have employed' "
+          "(i.e., outliers in the input feature space).")
+    print(f"\nFound {len(suspicious_indices)} records where the model's "
+          "estimates are likely unreliable:")
+    
+    for rank, idx in enumerate(suspicious_indices[:5]):
+        print(f"  Rank {rank+1}: Row index {idx}")
+        
+    print("\nThese records deviate significantly from our historical data, "
+          "making them poor candidates for standard model predictions.")
+```

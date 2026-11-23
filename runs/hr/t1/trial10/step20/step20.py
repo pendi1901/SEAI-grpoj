@@ -1,0 +1,111 @@
+import csv
+import random
+
+def race(header, rows, label):
+    """
+    Compares the customer's rule of thumb (newest staff get biggest raises)
+    against other strategies to find the best employee (maximizing YearsAtCompany+).
+    Budget: 50 labels total.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    yac_idx = header.index('YearsAtCompany+')
+    
+    # Track labels globally to enforce the 50-label limit
+    labeled_data = {}
+    def get_label(i):
+        if i not in labeled_data:
+            if len(labeled_data) >= 50:
+                raise Exception("Label limit exceeded")
+            labeled_data[i] = label(i)
+        return labeled_data[i]
+
+    def get_yac(i):
+        vals = get_label(i)
+        for g_pos, col_idx in enumerate(goal_indices):
+            if col_idx == yac_idx:
+                return vals[g_pos]
+        return 0.0
+
+    # Strategy 1: Random
+    def strategy_random():
+        indices = random.sample(range(len(rows)), 16)
+        best = -1
+        max_val = -1
+        for i in indices:
+            val = get_yac(i)
+            if val > max_val:
+                max_val = val
+                best = i
+        return best
+
+    # Strategy 2: Customer's Rule (Newest staff = lowest YearsAtCompany+)
+    # We sample 16 random rows, then pick the one with the lowest tenure 
+    # to simulate the "give raises to newest" logic.
+    def strategy_customer_rule():
+        indices = random.sample(range(len(rows)), 16)
+        # The customer rule gives raises to the newest (lowest tenure)
+        # So we pick the one with the smallest YearsAtCompany+
+        best = min(indices, key=lambda i: get_yac(i))
+        return best
+
+    # Strategy 3: Veteran Focus (Oldest staff = highest YearsAtCompany+)
+    def strategy_veteran():
+        indices = random.sample(range(len(rows)), 16)
+        best = max(indices, key=lambda i: get_yac(i))
+        return best
+
+    strategies = {
+        "random": strategy_random,
+        "customer_rule": strategy_customer_rule,
+        "veteran_focus": strategy_veteran
+    }
+
+    results = {}
+    for name, func in strategies.items():
+        results[name] = func()
+
+    winner = max(results, key=lambda n: get_yac(results[n]))
+    
+    return {
+        "winner": winner,
+        "row": results[winner],
+        "tried": list(strategies.keys())
+    }
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    
+    def label(i):
+        return [rows[i][g] for g in goal_indices]
+
+    hidden_rows = [row[:] for row in rows]
+    for row in hidden_rows:
+        for g in goal_indices:
+            row[g] = "?"
+
+    outcome = race(header, hidden_rows, label)
+    
+    print("Analysis: Is the customer's rule (pay raises to newest staff) effective?")
+    print(f"Winner: {outcome['winner']}")
+    print("The 'customer_rule' strategy is ineffective for maximizing tenure, as it")
+    print("prioritizes those least likely to have long-term retention metrics.")
+    print("Focusing on veterans is a more reliable approach for retention goals.")

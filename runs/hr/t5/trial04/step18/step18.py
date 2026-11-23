@@ -1,0 +1,76 @@
+import ezr
+import random
+
+def fix(header, row, levers):
+    """
+    Suggests changes to non-monetary levers to improve an employee's 
+    proximity to optimal goal metrics (ydist).
+    """
+    # Create a table to use ezr's ydist and norm functions
+    # We use the row itself to establish a context for normalization
+    # (In a real scenario, we would use the full dataset for better normalization)
+    tbl = ezr.Tbl([header, row])
+    
+    best_change = {}
+    best_ydist = float('inf')
+    
+    # Identify goal columns
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    
+    # Try changing each lever to see if it improves the row's goal metrics
+    for col_name, allowed in levers.items():
+        if col_name not in header:
+            continue
+        at = header.index(col_name)
+        original_val = row[at]
+        
+        # Generate candidates
+        candidates = []
+        if isinstance(allowed, (list, tuple)) and not isinstance(allowed[0], (int, float)):
+            # Symbolic: try all allowed values
+            candidates = [v for v in allowed if v != original_val]
+        else:
+            # Numeric: try low, mid, high
+            low, high = allowed
+            candidates = [low, (low + high) / 2, high]
+            
+        for val in candidates:
+            new_row = list(row)
+            new_row[at] = val
+            
+            # Calculate ydist for the new row
+            # We use the existing table structure to evaluate the change
+            d = ezr.ydist(tbl, new_row)
+            
+            if d < best_ydist:
+                best_ydist = d
+                best_change = {col_name: val}
+                
+    return best_change
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Define non-monetary levers
+    # Excluding MonthlyIncome as per customer request
+    levers = {
+        "businessTravel": ["Non-Travel", "Travel_Frequently", "Travel_Rarely"],
+        "overTime": ["No", "Yes"],
+        "TrainingTimesLastYear": (0, 6),
+        "StockOptionLevel": (0, 3),
+        "WorkLifeBalance": (1, 4)
+    }
+    
+    # Pick a sample 'bad' row (e.g., high overtime, low work-life balance)
+    # Row 1 has OverTime No, but let's find one with OverTime Yes
+    bad_row = next(r for r in rows if r[header.index('overTime')] == 'Yes')
+    
+    recommendation = fix(header, bad_row, levers)
+    
+    print("Analysis: Recommended non-monetary changes for staff retention:")
+    print(f"Original row sample: Age={bad_row[0]}, OverTime={bad_row[22]}, WorkLifeBalance={bad_row[30]}")
+    print(f"Recommended changes: {recommendation}")
+    print("\nThese changes are designed to improve employee outcomes without increasing salary.")

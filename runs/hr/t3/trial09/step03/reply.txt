@@ -1,0 +1,52 @@
+```python
+import csv
+from scipy import stats
+
+def certify(xs, ys):
+    """
+    Returns True if the two groups are statistically indistinguishable 
+    (p-value > 0.05), False if they are significantly different.
+    """
+    t_stat, p_value = stats.ttest_ind(xs, ys, equal_var=False)
+    return p_value > 0.05
+
+def analyze_attrition_impact(header, rows):
+    """
+    Compares 'YearsInCurrentRole+' for employees who work overtime vs those who don't.
+    """
+    overtime_idx = header.index('overTime')
+    role_idx = header.index('YearsInCurrentRole+')
+    
+    yes_overtime = [row[role_idx] for row in rows if row[overtime_idx] == 'Yes']
+    no_overtime = [row[role_idx] for row in rows if row[overtime_idx] == 'No']
+    
+    is_noise = certify(yes_overtime, no_overtime)
+    
+    return is_noise, yes_overtime, no_overtime
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    is_noise, yes_ot, no_ot = analyze_attrition_impact(header, rows)
+    
+    print("Analysis: Does working overtime affect how long someone stays in their role?")
+    if is_noise:
+        print("Result: The difference is statistically insignificant (likely just noise).")
+    else:
+        print("Result: There is a statistically significant difference in tenure between these groups.")
+    
+    print(f"Average years in role (Overtime): {sum(yes_ot)/len(yes_ot):.2f}")
+    print(f"Average years in role (No Overtime): {sum(no_ot)/len(no_ot):.2f}")
+```

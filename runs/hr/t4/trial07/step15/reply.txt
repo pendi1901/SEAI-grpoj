@@ -1,0 +1,65 @@
+```python
+import csv
+from sklearn.ensemble import RandomForestRegressor
+import step05
+
+def blame(header, rows):
+    """
+    Identifies input columns that have the least impact on tenure.
+    We use Random Forest feature importance to rank all input columns.
+    Columns with near-zero importance are candidates for removal.
+    """
+    goal_name = 'YearsAtCompany+'
+    goal_idx = header.index(goal_name)
+    
+    # Identify input columns (not goals)
+    input_indices = [i for i, name in enumerate(header) if not name.endswith(('-', '+'))]
+    
+    # Prepare data
+    X = []
+    for row in rows:
+        features = []
+        for i in input_indices:
+            val = row[i]
+            if isinstance(val, str):
+                features.append(hash(val) % 1000)
+            else:
+                features.append(val)
+        X.append(features)
+    
+    y = [row[goal_idx] for row in rows]
+    
+    # Train model to see which features actually matter
+    model = RandomForestRegressor(n_estimators=50, random_state=42)
+    model.fit(X, y)
+    
+    # Get importances
+    importances = model.feature_importances_
+    
+    # Sort features by importance
+    feature_importance = sorted(zip(input_indices, importances), key=lambda x: x[1])
+    
+    # Return columns that have very low importance (bottom 5)
+    # These are the ones that "have nothing to do with how long people stay"
+    return [header[idx] for idx, imp in feature_importance[:5]]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    results = blame(header, rows)
+    print("The following columns have little to no impact on tenure and could be stopped:")
+    for col in results:
+        print(f"- {col}")
+```

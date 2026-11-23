@@ -1,0 +1,63 @@
+import csv
+from sklearn.neighbors import KNeighborsRegressor
+from sklearn.preprocessing import LabelEncoder
+import numpy as np
+from step01 import remember
+
+def guess(header, train, test):
+    """
+    Predicts the MRE- (first goal column) for test rows using K-Nearest Neighbors.
+    """
+    # Identify goal index
+    goal_idx = 0  # MRE- is the first column
+    
+    # Prepare data: convert symbolic columns to numeric for sklearn
+    def encode_data(data):
+        data_arr = np.array(data, dtype=object)
+        # Encode 'criterion' column (index 4)
+        le = LabelEncoder()
+        data_arr[:, 4] = le.fit_transform(data_arr[:, 4].astype(str))
+        return data_arr.astype(float)
+
+    # Separate features and target
+    # Input columns are all except the goals (first 3 columns)
+    # Indices 0, 1, 2 are goals. Features are 3 to end.
+    X_train = encode_data([row[3:] for row in train])
+    y_train = np.array([row[goal_idx] for row in train], dtype=float)
+    
+    X_test = encode_data([row[3:] for row in test])
+    
+    # Use KNN to estimate the MRE
+    model = KNeighborsRegressor(n_neighbors=5)
+    model.fit(X_train, y_train)
+    
+    return model.predict(X_test).tolist()
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i] == 'criterion':
+                    processed_row.append(val)
+                else:
+                    processed_row.append(float(val))
+            rows.append(processed_row)
+
+    # Split data for demonstration: use last 10 rows as 'test'
+    train_data = rows[:-10]
+    test_data = [r[:] for r in rows[-10:]]
+    
+    # Mask goals in test data
+    for row in test_data:
+        row[0] = row[1] = row[2] = "?"
+        
+    predictions = guess(header, train_data, test_data)
+    
+    print("Forecasted MRE- for the last 10 setups:")
+    for i, pred in enumerate(predictions):
+        print(f"Setup {i+1}: Estimated MRE = {pred:.4f}")

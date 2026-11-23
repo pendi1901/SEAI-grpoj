@@ -1,0 +1,71 @@
+import csv
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column for each test row using a 
+    k-Nearest Neighbors approach based on input columns.
+    """
+    # Identify input columns (those not ending in - or +)
+    input_indices = [i for i, name in enumerate(header) 
+                     if not (name.endswith('-') or name.endswith('+'))]
+    
+    # Identify the target column (the first goal column)
+    target_idx = next(i for i, name in enumerate(header) 
+                      if name.endswith('-') or name.endswith('+'))
+    
+    predictions = []
+    
+    for t_row in test:
+        # Calculate Euclidean distance to all training rows based on inputs
+        distances = []
+        for train_row in train:
+            dist = 0
+            for i in input_indices:
+                # Assuming numeric inputs as per problem description
+                dist += (float(t_row[i]) - float(train_row[i]))**2
+            distances.append((dist**0.5, float(train_row[target_idx])))
+        
+        # Simple k-NN: average of the 3 nearest neighbors
+        distances.sort()
+        k = 3
+        neighbors = distances[:k]
+        avg_val = sum(n[1] for n in neighbors) / k
+        predictions.append(avg_val)
+        
+    return predictions
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            all_rows = [row for row in reader]
+            
+        # Split data: use 80% for training, 20% for testing
+        split = int(len(all_rows) * 0.8)
+        train_data = all_rows[:split]
+        test_data = all_rows[split:]
+        
+        # Mask the goals in test data to simulate "?"
+        goal_indices = [i for i, name in enumerate(header) 
+                        if name.endswith('-') or name.endswith('+')]
+        
+        masked_test = []
+        for row in test_data:
+            new_row = list(row)
+            for idx in goal_indices:
+                new_row[idx] = "?"
+            masked_test.append(new_row)
+            
+        results = guess(header, train_data, masked_test)
+        
+        # Print summary for the customer
+        print(f"Estimated values for the first goal column ({header[goal_indices[0]]}):")
+        for i in range(min(5, len(results))):
+            print(f"Test row {i}: {results[i]:.4f}")
+        print("...")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

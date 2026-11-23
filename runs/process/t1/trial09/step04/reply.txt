@@ -1,0 +1,61 @@
+```python
+import csv
+
+def flow(header, row, seen):
+    """
+    Decides whether to accept a row based on the Secretary Problem logic:
+    1. Observe a sample (first 25% of data) to establish a baseline.
+    2. Accept the first row that is better than the best seen in the sample.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    
+    def is_better(row_a, row_b):
+        # Returns True if row_a is better than row_b
+        for idx in goal_indices:
+            name = header[idx]
+            val_a, val_b = row_a[idx], row_b[idx]
+            if name.endswith('-'):
+                if val_a > val_b: return False
+            else:
+                if val_a < val_b: return False
+        return True
+
+    # Use 25% of the total expected data as a training sample
+    sample_size = 200 
+    
+    if len(seen) < sample_size:
+        return False
+    
+    # Find the best in the sample
+    best_in_sample = seen[0]
+    for r in seen[1:sample_size]:
+        if is_better(r, best_in_sample):
+            best_in_sample = r
+            
+    # If current row is better than the best in sample, accept it
+    return is_better(row, best_in_sample)
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(x) for x in row])
+        
+        accepted_count = 0
+        seen = []
+        for row in rows:
+            if flow(header, row, seen):
+                accepted_count += 1
+            seen.append(row)
+            
+        print(f"Processed {len(rows)} proposals.")
+        print(f"Accepted {accepted_count} proposals based on the decision policy.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

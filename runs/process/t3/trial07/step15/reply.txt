@@ -1,0 +1,84 @@
+```python
+import csv
+import pandas as pd
+from sklearn.ensemble import RandomForestRegressor
+
+def blame(header, rows):
+    """
+    Identifies the input columns that best explain why the worst rows are bad.
+    We define 'bad' as having a high aggregate cost/score/idle penalty.
+    We use Random Forest feature importance to rank which inputs drive these bad outcomes.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    
+    # Identify goal columns and input columns
+    goal_cols = [col for col in header if col.endswith(('-', '+'))]
+    input_cols = [col for col in header if col not in goal_cols]
+    
+    # Calculate aggregate 'badness' score
+    # For '-', higher is worse. For '+', lower is worse.
+    scores = pd.DataFrame(index=df.index)
+    for goal in goal_cols:
+        col_data = df[goal].astype(float)
+        norm = (col_data - col_data.min()) / (col_data.max() - col_data.min() + 1e-9)
+        if goal.endswith('-'):
+            scores[goal] = norm  # Higher is worse
+        else:
+            scores[goal] = 1 - norm  # Lower is worse
+            
+    df['badness'] = scores.mean(axis=1)
+    
+    # Train a Random Forest to predict 'badness' from inputs
+    X = df[input_cols]
+    y = df['badness']
+    
+    model = RandomForestRegressor(n_estimators=50, random_state=42)
+    model.fit(X, y)
+    
+    # Get feature importances
+    importances = model.feature_importances_
+    features_with_importance = sorted(
+        zip(input_cols, importances), 
+        key=lambda x: x[1], 
+        reverse=True
+    )
+    
+    # Return the top 2 most influential input columns
+    return [feat for feat, score in features_with_importance[:2]]
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed_row = []
+                for val in row:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        top_factors = blame(header, rows)
+        
+        print("Customer Inquiry: Which facts matter most to project cost and performance?")
+        print("Analysis: The following input factors are the primary drivers of poor project outcomes:")
+        for i, factor in enumerate(top_factors):
+            print(f"  {i+1}. {factor}")
+        
+        # Identify what to stop worrying about (the least important inputs)
+        goal_cols = [col for col in header if col.endswith(('-', '+'))]
+        input_cols = [col for col in header if col not in goal_cols]
+        least_important = [col for col in input_cols if col not in top_factors]
+        
+        print(f"\nConclusion: You should focus your management efforts on {', '.join(top_factors)}.")
+        print(f"You can safely stop worrying about {least_important[0]} (and others), as they have minimal impact on your goals.")
+        exit(0)
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

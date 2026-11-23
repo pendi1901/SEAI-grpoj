@@ -1,0 +1,49 @@
+import csv
+import pandas as pd
+from sklearn.ensemble import RandomForestRegressor
+from step01 import remember
+
+def blame(header, rows):
+    """
+    Identifies input columns that correlate most strongly with the 'Idle-' goal
+    in the worst-performing rows.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    
+    # Identify input columns and goal columns
+    input_cols = [col for col in header if not (col.endswith('-') or col.endswith('+'))]
+    
+    # Define "worst" rows as those with the highest 'Idle-' value
+    # (Since 'Idle-' is a goal to minimize, high values are the worst)
+    worst_rows = df.sort_values(by='Idle-', ascending=False).head(int(len(df) * 0.2))
+    
+    # Use a Random Forest to find feature importance regarding 'Idle-'
+    X = worst_rows[input_cols]
+    y = worst_rows['Idle-']
+    
+    model = RandomForestRegressor(n_estimators=50, random_state=42)
+    model.fit(X, y)
+    
+    # Get feature importances
+    importances = pd.Series(model.feature_importances_, index=input_cols)
+    
+    # Return the top 3 input columns that explain the 'Idle-' variance
+    return importances.nlargest(3).index.tolist()
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [[float(val) for val in row] for row in reader]
+            
+        top_blame = blame(header, rows)
+        
+        print("Analysis of why 'Idle-' is high in worst setups:")
+        print(f"The primary drivers for idle time are: {', '.join(top_blame)}.")
+        print("These inputs show the strongest correlation with high idle counts in our worst-performing configurations.")
+        exit(0)
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

@@ -1,0 +1,79 @@
+```python
+import ezr
+import step08
+
+def fix(header, row, levers):
+    """
+    Find the single best change to a setting that improves the row's ydist.
+    Reuses the logic from step08 but ensures only one lever is changed.
+    """
+    # Load the full dataset to establish the context for ydist normalization
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    header_data = next(data_gen)
+    all_rows = list(data_gen)
+    tbl = ezr.Tbl([header_data] + all_rows)
+    
+    best_change = {}
+    best_ydist = ezr.ydist(tbl, row)
+    
+    # Iterate through each allowed lever
+    for col_name, allowed in levers.items():
+        if col_name not in header:
+            continue
+        idx = header.index(col_name)
+        original_val = row[idx]
+        
+        candidates = []
+        if isinstance(allowed, tuple):
+            # Numeric range (low, high)
+            low, high = allowed
+            # Try 10 points across the range to find a good improvement
+            for i in range(10):
+                val = low + (high - low) * (i / 9)
+                if val != original_val:
+                    candidates.append(val)
+        elif isinstance(allowed, list):
+            # Symbolic list
+            candidates = [v for v in allowed if v != original_val]
+            
+        for val in candidates:
+            new_row = list(row)
+            new_row[idx] = val
+            d = ezr.ydist(tbl, new_row)
+            if d < best_ydist:
+                best_ydist = d
+                best_change = {col_name: val}
+                
+    return best_change
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    header = next(data_gen)
+    rows = list(data_gen)
+    
+    # Define levers based on column names and types
+    levers = {
+        "N_estimators": (50.0, 200.0),
+        "criterion": ["absolute_error", "poisson", "squared_error"],
+        "Min_sample_leaves": (1.0, 20.0),
+        "Min_impurity_decrease": (0.0, 10.0),
+        "Max_depth": (1.0, 20.0)
+    }
+    
+    # Pick a "bad" row (high ydist) to demonstrate the fix
+    tbl = ezr.Tbl([header] + rows)
+    bad_row = max(rows, key=lambda r: ezr.ydist(tbl, r))
+    
+    recommendation = fix(header, bad_row, levers)
+    
+    print("Single-lever optimization analysis:")
+    if recommendation:
+        for col, val in recommendation.items():
+            print(f"To improve performance, change '{col}' to {val}.")
+    else:
+        print("No single change found to improve this configuration.")
+    
+    exit(0)
+```

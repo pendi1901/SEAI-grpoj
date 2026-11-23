@@ -1,0 +1,51 @@
+import ezr
+import random
+
+def remember(header, rows):
+    """
+    Finds the top 5% of rows that are most similar to the 'ideal' 
+    configuration (the best possible goals).
+    """
+    # Create a table to handle column roles and normalization
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate ydist for all rows.
+    # ydist measures how far a row's goals are from the best possible.
+    # Lower ydist is better.
+    scored = []
+    for i, row in enumerate(rows):
+        d = ezr.ydist(tbl, row)
+        scored.append((d, i))
+    
+    # Sort by distance (ascending, as lower ydist is better)
+    scored.sort()
+    
+    # Return the top 5% of rows (800 rows * 0.05 = 40)
+    limit = max(1, int(len(rows) * 0.05))
+    return [idx for _, idx in scored[:limit]]
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    try:
+        data = list(ezr.csv(filename))
+        header = data[0]
+        rows = data[1:]
+        
+        # Get the best rows
+        best_indices = remember(header, rows)
+        
+        # Print a summary for the customer
+        print(f"Analysis complete. Found {len(best_indices)} highly trustworthy setups.")
+        print("Indices of top-performing rows:")
+        print(best_indices)
+        
+        # Show the first few as a sample
+        print("\nSample of top-performing rows:")
+        for i in best_indices[:3]:
+            print(f"Row {i}: {rows[i]}")
+            
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
+    
+    exit(0)

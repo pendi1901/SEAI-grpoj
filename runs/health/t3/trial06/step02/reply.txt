@@ -1,0 +1,86 @@
+```python
+import csv
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import LabelEncoder
+
+def guess(header, train, test):
+    """
+    Predicts the first goal column (MRE-) for test rows using a Random Forest.
+    """
+    # Identify goal column (first column is MRE-)
+    goal_idx = 0
+    
+    # Prepare training data
+    # Convert symbolic columns to numeric for scikit-learn
+    def prepare_data(data):
+        X = []
+        y = []
+        for row in data:
+            # Features: everything except goals (all columns except first 3)
+            # Note: The prompt implies goals are the first 3 columns
+            features = []
+            for i, val in enumerate(row):
+                if i >= 3:  # Skip MRE-, ACC+, PRED40+
+                    if isinstance(val, str):
+                        # Simple label encoding for symbolic columns
+                        features.append(hash(val) % 1000)
+                    else:
+                        features.append(val)
+            X.append(features)
+            if len(row) > 3:
+                y.append(row[goal_idx])
+        return X, y
+
+    X_train, y_train = prepare_data(train)
+    
+    # Prepare test data
+    X_test = []
+    for row in test:
+        features = []
+        for i, val in enumerate(row):
+            if i >= 3:
+                if isinstance(val, str):
+                    features.append(hash(val) % 1000)
+                else:
+                    features.append(val)
+        X_test.append(features)
+
+    # Train model
+    model = RandomForestRegressor(n_estimators=100, random_state=42)
+    model.fit(X_train, y_train)
+    
+    # Predict
+    return model.predict(X_test).tolist()
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for line in reader:
+            processed_row = []
+            for i, val in enumerate(line):
+                if header[i] == 'criterion':
+                    processed_row.append(val)
+                else:
+                    processed_row.append(float(val))
+            rows.append(processed_row)
+
+    # Split into train and a small test set to demonstrate
+    train_data = rows[:700]
+    test_data = rows[700:710]
+    
+    # Mask goals in test data
+    masked_test = []
+    for row in test_data:
+        masked_row = ["?"] * 3 + row[3:]
+        masked_test.append(masked_row)
+        
+    predictions = guess(header, train_data, masked_test)
+    
+    print("Forecasts for the first 10 test rows (MRE-):")
+    for i, pred in enumerate(predictions):
+        actual = test_data[i][0]
+        print(f"Row {i+1}: Predicted MRE={pred:.4f}, Actual MRE={actual:.4f}")
+```

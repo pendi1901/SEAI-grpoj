@@ -1,0 +1,69 @@
+import ezr
+import random
+
+def blame(header, rows):
+    """
+    Identify input columns that best explain why the worst rows are bad.
+    We compare the distribution of input values in the worst 25% of rows
+    against the rest, using the difference in entropy (for symbols)
+    or mean (for numbers) to rank the 'blame' of each column.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate ydist for all rows to identify the "worst"
+    # Higher ydist means worse performance
+    scored = []
+    for row in rows:
+        scored.append((ezr.ydist(tbl, row), row))
+    
+    scored.sort(key=lambda x: x[0], reverse=True)
+    
+    # Split into worst 25% and the rest
+    n = len(scored) // 4
+    worst = [x[1] for x in scored[:n]]
+    rest = [x[1] for x in scored[n:]]
+    
+    # Score columns by how much they differ between 'worst' and 'rest'
+    # For numeric: difference in means (normalized)
+    # For symbolic: difference in entropy
+    scores = []
+    for col in tbl.x:
+        at = col.at
+        if isinstance(col, ezr.Sym):
+            # Entropy difference
+            def entropy(r):
+                counts = {}
+                for row in r:
+                    val = row[at]
+                    counts[val] = counts.get(val, 0) + 1
+                total = len(r)
+                return -sum((c/total) * (ezr.log2(c/total)) for c in counts.values())
+            
+            diff = abs(entropy(worst) - entropy(rest))
+        else:
+            # Mean difference
+            mu_w = sum(r[at] for r in worst) / len(worst)
+            mu_r = sum(r[at] for r in rest) / len(rest)
+            diff = abs(mu_w - mu_r) / (ezr.div(col) + 1e-32)
+            
+        scores.append((diff, header[at]))
+    
+    # Return names of columns sorted by impact
+    scores.sort(key=lambda x: x[0], reverse=True)
+    return [name for _, name in scores]
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    all_data = list(ezr.csv(filename))
+    header = all_data[0]
+    rows = all_data[1:]
+    
+    blame_list = blame(header, rows)
+    
+    print("Analysis: Which settings contribute most to poor performance?")
+    print("The following input columns are most strongly associated with the worst outcomes,")
+    print("ranked by their impact on the result:")
+    for i, name in enumerate(blame_list[:3]):
+        print(f"{i+1}. {name}")
+    
+    print("\nThese settings are the primary candidates for adjustment to improve system reliability.")

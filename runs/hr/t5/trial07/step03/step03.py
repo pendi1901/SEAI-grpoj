@@ -1,0 +1,43 @@
+import ezr
+import random
+
+def certify(xs, ys):
+    """
+    Returns True if the distributions of xs and ys are statistically 
+    indistinguishable (i.e., they are the same apart from noise).
+    Returns False if they really differ.
+    """
+    # ezr.same uses cliffs delta and KS test to check for differences.
+    # We pass eps=0 to skip the Cohen's d test, focusing on rank/distribution.
+    return ezr.same(xs, ys, eps=0)
+
+if __name__ == "__main__":
+    # Load the data
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+
+    # Identify indices
+    # 'overTime' is at index 22
+    # 'YearsAtCompany+' is at index 31
+    overtime_idx = header.index('overTime')
+    years_idx = header.index('YearsAtCompany+')
+
+    # Split data into two groups based on overtime
+    no_overtime = [r[years_idx] for r in rows if r[overtime_idx] == 'No']
+    yes_overtime = [r[years_idx] for r in rows if r[overtime_idx] == 'Yes']
+
+    # Perform the certification
+    is_same = certify(no_overtime, yes_overtime)
+
+    print("Analysis: Do people who work overtime leave their role sooner?")
+    print(f"  Average years at company (No Overtime): {sum(no_overtime)/len(no_overtime):.2f}")
+    print(f"  Average years at company (Yes Overtime): {sum(yes_overtime)/len(yes_overtime):.2f}")
+    
+    if is_same:
+        print("Conclusion: The difference is statistically insignificant (noise).")
+    else:
+        print("Conclusion: There is a statistically significant difference between the groups.")
+    
+    exit(0)

@@ -1,0 +1,68 @@
+import csv
+
+def spot(header, rows):
+    """
+    Identifies rows that are 'unlike anyone we have employed' by checking
+    if their input features fall outside the observed range of the historical data.
+    
+    A row is suspicious if any of its numeric input features are outside the 
+    min/max range established by the rest of the population.
+    """
+    # Identify numeric input columns (not goals)
+    input_indices = [
+        i for i, name in enumerate(header)
+        if name[0].isupper() and not name.endswith('+') and not name.endswith('-')
+    ]
+    
+    # Calculate min/max for each input column
+    mins = {}
+    maxs = {}
+    for i in input_indices:
+        vals = [r[i] for r in rows if isinstance(r[i], (int, float))]
+        if vals:
+            mins[i] = min(vals)
+            maxs[i] = max(vals)
+            
+    suspicious = []
+    for idx, row in enumerate(rows):
+        anomaly_score = 0
+        for i in input_indices:
+            val = row[i]
+            if isinstance(val, (int, float)):
+                # If the value is outside the historical range, it's suspicious
+                if val < mins[i] or val > maxs[i]:
+                    anomaly_score += 1
+        
+        if anomaly_score > 0:
+            suspicious.append((anomaly_score, idx))
+            
+    # Sort by anomaly score descending (most suspicious first)
+    suspicious.sort(key=lambda x: x[0], reverse=True)
+    
+    return [item[1] for item in suspicious]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    suspicious_indices = spot(header, rows)
+    
+    print("Analysis: Identifying unreliable estimates for new hires.")
+    print("We cannot trust estimates for candidates whose profiles fall outside our historical data range.")
+    if not suspicious_indices:
+        print("All current records are within expected bounds.")
+    else:
+        print(f"Found {len(suspicious_indices)} records that are 'unlike' our historical population.")
+        print("The most suspicious row indices are:")
+        print(suspicious_indices[:10])

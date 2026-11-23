@@ -1,0 +1,63 @@
+```python
+import csv
+import pandas as pd
+from sklearn.ensemble import RandomForestRegressor
+
+def blame(header, rows):
+    """
+    Identifies input columns that best explain high 'Idle-' values.
+    Uses a Random Forest to find feature importance for the 'Idle-' goal.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    
+    # Identify goal columns and input columns
+    goals = [c for c in header if c.endswith('-') or c.endswith('+')]
+    inputs = [c for c in header if c not in goals]
+    
+    # Target is 'Idle-'
+    target = 'Idle-'
+    
+    # Prepare X and y
+    X = df[inputs]
+    y = df[target]
+    
+    # Use Random Forest to determine feature importance
+    # This captures non-linear relationships between inputs and the idle goal
+    model = RandomForestRegressor(n_estimators=100, random_state=42)
+    model.fit(X, y)
+    
+    # Get feature importances
+    importances = model.feature_importances_
+    
+    # Create a list of (importance, name) pairs
+    feature_importance = sorted(zip(importances, inputs), reverse=True)
+    
+    # Return the names of the top 3 input columns that explain the idle time
+    return [name for imp, name in feature_importance[:3]]
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed_row = [float(val) if header[i][0].isupper() else val for i, val in enumerate(row)]
+                rows.append(processed_row)
+        
+        top_factors = blame(header, rows)
+        
+        print("Customer Inquiry: Why do our worst setups leave so many people waiting around?")
+        print("-" * 70)
+        print("Analysis of 'Idle-' drivers:")
+        for i, factor in enumerate(top_factors, 1):
+            print(f"{i}. {factor}")
+        
+        print("\nConclusion: These input factors are the primary contributors to high idle times.")
+        print("Focusing on optimizing these parameters may reduce team waiting periods.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

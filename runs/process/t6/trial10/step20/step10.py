@@ -1,0 +1,111 @@
+import ezr
+import step01
+import random
+
+def race(header, rows, label):
+    """
+    Compares three strategies: random, acquire (from ezr), and a greedy search.
+    The total budget of 50 labels is shared.
+    """
+    budget = 50
+    labeled = {}
+
+    def get_label(i):
+        if i not in labeled:
+            if len(labeled) >= budget:
+                return None
+            labeled[i] = label(i)
+        return labeled[i]
+
+    # Helper to calculate ydist for a row that might have '?' in goals
+    def get_ydist(row):
+        # We need a table with full data to calculate norm/ydist correctly
+        # Since we only have partial data, we use the labeled set to build a reference
+        # or just use the row's known values if we had them. 
+        # To be safe, we use the provided label function to get the true values.
+        # But we must respect the budget.
+        # For the purpose of the race, we assume the strategy has access to the 
+        # true values of the rows it has "labeled".
+        return ezr.ydist(tbl_full, row)
+
+    # Build a full table for distance calculations
+    # We must be careful: the harness passes rows with '?'
+    # We create a copy and fill in the true values for rows we label
+    rows_with_labels = [r[:] for r in rows]
+    goal_indices = [i for i, name in enumerate(header) if name.endswith("-") or name.endswith("+")]
+    
+    def update_row(i):
+        vals = get_label(i)
+        if vals:
+            for g_idx, val in zip(goal_indices, vals):
+                rows_with_labels[i][g_idx] = val
+
+    tbl_full = ezr.Tbl([header] + rows_with_labels)
+
+    # Strategy 1: Random
+    def strategy_random():
+        indices = random.sample(range(len(rows)), budget // 3)
+        for i in indices: update_row(i)
+        return min(indices, key=lambda i: ezr.ydist(tbl_full, rows_with_labels[i]))
+
+    # Strategy 2: Acquire
+    def strategy_acquire():
+        # Use a subset of rows to acquire
+        subset_size = min(len(rows), 200)
+        subset_indices = random.sample(range(len(rows)), subset_size)
+        subset_rows = [rows[i] for i in subset_indices]
+        
+        def oracle_wrapper(row):
+            for i in subset_indices:
+                if rows[i] == row:
+                    update_row(i)
+                    return rows_with_labels[i]
+            return row
+        
+        tbl_sub = ezr.Tbl([header] + subset_rows)
+        best_rows = ezr.acquire(tbl_sub, cap=budget // 3, label=oracle_wrapper)
+        best_row = min(best_rows, key=lambda r: ezr.ydist(tbl_full, r))
+        for i in range(len(rows)):
+            if rows_with_labels[i] == best_row: return i
+        return 0
+
+    # Strategy 3: Greedy
+    def strategy_greedy():
+        # Use step01 logic to pick indices
+        indices = step01.remember(header, rows)[:budget // 3]
+        for i in indices: update_row(i)
+        return min(indices, key=lambda i: ezr.ydist(tbl_full, rows_with_labels[i]))
+
+    strategies = {
+        "random": strategy_random,
+        "acquire": strategy_acquire,
+        "greedy": strategy_greedy
+    }
+
+    results = {}
+    for name, func in strategies.items():
+        results[name] = func()
+
+    winner = min(results, key=lambda name: ezr.ydist(tbl_full, rows_with_labels[results[name]]))
+
+    return {
+        "winner": winner,
+        "row": results[winner],
+        "tried": list(strategies.keys())
+    }
+
+if __name__ == "__main__":
+    file_path = "pom3a.n1000.train.csv"
+    rows_gen = ezr.csv(file_path)
+    header = next(rows_gen)
+    all_rows = list(rows_gen)
+
+    def label(i):
+        return [all_rows[i][idx] for idx, name in enumerate(header) 
+                if name.endswith("-") or name.endswith("+")]
+
+    result = race(header, all_rows, label)
+    print(f"Race Results: Winner is '{result['winner']}' strategy.")
+    print(f"Best row found at index: {result['row']}")
+    print(f"Strategies compared: {', '.join(result['tried'])}")
+    exit(0)

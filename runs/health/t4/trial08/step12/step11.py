@@ -1,0 +1,63 @@
+import csv
+import math
+from step01 import remember as step01_remember
+
+def remember(header, rows):
+    """
+    Identifies the best rows by leveraging the logic from step01.
+    The customer wants to see setups most like the 'best' ones found today.
+    """
+    return step01_remember(header, rows)
+
+def get_similarity(row1, row2, header):
+    """
+    Calculates Euclidean distance between two rows based on input columns.
+    """
+    dist = 0
+    mapping = {'absolute_error': 0, 'poisson': 1, 'squared_error': 2}
+    for i, name in enumerate(header):
+        if not (name.endswith('-') or name.endswith('+')):
+            v1 = mapping.get(row1[i], row1[i]) if isinstance(row1[i], str) else row1[i]
+            v2 = mapping.get(row2[i], row2[i]) if isinstance(row2[i], str) else row2[i]
+            dist += (float(v1) - float(v2)) ** 2
+    return math.sqrt(dist)
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Get the best setups
+    best_indices = remember(header, rows)
+    
+    # Assume the "team's current setup" is the first row of the file
+    current_setup = rows[0]
+    
+    # Find setups most similar to the current one among the best ones
+    similarities = []
+    for idx in best_indices:
+        sim = get_similarity(current_setup, rows[idx], header)
+        similarities.append((sim, idx))
+    
+    similarities.sort()
+    
+    print("Top setups most similar to the current configuration:")
+    for sim, idx in similarities[:5]:
+        mre = rows[idx][header.index('MRE-')]
+        acc = rows[idx][header.index('ACC+')]
+        print(f"Row {idx}: Distance={sim:.2f}, MRE={mre:.4f}, ACC={acc:.4f}")
+    
+    exit(0)

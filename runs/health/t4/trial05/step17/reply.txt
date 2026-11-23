@@ -1,0 +1,81 @@
+```python
+import csv
+from step01 import remember
+
+def choose(header, rows, label):
+    """
+    Finds a setup that is both high-performing and small.
+    'Small' is defined by minimizing N_estimators and Max_depth.
+    'High-performing' is defined by the remember() score.
+    """
+    # We have a budget of 50 labels.
+    # We sample 50 rows to get a representative view of the search space.
+    n = len(rows)
+    indices_to_label = [int(i * (n - 1) / 49) for i in range(50)]
+    
+    labeled_rows = []
+    for idx in indices_to_label:
+        goals = label(idx)
+        row = list(rows[idx])
+        row[0], row[1], row[2] = goals[0], goals[1], goals[2]
+        labeled_rows.append((row, idx))
+    
+    # Define indices for size metrics
+    idx_n = header.index('N_estimators')
+    idx_d = header.index('Max_depth')
+    
+    # Normalize size metrics for the 50 sampled rows
+    n_vals = [r[0][idx_n] for r in labeled_rows]
+    d_vals = [r[0][idx_d] for r in labeled_rows]
+    min_n, max_n = min(n_vals), max(n_vals)
+    min_d, max_d = min(d_vals), max(d_vals)
+    
+    # Score rows based on performance (remember) and size (minimize)
+    # We use the remember() score (higher is better) and subtract normalized size
+    perf_scores = remember(header, [r[0] for r in labeled_rows])
+    
+    best_overall_idx = -1
+    best_combined_score = -float('inf')
+    
+    for i, (row, original_idx) in enumerate(labeled_rows):
+        # Performance score (normalized 0-1)
+        # We map the remember() ranking to a 0-1 scale
+        perf_score = 1.0 - (i / 50.0) 
+        
+        # Size score (lower is better, so we subtract)
+        norm_n = (row[idx_n] - min_n) / (max_n - min_n + 1e-9)
+        norm_d = (row[idx_d] - min_d) / (max_d - min_d + 1e-9)
+        size_penalty = (norm_n + norm_d) / 2
+        
+        combined = perf_score - size_penalty
+        if combined > best_combined_score:
+            best_combined_score = combined
+            best_overall_idx = original_idx
+            
+    return best_overall_idx
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = [float(val) if header[i] not in ['criterion'] else val 
+                             for i, val in enumerate(row)]
+            rows.append(processed_row)
+
+    # Keep a copy of true data for the label function
+    true_data = [list(r) for r in rows]
+    
+    # Mask goals
+    for r in rows:
+        r[0] = r[1] = r[2] = "?"
+
+    def label(i):
+        return [true_data[i][0], true_data[i][1], true_data[i][2]]
+
+    best_idx = choose(header, rows, label)
+    print(f"Recommended setup for nightly runs (best balance of performance and size) is at row index: {best_idx}")
+    exit(0)
+```

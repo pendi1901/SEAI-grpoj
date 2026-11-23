@@ -1,0 +1,117 @@
+import csv
+import random
+import step02
+
+def race(header, rows, label):
+    """
+    Compares three strategies: random, greedy (KNN-based), and 
+    a heuristic-based search (sampling).
+    """
+    budget = 50
+    labeled = {}
+
+    def get_goals(i):
+        if i not in labeled:
+            if len(labeled) >= budget:
+                raise Exception("Budget exceeded")
+            labeled[i] = label(i)
+        return labeled[i]
+
+    def score_row(row):
+        mre_idx = header.index('MRE-')
+        acc_idx = header.index('ACC+')
+        pred_idx = header.index('PRED40+')
+        
+        # Ensure goals are floats (they might be '?' if not yet labeled)
+        mre = float(row[mre_idx])
+        acc = float(row[acc_idx])
+        pred = float(row[pred_idx])
+        
+        return (-mre + acc + pred)
+
+    # Strategy 1: Random
+    def strategy_random():
+        indices = random.sample(range(len(rows)), 16)
+        best_s, best_i = -float('inf'), -1
+        for i in indices:
+            goals = get_goals(i)
+            row = list(rows[i])
+            for j, g in zip([0, 1, 2], goals): row[j] = g
+            s = score_row(row)
+            if s > best_s: best_s, best_i = s, i
+        return best_i
+
+    # Strategy 2: Greedy (KNN-based)
+    def strategy_greedy():
+        for i in range(10): get_goals(i)
+        best_s, best_i = -float('inf'), -1
+        for i in range(10, 16):
+            train_data = []
+            for k in labeled.keys():
+                r = list(rows[k])
+                for j, g in zip([0, 1, 2], labeled[k]): r[j] = g
+                train_data.append(r)
+            
+            goals = step02.guess(header, train_data, [rows[i]])
+            row = list(rows[i])
+            for j, g in zip([0, 1, 2], goals): row[j] = g
+            s = score_row(row)
+            if s > best_s: best_s, best_i = s, i
+            get_goals(i)
+        return best_i
+
+    # Strategy 3: Heuristic (First 16)
+    def strategy_heuristic():
+        best_s, best_i = -float('inf'), -1
+        for i in range(16):
+            goals = get_goals(i)
+            row = list(rows[i])
+            for j, g in zip([0, 1, 2], goals): row[j] = g
+            s = score_row(row)
+            if s > best_s: best_s, best_i = s, i
+        return best_i
+
+    strategies = {
+        "random": strategy_random,
+        "greedy": strategy_greedy,
+        "heuristic": strategy_heuristic
+    }
+
+    results = {}
+    for name, func in strategies.items():
+        results[name] = func()
+
+    best_overall_s = -float('inf')
+    winner = ""
+    best_row = -1
+    for name, idx in results.items():
+        row = list(rows[idx])
+        for j, g in zip([0, 1, 2], labeled[idx]): row[j] = g
+        s = score_row(row)
+        if s > best_overall_s:
+            best_overall_s, winner, best_row = s, name, idx
+
+    return {"winner": winner, "row": best_row, "tried": list(strategies.keys())}
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([val if header[i] == 'criterion' else float(val) for i, val in enumerate(row)])
+
+        def label(i):
+            return [rows[i][0], rows[i][1], rows[i][2]]
+
+        hidden_rows = [[val if i > 2 else "?" for i, val in enumerate(r)] for r in rows]
+        
+        result = race(header, hidden_rows, label)
+        print(f"Winner: {result['winner']}")
+        print(f"Best row found at index: {result['row']}")
+        print(f"Strategies tried: {', '.join(result['tried'])}")
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

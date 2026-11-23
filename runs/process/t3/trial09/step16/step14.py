@@ -1,0 +1,66 @@
+import csv
+
+def flow(header, row, seen):
+    """
+    Detects if a project's performance is 'going bad'.
+    We monitor the trend of the goals. If the current row's performance
+    is significantly worse than the moving average of the 'seen' rows,
+    we flag it as 'going bad' (returning True).
+    """
+    goal_indices = [i for i, h in enumerate(header) if h.endswith('-') or h.endswith('+')]
+    
+    def get_score(r):
+        # Normalize goals: 1 - (val - min)/(max - min) for '-'
+        # (val - min)/(max - min) for '+'
+        # Use seen data as a proxy for global min/max
+        all_data = seen + [r]
+        scores = []
+        for idx in goal_indices:
+            col_vals = [s[idx] for s in all_data]
+            min_v, max_v = min(col_vals), max(col_vals)
+            rng = max_v - min_v if max_v != min_v else 1
+            norm = (r[idx] - min_v) / rng
+            scores.append(1 - norm if header[idx].endswith('-') else norm)
+        return sum(scores) / len(scores)
+
+    if len(seen) < 10:
+        return False
+    
+    # Calculate moving average of the last 10 rows
+    recent_scores = [get_score(s) for s in seen[-10:]]
+    moving_avg = sum(recent_scores) / len(recent_scores)
+    
+    # Current score
+    current_score = get_score(row)
+    
+    # If current performance drops significantly below the moving average
+    # (e.g., more than 2 standard deviations or a fixed threshold), flag it.
+    # Here we use a 20% drop as a heuristic for "going bad".
+    if current_score < (moving_avg * 0.8):
+        return True
+        
+    return False
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) if i < len(header) - 3 or (i >= len(header) - 3 and val.replace('.','',1).isdigit()) else val for i, val in enumerate(row)])
+        
+        seen = []
+        alerts = 0
+        for i, row in enumerate(rows):
+            if flow(header, row, seen):
+                alerts += 1
+                print(f"Alert: Project performance at row {i} has degraded significantly.")
+            seen.append(row)
+            
+        print(f"\nMonitoring complete. Total performance degradation alerts: {alerts}")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

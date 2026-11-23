@@ -1,0 +1,83 @@
+```python
+import csv
+import step01
+import step05
+
+def fix(header, row, levers):
+    """
+    Identifies the best lever change to reduce 'Idle-' while respecting
+    the constraint that 'Team Size' cannot be changed (hiring).
+    """
+    # Load data to find what values correlate with low Idle-
+    filename = "pom3a.n1000.train.csv"
+    with open(filename, mode='r', encoding='utf-8') as f:
+        reader = csv.reader(f)
+        header_data = next(reader)
+        rows = [[float(x) for x in r] for r in reader]
+
+    idle_idx = header.index('Idle-')
+    
+    # Find the best 20% of rows (lowest idle time)
+    sorted_rows = sorted(rows, key=lambda r: r[idle_idx])
+    best_rows = sorted_rows[:len(rows) // 5]
+    
+    recommendation = {}
+    
+    # For each allowed lever, find the value that is most common/average 
+    # in the best performing rows and suggest that change.
+    for col_name, bounds in levers.items():
+        if col_name not in header:
+            continue
+        
+        idx = header.index(col_name)
+        
+        # Calculate target value from best rows
+        vals = [r[idx] for r in best_rows]
+        target_val = sum(vals) / len(vals)
+        
+        # Clamp to allowed bounds
+        low, high = bounds
+        target_val = max(low, min(high, target_val))
+        
+        # Only recommend if it's a change
+        if target_val != row[idx]:
+            recommendation[col_name] = target_val
+            # We only need one good recommendation to cut idle time
+            break
+            
+    return recommendation
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [[float(x) for x in row] for row in reader]
+        
+        # Identify a "bad" row (high idle time)
+        idle_idx = header.index('Idle-')
+        bad_row = max(rows, key=lambda r: r[idle_idx])
+        
+        # Customer cannot hire (cannot change 'Team Size')
+        # Suggest changes to other available levers
+        levers = {
+            'Culture': (0.0, 1.0),
+            'Criticality': (0.0, 1.0),
+            'Dynamism': (0.0, 1.0),
+            'Plan': (0.0, 1.0)
+        }
+        
+        recommendation = fix(header, bad_row, levers)
+        
+        print("Customer Inquiry: I am not allowed to hire. What else can I change to cut idle time?")
+        if recommendation:
+            for col, val in recommendation.items():
+                print(f"Answer: Adjust '{col}' to {val:.4f} to reduce idle time without hiring.")
+        else:
+            print("Answer: No effective adjustments found within the allowed levers.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

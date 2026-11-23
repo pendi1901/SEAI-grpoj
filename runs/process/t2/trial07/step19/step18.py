@@ -1,0 +1,73 @@
+import csv
+import step01
+import step05
+
+def fix(header, row, levers):
+    """
+    Identifies the most impactful lever to change to reduce 'Idle-' 
+    based on the blame analysis from step05.
+    """
+    # Load the full dataset to perform blame analysis
+    filename = "pom3a.n1000.train.csv"
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        next(reader)
+        for r in reader:
+            rows.append([float(x) for x in r])
+
+    # Identify the top factors contributing to high 'Idle-'
+    # We exclude 'Team Size' as the customer explicitly said they cannot hire.
+    reasons = step05.blame(header, rows)
+    
+    # Filter out 'Team Size' if it's in the reasons
+    allowed_reasons = [r for r in reasons if r in levers and r != 'Team Size']
+    
+    # If no other reasons found, pick the first available lever
+    target_col = allowed_reasons[0] if allowed_reasons else list(levers.keys())[0]
+    
+    # Calculate the recommended value
+    # We move the lever in the direction that reduces 'Idle-'
+    # Based on step05, the 'worst' rows have higher values for these inputs.
+    # Therefore, we should decrease the value.
+    idx = header.index(target_col)
+    allowed = levers[target_col]
+    
+    if isinstance(allowed, tuple):  # Numeric
+        low, high = allowed
+        current = row[idx]
+        # Move toward the lower bound to reduce 'Idle-'
+        target = max(low, current - 0.2)
+        return {target_col: target}
+    else:  # Symbolic
+        # Pick a value that is not the current one
+        options = [opt for opt in allowed if opt != row[idx]]
+        return {target_col: options[0] if options else allowed[0]}
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    rows = []
+    header = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            rows.append([float(x) for x in row])
+
+    # Find a bad row (high Idle-)
+    idle_idx = header.index('Idle-')
+    bad_row = max(rows, key=lambda r: r[idle_idx])
+    
+    # Define levers (excluding Team Size as per instructions)
+    levers = {
+        'Culture': (0.0, 1.0),
+        'Criticality': (0.0, 1.0),
+        'Dynamism': (0.0, 1.0),
+        'Plan': (0.0, 1.0)
+    }
+    
+    recommendation = fix(header, bad_row, levers)
+    
+    print("Customer Inquiry: I am not allowed to hire. What else can I change to cut idle time?")
+    for col, val in recommendation.items():
+        print(f"Analysis: To reduce idle time without hiring, we recommend adjusting '{col}' to {val:.4f}.")

@@ -1,0 +1,81 @@
+import csv
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import LabelEncoder
+
+def blame(header, rows):
+    """
+    Identifies input columns that best explain short stays (low 'YearsAtCompany+').
+    We define 'worst rows' as those in the bottom 20% of 'YearsAtCompany+'.
+    We then train a Random Forest to predict 'YearsAtCompany+' and extract
+    feature importances to see which inputs correlate with tenure.
+    """
+    goal_name = 'YearsAtCompany+'
+    goal_idx = header.index(goal_name)
+    
+    # Identify input columns (exclude goals)
+    input_indices = [i for i, name in enumerate(header) 
+                     if not (name.endswith('+') or name.endswith('-'))]
+    
+    # Prepare data
+    X = []
+    y = []
+    encoders = {}
+    
+    for i in input_indices:
+        if isinstance(rows[0][i], str):
+            encoders[i] = LabelEncoder()
+            col_data = [row[i] for row in rows]
+            encoders[i].fit(col_data)
+            
+    for row in rows:
+        processed = []
+        for i in input_indices:
+            val = row[i]
+            if i in encoders:
+                processed.append(encoders[i].transform([val])[0])
+            else:
+                processed.append(val)
+        X.append(processed)
+        y.append(row[goal_idx])
+        
+    # Train a regressor to find feature importance
+    model = RandomForestRegressor(n_estimators=50, random_state=42)
+    model.fit(X, y)
+    
+    # Get feature importances
+    importances = model.feature_importances_
+    
+    # Map importances back to column names
+    feature_scores = []
+    for i, idx in enumerate(input_indices):
+        feature_scores.append((header[idx], importances[i]))
+        
+    # Sort by importance
+    feature_scores.sort(key=lambda x: x[1], reverse=True)
+    
+    # Return top 3 columns that explain the variance in tenure
+    return [name for name, score in feature_scores[:3]]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    top_factors = blame(header, rows)
+    
+    print("Analysis: Factors explaining short stays (tenure):")
+    for factor in top_factors:
+        print(f"- {factor}")
+    print("\nThese columns are the strongest predictors of how long an employee stays.")

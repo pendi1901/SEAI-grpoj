@@ -1,0 +1,64 @@
+```python
+import csv
+import numpy as np
+import pandas as pd
+from sklearn.ensemble import IsolationForest
+
+def spot(header, rows):
+    """
+    Identifies rows that are outliers using the Isolation Forest algorithm.
+    This detects setups that are unlike anything seen in the training data.
+    Returns the indices of the rows, sorted by suspicion level (highest first).
+    """
+    # Convert rows to a DataFrame for processing
+    df = pd.DataFrame(rows, columns=header)
+    
+    # Isolate numeric columns for anomaly detection
+    # Symbolic columns are excluded as IsolationForest expects numeric input
+    numeric_cols = [col for col in header if not (col.endswith('-') or col.endswith('+'))]
+    df_numeric = df[numeric_cols].select_dtypes(include=[np.number])
+    
+    # IsolationForest is effective for detecting novel/unseen configurations.
+    # We set contamination to a small value to flag only the most extreme outliers.
+    model = IsolationForest(contamination=0.02, random_state=42)
+    
+    # Fit the model to the data
+    model.fit(df_numeric)
+    
+    # Get anomaly scores (lower scores are more anomalous)
+    scores = model.decision_function(df_numeric)
+    
+    # Get indices sorted by score (ascending, so most negative/anomalous first)
+    suspicious_indices = np.argsort(scores)
+    
+    return suspicious_indices.tolist()
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed_row = []
+                for val in row:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        suspicious = spot(header, rows)
+        
+        print("Customer Inquiry: Identifying setups that are unlike anything we have run.")
+        print(f"Analysis: Found {len(suspicious)} records that deviate from historical patterns.")
+        print("Top 5 most suspicious row indices (most novel/unseen first):")
+        for idx in suspicious[:5]:
+            print(f"  Row {idx}")
+        print("\nThese records represent configurations that are significantly different from your standard operations.")
+        
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
+```

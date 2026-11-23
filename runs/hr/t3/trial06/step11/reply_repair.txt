@@ -1,0 +1,63 @@
+```python
+import csv
+
+def remember(header, rows):
+    """
+    Finds the 5% of employees most similar to the first employee in the dataset.
+    Similarity is calculated using Euclidean distance on normalized numeric features.
+    """
+    # Identify numeric columns for similarity calculation
+    numeric_indices = [i for i, col in enumerate(header) if header[i][0].isupper()]
+    
+    # Normalize data to handle different scales
+    mins = []
+    maxs = []
+    for i in numeric_indices:
+        vals = [row[i] for row in rows]
+        mins.append(min(vals))
+        maxs.append(max(vals))
+    
+    ranges = [maxs[j] - mins[j] if maxs[j] != mins[j] else 1 for j in range(len(numeric_indices))]
+    
+    def get_normalized_features(row):
+        return [(row[numeric_indices[j]] - mins[j]) / ranges[j] for j in range(len(numeric_indices))]
+
+    # Target: First employee
+    target_features = get_normalized_features(rows[0])
+    
+    # Calculate distance to all other rows
+    distances = []
+    for i, row in enumerate(rows):
+        if i == 0: continue
+        row_features = get_normalized_features(row)
+        dist = sum((target_features[j] - row_features[j])**2 for j in range(len(target_features)))
+        distances.append((dist, i))
+    
+    # Sort by distance (ascending)
+    distances.sort(key=lambda x: x[0])
+    
+    # Return top 5% (800 rows * 0.05 = 40 rows)
+    limit = max(1, int(len(rows) * 0.05))
+    return [item[1] for item in distances[:limit]]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = [float(val) if header[i][0].isupper() else val for i, val in enumerate(row)]
+            rows.append(processed_row)
+    
+    indices = remember(header, rows)
+    
+    idx_years = header.index('YearsAtCompany+')
+    print(f"Employees most similar to the first record (Index 0):")
+    print(f"{'Index':<10} | {'YearsAtCompany+'}")
+    print("-" * 30)
+    for idx in indices:
+        print(f"{idx:<10} | {rows[idx][idx_years]:.1f}")
+    
+    print(f"\nAnalysis: Found {len(indices)} employees with similar profiles.")
+```

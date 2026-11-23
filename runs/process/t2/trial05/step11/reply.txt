@@ -1,0 +1,61 @@
+```python
+import csv
+import step01
+import step02
+
+def remember(header, rows):
+    """
+    Finds the best rows in the dataset based on goal performance.
+    Uses the logic from step01 to identify top-performing setups.
+    """
+    return step01.remember(header, rows)
+
+def find_similar(header, rows, target_row, k=5):
+    """
+    Finds the k most similar rows to the target_row based on input columns.
+    """
+    input_indices = [i for i, name in enumerate(header) 
+                     if not (name.endswith('-') or name.endswith('+'))]
+    
+    scored_rows = []
+    for i, row in enumerate(rows):
+        dist = sum((float(target_row[j]) - float(row[j]))**2 for j in input_indices)
+        scored_rows.append((dist, i))
+    
+    scored_rows.sort(key=lambda x: x[0])
+    return scored_rows[:k]
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) for val in row])
+        
+        # Simulate a proposed setup (using a row from the dataset as a proxy)
+        proposed_row = rows[0]
+        
+        print("Analyzing proposed setup...")
+        similar = find_similar(header, rows, proposed_row)
+        
+        print(f"Found {len(similar)} past setups most similar to your proposal:")
+        goal_indices = [i for i, name in enumerate(header) 
+                        if name.endswith('-') or name.endswith('+')]
+        
+        for dist, idx in similar:
+            goals = [f"{header[i]}={rows[idx][i]:.4f}" for i in goal_indices]
+            print(f"Row {idx} (Distance {dist:.4f}): {', '.join(goals)}")
+            
+        print("\nFor reference, the top-performing setups in the entire dataset are:")
+        best_indices = remember(header, rows)
+        for idx in best_indices[:3]:
+            goals = [f"{header[i]}={rows[idx][i]:.4f}" for i in goal_indices]
+            print(f"Row {idx}: {', '.join(goals)}")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

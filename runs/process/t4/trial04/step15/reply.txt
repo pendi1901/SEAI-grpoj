@@ -1,0 +1,59 @@
+```python
+import csv
+import pandas as pd
+from sklearn.ensemble import RandomForestRegressor
+
+def blame(header, rows):
+    """
+    Identifies the input columns that most strongly influence the 'Cost-' goal.
+    The most important features are the ones that matter most, while the least
+    important ones are those the customer can safely stop worrying about.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    
+    # Identify goal columns and input columns
+    goals = [col for col in header if col.endswith(('-', '+'))]
+    inputs = [col for col in header if col not in goals]
+    
+    # Target is 'Cost-'
+    target = 'Cost-'
+    
+    # Train a regressor to predict 'Cost-' based on inputs
+    # Random Forest feature importance provides a robust measure of influence
+    model = RandomForestRegressor(n_estimators=100, random_state=42)
+    model.fit(df[inputs], df[target])
+    
+    # Get feature importances
+    importances = model.feature_importances_
+    
+    # Pair inputs with their importance scores and sort
+    feat_imp = sorted(zip(inputs, importances), key=lambda x: x[1], reverse=True)
+    
+    # Return all input columns sorted by importance
+    # The customer can focus on the top ones and ignore the bottom ones
+    return [feat[0] for feat in feat_imp]
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                # Convert numeric columns to floats
+                rows.append([float(val) for val in row])
+        
+        ranked_inputs = blame(header, rows)
+        
+        print("Customer Inquiry: Which project facts matter most to cost?")
+        print(f"Analysis: The most influential factors for 'Cost-' are: {', '.join(ranked_inputs[:2])}.")
+        print(f"You can safely stop worrying about: {', '.join(ranked_inputs[-2:])}.")
+        print("\nFull ranking of influence on cost (most to least):")
+        for i, col in enumerate(ranked_inputs, 1):
+            print(f"  {i}. {col}")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

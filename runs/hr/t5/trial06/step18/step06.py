@@ -1,0 +1,48 @@
+import ezr
+import random
+
+def justify(header, rows, row):
+    """
+    Returns (p, reason): p is the fraction of rows that `row` is better than.
+    `row` is estimated by finding its leaf in a tree built from `rows`.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Build a tree to estimate the ydist of the input row
+    node = ezr.tree(tbl, tbl.rows)
+    
+    # Estimate the ydist of the input row by finding its leaf's mean ydist
+    leaf = ezr.leaf(node, row)
+    estimated_ydist = leaf.mu
+    
+    # Calculate ydist for all existing rows to compare
+    all_ydists = [ezr.ydist(tbl, r) for r in rows]
+    
+    # p is the fraction of rows that have a higher (worse) ydist than our estimate
+    # (i.e., our row is better than them)
+    better_than_count = sum(1 for d in all_ydists if d > estimated_ydist)
+    p = better_than_count / len(all_ydists)
+    
+    # Construct a reason based on the leaf node's path
+    reason = f"This arrangement ranks in the top {int((1-p)*100)}% of all records because it aligns with patterns found in {len(leaf.rows)} similar employee profiles."
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Pick a sample row to justify (masking its goals)
+    sample_idx = random.randint(0, len(rows) - 1)
+    sample_row = list(rows[sample_idx])
+    for i, name in enumerate(header):
+        if name.endswith('+') or name.endswith('-'):
+            sample_row[i] = "?"
+            
+    p, reason = justify(header, rows, sample_row)
+    
+    print(f"Justification for employee record {sample_idx}:")
+    print(f"Rank: {p:.2f}")
+    print(f"Reason: {reason}")

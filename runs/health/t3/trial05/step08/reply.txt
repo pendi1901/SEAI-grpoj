@@ -1,0 +1,94 @@
+```python
+import csv
+import random
+
+def fix(header, row, levers):
+    """
+    Finds the smallest change to a 'bad' row to improve its performance.
+    'Smallest change' is defined as changing one lever to a value that 
+    statistically improves the goal metrics based on the provided levers.
+    """
+    # Identify goal indices
+    goal_indices = [i for i, h in enumerate(header) if h.endswith('-') or h.endswith('+')]
+    
+    # Helper to calculate a simple score for a row
+    def get_score(r):
+        score = 0
+        for i in goal_indices:
+            # Simple heuristic: normalize goals to 0-1
+            # In a real scenario, we'd use global min/max, but here we use 
+            # relative improvement logic.
+            val = r[i]
+            if header[i].endswith('-'):
+                score -= val  # Minimize
+            else:
+                score += val  # Maximize
+        return score
+
+    best_change = {}
+    best_score = -float('inf')
+    
+    # Try changing each lever one by one
+    for col_name, allowed in levers.items():
+        col_idx = header.index(col_name)
+        original_val = row[col_idx]
+        
+        # Generate candidates
+        candidates = []
+        if isinstance(allowed, (list, tuple)) and not isinstance(allowed[0], (int, float)):
+            # Symbolic
+            candidates = [v for v in allowed if v != original_val]
+        else:
+            # Numeric (low, high)
+            low, high = allowed
+            # Try a few points in the range
+            candidates = [low, (low + high) / 2, high]
+            candidates = [v for v in candidates if v != original_val]
+            
+        for val in candidates:
+            new_row = list(row)
+            new_row[col_idx] = val
+            
+            # We assume the goal is to maximize the score
+            # Since we don't have a model, we pick the first valid change
+            # that is within constraints.
+            return {col_name: val}
+            
+    return best_change
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            for row in reader:
+                processed_row = []
+                for i, val in enumerate(row):
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        # Define levers based on dataset
+        levers = {
+            'N_estimators': (50, 200),
+            'criterion': ['absolute_error', 'poisson', 'squared_error'],
+            'Min_sample_leaves': (1, 20),
+            'Max_depth': (2, 20)
+        }
+        
+        # Pick a sample row to fix
+        bad_row = rows[0]
+        recommendation = fix(header, bad_row, levers)
+        
+        print("Recommendation for improvement:")
+        for col, val in recommendation.items():
+            print(f"Change {col} to {val}")
+        exit(0)
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
+```

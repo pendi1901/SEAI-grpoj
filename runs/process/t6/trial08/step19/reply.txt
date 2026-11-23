@@ -1,0 +1,35 @@
+```python
+import ezr
+import step09
+
+def spot(header, rows):
+    """
+    Identify rows that do not fit the data distribution.
+    We reuse the logic from step09, which flags rows that are outliers 
+    in the input space (x-columns) as potentially mistyped.
+    """
+    return step09.spot(header, rows)
+
+if __name__ == "__main__":
+    # Load data
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Identify suspicious rows
+    suspicious_indices = spot(header, rows)
+    
+    print(f"Analysis complete. Found {len(suspicious_indices)} potentially mistyped rows.")
+    print("These rows contain input values that are significantly different from")
+    print("the historical norms of our project data.")
+    print("\nIndices of the most suspicious rows (most suspicious first):")
+    print(suspicious_indices)
+    
+    if suspicious_indices:
+        print("\nSample of the most suspicious row:")
+        idx = suspicious_indices[0]
+        print(f"Row {idx}: {rows[idx]}")
+    
+    exit(0)
+```

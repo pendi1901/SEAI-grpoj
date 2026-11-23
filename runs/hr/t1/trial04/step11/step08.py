@@ -1,0 +1,87 @@
+import csv
+
+def fix(header, row, levers):
+    """
+    Recommends changes to improve retention-related goals.
+    Strategy: For a 'bad' row (e.g., high attrition risk), we adjust levers
+    to move towards values associated with higher tenure/satisfaction.
+    """
+    recommendations = {}
+    
+    # Simple heuristic:
+    # 1. If 'overTime' is 'Yes', change to 'No'.
+    # 2. If 'PercentSalaryHike' is low, increase it.
+    # 3. If 'StockOptionLevel' is low, increase it.
+    # 4. If 'TrainingTimesLastYear' is low, increase it.
+    
+    if 'overTime' in levers and 'overTime' in header:
+        idx = header.index('overTime')
+        if row[idx] == 'Yes' and 'No' in levers['overTime']:
+            recommendations['overTime'] = 'No'
+            
+    if 'PercentSalaryHike' in levers and 'PercentSalaryHike' in header:
+        idx = header.index('PercentSalaryHike')
+        low, high = levers['PercentSalaryHike']
+        if row[idx] < high:
+            recommendations['PercentSalaryHike'] = high
+            
+    if 'StockOptionLevel' in levers and 'StockOptionLevel' in header:
+        idx = header.index('StockOptionLevel')
+        low, high = levers['StockOptionLevel']
+        if row[idx] < high:
+            recommendations['StockOptionLevel'] = high
+
+    if 'TrainingTimesLastYear' in levers and 'TrainingTimesLastYear' in header:
+        idx = header.index('TrainingTimesLastYear')
+        low, high = levers['TrainingTimesLastYear']
+        if row[idx] < high:
+            recommendations['TrainingTimesLastYear'] = high
+
+    # Ensure at least one recommendation is made if possible
+    if not recommendations and levers:
+        for col, val in levers.items():
+            if isinstance(val, list):
+                recommendations[col] = val[0]
+            else:
+                recommendations[col] = val[1]
+                
+    return recommendations
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Define available levers based on customer request
+    levers = {
+        'businessTravel': ['Non-Travel', 'Travel_Rarely', 'Travel_Frequently'],
+        'overTime': ['No', 'Yes'],
+        'TrainingTimesLastYear': (0.0, 6.0),
+        'PercentSalaryHike': (11.0, 25.0),
+        'StockOptionLevel': (0.0, 3.0)
+    }
+
+    # Example: Fix the first row
+    sample_row = rows[0]
+    changes = fix(header, sample_row, levers)
+    
+    print("Recommended changes for employee retention:")
+    for col, val in changes.items():
+        print(f"- Change {col} to {val}")
+    
+    print("\nThese changes are designed to improve retention metrics based on common HR drivers.")

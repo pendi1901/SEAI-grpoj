@@ -1,0 +1,81 @@
+```python
+import csv
+import step01
+import step07
+
+def choose(header, rows, label):
+    """
+    Finds the best setup for a 'large' project.
+    'Large' is defined by the 'Size' column. We filter for rows where 'Size'
+    is in the top 25% (high values), then use a greedy sampling approach 
+    within that subset to find the best configuration while respecting the 
+    50-label budget.
+    """
+    size_idx = header.index('Size')
+    goal_indices = [i for i, name in enumerate(header) 
+                    if name.endswith('-') or name.endswith('+')]
+    
+    # Filter for large projects (top 25% of Size)
+    # We use a threshold of 0.75 as the data is normalized [0, 1]
+    large_project_indices = [i for i, r in enumerate(rows) if r[size_idx] > 0.75]
+    
+    # If no large projects found, fall back to all rows
+    candidates = large_project_indices if large_project_indices else range(len(rows))
+    
+    def get_score(row_vals):
+        total = 0
+        for i, g_idx in enumerate(goal_indices):
+            val = float(row_vals[i])
+            total += (1.0 - val) if header[g_idx].endswith('-') else val
+        return total
+
+    # Sample up to 50 candidates from the large project subset
+    sample_size = min(len(candidates), 50)
+    # Evenly space the samples to cover the range of large projects
+    indices_to_label = [candidates[int(i * (len(candidates) - 1) / (sample_size - 1))] 
+                        for i in range(sample_size)]
+    
+    best_idx = -1
+    best_score = -1.0
+    
+    for idx in indices_to_label:
+        true_goals = label(idx)
+        score = get_score(true_goals)
+        if score > best_score:
+            best_score = score
+            best_idx = idx
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed_row = []
+                for val in row:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        def label(i):
+            return [rows[i][col] for col, name in enumerate(header) 
+                    if name.endswith('-') or name.endswith('+')]
+        
+        best_idx = choose(header, rows, label)
+        
+        print(f"Best setup for a large project found at row index {best_idx}.")
+        goal_vals = [f"{header[i]}={rows[best_idx][i]:.4f}" 
+                     for i, name in enumerate(header) 
+                     if name.endswith('-') or name.endswith('+')]
+        print(f"Performance: {', '.join(goal_vals)}")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

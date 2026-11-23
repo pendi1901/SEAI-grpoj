@@ -1,0 +1,61 @@
+```python
+import csv
+from step02 import guess as step02_guess
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column for each test row.
+    The customer asks about a scenario where requirements change twice as fast
+    halfway through. We model this by splitting the training data into two
+    halves and using the second half (the 'faster' phase) to estimate the
+    first goal for the test rows.
+    """
+    goal_idx = -1
+    for i, name in enumerate(header):
+        if name.endswith('-') or name.endswith('+'):
+            goal_idx = i
+            break
+    
+    # Split training data into two halves
+    mid = len(train) // 2
+    second_half = train[mid:]
+    
+    # Calculate the average of the first goal column from the second half
+    avg_val = sum(row[goal_idx] for row in second_half) / len(second_half)
+    
+    # Return the average for every test row
+    return [avg_val for _ in test]
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', newline='') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [[float(x) for x in row] for row in reader]
+            
+            # Split into train and test
+            train = rows[:-100]
+            test = rows[-100:]
+            
+            # Mask the goals in the test set
+            goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+            masked_test = []
+            for row in test:
+                new_row = list(row)
+                for idx in goal_indices:
+                    new_row[idx] = "?"
+                masked_test.append(new_row)
+            
+            predictions = guess(header, train, masked_test)
+            
+            first_goal = header[goal_indices[0]]
+            print("Customer Inquiry: What happens to cost and idle time if requirements change twice as fast?")
+            print(f"Analysis: By observing the second half of the training data (the 'faster' phase),")
+            print(f"we estimate the average {first_goal} to be {sum(predictions)/len(predictions):.4f}.")
+            print("This reflects the impact of increased dynamism on project outcomes.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

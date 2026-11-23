@@ -1,0 +1,44 @@
+import ezr
+import step01
+
+def certify(xs, ys):
+    """
+    Returns True if the distributions are statistically indistinguishable,
+    False if they are significantly different.
+    """
+    return ezr.same(xs, ys)
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    
+    try:
+        header = next(data_gen)
+        rows = list(data_gen)
+        
+        # Identify "big" vs "small" setups.
+        # N_estimators is at index 3.
+        # We define "big" as having N_estimators > median.
+        n_est_idx = 3
+        n_ests = [r[n_est_idx] for r in rows]
+        median_n = sorted(n_ests)[len(n_ests) // 2]
+        
+        # We use MRE- (index 0) as the accuracy metric.
+        # Lower MRE- is better.
+        big_setups = [r[0] for r in rows if r[n_est_idx] > median_n]
+        small_setups = [r[0] for r in rows if r[n_est_idx] <= median_n]
+        
+        # Perform the certification
+        is_same = certify(big_setups, small_setups)
+        
+        print(f"Comparing MRE- for {len(big_setups)} big setups vs {len(small_setups)} small setups.")
+        if is_same:
+            print("Conclusion: The difference in accuracy is likely just noise.")
+        else:
+            print("Conclusion: The difference in accuracy is statistically significant.")
+            
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
+    
+    exit(0)

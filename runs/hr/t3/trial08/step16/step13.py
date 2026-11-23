@@ -1,0 +1,62 @@
+import csv
+from scipy import stats
+
+def certify(xs, ys):
+    """
+    Returns True if the two groups are statistically similar (p > 0.05),
+    False if they differ significantly (p <= 0.05).
+    """
+    if len(xs) < 2 or len(ys) < 2:
+        return True
+    t_stat, p_value = stats.ttest_ind(xs, ys, equal_var=False)
+    return p_value > 0.05
+
+def analyze_training_impact(header, rows):
+    """
+    Compares 'YearsWithCurrManager+' for employees with high training 
+    vs low training (split by median).
+    """
+    train_idx = header.index('TrainingTimesLastYear')
+    mgr_idx = header.index('YearsWithCurrManager+')
+    
+    training_vals = [row[train_idx] for row in rows]
+    median_train = sum(training_vals) / len(training_vals)
+    
+    high_training = [row[mgr_idx] for row in rows if row[train_idx] >= median_train]
+    low_training = [row[mgr_idx] for row in rows if row[train_idx] < median_train]
+    
+    is_same = certify(high_training, low_training)
+    
+    avg_high = sum(high_training) / len(high_training)
+    avg_low = sum(low_training) / len(low_training)
+    
+    return is_same, avg_high, avg_low
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    is_same, avg_high, avg_low = analyze_training_impact(header, rows)
+    
+    print("Analysis: Do people with more training stay longer with their manager?")
+    print(f"Average years with manager (High Training): {avg_high:.2f}")
+    print(f"Average years with manager (Low Training): {avg_low:.2f}")
+    
+    if is_same:
+        print("Conclusion: No, the difference is not statistically significant. Training does not appear to correlate with longer tenure under a manager.")
+    else:
+        print("Conclusion: Yes, there is a statistically significant difference in tenure based on training frequency.")

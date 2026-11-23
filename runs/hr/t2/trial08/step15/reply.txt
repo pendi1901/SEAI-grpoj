@@ -1,0 +1,74 @@
+```python
+import csv
+import step05
+
+def blame(header, rows):
+    """
+    Identifies input columns that have the least correlation with the goal 
+    'YearsAtCompany+'. Columns that do not help explain the variance in 
+    tenure are candidates for removal.
+    """
+    goal_col = "YearsAtCompany+"
+    goal_idx = header.index(goal_col)
+    
+    # Identify input columns (exclude goals and IDs)
+    input_cols = []
+    for i, name in enumerate(header):
+        if not (name.endswith('+') or name.endswith('-') or 'Number' in name):
+            input_cols.append((i, name))
+            
+    # We calculate the variance of the goal column for each unique value 
+    # (or bin) of the input column. If the variance remains high, the 
+    # input column is not a good predictor of the goal.
+    results = []
+    for idx, name in input_cols:
+        vals = [r[idx] for r in rows]
+        
+        # Group goal values by input value
+        groups = {}
+        for i, val in enumerate(vals):
+            if val not in groups:
+                groups[val] = []
+            groups[val].append(rows[i][goal_idx])
+            
+        # Calculate average variance within groups
+        total_var = 0
+        for g in groups.values():
+            if len(g) > 1:
+                avg = sum(g) / len(g)
+                var = sum((x - avg) ** 2 for x in g) / (len(g) - 1)
+                total_var += var
+        
+        # Higher average variance means the column is less informative
+        results.append((total_var / len(groups), name))
+            
+    # Sort by variance descending (least informative first)
+    results.sort(key=lambda x: x[0], reverse=True)
+    
+    # Return the top 5 columns that have the least to do with the goal
+    return [s[1] for s in results[:5]]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    unimportant_cols = blame(header, rows)
+    print("Customer Question: Which columns have nothing to do with how long people stay?")
+    print("Analysis: The following columns show the least correlation with tenure and are candidates for removal:")
+    for col in unimportant_cols:
+        print(f"- {col}")
+```

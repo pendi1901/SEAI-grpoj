@@ -1,0 +1,79 @@
+```python
+import ezr
+import step01
+
+def fix(header, row, levers):
+    """
+    Finds the best change to a bad row by exploring the neighborhood 
+    of the row within the provided lever constraints.
+    """
+    # Load data to establish the context of 'good'
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    tbl = ezr.Tbl(data)
+    
+    best_ydist = ezr.ydist(tbl, row)
+    best_change = {}
+
+    # Try changing each lever to find an improvement
+    for col_name, allowed in levers.items():
+        if col_name not in header:
+            continue
+        idx = header.index(col_name)
+        original_val = row[idx]
+        
+        # Generate test values
+        test_values = []
+        if isinstance(allowed, tuple): # Numeric (low, high)
+            low, high = allowed
+            # Try 10 points in the range to ensure we find an improvement
+            for i in range(10):
+                val = low + (high - low) * (i / 9)
+                test_values.append(val)
+        else: # Symbolic
+            test_values = allowed
+            
+        for val in test_values:
+            # Create candidate row
+            candidate = list(row)
+            candidate[idx] = val
+            
+            # Evaluate
+            d = ezr.ydist(tbl, candidate)
+            if d < best_ydist:
+                best_ydist = d
+                best_change = {col_name: val}
+                
+    return best_change
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Identify a "bad" row (high ydist)
+    tbl = ezr.Tbl(data)
+    scored = sorted([(ezr.ydist(tbl, r), r) for r in rows], key=lambda x: x[0], reverse=True)
+    bad_row = scored[0][1]
+    
+    # Define levers based on column names present in the header
+    # We target inputs that influence the goals
+    levers = {
+        "Team Size": (0.0, 1.0),
+        "Plan": (0.0, 1.0),
+        "Size": (0.0, 1.0),
+        "Culture": (0.0, 1.0),
+        "Criticality": (0.0, 1.0)
+    }
+    
+    recommendation = fix(header, bad_row, levers)
+    
+    print("Analysis of bad project setup:")
+    if recommendation:
+        print("Recommended changes to rescue the project:")
+        for col, val in recommendation.items():
+            print(f" - Change '{col}' to {val:.4f}")
+    else:
+        print("No simple lever changes found to improve this setup.")
+```

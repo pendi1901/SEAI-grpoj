@@ -1,0 +1,71 @@
+import csv
+import random
+from step01 import remember
+from step02 import guess
+
+def choose(header, rows, label):
+    """
+    Finds the best setup by sampling 50 rows, labeling them, 
+    and returning the index of the best one.
+    """
+    # Identify goal indices
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('-') or name.endswith('+')]
+    
+    # We have 800 rows, we can label 50.
+    # Strategy: Randomly sample 50 indices to explore the space.
+    indices_to_label = random.sample(range(len(rows)), 50)
+    
+    best_idx = -1
+    best_utility = -float('inf')
+    
+    for i in indices_to_label:
+        # Get true values
+        true_goals = label(i)
+        
+        # Calculate utility
+        # MRE- (minimize), ACC+ (maximize), PRED40+ (maximize)
+        # We need to map true_goals back to the row structure
+        mre = true_goals[0]
+        acc = true_goals[1]
+        pred = true_goals[2]
+        
+        utility = -mre + acc + pred
+        
+        if utility > best_utility:
+            best_utility = utility
+            best_idx = i
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Store true goals for the label function
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('-') or name.endswith('+')]
+    
+    def label(i):
+        return [rows[i][idx] for idx in goal_indices]
+
+    # Mask rows
+    for row in rows:
+        for idx in goal_indices:
+            row[idx] = "?"
+
+    best_index = choose(header, rows, label)
+    print(f"The best setup found after 50 trials is at index: {best_index}")
+    exit(0)

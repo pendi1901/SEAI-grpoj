@@ -1,0 +1,56 @@
+import csv
+import step01
+import step02
+
+def flow(header, row, seen):
+    """
+    Decides if the current row is a 'keeper' based on whether its 
+    'YearsAtCompany+' value is in the top 5% of the observed distribution.
+    Since we cannot go back, we compare the current row against the 
+    distribution of 'seen' rows.
+    """
+    years_idx = header.index('YearsAtCompany+')
+    
+    # If this is the first row, we can't compare, so let it go
+    if not seen:
+        return False
+    
+    # Extract years from seen rows
+    seen_years = [r[years_idx] for r in seen]
+    
+    # Calculate the 95th percentile threshold from seen data
+    # We use a simple heuristic: if the current row is better than 95% of seen
+    seen_years.sort(reverse=True)
+    limit = max(1, len(seen) // 20)
+    threshold = seen_years[limit - 1]
+    
+    # If current row exceeds the threshold, it's a candidate for retention
+    return row[years_idx] >= threshold
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Simulate the arrival process
+    seen = []
+    keepers = 0
+    for row in rows:
+        if flow(header, row, seen):
+            keepers += 1
+        seen.append(row)
+
+    print(f"Retention Analysis Complete.")
+    print(f"Total employees reviewed: {len(rows)}")
+    print(f"Employees identified for 'what would keep you here' conversation: {keepers}")
+    print("Decision logic: Identified top 5% tenure performers as they arrived.")

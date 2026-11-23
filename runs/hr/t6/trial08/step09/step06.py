@@ -1,0 +1,61 @@
+import ezr
+import step01
+import step02
+
+def justify(header, rows, row):
+    """
+    Returns (p, reason): p is the fraction of rows that row is better than;
+    reason is a sentence explaining the ranking based on the decision tree.
+    """
+    # 1. Build a model to estimate ydist for any row
+    tbl = ezr.Tbl([header] + rows)
+    root = ezr.tree(tbl, tbl.rows)
+    
+    # 2. Calculate ydist for all known rows
+    all_ydists = [ezr.ydist(tbl, r) for r in rows]
+    
+    # 3. Estimate ydist for the target row
+    # We use the leaf mean as the estimate
+    target_leaf = ezr.leaf(root, row)
+    target_ydist = target_leaf.mu
+    
+    # 4. Calculate p: fraction of rows that are worse (have higher ydist) than target
+    # A row is better if its ydist is lower.
+    # p = count(ydist > target_ydist) / total
+    better_than_count = sum(1 for d in all_ydists if d > target_ydist)
+    p = better_than_count / len(rows)
+    
+    # 5. Formulate reason
+    # Identify the path taken to the leaf
+    path = []
+    curr = root
+    while curr.kids:
+        op = "=" if type(tbl.cols[curr.at]) is ezr.Sym else "<="
+        no = "!=" if op == "=" else ">"
+        if curr.go(row):
+            path.append(f"{header[curr.at]} {op} {ezr.say(curr.v)}")
+            curr = curr.kids[0]
+        else:
+            path.append(f"{header[curr.at]} {no} {ezr.say(curr.v)}")
+            curr = curr.kids[1]
+            
+    reason = f"This arrangement ranks in the top {int((1-p)*100)}% because it follows the pattern: {', '.join(path)}."
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Pick a sample row and mask its goals
+    test_row = list(rows[0])
+    for i, name in enumerate(header):
+        if name.endswith('+') or name.endswith('-'):
+            test_row[i] = "?"
+            
+    p, reason = justify(header, rows, test_row)
+    
+    print(f"Rank: {p:.2f}")
+    print(f"Justification: {reason}")

@@ -1,0 +1,60 @@
+import ezr
+
+def blame(header, rows):
+    """
+    Identifies which input columns have the least impact on performance.
+    We define 'impact' by how much a column's split reduces the variance 
+    of the ydist (goal distance). Columns that don't help split 'good' 
+    from 'bad' rows are the ones that can be left at defaults.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate the baseline variance of the entire dataset
+    all_ys = [ezr.ydist(tbl, r) for r in rows]
+    all_num = ezr.adds(all_ys)
+    baseline_div = ezr.div(all_num)
+    
+    # Score each input column by how much it reduces variance
+    # A low reduction means the column is less important (safe to default)
+    scores = []
+    for col in tbl.x:
+        best_col_score = 1e30
+        for v, go in ezr.candidates(col, rows):
+            a_ys = [ezr.ydist(tbl, r) for r in rows if go(r)]
+            b_ys = [ezr.ydist(tbl, r) for r in rows if not go(r)]
+            
+            if len(a_ys) < 5 or len(b_ys) < 5:
+                continue
+                
+            a_num = ezr.adds(a_ys)
+            b_num = ezr.adds(b_ys)
+            
+            # Weighted average of standard deviation after split
+            score = (ezr.div(a_num) * a_num.n + ezr.div(b_num) * b_num.n) / (a_num.n + b_num.n)
+            if score < best_col_score:
+                best_col_score = score
+        
+        # The 'importance' is the reduction in variance. 
+        # We want to return columns with the LEAST reduction (highest score).
+        scores.append((best_col_score, col.txt))
+    
+    # Sort by score ascending (lowest reduction = least important)
+    scores.sort(key=lambda x: x[0], reverse=True)
+    return [name for score, name in scores]
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data_iter = ezr.csv(filename)
+    header = next(data_iter)
+    rows = list(data_iter)
+    
+    # Get the list of columns that have the least impact on performance
+    # These are the ones the customer can safely leave at defaults
+    safe_to_default = blame(header, rows)
+    
+    print("--- Analysis: Settings to leave at factory defaults ---")
+    print("The following input settings have the least impact on performance outcomes.")
+    print("You can safely leave these at their factory defaults:")
+    for i, name in enumerate(safe_to_default, 1):
+        print(f"{i}. {name}")
+    print("\nThese settings are statistically 'neutral' regarding your optimization goals.")

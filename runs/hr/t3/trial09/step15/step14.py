@@ -1,0 +1,68 @@
+import csv
+
+def flow(header, row, seen):
+    """
+    Detects when a team no longer looks like it 'normally' does.
+    We compare the current row's numeric features against the distribution 
+    of the 'seen' population. If the current row's features deviate 
+    significantly (e.g., more than 2 standard deviations from the mean 
+    of the seen population) in multiple key metrics, we flag it as an anomaly.
+    """
+    if len(seen) < 30:
+        return False
+
+    # Identify numeric columns
+    numeric_indices = [i for i, name in enumerate(header) if name[0].isupper()]
+    
+    # Calculate means and standard deviations of the 'seen' population
+    anomalies = 0
+    for i in numeric_indices:
+        vals = [r[i] for r in seen if isinstance(r[i], (int, float))]
+        if len(vals) < 2:
+            continue
+            
+        mean = sum(vals) / len(vals)
+        std = (sum((x - mean) ** 2 for x in vals) / len(vals)) ** 0.5
+        
+        if std > 0:
+            # Check if the current row's value is an outlier (Z-score > 2)
+            if isinstance(row[i], (int, float)):
+                z = abs(row[i] - mean) / std
+                if z > 2.0:
+                    anomalies += 1
+    
+    # If more than 20% of numeric columns are outliers, flag the row
+    if len(numeric_indices) > 0 and (anomalies / len(numeric_indices)) > 0.2:
+        return True
+        
+    return False
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    seen = []
+    anomalies_found = 0
+    for row in rows:
+        if flow(header, row, seen):
+            anomalies_found += 1
+        seen.append(row)
+
+    print("Team Composition Analysis:")
+    print(f"Processed {len(rows)} employee records.")
+    print(f"Detected {anomalies_found} instances where the team composition deviated significantly from the historical norm.")
+    print("Logic: Flagged records where numeric features deviate by > 2 standard deviations from the running average.")

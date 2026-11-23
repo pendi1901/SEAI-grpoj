@@ -1,0 +1,80 @@
+import csv
+import pandas as pd
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import LabelEncoder
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column ('YearsAtCompany+') for test rows.
+    To answer the customer's question about cutting overtime in Sales,
+    we train a model that captures the relationship between 'overTime',
+    'department', and the goal.
+    """
+    # Identify goal column
+    goal_col = next(c for c in header if c.endswith('+') or c.endswith('-'))
+    
+    # Prepare DataFrames
+    df_train = pd.DataFrame(train, columns=header)
+    df_test = pd.DataFrame(test, columns=header)
+    
+    # Separate features and target
+    X = df_train.drop(columns=[goal_col])
+    y = df_train[goal_col]
+    X_test = df_test.drop(columns=[goal_col])
+    
+    # Encode symbolic columns
+    encoders = {}
+    for col in X.columns:
+        if X[col].dtype == 'object':
+            le = LabelEncoder()
+            combined = pd.concat([X[col], X_test[col]], axis=0).astype(str)
+            le.fit(combined)
+            X[col] = le.transform(X[col].astype(str))
+            X_test[col] = le.transform(X_test[col].astype(str))
+            encoders[col] = le
+        else:
+            X[col] = X[col].astype(float)
+            X_test[col] = X_test[col].astype(float)
+            
+    # Train model
+    model = RandomForestRegressor(n_estimators=100, random_state=42)
+    model.fit(X, y)
+    
+    # Predict
+    return model.predict(X_test).tolist()
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = [float(val) if header[i][0].isupper() else val for i, val in enumerate(row)]
+            rows.append(processed_row)
+            
+    # Identify Sales employees who currently work Overtime
+    ot_idx = header.index('overTime')
+    dept_idx = header.index('department')
+    goal_idx = next(i for i, h in enumerate(header) if h.endswith('+') or h.endswith('-'))
+    
+    sales_ot = [r for r in rows if r[dept_idx] == 'Sales' and r[ot_idx] == 'Yes']
+    
+    # Create a test set where we simulate cutting overtime (setting to 'No')
+    test_rows = []
+    for r in sales_ot:
+        new_r = list(r)
+        new_r[ot_idx] = 'No'
+        new_r[goal_idx] = '?'
+        test_rows.append(new_r)
+        
+    # Predict impact
+    predictions = guess(header, rows, test_rows)
+    
+    avg_current = sum(r[goal_idx] for r in sales_ot) / len(sales_ot)
+    avg_predicted = sum(predictions) / len(predictions)
+    
+    print("Impact of cutting overtime in Sales:")
+    print(f"Current average tenure: {avg_current:.2f} years")
+    print(f"Predicted average tenure after cutting overtime: {avg_predicted:.2f} years")
+    print(f"Difference: {avg_predicted - avg_current:.2f} years")

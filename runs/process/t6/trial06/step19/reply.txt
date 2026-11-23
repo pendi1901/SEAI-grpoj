@@ -1,0 +1,37 @@
+```python
+import ezr
+import step09
+
+def spot(header, rows):
+    """
+    Identify suspicious rows by finding outliers.
+    We reuse the logic from step09, which calculates the distance 
+    of each row from the centroid of the data. Rows with a high 
+    xdist are considered 'unlike anything we have run'.
+    """
+    return step09.spot(header, rows)
+
+if __name__ == "__main__":
+    # Load the data
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Identify suspicious rows
+    suspicious_indices = spot(header, rows)
+    
+    print("Analysis: Identifying setups that are unlike anything we have run.")
+    if not suspicious_indices:
+        print("No unusual configurations detected.")
+    else:
+        print(f"Found {len(suspicious_indices)} configurations that are significantly different from our history.")
+        print("The following row indices are the most suspicious (most to least):")
+        print(suspicious_indices[:10])
+        
+        print("\nSample of suspicious row data:")
+        for i in suspicious_indices[:3]:
+            print(f"Row {i}: {rows[i]}")
+            
+    exit(0)
+```

@@ -1,0 +1,88 @@
+import csv
+import random
+from step02 import guess
+
+def choose(header, rows, label):
+    """
+    Finds the best working arrangement by sampling 50 rows, 
+    labeling them to get true goal values, and predicting 
+    the best row based on a Random Forest model.
+    """
+    # Identify goal columns
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    
+    # Randomly sample 50 indices to label
+    sample_indices = random.sample(range(len(rows)), min(50, len(rows)))
+    
+    # Label the sampled rows
+    labeled_data = []
+    for idx in sample_indices:
+        true_goals = label(idx)
+        # Create a copy of the row with true goals filled in
+        row_copy = list(rows[idx])
+        for i, g_idx in enumerate(goal_indices):
+            row_copy[g_idx] = true_goals[i]
+        labeled_data.append(row_copy)
+    
+    # Prepare test data: we need to replace '?' with a dummy value 
+    # that the encoder in step02 can handle (e.g., the mean of the labeled data)
+    # or simply use a placeholder that won't crash the float conversion.
+    # Since step02's transform_row expects a float, we use 0.0.
+    test_rows = []
+    for row in rows:
+        row_copy = list(row)
+        for g_idx in goal_indices:
+            row_copy[g_idx] = 0.0
+        test_rows.append(row_copy)
+    
+    # Predict goals for all rows
+    predictions = guess(header, labeled_data, test_rows)
+    
+    # Find the row with the best predicted goal value
+    # We aggregate goals: if multiple, we normalize and sum.
+    # For simplicity, we focus on the first goal column as the primary metric.
+    target_goal_idx = goal_indices[0]
+    is_maximize = header[target_goal_idx].endswith('+')
+    
+    best_idx = 0
+    if is_maximize:
+        best_val = -float('inf')
+        for i, val in enumerate(predictions):
+            if val > best_val:
+                best_val = val
+                best_idx = i
+    else:
+        best_val = float('inf')
+        for i, val in enumerate(predictions):
+            if val < best_val:
+                best_val = val
+                best_idx = i
+                
+    return best_idx
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    def label(i):
+        return [rows[i][g] for g in goal_indices]
+
+    # Mask goals for the choose function
+    for row in rows:
+        for g in goal_indices:
+            row[g] = "?"
+
+    best_index = choose(header, rows, label)
+    print(f"The best working arrangement is found at row index: {best_index}")

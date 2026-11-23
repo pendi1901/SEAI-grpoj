@@ -1,0 +1,61 @@
+import csv
+
+def flow(header, row, seen):
+    """
+    Decides if the current row is 'good enough' to ship.
+    We define 'good enough' as being in the top 5% of the expected 
+    distribution of performance based on historical data (seen).
+    """
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+
+    def get_score(r):
+        # Normalize goals: (1 - MRE) + ACC + PRED40
+        # We assume values are within [0, 1]
+        return (1.0 - float(r[mre_idx])) + float(r[acc_idx]) + float(r[pred_idx])
+
+    # If this is the first row, we have no baseline
+    if not seen:
+        return False
+
+    # Calculate score for current row
+    current_score = get_score(row)
+    
+    # Calculate scores for all seen rows
+    seen_scores = [get_score(r) for r in seen]
+    
+    # Threshold: Is this row better than 95% of what we have seen so far?
+    # We use a dynamic threshold based on the current distribution.
+    seen_scores.sort(reverse=True)
+    top_5_percent_idx = max(0, int(len(seen_scores) * 0.05))
+    threshold = seen_scores[top_5_percent_idx]
+    
+    return current_score >= threshold
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                try:
+                    processed_row.append(float(val))
+                except ValueError:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    seen = []
+    shipped = False
+    for i, row in enumerate(rows):
+        if flow(header, row, seen):
+            print(f"Shipped setup at index {i} (row {i+1}).")
+            shipped = True
+            break
+        seen.append(row)
+    
+    if not shipped:
+        print("No setup met the criteria to ship.")

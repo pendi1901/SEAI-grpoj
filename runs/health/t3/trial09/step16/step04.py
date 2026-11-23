@@ -1,0 +1,69 @@
+import csv
+
+def flow(header, row, seen):
+    """
+    Decides if the current row is 'good enough' to stop searching.
+    We define 'good enough' as being in the top 5% of the performance 
+    distribution based on the goals observed so far.
+    """
+    goals = []
+    for i, name in enumerate(header):
+        if name.endswith('-'):
+            goals.append((i, -1))
+        elif name.endswith('+'):
+            goals.append((i, 1))
+
+    def get_score(r):
+        score = 0
+        for idx, direction in goals:
+            score += r[idx] * direction
+        return score
+
+    # Calculate score for current row
+    current_score = get_score(row)
+
+    # If this is the first row, we can't compare yet
+    if not seen:
+        return False
+
+    # Compare against all previously seen rows
+    # We stop if the current row is better than 95% of what we've seen
+    seen_scores = [get_score(r) for r in seen]
+    better_than_count = sum(1 for s in seen_scores if current_score > s)
+    
+    # Threshold: if better than 95% of history, or if we have enough history
+    # to be confident (e.g., at least 20 rows seen)
+    if len(seen) >= 20:
+        if better_than_count / len(seen) >= 0.95:
+            return True
+            
+    return False
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    rows = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for val in row:
+                try:
+                    processed_row.append(float(val))
+                except ValueError:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    seen = []
+    found_index = -1
+    for i, row in enumerate(rows):
+        if flow(header, row, seen):
+            found_index = i
+            break
+        seen.append(row)
+
+    if found_index != -1:
+        print(f"Stopped at row {found_index + 1}: Found a setup good enough to ship.")
+    else:
+        print("Processed all rows: No setup met the 'good enough' criteria.")

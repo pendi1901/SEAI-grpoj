@@ -1,0 +1,45 @@
+```python
+import ezr
+import step09
+
+def spot(header, rows):
+    """
+    Identify rows that are 'outliers' in the input space.
+    We use the distance of each row from the median of the dataset 
+    as a measure of how 'unusual' or 'mistyped' a row is.
+    
+    This reuses the logic from step09 which identifies rows that are 
+    most distant from the dataset's central tendency.
+    """
+    return step09.spot(header, rows)
+
+if __name__ == "__main__":
+    # Load the data
+    filename = "pom3a.n1000.train.csv"
+    rows_gen = ezr.csv(filename)
+    header = next(rows_gen)
+    rows = list(rows_gen)
+    
+    # Identify suspicious rows
+    suspicious_indices = spot(header, rows)
+    
+    print("Analysis: Identifying configurations that are unlike anything seen before.")
+    print("-" * 60)
+    print(f"Found {len(suspicious_indices)} configurations that are highly unusual.")
+    print("These rows are the most distant from the dataset's central tendency:")
+    print("-" * 60)
+    print(f"{'Index':<10} | {'Distance from Median':<20}")
+    print("-" * 60)
+    
+    # Re-calculate distances for display
+    tbl = ezr.Tbl([header] + rows)
+    median_row = ezr.mids(tbl)
+    
+    for idx in suspicious_indices[:10]: # Print top 10
+        dist = ezr.xdist(tbl, rows[idx], median_row)
+        print(f"{idx:<10} | {dist:.4f}")
+        
+    print("-" * 60)
+    print("These records represent setups that deviate significantly from historical norms.")
+    print("They may be errors, or they may be novel, high-risk experiments.")
+```

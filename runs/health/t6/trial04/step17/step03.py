@@ -1,0 +1,41 @@
+import ezr
+import step01
+
+def certify(xs, ys):
+    """
+    Returns True if xs and ys are statistically indistinguishable,
+    False if they differ significantly.
+    """
+    return ezr.same(xs, ys)
+
+if __name__ == "__main__":
+    # Load the data
+    file_path = "Health-ClosedIssues0000.n1000.train.csv"
+    all_data = list(ezr.csv(file_path))
+    header = all_data[0]
+    rows = all_data[1:]
+    
+    # Identify the 'N_estimators' column (index 3)
+    # The customer asks about "big setups" vs "small ones".
+    # We split based on the median of N_estimators.
+    n_est_idx = 3
+    n_ests = [row[n_est_idx] for row in rows]
+    median_n = sorted(n_ests)[len(n_ests) // 2]
+    
+    # We use ACC+ (index 1) as the metric for "accuracy"
+    acc_idx = 1
+    small_acc = [row[acc_idx] for row in rows if row[n_est_idx] <= median_n]
+    big_acc = [row[acc_idx] for row in rows if row[n_est_idx] > median_n]
+    
+    # Run the certification
+    is_same = certify(small_acc, big_acc)
+    
+    print("Certification of performance difference between small and big setups:")
+    if is_same:
+        print("Result: The difference in accuracy is statistically insignificant (noise).")
+    else:
+        print("Result: The difference in accuracy is statistically significant (real).")
+    
+    # Provide context
+    print(f"Small setups (N_estimators <= {median_n}): {len(small_acc)} rows, mean ACC: {sum(small_acc)/len(small_acc):.4f}")
+    print(f"Big setups (N_estimators > {median_n}): {len(big_acc)} rows, mean ACC: {sum(big_acc)/len(big_acc):.4f}")

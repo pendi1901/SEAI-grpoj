@@ -1,0 +1,74 @@
+import csv
+
+def blame(header, rows):
+    """
+    Identifies input columns that correlate most strongly with poor performance.
+    'Bad' rows are defined as the bottom 25% based on the multi-objective score.
+    We compare the distribution of each input in the 'bad' set vs the 'good' set.
+    """
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+    
+    input_indices = [i for i, h in enumerate(header) if not (h.endswith('-') or h.endswith('+'))]
+
+    # Calculate scores to rank rows
+    def get_score(row):
+        # Simple normalization based on global min/max for this dataset
+        # MRE: 0.0 to 1.0, ACC: 0.0 to 1.0, PRED: 0.0 to 1.0
+        s1 = 1.0 - row[mre_idx]
+        s2 = row[acc_idx]
+        s3 = row[pred_idx]
+        return (s1 + s2 + s3) / 3.0
+
+    scored_rows = sorted([(get_score(r), r) for r in rows], key=lambda x: x[0])
+    
+    # Bottom 25% are 'bad', top 25% are 'good'
+    n = len(scored_rows)
+    bad = [x[1] for x in scored_rows[:n//4]]
+    good = [x[1] for x in scored_rows[3*n//4:]]
+
+    # For each input, check if the mean/distribution in 'bad' is significantly different from 'good'
+    # We use a simple difference of means (normalized) as a proxy for 'blame'
+    blame_scores = []
+    for i in input_indices:
+        col_name = header[i]
+        if col_name == 'criterion':
+            # For symbolic, check frequency of most common bad value
+            bad_vals = [r[i] for r in bad]
+            good_vals = [r[i] for r in good]
+            # Score based on how much more frequent a value is in bad vs good
+            score = 0
+            for val in set(bad_vals):
+                score += abs(bad_vals.count(val)/len(bad_vals) - good_vals.count(val)/len(good_vals))
+            blame_scores.append((col_name, score))
+        else:
+            # For numeric, check difference in means
+            bad_vals = [r[i] for r in bad]
+            good_vals = [r[i] for r in good]
+            score = abs((sum(bad_vals)/len(bad_vals)) - (sum(good_vals)/len(good_vals)))
+            blame_scores.append((col_name, score))
+
+    # Sort by score descending
+    blame_scores.sort(key=lambda x: x[1], reverse=True)
+    return [x[0] for x in blame_scores[:3]]
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    rows = []
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            for row in reader:
+                processed_row = [val if header[i] == 'criterion' else float(val) 
+                                 for i, val in enumerate(row)]
+                rows.append(processed_row)
+        
+        culprits = blame(header, rows)
+        print("The settings most responsible for poor performance are:")
+        for c in culprits:
+            print(f"- {c}")
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

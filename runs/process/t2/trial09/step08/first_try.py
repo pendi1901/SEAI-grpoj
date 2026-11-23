@@ -1,0 +1,75 @@
+import csv
+from step01 import remember
+
+def fix(header, row, levers):
+    """
+    Finds the smallest change to 'Plan' and 'Team Size' to improve the row.
+    We perform a local search by testing small increments/decrements within
+    the allowed lever ranges.
+    """
+    goal_indices = [(i, name[-1]) for i, name in enumerate(header) 
+                    if name.endswith('-') or name.endswith('+')]
+
+    def score_row(r):
+        total = 0
+        for idx, op in goal_indices:
+            val = float(r[idx])
+            total += val if op == '-' else (1.0 - val)
+        return total
+
+    best_row = list(row)
+    best_score = score_row(row)
+    recommendation = {}
+
+    # Try changing each lever slightly
+    for col_name, bounds in levers.items():
+        idx = header.index(col_name)
+        original_val = row[idx]
+        
+        # Test a few points in the range
+        low, high = bounds
+        for step in [0.1, -0.1]:
+            new_val = max(low, min(high, original_val + step))
+            if new_val != original_val:
+                test_row = list(row)
+                test_row[idx] = new_val
+                new_score = score_row(test_row)
+                
+                if new_score < best_score:
+                    best_score = new_score
+                    recommendation = {col_name: new_val}
+    
+    return recommendation
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', newline='') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [[float(x) for x in row] for row in reader]
+            
+            # Define levers based on the customer's request (Plan and Team Size)
+            # Assuming normalized range [0, 1] for these numeric inputs
+            levers = {
+                'Plan': (0.0, 1.0),
+                'Team Size': (0.0, 1.0)
+            }
+            
+            # Find a "bad" row (e.g., one with high Cost- and Idle-)
+            cost_idx = header.index('Cost-')
+            idle_idx = header.index('Idle-')
+            bad_row = max(rows, key=lambda r: r[cost_idx] + r[idle_idx])
+            
+            suggestion = fix(header, bad_row, levers)
+            
+            print("Customer Inquiry: How to rescue an over-budget, idle project?")
+            if suggestion:
+                for col, val in suggestion.items():
+                    print(f"Recommendation: Adjust '{col}' to {val:.4f}.")
+            else:
+                print("No simple adjustment found to improve performance.")
+                
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

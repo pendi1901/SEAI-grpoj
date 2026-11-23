@@ -1,0 +1,74 @@
+import csv
+
+def blame(header, rows):
+    """
+    Identifies input columns that correlate most strongly with poor performance.
+    Performance is defined by a utility score: (1 - MRE) + ACC + PRED.
+    We compare the distribution of input values in the worst 20% of rows
+    against the rest to find which inputs are 'damaging'.
+    """
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+    
+    # Calculate utility for each row
+    def get_utility(r):
+        return (1.0 - r[mre_idx]) + r[acc_idx] + r[pred_idx]
+
+    scored_rows = []
+    for r in rows:
+        scored_rows.append((get_utility(r), r))
+    
+    # Sort by utility ascending (worst first)
+    scored_rows.sort(key=lambda x: x[0])
+    
+    # Define worst 20%
+    n_worst = max(1, len(rows) // 5)
+    worst_rows = [r for _, r in scored_rows[:n_worst]]
+    
+    # Identify input columns (exclude goals)
+    input_indices = [i for i, h in enumerate(header) if not (h.endswith('-') or h.endswith('+'))]
+    
+    # For each input, calculate how much the mean in the worst set deviates 
+    # from the global mean (normalized by standard deviation)
+    impacts = []
+    for i in input_indices:
+        col_vals = [r[i] for r in rows if isinstance(r[i], (int, float))]
+        if not col_vals:
+            continue
+            
+        global_mean = sum(col_vals) / len(col_vals)
+        worst_vals = [r[i] for r in worst_rows if isinstance(r[i], (int, float))]
+        if not worst_vals:
+            continue
+            
+        worst_mean = sum(worst_vals) / len(worst_vals)
+        
+        # The 'blame' score is the absolute difference in means
+        impacts.append((abs(worst_mean - global_mean), header[i]))
+    
+    # Sort by impact descending
+    impacts.sort(key=lambda x: x[0], reverse=True)
+    
+    return [name for _, name in impacts[:3]]
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    header = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for line in reader:
+            processed_row = []
+            for i, val in enumerate(line):
+                if header[i] == 'criterion':
+                    processed_row.append(val)
+                else:
+                    processed_row.append(float(val))
+            rows.append(processed_row)
+            
+    blameworthy = blame(header, rows)
+    print("The settings most responsible for poor performance are:")
+    for col in blameworthy:
+        print(f"- {col}")

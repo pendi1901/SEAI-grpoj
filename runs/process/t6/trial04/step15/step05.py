@@ -1,0 +1,60 @@
+import ezr
+import step01
+
+def blame(header, rows):
+    """
+    Identify input columns that best explain why the worst rows are bad.
+    We define 'worst' as the bottom 20% of rows by ydist.
+    We compare the distribution of inputs in the 'worst' rows vs the 'best' rows.
+    """
+    # Create a table to use ezr's normalization and ydist
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Sort rows by ydist (ascending: best to worst)
+    scored = sorted(rows, key=lambda r: ezr.ydist(tbl, r))
+    
+    n = len(scored)
+    best = scored[:n // 5]
+    worst = scored[4 * n // 5:]
+    
+    # We look for input columns where the distribution in 'worst' is 
+    # significantly different from 'best'.
+    # We use the 'at' index to track columns.
+    input_cols = [c for c in tbl.x]
+    
+    def score_col(col):
+        # For numeric, compare means. For symbolic, compare entropy/distribution.
+        # A simple heuristic: difference in means (normalized)
+        vals_best = [r[col.at] for r in best if r[col.at] != "?"]
+        vals_worst = [r[col.at] for r in worst if r[col.at] != "?"]
+        if not vals_best or not vals_worst: return 0
+        
+        if isinstance(col, ezr.Num):
+            m1 = sum(vals_best) / len(vals_best)
+            m2 = sum(vals_worst) / len(vals_worst)
+            return abs(m1 - m2)
+        else:
+            # For symbols, check if the most common symbol in worst is rare in best
+            return 0 # Simplified: focus on numeric drivers for this dataset
+
+    # Rank inputs by their impact
+    ranked = sorted(input_cols, key=score_col, reverse=True)
+    
+    # Return the names of the top 3 most influential input columns
+    return [c.txt for c in ranked[:3]]
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    rows_gen = ezr.csv(filename)
+    header = next(rows_gen)
+    rows = list(rows_gen)
+    
+    top_blame = blame(header, rows)
+    
+    print("Analysis: Why do our worst setups leave so many people waiting around?")
+    print("-" * 60)
+    print(f"The primary input factors contributing to poor performance are:")
+    for i, name in enumerate(top_blame):
+        print(f"{i+1}. {name}")
+    print("-" * 60)
+    print("These columns show the greatest divergence between our best and worst configurations.")

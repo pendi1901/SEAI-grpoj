@@ -1,0 +1,59 @@
+```python
+import ezr
+import random
+
+def certify(xs, ys):
+    """
+    Returns True if the distributions of xs and ys are statistically 
+    indistinguishable (same apart from noise), False otherwise.
+    Uses the statistical tests provided in ezr.
+    """
+    # Sort inputs as required by the statistical tests in ezr
+    xs_sorted = sorted(xs)
+    ys_sorted = sorted(ys)
+    
+    # Use ezr.same which combines cliffs, ks, and cohen tests
+    # eps=0.35 is a standard medium effect size for Cohen's d
+    return ezr.same(xs_sorted, ys_sorted, eps=0.35)
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    
+    try:
+        header = next(data_gen)
+        rows = list(data_gen)
+    except StopIteration:
+        exit(0)
+
+    # The customer asks about the "two built-in rules".
+    # In the context of this data and the provided ezr.py, we compare
+    # the two main ways to rank/select configurations:
+    # 1. The tree-based ranker (used in step02/step06)
+    # 2. The ydist-based selection (used in step01/step07)
+    
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Rule 1: Tree-based ranker (leaf mean ydist)
+    node = ezr.tree(tbl, rows)
+    ranker_scores = [ezr.leaf(node, r).mu for r in rows]
+    
+    # Rule 2: Direct ydist (proximity to ideal)
+    ydist_scores = [ezr.ydist(tbl, r) for r in rows]
+    
+    # Compare the distributions of these two ranking methods
+    # If they are the same, the choice doesn't matter.
+    is_same = certify(ranker_scores, ydist_scores)
+    
+    print("Analysis of ranking rules:")
+    print("Comparing the distribution of scores from the Tree-based ranker vs Direct ydist.")
+    
+    if is_same:
+        print("Result: The choice between these two rules does not make a real difference.")
+        print("You can stop arguing about it; they are statistically indistinguishable.")
+    else:
+        print("Result: The choice between these two rules makes a statistically significant difference.")
+        print("The rules provide different perspectives on the configuration space.")
+    
+    exit(0)
+```

@@ -1,0 +1,85 @@
+import csv
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import LabelEncoder
+
+def blame(header, rows):
+    """
+    Identifies which input columns best explain why the worst rows are bad.
+    Uses a Random Forest to predict the 'badness' score of rows and 
+    extracts feature importances.
+    """
+    # Identify goal and input columns
+    goal_cols = [i for i, h in enumerate(header) if h.endswith('-') or h.endswith('+')]
+    input_cols = [i for i, h in enumerate(header) if not (h.endswith('-') or h.endswith('+'))]
+    
+    # Calculate a 'badness' score for each row
+    # Normalize goals: MRE- (minimize), ACC+ (maximize), PRED40+ (maximize)
+    # We want a score where higher = worse.
+    def get_badness(row):
+        score = 0
+        for i in goal_cols:
+            col_vals = [r[i] for r in rows if isinstance(r[i], (int, float))]
+            min_v, max_v = min(col_vals), max(col_vals)
+            rng = max_v - min_v + 1e-9
+            norm = (row[i] - min_v) / rng
+            if header[i].endswith('-'):
+                score += norm
+            else:
+                score += (1 - norm)
+        return score
+
+    badness_scores = [get_badness(row) for row in rows]
+    
+    # Prepare data for Random Forest
+    X = []
+    encoders = {}
+    for i in input_cols:
+        if isinstance(rows[0][i], str):
+            le = LabelEncoder()
+            le.fit([r[i] for r in rows])
+            encoders[i] = le
+            
+    for row in rows:
+        feat = []
+        for i in input_cols:
+            if i in encoders:
+                feat.append(encoders[i].transform([row[i]])[0])
+            else:
+                feat.append(float(row[i]))
+        X.append(feat)
+    
+    # Train a regressor to predict badness
+    model = RandomForestRegressor(n_estimators=50, random_state=42)
+    model.fit(X, badness_scores)
+    
+    # Get feature importances
+    importances = model.feature_importances_
+    indexed_importances = sorted(zip(importances, [header[i] for i in input_cols]), reverse=True)
+    
+    # Return the top 3 columns that explain the badness
+    return [name for score, name in indexed_importances[:3]]
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            for row in reader:
+                processed_row = []
+                for i, val in enumerate(row):
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        top_blame = blame(header, rows)
+        print("The settings most responsible for poor performance are:")
+        for col in top_blame:
+            print(f"- {col}")
+        exit(0)
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

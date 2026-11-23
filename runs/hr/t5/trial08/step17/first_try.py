@@ -1,0 +1,82 @@
+import ezr
+import random
+
+def choose(header, rows, label):
+    """
+    Finds the best arrangement for 'Laboratory Technician' staff using 
+    at most 50 labels.
+    """
+    # Identify the index for jobRole
+    job_role_idx = header.index("jobRole")
+    
+    # Filter rows to only include 'Laboratory Technician'
+    lab_indices = [i for i, row in enumerate(rows) if row[job_role_idx] == "Laboratory Technician"]
+    lab_rows = [rows[i] for i in lab_indices]
+    
+    # If no lab staff found, return 0
+    if not lab_indices:
+        return 0
+    
+    # Track labeled rows
+    labeled_data = {}
+    
+    def oracle_wrapper(row):
+        # Find original index
+        for i, r in enumerate(rows):
+            if r is row:
+                if i not in labeled_data:
+                    if len(labeled_data) >= 50:
+                        return row
+                    true_vals = label(i)
+                    for col_idx, val in enumerate(true_vals):
+                        row[col_idx] = val
+                    labeled_data[i] = row
+                return row
+        return row
+
+    # Create a table for the lab staff
+    tbl = ezr.Tbl([header] + lab_rows)
+    
+    # Use acquire to intelligently select rows to label
+    # We use a subset of the budget (50)
+    labeled = ezr.acquire(tbl, cap=50, label=oracle_wrapper)
+    
+    # Find the best row among those labeled
+    # A row is better when its ydist is lower
+    best_row = min(labeled, key=lambda r: ezr.ydist(tbl, r))
+    
+    # Return the original index of the best row
+    for i, r in enumerate(rows):
+        if r is best_row:
+            return i
+    return lab_indices[0]
+
+if __name__ == "__main__":
+    # Load data
+    data = list(ezr.csv("WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"))
+    header = data[0]
+    rows = data[1:]
+    
+    # Create a copy for the label function
+    full_data = [list(r) for r in rows]
+    
+    # Mask the goals
+    goal_indices = [i for i, name in enumerate(header) if name[-1] in "+-"]
+    masked_rows = []
+    for row in full_data:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_rows.append(new_row)
+        
+    def label(i):
+        return full_data[i]
+    
+    best_idx = choose(header, masked_rows, label)
+    
+    print(f"Best laboratory technician arrangement found at index: {best_idx}")
+    print("Goal values for this employee:")
+    for idx in goal_indices:
+        print(f"  {header[idx]}: {full_data[best_idx][idx]}")
+    
+    exit(0)

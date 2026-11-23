@@ -1,0 +1,59 @@
+```python
+import ezr
+import random
+
+def spot(header, rows):
+    """
+    Identifies rows that are 'suspicious' because they are unlike anyone 
+    else we have employed. We use the distance to the nearest neighbor 
+    in the input space (xdist). Rows that are far from all other rows 
+    are outliers, meaning our model's estimates for them cannot be trusted.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate the distance of each row to its nearest neighbor in the input space.
+    # Rows that are very far from all other rows are likely anomalies.
+    suspicious = []
+    for i, r1 in enumerate(rows):
+        # Find distance to the nearest neighbor (excluding self)
+        min_dist = 1e30
+        for j, r2 in enumerate(rows):
+            if i == j:
+                continue
+            d = ezr.xdist(tbl, r1, r2)
+            if d < min_dist:
+                min_dist = d
+        suspicious.append((min_dist, i))
+    
+    # Sort by distance descending: the rows with the largest "nearest neighbor" 
+    # distance are the most isolated/suspicious.
+    suspicious.sort(key=lambda x: x[0], reverse=True)
+    
+    return [idx for dist, idx in suspicious]
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Identify the most suspicious rows
+    suspects = spot(header, rows)
+    
+    print("Analysis: Identifying records where our estimates cannot be trusted.")
+    print("-" * 60)
+    print("We flag records as 'untrustworthy' when they are outliers in our")
+    print("input space—meaning they are unlike anyone we have employed before.")
+    print("-" * 60)
+    
+    # Print the top 5 most suspicious rows
+    for i in range(min(5, len(suspects))):
+        idx = suspects[i]
+        print(f" - Row index {idx:3}: Most suspicious rank {i+1}")
+        
+    print("-" * 60)
+    print("For these employees, our predictive models lack sufficient")
+    print("historical data to provide a reliable estimate.")
+    
+    exit(0)
+```

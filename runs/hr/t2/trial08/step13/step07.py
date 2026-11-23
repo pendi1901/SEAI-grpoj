@@ -1,0 +1,72 @@
+import csv
+import random
+
+def choose(header, rows, label):
+    """
+    Finds the best working arrangement by sampling 50 rows, 
+    labeling them, and picking the one with the best average goal performance.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    
+    # Randomly sample 50 indices to label
+    indices_to_sample = random.sample(range(len(rows)), min(50, len(rows)))
+    
+    best_idx = -1
+    best_score = -float('inf')
+    
+    for i in indices_to_sample:
+        # Get true values for the goals
+        true_goals = label(i)
+        
+        # Calculate a normalized score for this row
+        # We want to maximize (+) and minimize (-)
+        # Since we don't have global min/max, we use the relative performance 
+        # of the sampled set to rank them.
+        score = 0
+        for j, goal_idx in enumerate(goal_indices):
+            val = true_goals[j]
+            if header[goal_idx].endswith('+'):
+                score += val
+            else:
+                score -= val
+        
+        if score > best_score:
+            best_score = score
+            best_idx = i
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    # Prepare hidden rows
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    hidden_rows = [row[:] for row in rows]
+    for row in hidden_rows:
+        for idx in goal_indices:
+            row[idx] = "?"
+            
+    def label(i):
+        return [rows[i][idx] for idx in goal_indices]
+        
+    best_idx = choose(header, hidden_rows, label)
+    
+    print(f"Analysis complete. Best working arrangement found at row index: {best_idx}")
+    print("This row was selected based on the highest performance across all goal metrics.")

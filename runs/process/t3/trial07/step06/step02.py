@@ -1,0 +1,75 @@
+import csv
+import pandas as pd
+from sklearn.neighbors import KNeighborsRegressor
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column for test rows using K-Nearest Neighbors.
+    """
+    df_train = pd.DataFrame(train, columns=header)
+    df_test = pd.DataFrame(test, columns=header)
+    
+    # Identify input columns (those not ending in - or +)
+    inputs = [col for col in header if not (col.endswith('-') or col.endswith('+'))]
+    
+    # Identify the first goal column
+    goals = [col for col in header if col.endswith(('-', '+'))]
+    target = goals[0]
+    
+    # Prepare training data
+    X_train = df_train[inputs]
+    y_train = df_train[target]
+    
+    # Prepare test data
+    X_test = df_test[inputs]
+    
+    # Use KNN to predict the target
+    # n_neighbors=5 is a standard heuristic for small datasets
+    model = KNeighborsRegressor(n_neighbors=5)
+    model.fit(X_train, y_train)
+    
+    predictions = model.predict(X_test)
+    return predictions.tolist()
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed_row = []
+                for val in row:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        # Split data: use first 700 for training, next 100 for testing
+        train_data = rows[:700]
+        test_data = rows[700:800]
+        
+        # Mask the goals in test_data to simulate "?"
+        goal_indices = [i for i, h in enumerate(header) if h.endswith(('-', '+'))]
+        masked_test = []
+        for row in test_data:
+            new_row = list(row)
+            for idx in goal_indices:
+                new_row[idx] = "?"
+            masked_test.append(new_row)
+            
+        predictions = guess(header, train_data, masked_test)
+        
+        # Report findings
+        print("Customer Inquiry: Estimated Cost (first goal column) for test setups:")
+        for i, val in enumerate(predictions[:5]): # Show first 5
+            print(f"  Setup {i+1}: {val:.4f}")
+        print("  ...")
+        print(f"Total estimations generated: {len(predictions)}")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

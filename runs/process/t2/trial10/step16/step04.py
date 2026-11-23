@@ -1,0 +1,54 @@
+import csv
+import step01
+
+def flow(header, row, seen):
+    """
+    Decides whether to accept a row based on whether it is better than 
+    the best seen so far. We use the logic from step01 to define 'better'.
+    """
+    # If it's the first row, we have no baseline, so we accept it.
+    if not seen:
+        return True
+
+    # Identify goal indices and directions
+    goal_indices = []
+    for i, name in enumerate(header):
+        if name.endswith('-') or name.endswith('+'):
+            goal_indices.append((i, name[-1]))
+
+    def get_score(r):
+        # Lower is better: minimize '-' and negate '+'
+        return sum(float(r[idx]) if op == '-' else -float(r[idx]) for idx, op in goal_indices)
+
+    # Calculate score for current row
+    current_score = get_score(row)
+    
+    # Calculate scores for all previously seen rows
+    seen_scores = [get_score(r) for r in seen]
+    
+    # Accept if the current row is better than the best seen so far
+    return current_score < min(seen_scores)
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', newline='') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [row for row in reader]
+            
+            seen = []
+            accepted_count = 0
+            for row in rows:
+                if flow(header, row, seen):
+                    accepted_count += 1
+                seen.append(row)
+            
+            print("Customer Inquiry: Sequential decision making for new programs.")
+            print(f"Processed {len(rows)} programs.")
+            print(f"Recommended to accept {accepted_count} programs based on improvement over history.")
+            print("Decision logic: Accept only if the current program outperforms all previous ones.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

@@ -1,0 +1,82 @@
+import csv
+import random
+
+def get_score(header, row):
+    """Calculates aggregate score: (1 - MRE) + ACC + PRED40."""
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+    return (1.0 - float(row[mre_idx])) + float(row[acc_idx]) + float(row[pred_idx])
+
+def fix(header, row, levers):
+    """
+    Finds the single lever change that maximizes the predicted score.
+    We estimate the impact of changing each lever by checking the 
+    average performance of rows that already have that value.
+    """
+    # Load the dataset to calculate average performance per lever value
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    all_rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for r in reader:
+            all_rows.append([float(x) if i not in [4] else x for i, x in enumerate(r)])
+
+    best_change = {}
+    max_gain = -float('inf')
+
+    for col, allowed in levers.items():
+        col_idx = header.index(col)
+        
+        # Determine candidate values to try
+        candidates = []
+        if isinstance(allowed, list):  # Symbolic
+            candidates = allowed
+        else:  # Numeric: try low, mid, high
+            low, high = allowed
+            candidates = [low, (low + high) / 2, high]
+            
+        for val in candidates:
+            # Calculate average score for rows with this value
+            relevant_rows = [r for r in all_rows if r[col_idx] == val]
+            if not relevant_rows:
+                # Fallback: if no rows have this exact value, skip or estimate
+                continue
+            
+            avg_score = sum(get_score(header, r) for r in relevant_rows) / len(relevant_rows)
+            
+            if avg_score > max_gain:
+                max_gain = avg_score
+                best_change = {col: val}
+                
+    return best_change
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            rows.append([float(x) if i not in [4] else x for i, x in enumerate(row)])
+
+    levers = {
+        'N_estimators': (50, 200),
+        'criterion': ['absolute_error', 'poisson', 'squared_error'],
+        'Min_sample_leaves': (1, 20),
+        'Min_impurity_decrease': (0, 10),
+        'Max_depth': (1, 20)
+    }
+
+    # Pick the worst row to fix
+    scores = [(i, get_score(header, r)) for i, r in enumerate(rows)]
+    bad_idx = min(scores, key=lambda x: x[1])[0]
+    bad_row = rows[bad_idx]
+
+    recommendation = fix(header, bad_row, levers)
+    
+    print("To improve your setup with a single change, we recommend:")
+    for col, val in recommendation.items():
+        print(f"Set '{col}' to {val}.")
+    print("This adjustment is statistically associated with higher performance.")

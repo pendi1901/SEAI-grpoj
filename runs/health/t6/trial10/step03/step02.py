@@ -1,0 +1,59 @@
+import ezr
+import step01
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column for each test row by finding the 
+    nearest neighbor in the training set based on x-column distance.
+    """
+    # Create a table from training data to calculate distances
+    data = [header] + train
+    tbl = ezr.Tbl(data)
+    
+    # The first goal column is the first column in tbl.y
+    goal_col = tbl.y[0]
+    
+    results = []
+    for t_row in test:
+        # Find the row in training data that is closest in x-space
+        # Using xdist from ezr
+        best_row = min(train, key=lambda r: ezr.xdist(tbl, t_row, r))
+        
+        # Return the value of the first goal column from that neighbor
+        results.append(best_row[goal_col.at])
+        
+    return results
+
+if __name__ == "__main__":
+    # Load the data
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    all_rows = list(ezr.csv(filename))
+    header = all_rows[0]
+    rows = all_rows[1:]
+    
+    # Split data: 80% train, 20% test
+    split_idx = int(len(rows) * 0.8)
+    train = rows[:split_idx]
+    test = rows[split_idx:]
+    
+    # Prepare test rows by masking the goal columns
+    # Goals are columns ending in + or -
+    goal_indices = [i for i, name in enumerate(header) if name[-1] in "+-"]
+    masked_test = []
+    for row in test:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_test.append(new_row)
+    
+    # Get predictions
+    predictions = guess(header, train, masked_test)
+    
+    # Calculate average error for the first goal column
+    actuals = [row[goal_indices[0]] for row in test]
+    errors = [abs(p - a) for p, a in zip(predictions, actuals)]
+    avg_error = sum(errors) / len(errors)
+    
+    print(f"Prediction analysis complete.")
+    print(f"Estimated average error for the first goal column: {avg_error:.4f}")
+    print(f"Sample prediction: {predictions[0]:.4f} (Actual: {actuals[0]:.4f})")

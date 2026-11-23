@@ -1,0 +1,51 @@
+```python
+import ezr
+import random
+
+def spot(header, rows):
+    """
+    Finds suspicious rows by identifying outliers in the input space.
+    Rows that are significantly distant from the rest of the data in 
+    the input (X) space are flagged as potentially erroneous.
+    """
+    # Create a table to handle column roles
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate the centroid of the input space
+    # We use the cached mids from the table
+    mids = ezr.mids(tbl)
+    
+    # Calculate the distance of each row from the centroid in X-space
+    # A high xdist indicates the row is an outlier compared to the rest
+    outliers = []
+    for i, row in enumerate(rows):
+        d = ezr.xdist(tbl, row, mids)
+        outliers.append((d, i))
+    
+    # Sort by distance descending (most distant/suspicious first)
+    outliers.sort(key=lambda x: x[0], reverse=True)
+    
+    # Return the indices of the most suspicious rows
+    return [item[1] for item in outliers]
+
+if __name__ == "__main__":
+    # Load the data
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    all_data = list(ezr.csv(filename))
+    header = all_data[0]
+    rows = all_data[1:]
+    
+    # Identify suspicious rows
+    suspicious_indices = spot(header, rows)
+    
+    print("Analysis: Identifying potentially erroneous configurations.")
+    print("The following rows are most distant from the typical input parameters,")
+    print("suggesting they may be failed runs or data entry errors:")
+    
+    # Print the top 5 most suspicious rows
+    for i in range(min(5, len(suspicious_indices))):
+        idx = suspicious_indices[i]
+        print(f"{i+1}. Row {idx}: {rows[idx]}")
+    
+    print(f"\nTotal suspicious rows identified: {len(suspicious_indices)}")
+```

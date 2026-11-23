@@ -1,0 +1,97 @@
+import csv
+import random
+
+def get_score(header, row):
+    """Calculates a normalized score [0, 1] for a row based on goals."""
+    goal_indices = [i for i, h in enumerate(header) if h.endswith('-') or h.endswith('+')]
+    scores = []
+    for i in goal_indices:
+        val = row[i]
+        if header[i].endswith('-'):
+            scores.append(1.0 - val)
+        else:
+            scores.append(val)
+    return sum(scores) / len(scores)
+
+def race(header, rows, label):
+    """
+    Compares three strategies: random, greedy, and hill-climbing.
+    Budget: 50 labels total.
+    """
+    budget = 50
+    tried = ["random", "greedy", "hill-climbing"]
+    results = {}
+    
+    # Helper to get full row with labels
+    def get_full_row(idx):
+        row = list(rows[idx])
+        goals = label(idx)
+        goal_indices = [i for i, h in enumerate(header) if h.endswith('-') or h.endswith('+')]
+        for i, g in zip(goal_indices, goals):
+            row[i] = g
+        return row
+
+    # 1. Random Strategy: 17 labels
+    random_indices = random.sample(range(len(rows)), 17)
+    best_r_idx = -1
+    best_r_score = -1.0
+    for idx in random_indices:
+        score = get_score(header, get_full_row(idx))
+        if score > best_r_score:
+            best_r_score = score
+            best_r_idx = idx
+    results["random"] = (best_r_score, best_r_idx)
+
+    # 2. Greedy Strategy: 17 labels
+    # Pick 17 random, then pick the best one found
+    greedy_indices = random.sample(range(len(rows)), 17)
+    best_g_idx = -1
+    best_g_score = -1.0
+    for idx in greedy_indices:
+        score = get_score(header, get_full_row(idx))
+        if score > best_g_score:
+            best_g_score = score
+            best_g_idx = idx
+    results["greedy"] = (best_g_score, best_g_idx)
+
+    # 3. Hill-Climbing Strategy: 16 labels
+    # Start at random, move to neighbor if better
+    curr_idx = random.randint(0, len(rows) - 1)
+    best_h_idx = curr_idx
+    best_h_score = get_score(header, get_full_row(curr_idx))
+    labels_used = 1
+    while labels_used < 16:
+        neighbor = random.randint(0, len(rows) - 1)
+        score = get_score(header, get_full_row(neighbor))
+        labels_used += 1
+        if score > best_h_score:
+            best_h_score = score
+            best_h_idx = neighbor
+    results["hill-climbing"] = (best_h_score, best_h_idx)
+
+    # Determine winner
+    winner = max(results, key=lambda k: results[k][0])
+    return {"winner": winner, "row": results[winner][1], "tried": tried}
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(x) for x in row])
+        
+        def label(i):
+            return [rows[i][j] for j, h in enumerate(header) if h.endswith('-') or h.endswith('+')]
+        
+        result = race(header, rows, label)
+        print(f"Race Results:")
+        print(f"Winner: {result['winner']}")
+        print(f"Best row found at index: {result['row']}")
+        print(f"Strategies compared: {', '.join(result['tried'])}")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

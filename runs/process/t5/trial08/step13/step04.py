@@ -1,0 +1,59 @@
+import ezr
+import random
+
+def flow(header, row, seen):
+    """
+    Decide whether to accept a row based on whether it is better than 
+    the current best seen so far. Since we want to minimize '-' goals 
+    and maximize '+' goals, we use ydist to measure quality.
+    
+    We accept the row if it is significantly better than the average 
+    of what we have seen, or if we have seen very few rows.
+    """
+    if not seen:
+        return True
+    
+    # Create a table to calculate ydist
+    # We use the header and the seen rows to establish the context
+    tbl = ezr.Tbl([header] + seen)
+    
+    # Calculate the quality of the current row and the average quality of seen rows
+    current_ydist = ezr.ydist(tbl, row)
+    seen_ydists = [ezr.ydist(tbl, r) for r in seen]
+    avg_seen_ydist = sum(seen_ydists) / len(seen_ydists)
+    
+    # If the current row is better (lower ydist) than the average of what we've seen,
+    # we accept it. We also add a small buffer to be selective.
+    return current_ydist < (avg_seen_ydist * 0.95)
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    
+    try:
+        header = next(data_gen)
+        rows = list(data_gen)
+    except StopIteration:
+        print("Error: File is empty or missing.")
+        exit(1)
+        
+    # Simulate the arrival process
+    random.seed(1234567891)
+    random.shuffle(rows)
+    
+    seen = []
+    accepted_count = 0
+    
+    print(f"Processing {len(rows)} incoming proposals...")
+    
+    for row in rows:
+        if flow(header, row, seen):
+            accepted_count += 1
+            # Once we accept, we stop as per the requirement
+            print(f"Proposal accepted at index {len(seen)}. Stopping.")
+            break
+        seen.append(row)
+    else:
+        print("No proposals met the criteria.")
+        
+    exit(0)

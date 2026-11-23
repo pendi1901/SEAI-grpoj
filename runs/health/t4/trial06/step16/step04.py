@@ -1,0 +1,66 @@
+import csv
+
+def flow(header, row, seen):
+    """
+    Decides if the current row is 'good enough' to ship.
+    We define 'good enough' as being better than all previously seen rows
+    across all objectives (Pareto-dominance).
+    """
+    goals = []
+    for i, name in enumerate(header):
+        if name.endswith('-'):
+            goals.append((i, -1))  # Minimize
+        elif name.endswith('+'):
+            goals.append((i, 1))   # Maximize
+
+    def dominates(row_a, row_b):
+        # Returns True if row_a dominates row_b
+        better_in_at_least_one = False
+        for idx, direction in goals:
+            val_a, val_b = row_a[idx], row_b[idx]
+            if direction == 1: # Maximize
+                if val_a < val_b: return False
+                if val_a > val_b: better_in_at_least_one = True
+            else: # Minimize
+                if val_a > val_b: return False
+                if val_a < val_b: better_in_at_least_one = True
+        return better_in_at_least_one
+
+    # If no previous rows, this is the best so far
+    if not seen:
+        return True
+
+    # If this row dominates all previous rows, it is a new Pareto optimal point
+    # We ship if it is better than everything we have seen so far.
+    for prev in seen:
+        if not dominates(row, prev):
+            return False
+            
+    return True
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i] == 'criterion':
+                    processed_row.append(val)
+                else:
+                    processed_row.append(float(val))
+            rows.append(processed_row)
+
+    seen = []
+    shipped = False
+    for i, row in enumerate(rows):
+        if flow(header, row, seen):
+            print(f"Shipped configuration at index {i} (row {i+1}).")
+            shipped = True
+            break
+        seen.append(row)
+    
+    if not shipped:
+        print("No configuration met the criteria to ship.")

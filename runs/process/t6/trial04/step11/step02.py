@@ -1,0 +1,66 @@
+import ezr
+import step01
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column (Cost-) for each test row.
+    Uses the ranker from ezr to predict performance based on training data.
+    """
+    # Create a table from training data to build the model
+    data = [header] + train
+    tbl = ezr.Tbl(data)
+    
+    # Build a ranker (tree-based) on the training data
+    # The ranker returns a function that estimates the ydist of a row
+    ranker_func = ezr.ranker(tbl)
+    
+    # Identify the index of the first goal column (Cost-)
+    goal_idx = [i for i, name in enumerate(header) if name.endswith(('-', '+'))][0]
+    
+    # To estimate the value of the first goal, we find the average value 
+    # of that column in the training rows that are "near" the test row 
+    # in terms of the tree-based ydist prediction.
+    results = []
+    for t_row in test:
+        # Find the leaf node for this test row
+        node = ezr.leaf(ezr.tree(tbl, tbl.rows), t_row)
+        
+        # Estimate the goal value as the mean of that goal in the leaf
+        vals = [r[goal_idx] for r in node.rows]
+        results.append(sum(vals) / len(vals))
+        
+    return results
+
+if __name__ == "__main__":
+    # Load the data
+    filename = "pom3a.n1000.train.csv"
+    rows_gen = ezr.csv(filename)
+    header = next(rows_gen)
+    rows = list(rows_gen)
+    
+    # Split data: 80% train, 20% test
+    n = len(rows)
+    split = int(n * 0.8)
+    train = rows[:split]
+    test_raw = rows[split:]
+    
+    # Mask the goals in the test set to simulate "unknown"
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    test = []
+    for row in test_raw:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        test.append(new_row)
+        
+    # Get estimates
+    estimates = guess(header, train, test)
+    
+    # Print a summary for the customer
+    print(f"Estimated Cost- for {len(test)} test configurations:")
+    print("-" * 30)
+    for i in range(min(5, len(estimates))):
+        print(f"Config {i+1}: Estimated Cost = {estimates[i]:.4f}")
+    print("...")
+    print("-" * 30)
+    print("Estimates derived from training data patterns.")

@@ -1,0 +1,60 @@
+import ezr
+import step01
+import step02
+
+def justify(header, rows, row):
+    """
+    Returns (p, reason): p is the fraction of rows that 'row' is better than,
+    and reason is a human-readable explanation.
+    """
+    # 1. Estimate goals for the target row using the tree-based ranker
+    # We use the training data (rows) to build a model to predict the goals
+    tbl = ezr.Tbl([header] + rows)
+    rank_func = step02.guess(header, rows, [row])
+    
+    # Create a copy of the row with estimated goals
+    # Note: step02.guess returns a list of estimates for the first goal (Cost-)
+    # To get a full estimate, we use the tree leaf mean from the ranker
+    node = ezr.tree(tbl, rows)
+    leaf = ezr.leaf(node, row)
+    
+    # Construct a proxy row with estimated goals
+    # We use the mean of the leaf for all goal columns (indices 9, 10, 11)
+    # Since we need to compare against all rows, we need a full row object
+    proxy_row = list(row)
+    for i in [9, 10, 11]:
+        vals = [r[i] for r in leaf.rows]
+        proxy_row[i] = sum(vals) / len(vals)
+    
+    # 2. Calculate how many rows are worse than our proxy_row
+    # A row is better if its ydist is lower.
+    # We want to know the fraction of rows where proxy_row.ydist < other_row.ydist
+    target_ydist = ezr.ydist(tbl, proxy_row)
+    worse_count = 0
+    for r in rows:
+        if target_ydist < ezr.ydist(tbl, r):
+            worse_count += 1
+            
+    p = worse_count / len(rows)
+    reason = f"This setup is estimated to be better than {int(p*100)}% of all known configurations based on its input characteristics."
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Pick a sample row to justify (e.g., the 500th row)
+    test_row = list(rows[500])
+    # Mask the goals
+    test_row[9] = test_row[10] = test_row[11] = "?"
+    
+    p, reason = justify(header, rows, test_row)
+    
+    print(f"Justification for setup:")
+    print(f"Rank: {p:.4f}")
+    print(f"Reason: {reason}")
+    
+    exit(0)

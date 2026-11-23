@@ -1,0 +1,54 @@
+import ezr
+import step08
+
+def fix(header, row, levers):
+    """
+    Suggests changes to a 'bad' row to improve its goal outcomes,
+    excluding 'MonthlyIncome' as requested by the customer.
+    """
+    # Filter out MonthlyIncome from the levers if it exists
+    if "MonthlyIncome" in levers:
+        levers = {k: v for k, v in levers.items() if k != "MonthlyIncome"}
+    
+    # Reuse the logic from step08
+    return step08.fix(header, row, levers)
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Define levers excluding salary
+    levers = {
+        "businessTravel": ["Non-Travel", "Travel_Frequently", "Travel_Rarely"],
+        "overTime": ["No", "Yes"],
+        "TrainingTimesLastYear": (0.0, 6.0),
+        "PercentSalaryHike": (11.0, 25.0),
+        "StockOptionLevel": (0.0, 3.0),
+        "JobInvolvement": (1.0, 4.0),
+        "EnvironmentSatisfaction": (1.0, 4.0)
+    }
+    
+    # Identify a 'bad' row (high ydist)
+    tbl = ezr.Tbl([header] + rows)
+    worst_rows = sorted(rows, key=lambda r: ezr.ydist(tbl, r), reverse=True)
+    bad_row = worst_rows[0]
+    
+    suggestion = fix(header, bad_row, levers)
+    
+    print("Retention Improvement Analysis (Non-Monetary)")
+    print("-" * 50)
+    if suggestion:
+        print(f"Original row goal distance: {ezr.ydist(tbl, bad_row):.2f}")
+        print(f"Recommended non-monetary change: {suggestion}")
+        
+        # Verify improvement
+        col_name, val = list(suggestion.items())[0]
+        new_row = list(bad_row)
+        new_row[header.index(col_name)] = val
+        print(f"New row goal distance: {ezr.ydist(tbl, new_row):.2f}")
+        print("-" * 50)
+        print("These changes improve retention metrics without requiring salary increases.")
+    else:
+        print("No beneficial non-monetary changes found for this record.")

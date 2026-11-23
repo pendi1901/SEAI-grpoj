@@ -1,0 +1,110 @@
+import csv
+import random
+
+def race(header, rows, label):
+    """
+    Compares three strategies:
+    1. 'random': Picks rows at random.
+    2. 'big_teams': Picks rows with the highest 'Team Size' (customer's current approach).
+    3. 'smart': A simple hill-climber that explores neighbors of promising rows.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    input_indices = [i for i in range(len(header)) if i not in goal_indices]
+    team_size_idx = header.index('Team Size')
+
+    # Shared budget management
+    labeled = {}
+    def get_goals(i):
+        if i not in labeled:
+            if len(labeled) >= 50:
+                raise Exception("Too many labels!")
+            labeled[i] = label(i)
+        return labeled[i]
+
+    def get_score(i):
+        goals = get_goals(i)
+        s = 0
+        for j, g_idx in enumerate(goal_indices):
+            val = goals[j]
+            s += val if header[g_idx].endswith('-') else (1.0 - val)
+        return s
+
+    def get_dist(i, j):
+        d2 = 0
+        for idx in input_indices:
+            d2 += (rows[i][idx] - rows[j][idx]) ** 2
+        return d2 ** 0.5
+
+    # Strategy 1: Random
+    def strategy_random():
+        best_idx = -1
+        best_score = float('inf')
+        for _ in range(16):
+            i = random.randint(0, len(rows) - 1)
+            score = get_score(i)
+            if score < best_score:
+                best_score, best_idx = score, i
+        return best_idx, best_score
+
+    # Strategy 2: Big Teams (Customer's current approach)
+    def strategy_big_teams():
+        # Sort by team size descending and pick the top 16
+        sorted_indices = sorted(range(len(rows)), key=lambda i: rows[i][team_size_idx], reverse=True)
+        best_idx = -1
+        best_score = float('inf')
+        for i in sorted_indices[:16]:
+            score = get_score(i)
+            if score < best_score:
+                best_score, best_idx = score, i
+        return best_idx, best_score
+
+    # Strategy 3: Smart (Hill Climber)
+    def strategy_smart():
+        curr = random.randint(0, len(rows) - 1)
+        best_score = get_score(curr)
+        for _ in range(17):
+            dists = sorted([(get_dist(curr, i), i) for i in range(len(rows)) if i != curr])
+            found = False
+            for _, i in dists[:5]:
+                score = get_score(i)
+                if score < best_score:
+                    best_score, curr = score, i
+                    found = True
+                    break
+            if not found: break
+        return curr, best_score
+
+    results = {
+        "random": strategy_random(),
+        "big_teams": strategy_big_teams(),
+        "smart": strategy_smart()
+    }
+    
+    winner = min(results, key=lambda k: results[k][1])
+    return {"winner": winner, "row": results[winner][0], "tried": list(results.keys())}
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            full_rows = [[float(x) for x in row] for row in reader]
+        
+        goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+        rows_hidden = [[("?" if i in goal_indices else val) for i, val in enumerate(r)] for r in full_rows]
+        
+        def label(i):
+            return [full_rows[i][idx] for idx in goal_indices]
+            
+        res = race(header, rows_hidden, label)
+        print("Analysis: Is 'biggest teams' better than our search strategies?")
+        print(f"The winning strategy was: {res['winner']}")
+        print(f"Best configuration found at index: {res['row']}")
+        print(f"Strategies compared: {', '.join(res['tried'])}")
+        if res['winner'] == 'big_teams':
+            print("Conclusion: Your current approach is optimal.")
+        else:
+            print(f"Conclusion: The '{res['winner']}' strategy outperformed your 'big_teams' approach.")
+    except Exception as e:
+        print(f"Error: {e}")

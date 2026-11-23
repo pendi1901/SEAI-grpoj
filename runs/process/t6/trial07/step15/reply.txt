@@ -1,0 +1,32 @@
+```python
+import ezr
+import step05
+
+def blame(header, rows):
+    """
+    Identify input columns that best explain why the worst rows are bad.
+    We reuse the logic from step05, which identifies the most influential 
+    input columns by analyzing the decision paths to the worst-performing rows.
+    """
+    # The logic in step05.blame returns a list of input column names 
+    # sorted by their frequency in paths leading to the worst 10% of rows.
+    # This directly answers which factors matter most to poor performance.
+    return step05.blame(header, rows)
+
+if __name__ == "__main__":
+    file_path = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(file_path))
+    header = data[0]
+    rows = data[1:]
+    
+    # Get the ranked list of influential factors
+    factors = blame(header, rows)
+    
+    print("Analysis: Which project factors matter most to cost?")
+    print("The following input factors are most strongly associated with high costs/poor performance:")
+    for i, factor in enumerate(factors[:2], 1):
+        print(f"{i}. {factor}")
+        
+    print("\nFactors not listed here have a smaller impact on performance and can be prioritized lower.")
+    exit(0)
+```

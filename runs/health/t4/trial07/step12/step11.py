@@ -1,0 +1,66 @@
+import csv
+import step01
+from sklearn.neighbors import NearestNeighbors
+
+def remember(header, rows):
+    """
+    Finds the 5% of rows most similar to the 'best' setup identified in step01.
+    Similarity is calculated using Euclidean distance on normalized input features.
+    """
+    # 1. Identify the 'best' setup (the target)
+    best_indices = step01.remember(header, rows)
+    target_row = rows[best_indices[0]]
+    
+    # 2. Prepare input features for similarity search
+    goal_names = {'MRE-', 'ACC+', 'PRED40+'}
+    input_indices = [i for i, name in enumerate(header) if name not in goal_names]
+    
+    def transform(row):
+        vec = []
+        for i in input_indices:
+            val = row[i]
+            if isinstance(val, str):
+                vec.append(float(hash(val) % 1000))
+            else:
+                vec.append(float(val))
+        return vec
+
+    X = [transform(r) for r in rows]
+    target_vec = [transform(target_row)]
+    
+    # 3. Find nearest neighbors
+    # We want 5% of rows (800 * 0.05 = 40)
+    n_neighbors = max(1, int(len(rows) * 0.05))
+    nn = NearestNeighbors(n_neighbors=n_neighbors).fit(X)
+    distances, indices = nn.kneighbors(target_vec)
+    
+    return indices[0].tolist()
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    best_indices = remember(header, rows)
+    
+    print("Analysis complete: Found setups most similar to the top-performing configuration.")
+    print(f"Indices of the {len(best_indices)} most similar setups:")
+    print(best_indices)
+    
+    # Print a summary of their performance
+    mre_idx, acc_idx, pred_idx = 0, 1, 2
+    print("\nPerformance summary of these similar setups:")
+    for idx in best_indices:
+        r = rows[idx]
+        utility = (1.0 - r[mre_idx]) + r[acc_idx] + r[pred_idx]
+        print(f"Row {idx}: Utility {utility:.4f} (MRE: {r[mre_idx]:.3f}, ACC: {r[acc_idx]:.3f})")

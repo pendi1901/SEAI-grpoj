@@ -1,0 +1,87 @@
+import csv
+
+def blame(header, rows):
+    """
+    Identifies input columns that have the least impact on performance.
+    We define 'impact' as the difference in distribution between the 
+    top 25% (best) and bottom 25% (worst) of rows. Columns with 
+    negligible differences are 'safe' to leave at default.
+    """
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+    
+    input_indices = [i for i, h in enumerate(header) if not (h.endswith('-') or h.endswith('+'))]
+
+    # Calculate multi-objective score to rank rows
+    def get_score(row):
+        # Normalize goals to [0, 1]
+        # Since we have the full dataset, we can use global min/max
+        mres = [r[mre_idx] for r in rows]
+        accs = [r[acc_idx] for r in rows]
+        preds = [r[pred_idx] for r in rows]
+        
+        def norm(val, vals, reverse=False):
+            min_v, max_v = min(vals), max(vals)
+            if max_v == min_v: return 0.0
+            n = (val - min_v) / (max_v - min_v)
+            return 1.0 - n if reverse else n
+        
+        s1 = norm(row[mre_idx], mres, reverse=True)
+        s2 = norm(row[acc_idx], accs)
+        s3 = norm(row[pred_idx], preds)
+        return (s1 + s2 + s3) / 3.0
+
+    scored_rows = sorted([(get_score(r), r) for r in rows], key=lambda x: x[0])
+    
+    n = len(scored_rows)
+    worst = [x[1] for x in scored_rows[:n//4]]
+    best = [x[1] for x in scored_rows[3*n//4:]]
+
+    # Calculate impact score for each input
+    impacts = []
+    for i in input_indices:
+        col_name = header[i]
+        if col_name == 'criterion':
+            # Symbolic: use Jensen-Shannon or simple frequency difference
+            w_vals = [r[i] for r in worst]
+            b_vals = [r[i] for r in best]
+            diff = 0
+            for val in set(w_vals + b_vals):
+                diff += abs(w_vals.count(val)/len(w_vals) - b_vals.count(val)/len(b_vals))
+            impacts.append((col_name, diff))
+        else:
+            # Numeric: use normalized difference of means
+            w_vals = [r[i] for r in worst]
+            b_vals = [r[i] for r in best]
+            w_mean = sum(w_vals) / len(w_vals)
+            b_mean = sum(b_vals) / len(b_vals)
+            # Normalize by range to make impacts comparable
+            col_vals = [r[i] for r in rows]
+            diff = abs(w_mean - b_mean) / (max(col_vals) - min(col_vals) + 1e-9)
+            impacts.append((col_name, diff))
+
+    # Sort by impact ascending: lowest impact means safest to leave at default
+    impacts.sort(key=lambda x: x[1])
+    return [x[0] for x in impacts]
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed_row = [val if header[i] == 'criterion' else float(val) 
+                                 for i, val in enumerate(row)]
+                rows.append(processed_row)
+        
+        safe_settings = blame(header, rows)
+        print("Settings you can safely leave at factory defaults (least impact on performance):")
+        for s in safe_settings:
+            print(f"- {s}")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

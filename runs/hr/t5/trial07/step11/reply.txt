@@ -1,0 +1,72 @@
+```python
+import ezr
+import random
+
+def similar(header, rows, target_row, k=10):
+    """
+    Finds the k rows most similar to target_row based on input (x) columns.
+    Returns a list of indices.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate xdist between target_row and all other rows
+    distances = []
+    for i, row in enumerate(rows):
+        # Skip comparing to itself
+        if row == target_row:
+            continue
+        d = ezr.xdist(tbl, target_row, row)
+        distances.append((d, i))
+    
+    # Sort by distance ascending (most similar first)
+    distances.sort(key=lambda x: x[0])
+    
+    return [idx for d, idx in distances[:k]]
+
+def remember(header, rows):
+    """
+    Returns the indices of the rows most similar to the first row in the dataset,
+    as a demonstration of finding 'people most like them'.
+    """
+    # The customer asks for people most like a specific employee.
+    # We use the first row as the target employee.
+    target_row = rows[0]
+    
+    # Find the top 5% or at least 1, but no more than 5%
+    limit = max(1, len(rows) // 20)
+    
+    indices = similar(header, rows, target_row, k=limit)
+    return indices
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Identify goal column for 'how long they stayed'
+    # YearsAtCompany+ is a goal column
+    goal_idx = header.index("YearsAtCompany+")
+    
+    target_idx = 0
+    target_row = rows[target_idx]
+    
+    print(f"Target Employee (Index {target_idx}):")
+    print(f"  Years at company: {target_row[goal_idx]}")
+    
+    # Find similar people
+    similar_indices = remember(header, rows)
+    
+    print(f"\nFound {len(similar_indices)} employees most similar to this person:")
+    
+    total_years = 0
+    for idx in similar_indices:
+        years = rows[idx][goal_idx]
+        total_years += years
+        print(f"  - Employee at index {idx}: stayed {years} years")
+        
+    avg_years = total_years / len(similar_indices)
+    print(f"\nAverage stay duration for these similar employees: {avg_years:.2f} years.")
+    
+    exit(0)
+```

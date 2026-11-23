@@ -1,0 +1,53 @@
+import csv
+import math
+
+def spot(header, rows):
+    """
+    Identifies rows that are 'suspicious' by detecting outliers in the input space.
+    We use the Z-score of numeric inputs to find rows that deviate significantly
+    from the mean of their respective columns.
+    """
+    input_indices = [i for i, h in enumerate(header) if h not in ['MRE-', 'ACC+', 'PRED40+']]
+    numeric_indices = [i for i in input_indices if not isinstance(rows[0][i], str)]
+    
+    # Calculate means and standard deviations for numeric inputs
+    stats = {}
+    for i in numeric_indices:
+        vals = [r[i] for r in rows]
+        mean = sum(vals) / len(vals)
+        std = math.sqrt(sum((x - mean)**2 for x in vals) / len(vals))
+        stats[i] = (mean, std if std > 0 else 1.0)
+        
+    # Score rows based on how many standard deviations they are from the mean
+    suspicion_scores = []
+    for idx, row in enumerate(rows):
+        score = 0
+        for i in numeric_indices:
+            mean, std = stats[i]
+            z_score = abs(row[i] - mean) / std
+            score += z_score
+        suspicion_scores.append((idx, score))
+        
+    # Sort by suspicion score descending
+    suspicion_scores.sort(key=lambda x: x[1], reverse=True)
+    return [idx for idx, score in suspicion_scores if score > 5.0]
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = [val if header[i] == 'criterion' else float(val) for i, val in enumerate(row)]
+            rows.append(processed_row)
+            
+    suspicious = spot(header, rows)
+    
+    print(f"Detected {len(suspicious)} potentially failed/erroneous runs.")
+    print("Top 5 most suspicious row indices:", suspicious[:5])
+    
+    for idx in suspicious[:5]:
+        print(f"Row {idx} is suspicious due to extreme input values.")

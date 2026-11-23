@@ -1,0 +1,54 @@
+```python
+import csv
+import step01
+import step02
+
+def justify(header, rows, row):
+    """
+    Estimates the performance of a given row and compares it against all other rows.
+    Returns (p, reason) where p is the fraction of rows outperformed by the input row.
+    """
+    # 1. Estimate the missing goal values for the input row
+    # We use the guess logic from step02 to fill in the "?" values
+    # Since step02.guess returns a list of predictions, we take the first one
+    estimated_mre = step02.guess(header, rows, [row])[0]
+    
+    # For ACC+ and PRED40+, we use the average of the top 5% (from step01)
+    # as a proxy for a "good" setup's performance
+    best_indices = step01.remember(header, rows)
+    avg_acc = sum(rows[i][1] for i in best_indices) / len(best_indices)
+    avg_pred = sum(rows[i][2] for i in best_indices) / len(best_indices)
+    
+    # Fill the row with estimates
+    row[0], row[1], row[2] = estimated_mre, avg_acc, avg_pred
+    
+    # 2. Calculate how many rows this row is better than
+    # A row is better if it has lower MRE, higher ACC, and higher PRED
+    better_count = 0
+    for r in rows:
+        # Compare goals: MRE (lower is better), ACC/PRED (higher is better)
+        if (row[0] < r[0]) and (row[1] > r[1]) and (row[2] > r[2]):
+            better_count += 1
+            
+    p = better_count / len(rows)
+    reason = f"This setup outperforms {p:.1%} of all known configurations based on its estimated performance metrics."
+    
+    return (p, reason)
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = [val if header[i] == 'criterion' else float(val) for i, val in enumerate(row)]
+            rows.append(processed_row)
+            
+    # Pick a sample row to justify (e.g., the last one)
+    test_row = rows[-1][:]
+    test_row[0] = test_row[1] = test_row[2] = "?"
+    
+    p, reason = justify(header, rows, test_row)
+    print(f"Justification: {reason}")
+```

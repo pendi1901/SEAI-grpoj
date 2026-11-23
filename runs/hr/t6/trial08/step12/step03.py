@@ -1,0 +1,50 @@
+import ezr
+import step01
+
+def certify(xs, ys):
+    """
+    Returns True if the distributions are statistically indistinguishable 
+    (noise), False if they are significantly different.
+    """
+    # Using the stats module from ezr which provides cliffs, ks, and cohen
+    # The same() function in ezr.py performs these checks.
+    return ezr.same(xs, ys)
+
+if __name__ == "__main__":
+    # Load data
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Identify column indices
+    # 'overTime' is at index 22
+    # 'YearsInCurrentRole+' is at index 32
+    overtime_idx = 22
+    tenure_idx = 32
+    
+    # Split data into two groups based on overtime
+    yes_overtime = []
+    no_overtime = []
+    
+    for row in rows:
+        val = row[tenure_idx]
+        if isinstance(val, (int, float)):
+            if row[overtime_idx] == "Yes":
+                yes_overtime.append(val)
+            else:
+                no_overtime.append(val)
+    
+    # Run certification
+    # If same() returns True, they are the same (noise). 
+    # If False, they differ (real effect).
+    is_noise = certify(yes_overtime, no_overtime)
+    
+    print("Analysis: Does working overtime affect tenure (YearsInCurrentRole)?")
+    print(f"Group 'Yes' Overtime (n={len(yes_overtime)}): Mean tenure = {sum(yes_overtime)/len(yes_overtime):.2f}")
+    print(f"Group 'No' Overtime (n={len(no_overtime)}): Mean tenure = {sum(no_overtime)/len(no_overtime):.2f}")
+    
+    if is_noise:
+        print("Result: The difference is statistically insignificant (noise).")
+    else:
+        print("Result: The difference is statistically significant (real effect).")

@@ -1,0 +1,76 @@
+import csv
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column (MRE-) for test rows using a 
+    k-Nearest Neighbors approach based on input columns.
+    """
+    # Identify indices
+    # Goals: MRE- (0), ACC+ (1), PRED40+ (2)
+    # Inputs: N_estimators (3), criterion (4), Min_sample_leaves (5), 
+    #         Min_impurity_decrease (6), Max_depth (7)
+    input_indices = [3, 4, 5, 6, 7]
+    target_idx = 0
+    
+    def distance(row1, row2):
+        d = 0
+        for i in input_indices:
+            v1, v2 = row1[i], row2[i]
+            if isinstance(v1, str):  # Symbolic column 'criterion'
+                d += 0 if v1 == v2 else 1
+            else:  # Numeric columns
+                # Simple normalization for distance calculation
+                d += abs(v1 - v2)
+        return d
+
+    predictions = []
+    for t_row in test:
+        # Find nearest neighbors in training set
+        distances = []
+        for train_row in train:
+            distances.append((distance(t_row, train_row), train_row[target_idx]))
+        
+        # Sort by distance and take average of top 5 neighbors
+        distances.sort(key=lambda x: x[0])
+        k = 5
+        neighbors = distances[:k]
+        avg_mre = sum(n[1] for n in neighbors) / k
+        predictions.append(avg_mre)
+        
+    return predictions
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i] in ['MRE-', 'ACC+', 'PRED40+', 'N_estimators', 
+                                 'Min_sample_leaves', 'Min_impurity_decrease', 'Max_depth']:
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Split data: use 80% for training, 20% for testing
+    split = int(len(rows) * 0.8)
+    train_data = rows[:split]
+    test_data = []
+    for r in rows[split:]:
+        # Mask the goals for the test set
+        test_row = list(r)
+        test_row[0] = "?"
+        test_row[1] = "?"
+        test_row[2] = "?"
+        test_data.append(test_row)
+
+    results = guess(header, train_data, test_data)
+    
+    print("Forecast Analysis:")
+    print(f"Estimated MRE for the first 5 test rows:")
+    for i in range(min(5, len(results))):
+        print(f"Test Row {i}: {results[i]:.4f}")
+    print("\nThis estimate is based on the average MRE of the 5 most similar configurations.")

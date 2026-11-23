@@ -1,0 +1,57 @@
+import csv
+from step02 import guess
+
+def analyze_overtime_impact(header, rows):
+    """
+    Estimates the impact of cutting overtime in the 'Sales' department
+    on 'YearsAtCompany+'.
+    """
+    # Identify indices
+    dept_idx = header.index('department')
+    ot_idx = header.index('overTime')
+    goal_idx = [i for i, h in enumerate(header) if h.endswith('+') or h.endswith('-')][0]
+
+    # Filter for Sales department
+    sales_rows = [row for row in rows if row[dept_idx] == 'Sales']
+    
+    # Create two scenarios for the test set:
+    # 1. Current state (keep original overtime)
+    # 2. Counterfactual (force overTime to 'No')
+    test_rows_current = [list(row) for row in sales_rows]
+    test_rows_counterfactual = [list(row) for row in sales_rows]
+    
+    for row in test_rows_counterfactual:
+        row[ot_idx] = 'No'
+        row[goal_idx] = '?'
+        
+    # Use the model from step02 to predict
+    # We use the full dataset as training to get the best possible estimate
+    predictions_current = guess(header, rows, test_rows_current)
+    predictions_counterfactual = guess(header, rows, test_rows_counterfactual)
+    
+    avg_current = sum(predictions_current) / len(predictions_current)
+    avg_counterfactual = sum(predictions_counterfactual) / len(predictions_counterfactual)
+    
+    return avg_current, avg_counterfactual
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = [float(val) if header[i][0].isupper() else val for i, val in enumerate(row)]
+            rows.append(processed_row)
+
+    avg_now, avg_no_ot = analyze_overtime_impact(header, rows)
+    
+    print("Analysis: Impact of cutting overtime in the Sales department.")
+    print(f"Average predicted tenure (current): {avg_now:.2f} years")
+    print(f"Average predicted tenure (if overtime is cut): {avg_no_ot:.2f} years")
+    
+    diff = avg_no_ot - avg_now
+    if diff > 0:
+        print(f"Result: Cutting overtime is predicted to increase average tenure by {diff:.2f} years.")
+    else:
+        print(f"Result: Cutting overtime is predicted to decrease average tenure by {abs(diff):.2f} years.")

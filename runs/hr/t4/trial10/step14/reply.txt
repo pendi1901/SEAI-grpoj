@@ -1,0 +1,67 @@
+```python
+import csv
+
+def flow(header, row, seen):
+    """
+    Detects if a team's composition has shifted significantly.
+    We compare the mean of numeric inputs of the current row against 
+    the historical mean of all 'seen' rows. If the current row's 
+    average numeric input is more than 2 standard deviations away 
+    from the historical mean, we flag it as a shift.
+    """
+    if not seen:
+        return False
+
+    # Identify numeric input columns (excluding goals)
+    numeric_indices = [
+        i for i, h in enumerate(header) 
+        if h[0].isupper() and not (h.endswith('+') or h.endswith('-'))
+    ]
+    
+    if not numeric_indices:
+        return False
+
+    # Calculate historical average of numeric inputs
+    history_vals = []
+    for r in seen:
+        history_vals.extend([r[i] for i in numeric_indices])
+    
+    if not history_vals:
+        return False
+        
+    mean = sum(history_vals) / len(history_vals)
+    std = (sum((x - mean) ** 2 for x in history_vals) / len(history_vals)) ** 0.5
+    
+    if std == 0:
+        return False
+        
+    # Calculate current row's numeric average
+    current_vals = [row[i] for i in numeric_indices]
+    current_mean = sum(current_vals) / len(current_vals)
+    
+    # Flag if current row is a significant outlier (Z-score > 2)
+    z_score = abs(current_mean - mean) / std
+    return z_score > 2
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = [float(val) if header[i][0].isupper() else val for i, val in enumerate(row)]
+            rows.append(processed_row)
+
+    seen = []
+    shifts = 0
+    for row in rows:
+        if flow(header, row, seen):
+            shifts += 1
+        seen.append(row)
+
+    print("Analysis: Detecting shifts in team composition.")
+    print(f"Processed {len(rows)} employees.")
+    print(f"Number of times the team composition significantly deviated from historical norms: {shifts}")
+    print("Decision logic: Flagged rows where the average of numeric inputs deviates by > 2 standard deviations from the historical mean.")
+```

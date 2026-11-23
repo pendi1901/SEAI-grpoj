@@ -1,0 +1,71 @@
+import csv
+from step01 import remember as base_remember
+from sklearn.neighbors import NearestNeighbors
+from sklearn.preprocessing import LabelEncoder
+
+def remember(header, rows):
+    """
+    Identifies the best rows based on multi-objective optimization,
+    then finds the 5% of rows most similar to the best setup found.
+    """
+    # 1. Find the best setup using the existing logic
+    best_indices = base_remember(header, rows)
+    if not best_indices:
+        return []
+    
+    # Use the first best row as the reference "team setup"
+    ref_row = rows[best_indices[0]]
+    
+    # 2. Prepare data for similarity search (exclude goal columns)
+    input_indices = [i for i, name in enumerate(header) if not (name.endswith('-') or name.endswith('+'))]
+    
+    X = []
+    encoders = {}
+    for i in input_indices:
+        if isinstance(rows[0][i], str):
+            le = LabelEncoder()
+            le.fit([str(r[i]) for r in rows])
+            encoders[i] = le
+            
+    for row in rows:
+        features = []
+        for i in input_indices:
+            if i in encoders:
+                features.append(encoders[i].transform([str(row[i])])[0])
+            else:
+                features.append(float(row[i]))
+        X.append(features)
+        
+    # 3. Find rows most similar to the reference setup
+    ref_features = [X[best_indices[0]]]
+    nn = NearestNeighbors(n_neighbors=max(1, int(len(rows) * 0.05)))
+    nn.fit(X)
+    distances, indices = nn.kneighbors(ref_features)
+    
+    return indices[0].tolist()
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            for row in reader:
+                processed_row = []
+                for val in row:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        best_indices = remember(header, rows)
+        
+        print("The setups most similar to the current team's best configuration are:")
+        for idx in best_indices:
+            print(f"- Row index: {idx}")
+            
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

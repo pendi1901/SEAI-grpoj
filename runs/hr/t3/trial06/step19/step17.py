@@ -1,0 +1,78 @@
+import csv
+import random
+
+def choose(header, rows, label):
+    """
+    Finds the best working arrangement for 'Laboratory Technician' staff
+    by sampling up to 50 rows, labeling them, and identifying the one 
+    with the highest tenure-based score.
+    """
+    goal_indices = [i for i, col in enumerate(header) if col.endswith('+') or col.endswith('-')]
+    job_role_idx = header.index('jobRole')
+    
+    # Filter indices for Laboratory Technicians
+    lab_indices = [i for i, row in enumerate(rows) if row[job_role_idx] == 'Laboratory Technician']
+    
+    # If no lab staff found, return any valid index
+    if not lab_indices:
+        return 0
+    
+    # Sample up to 50 lab staff
+    sample_size = min(len(lab_indices), 50)
+    indices_to_label = random.sample(lab_indices, sample_size)
+    
+    best_idx = -1
+    best_score = -float('inf')
+    
+    for i in indices_to_label:
+        # Get true values for the goals
+        true_goals = label(i)
+        
+        # Calculate score: maximize '+' goals, minimize '-' goals
+        score = 0
+        for j, goal_idx in enumerate(goal_indices):
+            val = true_goals[j]
+            col_name = header[goal_idx]
+            if col_name.endswith('+'):
+                score += val
+            elif col_name.endswith('-'):
+                score -= val
+        
+        if score > best_score:
+            best_score = score
+            best_idx = i
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    original_data = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = [float(val) if header[i][0].isupper() else val for i, val in enumerate(row)]
+            rows.append(processed_row[:])
+            original_data.append(processed_row)
+
+    # Mask goals in rows
+    goal_indices = [i for i, col in enumerate(header) if col.endswith('+') or col.endswith('-')]
+    for row in rows:
+        for idx in goal_indices:
+            row[idx] = "?"
+
+    labeled_count = 0
+    def label(i):
+        global labeled_count
+        labeled_count += 1
+        if labeled_count > 50:
+            raise Exception("Budget exceeded")
+        return [original_data[i][idx] for idx in goal_indices]
+
+    best_idx = choose(header, rows, label)
+    
+    print(f"Analysis complete for Laboratory Staff.")
+    print(f"Best working arrangement found at row index: {best_idx}")
+    print(f"This selection was made by sampling {labeled_count} laboratory staff members.")

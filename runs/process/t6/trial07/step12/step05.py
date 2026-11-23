@@ -1,0 +1,66 @@
+import ezr
+import step01
+
+def blame(header, rows):
+    """
+    Identify input columns that best explain why the worst rows are bad.
+    We define 'worst' as the bottom 10% of rows by ydist.
+    We then use the tree-based split logic to find which input columns 
+    most frequently appear in the branches leading to these worst rows.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate ydist for all rows and identify the worst 10%
+    scored = sorted([(ezr.ydist(tbl, r), r) for r in rows], key=lambda x: x[0], reverse=True)
+    worst_rows = [x[1] for x in scored[:max(1, len(rows) // 10)]]
+    
+    # Build a tree on the whole dataset to see how it partitions the space
+    root = ezr.tree(tbl, rows)
+    
+    # Count how often each input column is used in a split that leads to a 'worst' leaf
+    # A 'worst' leaf is one where the mean ydist is high
+    counts = {col.txt: 0 for col in tbl.x}
+    
+    def traverse(node):
+        if not node.kids:
+            # If this leaf is in the worst 10% of all leaves by ydist, count its ancestors
+            return
+        
+        # Check if this node's split is relevant to the worst rows
+        # We look for nodes that contain a high density of worst_rows
+        for kid in node.kids:
+            traverse(kid)
+            
+    # Simpler approach: find the leaves that contain the worst rows
+    # and count the columns used in the path to those leaves
+    def get_path_cols(node, row, path):
+        if not node.kids:
+            return path
+        path.append(header[node.at])
+        return get_path_cols(node.kids[0] if node.go(row) else node.kids[1], row, path)
+
+    for row in worst_rows:
+        for col_name in get_path_cols(root, row, []):
+            counts[col_name] += 1
+            
+    # Return columns sorted by frequency of appearance in paths to worst rows
+    sorted_cols = sorted(counts.items(), key=lambda x: x[1], reverse=True)
+    return [name for name, count in sorted_cols if count > 0]
+
+if __name__ == "__main__":
+    file_path = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(file_path))
+    header = data[0]
+    rows = data[1:]
+    
+    # The customer asks why worst setups leave people waiting (Idle-)
+    # We identify the columns that correlate with the worst performance
+    reasons = blame(header, rows)
+    
+    print("Analysis: Why do our worst setups leave people waiting?")
+    print("The following input factors are most strongly associated with poor performance:")
+    for i, reason in enumerate(reasons[:3], 1):
+        print(f"{i}. {reason}")
+    
+    print("\nThese factors appear most frequently in the decision paths leading to the worst outcomes.")
+    exit(0)

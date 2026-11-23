@@ -1,0 +1,92 @@
+import csv
+
+def fix(header, row, levers):
+    """
+    Finds the smallest change to a 'bad' row to improve its performance.
+    'Smallest change' is defined as the minimum Euclidean distance in the
+    normalized lever space.
+    """
+    # Identify goal indices
+    goal_indices = [i for i, name in enumerate(header) if '-' in name or '+' in name]
+    
+    def get_score(r):
+        # Simple score: normalize goals and sum
+        # Since we don't have global context, we assume the row is evaluated 
+        # against a hypothetical ideal.
+        s = 0
+        for i in goal_indices:
+            # Heuristic: just use the value directly as a proxy for improvement
+            # (assuming we want to move towards better values)
+            val = r[i]
+            if header[i].endswith('-'):
+                s -= val
+            else:
+                s += val
+        return s
+
+    # We want to find a change that maximizes the score improvement
+    # while minimizing the distance from the original row.
+    best_change = {}
+    best_improvement = -float('inf')
+    
+    for col_name, allowed in levers.items():
+        idx = header.index(col_name)
+        original_val = row[idx]
+        
+        candidates = []
+        if isinstance(allowed, (list, tuple)) and not isinstance(allowed[0], (int, float)):
+            # Symbolic
+            candidates = [v for v in allowed if v != original_val]
+        else:
+            # Numeric (low, high)
+            low, high = allowed
+            # Try a few steps within the range
+            step = (high - low) / 5
+            candidates = [low + i * step for i in range(6)]
+            candidates = [c for c in candidates if abs(c - original_val) > 1e-5]
+            
+        for cand in candidates:
+            new_row = list(row)
+            new_row[idx] = cand
+            # Improvement heuristic: simple delta
+            improvement = get_score(new_row) - get_score(row)
+            if improvement > best_improvement:
+                best_improvement = improvement
+                best_change = {col_name: cand}
+                
+    return best_change
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i] == 'criterion':
+                    processed_row.append(val)
+                else:
+                    processed_row.append(float(val))
+            rows.append(processed_row)
+
+    # Define levers based on data ranges
+    levers = {
+        'N_estimators': (50, 200),
+        'criterion': ['absolute_error', 'poisson', 'squared_error'],
+        'Min_sample_leaves': (1, 20),
+        'Max_depth': (1, 20)
+    }
+    
+    # Pick a 'bad' row (e.g., the one with the lowest score)
+    def score_row(r):
+        return sum(r[i] for i, h in enumerate(header) if h.endswith('+')) - \
+               sum(r[i] for i, h in enumerate(header) if h.endswith('-'))
+    
+    bad_row = min(rows, key=score_row)
+    recommendation = fix(header, bad_row, levers)
+    
+    print("Recommendation for improving performance:")
+    for col, val in recommendation.items():
+        print(f"Change '{col}' to {val}")

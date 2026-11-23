@@ -1,0 +1,64 @@
+```python
+import csv
+from step01 import remember
+
+def justify(header, rows, row):
+    """
+    Estimates the goals for the given row and returns its percentile rank
+    among the provided rows, along with a justification.
+    """
+    goal_indices = [(i, name[-1]) for i, name in enumerate(header) 
+                    if name.endswith('-') or name.endswith('+')]
+    input_indices = [i for i, name in enumerate(header) 
+                     if not (name.endswith('-') or name.endswith('+'))]
+
+    # Estimate goals using the average of the training set
+    # (Simple estimation strategy as per step02)
+    estimates = []
+    for idx, op in goal_indices:
+        avg = sum(r[idx] for r in rows) / len(rows)
+        estimates.append(avg)
+    
+    # Create a full version of the row for scoring
+    full_row = list(row)
+    for i, (idx, _) in enumerate(goal_indices):
+        full_row[idx] = estimates[i]
+
+    def score(r):
+        total = 0
+        for idx, op in goal_indices:
+            val = float(r[idx])
+            total += val if op == '-' else (1.0 - val)
+        return total
+
+    target_score = score(full_row)
+    better_count = sum(1 for r in rows if score(r) < target_score)
+    p = better_count / len(rows)
+    
+    reason = f"This setup is better than {p:.1%} of all known configurations based on its input parameters."
+    return p, reason
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', newline='') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [[float(x) for x in row] for row in reader]
+            
+            # Pick a sample row and mask its goals to test justify()
+            sample_row = list(rows[0])
+            goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+            for idx in goal_indices:
+                sample_row[idx] = "?"
+            
+            p, reason = justify(header, rows, sample_row)
+            
+            print("Customer Inquiry: How does this setup rank against others?")
+            print(f"Rank: {p:.4f}")
+            print(f"Justification: {reason}")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

@@ -1,0 +1,77 @@
+import csv
+import pandas as pd
+import numpy as np
+from step02 import guess as step02_guess
+
+def justify(header, rows, row):
+    """
+    Estimates the goal values for the provided row using KNN, 
+    then compares it against all other rows to determine its percentile rank.
+    """
+    # 1. Estimate the goals for the input row
+    # step02_guess returns a list of predictions (one per test row)
+    # If there is only one goal, it might return a flat list of floats.
+    predictions = step02_guess(header, rows, [row])
+    
+    # 2. Reconstruct the row with predicted goals
+    goal_indices = [i for i, h in enumerate(header) if h.endswith(('-', '+'))]
+    full_row = list(row)
+    
+    # Handle both cases: if predictions[0] is a list/array (multiple goals) 
+    # or a single float (one goal)
+    preds = predictions[0]
+    if not isinstance(preds, (list, np.ndarray)):
+        preds = [preds]
+        
+    for i, idx in enumerate(goal_indices):
+        full_row[idx] = preds[i]
+    
+    # 3. Calculate aggregate scores for all rows
+    # We use the logic from step01 to rank performance
+    df = pd.DataFrame(rows + [full_row], columns=header)
+    goals = [col for col in header if col.endswith(('-', '+'))]
+    
+    normalized_scores = []
+    for goal in goals:
+        col_min = df[goal].min()
+        col_max = df[goal].max()
+        norm = (df[goal] - col_min) / (col_max - col_min + 1e-9)
+        if goal.endswith('-'):
+            normalized_scores.append(1 - norm)
+        else:
+            normalized_scores.append(norm)
+            
+    df['aggregate'] = np.mean(normalized_scores, axis=0)
+    
+    # 4. Determine percentile rank
+    # p is the fraction of rows that this row is better than
+    my_score = df['aggregate'].iloc[-1]
+    others = df['aggregate'].iloc[:-1]
+    p = float((others < my_score).mean())
+    
+    reason = f"This setup is better than {p:.2%} of all known configurations based on its predicted performance across all goal metrics."
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [[float(val) for val in row] for row in reader]
+        
+        # Example: Justify why a specific setup (e.g., row 0) is better/worse than others
+        test_row = list(rows[0])
+        goal_indices = [i for i, h in enumerate(header) if h.endswith(('-', '+'))]
+        for idx in goal_indices:
+            test_row[idx] = "?"
+            
+        p, reason = justify(header, rows, test_row)
+        
+        print(f"Justification: {reason}")
+        print(f"Percentile rank: {p:.4f}")
+        
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

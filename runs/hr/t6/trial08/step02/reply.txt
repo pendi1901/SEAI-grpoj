@@ -1,0 +1,70 @@
+```python
+import ezr
+import random
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column for test rows by training a tree
+    on the provided training data and predicting the mean of the leaf
+    where the test row lands.
+    """
+    # Create a table from training data
+    train_tbl = ezr.Tbl([header] + train)
+    
+    # Build a tree to predict ydist (the aggregate goal distance)
+    # Note: The prompt asks for the FIRST goal column.
+    # We identify the first goal column index.
+    goal_indices = [c.at for c in train_tbl.y]
+    first_goal_idx = goal_indices[0]
+    
+    # Build a tree to predict the value of the first goal column
+    # We need a custom ranker/predictor for the specific column
+    def get_leaf_mean(node, col_idx):
+        # Calculate mean of column col_idx in this leaf
+        vals = [r[col_idx] for r in node.rows if r[col_idx] != "?"]
+        return sum(vals) / len(vals) if vals else 0
+
+    # Build tree based on training data
+    root = ezr.tree(train_tbl, train_tbl.rows)
+    
+    results = []
+    for row in test:
+        # Walk the tree to find the leaf
+        node = ezr.leaf(root, row)
+        # Estimate based on the mean of the first goal column in that leaf
+        results.append(get_leaf_mean(node, first_goal_idx))
+        
+    return results
+
+if __name__ == "__main__":
+    # Load data
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Split into train and test (80/20)
+    random.seed(1234567891)
+    random.shuffle(rows)
+    split = int(len(rows) * 0.8)
+    train = rows[:split]
+    test_full = rows[split:]
+    
+    # Mask goals in test data
+    test = []
+    for row in test_full:
+        new_row = list(row)
+        # Mask all goal columns (ending in + or -)
+        for i, name in enumerate(header):
+            if name.endswith('+') or name.endswith('-'):
+                new_row[i] = "?"
+        test.append(new_row)
+        
+    # Get estimates
+    estimates = guess(header, train, test)
+    
+    # Print summary
+    print(f"Estimated tenure (first goal column) for {len(test)} employees.")
+    print(f"Sample estimates: {[round(x, 2) for x in estimates[:5]]}")
+    print("The model uses decision tree leaves to estimate outcomes based on day-one inputs.")
+```

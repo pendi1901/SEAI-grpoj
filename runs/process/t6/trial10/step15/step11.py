@@ -1,0 +1,55 @@
+import ezr
+import step01
+import step09
+
+def remember(header, rows):
+    """
+    Finds the rows most similar to the 'best' configurations.
+    We identify the best rows using the logic from step01,
+    then find rows that are closest to those best rows in the input space.
+    """
+    # 1. Identify the best rows (the target "good" configurations)
+    best_indices = step01.remember(header, rows)
+    best_rows = [rows[i] for i in best_indices]
+    
+    # 2. Create a table to facilitate distance calculations
+    tbl = ezr.Tbl([header] + rows)
+    
+    # 3. For every row in the dataset, find its distance to the nearest 'best' row
+    # We want to find rows that are 'most like' the best ones.
+    distances = []
+    for i, row in enumerate(rows):
+        # Calculate distance to all best rows and take the minimum
+        d = min([ezr.xdist(tbl, row, best_row) for best_row in best_rows])
+        distances.append((d, i))
+    
+    # 4. Sort by distance (ascending, so closest to best first)
+    distances.sort(key=lambda x: x[0])
+    
+    # 5. Return the top 5% of rows that are most similar to the best ones
+    limit = max(1, int(len(rows) * 0.05))
+    return [item[1] for item in distances[:limit]]
+
+if __name__ == "__main__":
+    file_path = "pom3a.n1000.train.csv"
+    rows_gen = ezr.csv(file_path)
+    try:
+        header = next(rows_gen)
+        rows = list(rows_gen)
+        
+        # Get the indices of rows most like the best ones
+        similar_indices = remember(header, rows)
+        
+        print(f"Found {len(similar_indices)} configurations most similar to the best setups.")
+        print("Indices of these similar rows:")
+        print(similar_indices)
+        
+        print("\nSample of these similar rows (first 3):")
+        for i in similar_indices[:3]:
+            print(f"Row {i}: {rows[i]}")
+            
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
+        
+    exit(0)

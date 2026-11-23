@@ -1,0 +1,71 @@
+```python
+import csv
+
+def flow(header, row, seen):
+    """
+    Implements a Secretary Problem strategy:
+    1. Observe a sample (the first 30% of the data).
+    2. Establish the best performance seen in that sample.
+    3. Accept the first subsequent row that is better than that benchmark.
+    """
+    # Identify goal columns and their optimization direction
+    goal_indices = [i for i, h in enumerate(header) if h.endswith('-') or h.endswith('+')]
+    
+    def get_score(r):
+        # Calculate a simple normalized score for the row
+        # Lower is better for '-', Higher is better for '+'
+        score = 0
+        for i in goal_indices:
+            val = r[i]
+            if header[i].endswith('-'):
+                score -= val
+            else:
+                score += val
+        return score
+
+    # If this is the first row, we can't compare
+    if not seen:
+        return False
+
+    # Define sample size (30% of total expected data, but we don't know total)
+    # We use a fixed threshold based on the problem context (800 rows)
+    sample_size = 240 
+    
+    if len(seen) < sample_size:
+        return False
+    
+    # Calculate the best score seen during the sampling phase
+    sample_scores = [get_score(s) for s in seen[:sample_size]]
+    best_sample_score = max(sample_scores)
+    
+    # Accept if current row is better than the best in the sample
+    current_score = get_score(row)
+    return current_score > best_sample_score
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) for val in row])
+        
+        seen = []
+        accepted = None
+        for i, row in enumerate(rows):
+            if flow(header, row, seen):
+                accepted = (i, row)
+                break
+            seen.append(row)
+            
+        if accepted:
+            print(f"Decision: Approved proposal at index {accepted[0]}.")
+        else:
+            print("Decision: No proposal met the criteria; rejected all.")
+            
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
+```

@@ -1,0 +1,60 @@
+import csv
+import step02
+
+def spot(header, rows):
+    """
+    Identifies suspicious rows by checking for outliers in numeric columns.
+    A row is suspicious if its values are significantly distant from the 
+    median of the column, suggesting a data entry error.
+    """
+    # Identify numeric columns
+    numeric_indices = [i for i, name in enumerate(header) if name[0].isupper()]
+    
+    # Calculate column medians
+    medians = {}
+    for i in numeric_indices:
+        vals = sorted([r[i] for r in rows if isinstance(r[i], (int, float))])
+        medians[i] = vals[len(vals) // 2]
+    
+    # Calculate suspicion score for each row
+    # Score = sum of absolute deviations from median
+    scores = []
+    for idx, row in enumerate(rows):
+        score = 0
+        for i in numeric_indices:
+            val = row[i]
+            if isinstance(val, (int, float)):
+                # Simple outlier detection: deviation from median
+                # We use a simple threshold or just raw deviation
+                score += abs(val - medians[i])
+        scores.append((score, idx))
+    
+    # Sort by score descending (most suspicious first)
+    scores.sort(key=lambda x: x[0], reverse=True)
+    
+    # Return the top 10 most suspicious row indices
+    return [item[1] for item in scores[:10]]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    suspicious_indices = spot(header, rows)
+    
+    print("Top 10 most suspicious rows (potential data entry errors):")
+    for idx in suspicious_indices:
+        print(f"Row {idx} is highly suspicious.")

@@ -1,0 +1,78 @@
+```python
+import ezr
+import random
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column (MRE-) for test rows.
+    Uses a tree-based ranker to find the nearest neighbors in the training set
+    and returns the average MRE- of those neighbors.
+    """
+    # Create a table for training data
+    train_tbl = ezr.Tbl([header] + train)
+    
+    # Build a tree on the training data to act as a predictor
+    # The tree partitions the space; we use the leaf's mean for the first goal
+    node = ezr.tree(train_tbl, train_tbl.rows)
+    
+    # Identify the index of the first goal column (MRE-)
+    goal_idx = 0
+    
+    predictions = []
+    for row in test:
+        # Walk the tree to find the leaf containing similar rows
+        leaf_node = ezr.leaf(node, row)
+        
+        # Calculate the mean of the first goal column in this leaf
+        vals = [r[goal_idx] for r in leaf_node.rows if r[goal_idx] != "?"]
+        if vals:
+            predictions.append(sum(vals) / len(vals))
+        else:
+            # Fallback to global mean if leaf is empty
+            all_vals = [r[goal_idx] for r in train if r[goal_idx] != "?"]
+            predictions.append(sum(all_vals) / len(all_vals))
+            
+    return predictions
+
+if __name__ == "__main__":
+    # Load data
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    all_data = list(ezr.csv(filename))
+    header = all_data[0]
+    rows = all_data[1:]
+    
+    # Split into train and test
+    random.seed(1234567891)
+    random.shuffle(rows)
+    split = int(len(rows) * 0.8)
+    train_full = rows[:split]
+    test_full = rows[split:]
+    
+    # Prepare test rows by masking the goal columns
+    goal_indices = [i for i, name in enumerate(header) if name[-1] in "+-"]
+    test_masked = []
+    for row in test_full:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        test_masked.append(new_row)
+        
+    # Compare full training set vs halved training set
+    # We simulate "halving the size" by taking half the training rows
+    train_half = train_full[:len(train_full) // 2]
+    
+    preds_full = guess(header, train_full, test_masked)
+    preds_half = guess(header, train_half, test_masked)
+    
+    # Calculate average absolute error difference
+    actuals = [r[0] for r in test_full]
+    err_full = sum(abs(p - a) for p, a in zip(preds_full, actuals)) / len(actuals)
+    err_half = sum(abs(p - a) for p, a in zip(preds_half, actuals)) / len(actuals)
+    
+    print("Impact of halving the forecaster training data:")
+    print(f"Full training set (n={len(train_full)}) mean absolute error: {err_full:.4f}")
+    print(f"Half training set (n={len(train_half)}) mean absolute error: {err_half:.4f}")
+    print(f"Performance degradation: {((err_half - err_full) / err_full) * 100:.2f}%")
+    
+    exit(0)
+```

@@ -1,0 +1,65 @@
+```python
+import csv
+
+def justify(header, rows, row):
+    """
+    Estimates the performance of a given row by comparing it to the training data
+    using a k-Nearest Neighbors approach, then returns its percentile rank.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('-') or name.endswith('+')]
+    input_indices = [i for i, name in enumerate(header) if not (name.endswith('-') or name.endswith('+'))]
+
+    def get_score(r):
+        s = 0
+        for idx in goal_indices:
+            val = float(r[idx])
+            if header[idx].endswith('+'):
+                s += (1.0 - val)
+            else:
+                s += val
+        return s
+
+    # Estimate missing goals using 3-NN
+    distances = []
+    for train_row in rows:
+        dist = sum((float(row[i]) - float(train_row[i]))**2 for i in input_indices)**0.5
+        distances.append((dist, train_row))
+    
+    distances.sort()
+    k = 3
+    neighbors = [n[1] for n in distances[:k]]
+    
+    # Estimate the score of the input row based on neighbors
+    estimated_score = sum(get_score(n) for n in neighbors) / k
+    
+    # Compare against all rows to find percentile
+    all_scores = [get_score(r) for r in rows]
+    better_than_count = sum(1 for s in all_scores if s > estimated_score)
+    p = better_than_count / len(rows)
+    
+    reason = (f"This setup is estimated to be better than {p:.1%} of all known configurations "
+              f"based on its input parameters matching similar high-performing historical data.")
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [row for row in reader]
+            
+        # Pick a sample row and mask its goals to test the function
+        sample_row = list(rows[0])
+        for idx in [i for i, name in enumerate(header) if name.endswith('-') or name.endswith('+')]:
+            sample_row[idx] = "?"
+            
+        p, reason = justify(header, rows, sample_row)
+        print(f"Percentile Rank: {p:.4f}")
+        print(f"Justification: {reason}")
+        exit(0)
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

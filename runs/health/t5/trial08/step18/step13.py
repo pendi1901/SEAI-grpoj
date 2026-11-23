@@ -1,0 +1,52 @@
+import ezr
+
+def certify(xs, ys):
+    """
+    Returns True if the two distributions are statistically indistinguishable 
+    (noise), False if they are significantly different.
+    """
+    # Using the same logic as step03, which leverages ezr.same
+    # to check if two distributions are effectively the same.
+    return ezr.same(xs, ys, eps=0.35)
+
+if __name__ == "__main__":
+    # Load the data
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data_iter = ezr.csv(filename)
+    header = next(data_iter)
+    rows = list(data_iter)
+    
+    # The customer asks about the "two built-in rules".
+    # In the context of this dataset and the provided tools, 
+    # a common comparison is between different 'criterion' settings 
+    # (e.g., 'absolute_error' vs 'squared_error').
+    
+    tbl = ezr.Tbl([header] + rows)
+    at = header.index("criterion")
+    
+    # Group by criterion
+    groups = {}
+    for row in rows:
+        val = row[at]
+        if val not in groups: groups[val] = []
+        # We use ydist as the performance metric
+        groups[val].append(ezr.ydist(tbl, row))
+        
+    # Compare the two most common criteria
+    c1, c2 = "absolute_error", "squared_error"
+    if c1 in groups and c2 in groups:
+        xs, ys = groups[c1], groups[c2]
+        is_same = certify(xs, ys)
+        
+        print("Customer Query: Does the choice between the tool's two built-in rules make any real difference?")
+        if is_same:
+            print("Result: No, the difference between these rules is statistically insignificant (noise).")
+        else:
+            print("Result: Yes, there is a statistically significant difference between these rules.")
+            
+        print(f"Mean ydist for {c1}: {sum(xs)/len(xs):.4f}")
+        print(f"Mean ydist for {c2}: {sum(ys)/len(ys):.4f}")
+    else:
+        print("Insufficient data to compare the two rules.")
+        
+    exit(0)

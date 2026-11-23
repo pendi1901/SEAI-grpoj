@@ -1,0 +1,57 @@
+```python
+import ezr
+
+def certify(xs, ys):
+    """
+    Returns True if the two distributions are statistically indistinguishable
+    (i.e., the difference is just noise), False if they are significantly different.
+    """
+    return ezr.same(xs, ys)
+
+if __name__ == "__main__":
+    # Load data
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+
+    # Identify indices
+    # 'TrainingTimesLastYear' is numeric (index 29)
+    # 'YearsWithCurrManager+' is numeric (index 34)
+    train_idx = 29
+    manager_idx = 34
+
+    # Split data into two groups based on the median of training days
+    # to compare "more training" vs "less training"
+    all_train_days = [r[train_idx] for r in rows if isinstance(r[train_idx], (int, float))]
+    median_train = sorted(all_train_days)[len(all_train_days) // 2]
+
+    more_training = []
+    less_training = []
+
+    for row in rows:
+        t_days = row[train_idx]
+        m_years = row[manager_idx]
+        if isinstance(t_days, (int, float)) and isinstance(m_years, (int, float)):
+            if t_days > median_train:
+                more_training.append(m_years)
+            else:
+                less_training.append(m_years)
+
+    # Sort for statistical tests
+    more_training.sort()
+    less_training.sort()
+
+    # Perform certification
+    is_noise = certify(more_training, less_training)
+
+    # Output results
+    print("Analysis: Do people with more training stay longer with their manager?")
+    print(f"Group 'More Training' (> {median_train} days) count: {len(more_training)}, mean: {sum(more_training)/len(more_training):.2f}")
+    print(f"Group 'Less Training' (<= {median_train} days) count: {len(less_training)}, mean: {sum(less_training)/len(less_training):.2f}")
+    
+    if not is_noise:
+        print("Result: The difference is statistically significant (not just noise).")
+    else:
+        print("Result: The difference is statistically indistinguishable (likely just noise).")
+```

@@ -1,0 +1,113 @@
+```python
+import csv
+import numpy as np
+import pandas as pd
+from sklearn.neighbors import KNeighborsRegressor
+
+def race(header, rows, label):
+    """
+    Compares strategies:
+    1. 'random': Picks 16 random rows.
+    2. 'big-teams': Picks the 16 rows with the largest 'Team Size'.
+    3. 'knn-greedy': Uses 18 samples to train a model and pick the best predicted row.
+    Total labels used: 16 + 16 + 18 = 50.
+    """
+    n_rows = len(rows)
+    input_cols = [i for i, h in enumerate(header) if not (h.endswith('-') or h.endswith('+'))]
+    goal_cols = [i for i, h in enumerate(header) if h.endswith(('-', '+'))]
+    team_size_idx = header.index('Team Size')
+    
+    labeled = {}
+    def get_label(idx):
+        if idx not in labeled:
+            if len(labeled) >= 50:
+                raise ValueError("Budget exceeded")
+            labeled[idx] = label(idx)
+        return labeled[idx]
+
+    def get_aggregate(row_goals):
+        # Normalize based on current knowledge
+        all_goals = np.array(list(labeled.values()))
+        norm = (row_goals - all_goals.min(axis=0)) / (all_goals.max(axis=0) - all_goals.min(axis=0) + 1e-9)
+        scores = []
+        for i, col_idx in enumerate(goal_cols):
+            if header[col_idx].endswith('-'):
+                scores.append(1 - norm[i])
+            else:
+                scores.append(norm[i])
+        return np.mean(scores)
+
+    # Strategy 1: Random
+    def strategy_random():
+        indices = np.random.choice(n_rows, 16, replace=False)
+        best_idx, best_score = -1, -1
+        for idx in indices:
+            score = get_aggregate(get_label(idx))
+            if score > best_score:
+                best_score, best_idx = score, idx
+        return best_idx
+
+    # Strategy 2: Big Teams (Customer's current approach)
+    def strategy_big_teams():
+        # Sort by Team Size descending
+        indices = np.argsort([rows[i][team_size_idx] for i in range(n_rows)])[::-1][:16]
+        best_idx, best_score = -1, -1
+        for idx in indices:
+            score = get_aggregate(get_label(idx))
+            if score > best_score:
+                best_score, best_idx = score, idx
+        return best_idx
+
+    # Strategy 3: KNN Greedy
+    def strategy_knn_greedy():
+        # Sample 18 rows
+        indices = np.linspace(0, n_rows - 1, 18, dtype=int)
+        for idx in indices: get_label(idx)
+        
+        X = [[rows[i][c] for c in input_cols] for i in labeled]
+        y = list(labeled.values())
+        model = KNeighborsRegressor(n_neighbors=3).fit(X, y)
+        
+        all_inputs = [[rows[i][c] for c in input_cols] for i in range(n_rows)]
+        preds = model.predict(all_inputs)
+        
+        # Pick best predicted
+        return int(np.argmax([get_aggregate(p) for p in preds]))
+
+    results = {
+        "random": strategy_random(),
+        "big-teams": strategy_big_teams(),
+        "knn-greedy": strategy_knn_greedy()
+    }
+    
+    # Evaluate
+    best_overall, winner = -1, None
+    for name, idx in results.items():
+        score = get_aggregate(get_label(idx))
+        if score > best_overall:
+            best_overall, winner = score, name
+            
+    return {"winner": winner, "row": results[winner], "tried": list(results.keys())}
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [[float(x) for x in row] for row in reader]
+            true_goals = [r[-3:] for r in rows]
+        
+        def label(i): return true_goals[i]
+        
+        res = race(header, rows, label)
+        print("Customer Inquiry: Is 'biggest teams' the best strategy?")
+        print(f"Analysis: The winner was '{res['winner']}'.")
+        if res['winner'] == 'big-teams':
+            print("Conclusion: Your current strategy of maximizing team size is optimal.")
+        else:
+            print("Conclusion: Your current strategy is outperformed by smarter search methods.")
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
+```

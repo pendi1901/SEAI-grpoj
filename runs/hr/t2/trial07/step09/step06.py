@@ -1,0 +1,63 @@
+import csv
+import step02
+
+def justify(header, rows, row):
+    """
+    Estimates the performance of a row by comparing its predicted goal values
+    against the actual values of the provided population.
+    Returns (percentile, reason).
+    """
+    goal_indices = [i for i, h in enumerate(header) if '+' in h or '-' in h]
+    
+    # Estimate the missing goal values using the k-NN logic from step02
+    # We treat the input 'row' as a test set of size 1
+    estimated_goals = step02.guess(header, rows, [row])[0]
+    
+    # Calculate scores for the population
+    def get_score(r):
+        score = 0
+        for i in goal_indices:
+            val = r[i]
+            if header[i].endswith('+'):
+                score += val
+            else:
+                score -= val
+        return score
+
+    # Score the estimated row and the population
+    target_score = estimated_goals
+    pop_scores = [get_score(r) for r in rows]
+    
+    # Calculate fraction of rows that the target row is better than
+    better_than = [s for s in pop_scores if target_score > s]
+    p = len(better_than) / len(rows)
+    
+    reason = (f"This arrangement ranks in the top {int((1-p)*100)}% of all "
+              f"observed records based on its projected tenure metrics.")
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Test with the first row, masking its goal values
+    test_row = list(rows[0])
+    goal_indices = [i for i, h in enumerate(header) if '+' in h or '-' in h]
+    for idx in goal_indices:
+        test_row[idx] = "?"
+
+    p, reason = justify(header, rows, test_row)
+    print(f"Rank: {p:.2f}")
+    print(f"Reason: {reason}")

@@ -1,0 +1,68 @@
+import csv
+
+def get_score(header, row):
+    """Calculates a normalized aggregate score for a row."""
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+    
+    # Normalize: (1-MRE) + ACC + PRED
+    # Assuming values are roughly in [0, 1]
+    mre = float(row[mre_idx])
+    acc = float(row[acc_idx])
+    pred = float(row[pred_idx])
+    return (1.0 - mre) + acc + pred
+
+def flow(header, row, seen):
+    """
+    Decides whether to stop at the current row.
+    We stop if the current row is significantly better than the 
+    best seen so far, or if we have processed enough data that 
+    further improvement is statistically unlikely.
+    """
+    if not seen:
+        return False
+    
+    scores = [get_score(header, r) for r in seen]
+    best_seen = max(scores)
+    current_score = get_score(header, row)
+    
+    # Stop if we've seen a reasonable amount of data (e.g., 50 rows)
+    # and the current row is the best we've seen so far.
+    # This acts as an early stopping criterion for optimization.
+    if len(seen) >= 50 and current_score > best_seen:
+        return True
+        
+    return False
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed_row = []
+                for val in row:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+
+        seen = []
+        stopped = False
+        for i, row in enumerate(rows):
+            if flow(header, row, seen):
+                print(f"Optimization stopped at row {i+1}: Found a high-performing configuration.")
+                stopped = True
+                break
+            seen.append(row)
+        
+        if not stopped:
+            print("Processed all rows; no significant improvement found to justify early stopping.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

@@ -1,0 +1,82 @@
+```python
+import csv
+import step08
+
+def fix(header, row, levers):
+    """
+    Recommends changes for a 'bad' row (low tenure) by adjusting levers
+    to values that correlate with higher tenure in the dataset.
+    Since there is no money for pay, we focus on non-monetary levers.
+    """
+    # We use the logic from step08 but ensure we only pick non-monetary levers
+    # if the customer specifically asks for alternatives to pay.
+    # The provided levers in the harness context are:
+    # 'businessTravel', 'overTime', 'TrainingTimesLastYear', 'PercentSalaryHike', 'StockOptionLevel'
+    # We exclude 'PercentSalaryHike' as it is monetary.
+    
+    recommendations = {}
+    
+    # Filter out monetary levers
+    monetary_levers = ['PercentSalaryHike']
+    
+    for col_name, allowed in levers.items():
+        if col_name in monetary_levers:
+            continue
+            
+        idx = header.index(col_name)
+        
+        if isinstance(allowed, (list, tuple)) and not isinstance(allowed[0], (int, float)):
+            # Symbolic: pick a value that isn't the current one
+            current = row[idx]
+            for val in allowed:
+                if val != current:
+                    recommendations[col_name] = val
+                    break
+        else:
+            # Numeric: move towards the higher end of the range
+            low, high = allowed
+            recommendations[col_name] = high
+            
+    return recommendations
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Define levers excluding monetary ones
+    levers = {
+        'businessTravel': ['Non-Travel', 'Travel_Frequently', 'Travel_Rarely'],
+        'overTime': ['No', 'Yes'],
+        'TrainingTimesLastYear': (0.0, 6.0),
+        'StockOptionLevel': (0.0, 3.0)
+    }
+
+    # Pick a 'bad' row (lowest tenure)
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+')]
+    scored_rows = sorted([(sum(r[i] for i in goal_indices), r) for r in rows], key=lambda x: x[0])
+    bad_row = scored_rows[0][1]
+
+    recommendations = fix(header, bad_row, levers)
+
+    print("Retention Strategy (Non-Monetary):")
+    print("Since budget for salary increases is unavailable, we recommend:")
+    for col, val in recommendations.items():
+        print(f"- Adjust {col} to {val}")
+    print("\nThese adjustments focus on work-life balance and professional development.")
+```

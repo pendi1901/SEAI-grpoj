@@ -1,0 +1,38 @@
+import ezr
+import step09
+
+def spot(header, rows):
+    """
+    Identify rows containing input values that are 'suspicious' or 'wrong'.
+    We define these as rows that are extreme outliers in the input space (x-columns)
+    relative to the rest of the data. We reuse the logic from step09, which
+    calculates the xdist from the centroid of all rows.
+    """
+    # Reuse the logic from step09 to identify outliers
+    return step09.spot(header, rows)
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    
+    try:
+        header = next(data_gen)
+        rows = list(data_gen)
+        
+        # Identify suspicious rows
+        suspicious_indices = spot(header, rows)
+        
+        print(f"Analysis complete. Found {len(suspicious_indices)} suspicious configurations.")
+        print("These rows contain input values that are far outside the typical range of the data.")
+        print("Indices of the most suspicious rows (most suspicious first):")
+        print(suspicious_indices[:10])
+        
+        print("\nTop 3 most suspicious configurations:")
+        for i in suspicious_indices[:3]:
+            print(f"Row {i}: {rows[i]}")
+            
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
+        
+    exit(0)

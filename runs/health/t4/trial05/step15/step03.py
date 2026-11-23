@@ -1,0 +1,52 @@
+import csv
+from scipy import stats
+
+def certify(xs, ys):
+    """
+    Returns True if the difference between two distributions is statistically 
+    insignificant (noise), False if they really differ.
+    Uses a T-test for independent samples.
+    """
+    t_stat, p_value = stats.ttest_ind(xs, ys, equal_var=False)
+    # If p_value > 0.05, we fail to reject the null hypothesis (they are the same)
+    return p_value > 0.05
+
+def get_data():
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i] == 'criterion':
+                    processed_row.append(val)
+                else:
+                    processed_row.append(float(val))
+            rows.append(processed_row)
+    return header, rows
+
+if __name__ == "__main__":
+    header, rows = get_data()
+    
+    # Define "big" vs "small" based on N_estimators
+    idx_n = header.index('N_estimators')
+    idx_acc = header.index('ACC+')
+    
+    # Split data by median of N_estimators
+    n_values = [r[idx_n] for r in rows]
+    median_n = sorted(n_values)[len(n_values) // 2]
+    
+    small_setups = [r[idx_acc] for r in rows if r[idx_n] <= median_n]
+    big_setups = [r[idx_acc] for r in rows if r[idx_n] > median_n]
+    
+    is_noise = certify(small_setups, big_setups)
+    
+    print("Analysis: Is the difference in accuracy between big and small setups just noise?")
+    if is_noise:
+        print("Result: True. The observed difference is likely just noise.")
+    else:
+        print("Result: False. The difference is statistically significant.")
+    
+    exit(0)

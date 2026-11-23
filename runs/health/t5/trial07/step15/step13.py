@@ -1,0 +1,46 @@
+import ezr
+import random
+
+def certify(xs, ys):
+    """
+    Returns True if the distributions of xs and ys are statistically 
+    indistinguishable (noise), False if they are significantly different.
+    """
+    return ezr.same(xs, ys)
+
+if __name__ == "__main__":
+    # Load the data
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    all_data = list(ezr.csv(filename))
+    header = all_data[0]
+    rows = all_data[1:]
+    
+    # The customer asks about "the tool's two built-in rules".
+    # In the context of the provided ezr.py, the primary rule-based 
+    # mechanism is the tree construction. We can compare the performance
+    # of the default tree vs a tree with a different 'Cuts' parameter
+    # to see if the rule-based configuration makes a significant difference.
+    
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Rule 1: Default tree
+    root1 = ezr.tree(tbl, tbl.rows)
+    scores1 = [ezr.leaf(root1, r).mu for r in rows]
+    
+    # Rule 2: Tree with different 'Cuts' (e.g., 4 instead of 8)
+    old_cuts = ezr.the.Cuts
+    ezr.the.Cuts = 4
+    root2 = ezr.tree(tbl, tbl.rows)
+    scores2 = [ezr.leaf(root2, r).mu for r in rows]
+    ezr.the.Cuts = old_cuts
+    
+    # Compare the distributions of performance scores
+    is_same = certify(scores1, scores2)
+    
+    print("Analysis: Does the choice of rule-based configuration make a difference?")
+    if is_same:
+        print("Result: The difference between the two configurations is statistically insignificant.")
+        print("Conclusion: You can stop arguing about it; the choice does not make a real difference.")
+    else:
+        print("Result: There is a statistically significant difference between the configurations.")
+        print("Conclusion: The choice of rules does impact performance.")

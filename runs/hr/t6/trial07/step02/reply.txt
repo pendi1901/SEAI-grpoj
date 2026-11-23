@@ -1,0 +1,64 @@
+```python
+import ezr
+import random
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column for each test row.
+    We use the tree-based ranker from ezr to predict the outcome.
+    """
+    # Create a table for the training data
+    tbl = ezr.Tbl([header] + train)
+    
+    # Grow a tree on the training data to learn the relationship between
+    # inputs and the goal columns (ydist).
+    node = ezr.tree(tbl, tbl.rows)
+    
+    # For each test row, walk the tree to find the leaf node.
+    # The estimate is the mean ydist of that leaf.
+    # Note: The goal is to estimate the first goal column.
+    # Since ydist is a normalized distance, we map it back to the 
+    # scale of the first goal column using the leaf's centroid.
+    
+    results = []
+    # Identify the first goal column index
+    goal_col = [c for c in tbl.y if c.at == [i for i, h in enumerate(header) if h.endswith(("+", "-"))][0]][0]
+    
+    for row in test:
+        leaf = ezr.leaf(node, row)
+        # Calculate the average value of the first goal column in this leaf
+        vals = [r[goal_col.at] for r in leaf.rows]
+        results.append(sum(vals) / len(vals))
+        
+    return results
+
+if __name__ == "__main__":
+    # Load data
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    all_rows = data[1:]
+    
+    # Split into train and test
+    random.seed(1234567891)
+    random.shuffle(all_rows)
+    split = int(len(all_rows) * 0.8)
+    train = all_rows[:split]
+    test_full = all_rows[split:]
+    
+    # Mask the goal columns in test data to simulate "day one"
+    goal_indices = [i for i, h in enumerate(header) if h.endswith(("+", "-"))]
+    test = []
+    for row in test_full:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        test.append(new_row)
+    
+    # Get estimates
+    estimates = guess(header, train, test)
+    
+    print(f"Estimated tenure for {len(estimates)} new hires.")
+    print(f"Sample estimates (YearsAtCompany+): {estimates[:5]}")
+    print("Analysis complete.")
+```

@@ -1,0 +1,52 @@
+```python
+import csv
+import step03
+
+def certify(xs, ys):
+    """
+    Returns True if the difference between two distributions is likely noise,
+    False if they are statistically distinct.
+    """
+    return step03.certify(xs, ys)
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed_row = [val if header[i] == 'criterion' else float(val) 
+                                 for i, val in enumerate(row)]
+                rows.append(processed_row)
+        
+        # The customer asks about the choice between the tool's built-in rules.
+        # In this dataset, 'criterion' is the symbolic column defining the rule.
+        # We compare the performance (ACC+) of the two most common criteria.
+        crit_idx = header.index('criterion')
+        acc_idx = header.index('ACC+')
+        
+        # Identify the two most frequent criteria
+        criteria = {}
+        for r in rows:
+            c = r[crit_idx]
+            criteria[c] = criteria.get(c, 0) + 1
+        
+        top_two = sorted(criteria.keys(), key=lambda x: criteria[x], reverse=True)[:2]
+        
+        group1 = [r[acc_idx] for r in rows if r[crit_idx] == top_two[0]]
+        group2 = [r[acc_idx] for r in rows if r[crit_idx] == top_two[1]]
+        
+        is_noise = certify(group1, group2)
+        
+        print(f"Comparing the two most common criteria: {top_two[0]} vs {top_two[1]}")
+        if is_noise:
+            print("Conclusion: The difference in performance is likely noise. You can stop arguing about it.")
+        else:
+            print("Conclusion: The difference in performance is statistically significant. The choice of rule matters.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

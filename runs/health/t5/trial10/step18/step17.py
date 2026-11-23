@@ -1,0 +1,88 @@
+import ezr
+import random
+
+def choose(header, rows, label):
+    """
+    Finds a setup that is both accurate (low ydist) and small (low N_estimators).
+    We use a multi-objective approach: we want to minimize ydist AND minimize N_estimators.
+    We use the acquire logic to sample the space, then pick the best trade-off.
+    """
+    # 1. Setup: Identify indices for goals and the 'size' metric (N_estimators)
+    # We want to minimize ydist (accuracy) and minimize N_estimators (size).
+    # We create a temporary table to help with normalization.
+    tbl = ezr.Tbl([header])
+    
+    # 2. Labeling: Use the acquire logic to intelligently sample the space.
+    # We use a budget of 50 labels.
+    labeled_data = []
+    labeled_indices = set()
+    
+    # We need to map rows to indices for the oracle
+    row_to_idx = {id(r): i for i, r in enumerate(rows)}
+    
+    def oracle_wrapper(row):
+        idx = row_to_idx[id(row)]
+        if idx not in labeled_indices:
+            labeled_indices.add(idx)
+            true_goals = label(idx)
+            # Update the row with true goals
+            for i, name in enumerate(header):
+                if name[-1] in "+-":
+                    row[i] = true_goals[i]
+        return row
+
+    # Prepare rows for acquire (mask goals)
+    masked_rows = []
+    for r in rows:
+        nr = list(r)
+        for i, name in enumerate(header):
+            if name[-1] in "+-": nr[i] = "?"
+        masked_rows.append(nr)
+        row_to_idx[id(nr)] = row_to_idx[id(r)]
+
+    # Run acquisition
+    tbl.rows = masked_rows
+    final_rows = ezr.acquire(tbl, cap=50, label=oracle_wrapper)
+    
+    # 3. Selection: Find the best trade-off.
+    # We want low ydist and low N_estimators.
+    # We normalize N_estimators to 0..1 to compare with ydist.
+    n_est_idx = header.index('N_estimators')
+    
+    # Get min/max for N_estimators to normalize
+    n_vals = [r[n_est_idx] for r in rows]
+    n_min, n_max = min(n_vals), max(n_vals)
+    
+    def get_score(row):
+        # ydist is already 0..1
+        yd = ezr.ydist(tbl, row)
+        # Normalize N_estimators
+        norm_n = (row[n_est_idx] - n_min) / (n_max - n_min + 1e-32)
+        # Combined score: minimize both
+        return yd + norm_n
+    
+    best_row = min(final_rows, key=get_score)
+    return row_to_idx[id(best_row)]
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    try:
+        data = list(ezr.csv(filename))
+        header = data[0]
+        rows = data[1:]
+        
+        # Define the label function for the harness
+        def label(i):
+            return rows[i]
+            
+        best_idx = choose(header, rows, label)
+        
+        print(f"Analysis complete.")
+        print(f"The best setup found (balancing accuracy and size) is at index: {best_idx}")
+        print(f"Row details: {rows[best_idx]}")
+        
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
+    
+    exit(0)

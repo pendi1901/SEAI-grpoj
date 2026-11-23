@@ -1,0 +1,65 @@
+```python
+import csv
+import numpy as np
+from step01 import remember
+
+def get_score(header, row):
+    """Calculates a normalized aggregate score for a row."""
+    goals = [i for i, col in enumerate(header) if col.endswith(('-', '+'))]
+    scores = []
+    for i in goals:
+        val = row[i]
+        # Since we don't have global min/max for every arrival, 
+        # we treat values as normalized [0,1] based on problem description.
+        if header[i].endswith('-'):
+            scores.append(1.0 - val)
+        else:
+            scores.append(val)
+    return np.mean(scores) if scores else 0
+
+def flow(header, row, seen):
+    """
+    Warns if a row is 'going bad'. We define 'going bad' as a significant 
+    drop in performance compared to the moving average of the last 50 rows.
+    """
+    if len(seen) < 50:
+        return False
+    
+    current_score = get_score(header, row)
+    recent_scores = [get_score(header, s) for s in seen[-50:]]
+    avg_recent = np.mean(recent_scores)
+    std_recent = np.std(recent_scores)
+    
+    # If the current score is more than 2 standard deviations below the recent average,
+    # we flag it as 'going bad'.
+    if current_score < (avg_recent - 2 * (std_recent + 1e-9)):
+        return True
+    
+    return False
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [[float(val) for val in row] for row in reader]
+        
+        seen = []
+        alerts = []
+        for i, row in enumerate(rows):
+            if flow(header, row, seen):
+                alerts.append(i)
+            seen.append(row)
+            
+        print("Customer Inquiry: Monitoring programme performance week by week.")
+        if alerts:
+            print(f"Warning: Performance degradation detected in {len(alerts)} records.")
+            print(f"First alert triggered at record index: {alerts[0]}")
+        else:
+            print("Status: All programmes performing within acceptable variance.")
+            
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
+```

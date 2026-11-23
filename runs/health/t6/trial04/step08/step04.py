@@ -1,0 +1,49 @@
+import ezr
+import step01
+
+def flow(header, row, seen):
+    """
+    Decide if the current row is 'good enough' to stop.
+    We define 'good enough' as being in the top 5% of the potential
+    distribution, estimated by comparing the current row against
+    the distribution of rows seen so far.
+    """
+    if not seen:
+        return False
+    
+    # Create a table to calculate ydist (distance to ideal goals)
+    # We use the current row and all previously seen rows to define the space
+    data = [header] + seen + [row]
+    tbl = ezr.Tbl(data)
+    
+    # Calculate ydist for the current row
+    current_ydist = ezr.ydist(tbl, row)
+    
+    # Calculate ydist for all previously seen rows
+    seen_ydists = [ezr.ydist(tbl, r) for r in seen]
+    
+    # We stop if the current row is better than 95% of what we've seen
+    # (i.e., its ydist is in the bottom 5% of the current distribution)
+    threshold = sorted(seen_ydists)[int(len(seen_ydists) * 0.05)]
+    
+    return current_ydist <= threshold
+
+if __name__ == "__main__":
+    file_path = "Health-ClosedIssues0000.n1000.train.csv"
+    all_data = list(ezr.csv(file_path))
+    header = all_data[0]
+    rows = all_data[1:]
+    
+    seen = []
+    found = False
+    for i, row in enumerate(rows):
+        if flow(header, row, seen):
+            print(f"Stopped at row {i} (index {i}).")
+            print(f"This configuration met the quality threshold.")
+            print(f"Values: {row}")
+            found = True
+            break
+        seen.append(row)
+    
+    if not found:
+        print("Processed all rows; no configuration met the quality threshold.")

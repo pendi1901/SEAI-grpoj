@@ -1,0 +1,69 @@
+import csv
+import step01
+
+def fix(header, row, levers):
+    """
+    Finds the smallest change to levers that moves the row towards the 
+    best-performing setups found in the training data.
+    """
+    # Identify goal indices and directions
+    goal_indices = [(i, name[-1]) for i, name in enumerate(header) 
+                    if name.endswith('-') or name.endswith('+')]
+    
+    # Calculate the average of the best 5% of rows to use as a target
+    # We use step01.remember to find the best rows
+    filename = "pom3a.n1000.train.csv"
+    with open(filename, mode='r', newline='') as f:
+        reader = csv.reader(f)
+        header_file = next(reader)
+        rows = [r for r in reader]
+    
+    best_indices = step01.remember(header_file, rows)
+    
+    # Calculate target values for each lever
+    recommendations = {}
+    for col_name, allowed in levers.items():
+        col_idx = header.index(col_name)
+        
+        # If numeric, move towards the average of the best rows
+        if isinstance(allowed, tuple):
+            low, high = allowed
+            best_vals = [float(rows[i][col_idx]) for i in best_indices]
+            target = sum(best_vals) / len(best_vals)
+            # Clamp to allowed range
+            recommendations[col_name] = max(low, min(high, target))
+        else:
+            # If symbolic, pick the most frequent value in the best rows
+            best_vals = [rows[i][col_idx] for i in best_indices]
+            recommendations[col_name] = max(set(best_vals), key=best_vals.count)
+            
+    return recommendations
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', newline='') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [row for row in reader]
+            
+            # Define levers: Plan and Team Size are the primary planning/staffing inputs
+            # Plan is numeric (0-1), Team Size is numeric (0-1)
+            levers = {
+                "Plan": (0.0, 1.0),
+                "Team Size": (0.0, 1.0)
+            }
+            
+            # Pick a "bad" row (e.g., the last one) to fix
+            bad_row = rows[-1]
+            changes = fix(header, bad_row, levers)
+            
+            print("Customer Inquiry: How to rescue an over-budget, idle program?")
+            print("Recommendation: Adjust the following parameters to align with high-performing setups:")
+            for col, val in changes.items():
+                print(f" - {col}: {val:.4f}")
+            print("These changes are derived from the characteristics of the top 5% of historical projects.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

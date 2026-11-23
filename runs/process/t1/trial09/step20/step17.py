@@ -1,0 +1,87 @@
+import csv
+import random
+
+def choose(header, rows, label):
+    """
+    Finds the best setup for a large, high-criticality project.
+    We filter for rows where 'Size' and 'Criticality' are high,
+    then use a small budget of 50 labels to find the best among them.
+    """
+    size_idx = header.index('Size')
+    crit_idx = header.index('Criticality')
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+
+    # Filter for "large and high-criticality" projects
+    # We define this as being in the top 50% for both Size and Criticality
+    size_threshold = sum(r[size_idx] for r in rows) / len(rows)
+    crit_threshold = sum(r[crit_idx] for r in rows) / len(rows)
+    
+    candidates = [
+        i for i, r in enumerate(rows) 
+        if r[size_idx] >= size_threshold and r[crit_idx] >= crit_threshold
+    ]
+
+    def get_score(goals):
+        # Normalize goals: minimize '-' (val), maximize '+' (1-val)
+        score = 0
+        for i, val in enumerate(goals):
+            name = header[goal_indices[i]]
+            if name.endswith('-'):
+                score += val
+            else:
+                score += (1 - val)
+        return score
+
+    # Sample up to 50 candidates
+    sample_size = min(50, len(candidates))
+    sampled_indices = random.sample(candidates, sample_size)
+    
+    best_idx = -1
+    best_score = float('inf')
+    
+    for idx in sampled_indices:
+        goals = label(idx)
+        score = get_score(goals)
+        if score < best_score:
+            best_score = score
+            best_idx = idx
+            
+    return best_idx
+
+def load_data(filename):
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = []
+        for row in reader:
+            processed = []
+            for val in row:
+                try:
+                    processed.append(float(val))
+                except ValueError:
+                    processed.append(val)
+            rows.append(processed)
+    return header, rows
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        header, rows = load_data(filename)
+        
+        goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+        
+        def label(i):
+            return [rows[i][idx] for idx in goal_indices]
+            
+        best_idx = choose(header, rows, label)
+        
+        print(f"Analysis complete for large, high-criticality projects.")
+        print(f"The best configuration found is at index {best_idx}.")
+        print("Goal values for this configuration:")
+        goals = label(best_idx)
+        for i, val in enumerate(goals):
+            print(f"  {header[goal_indices[i]]}: {val:.4f}")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

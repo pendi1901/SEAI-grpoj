@@ -1,0 +1,46 @@
+```python
+import ezr
+import step01
+
+def remember(header, rows):
+    """
+    Finds the top 5% of rows that are most similar to the 'best' performing 
+    setups in the dataset. We define 'best' as those with the lowest ydist.
+    """
+    # Create a table to calculate ydist for all rows
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate ydist for all rows
+    scored = []
+    for i, row in enumerate(rows):
+        scored.append((ezr.ydist(tbl, row), i))
+    
+    # Sort by ydist (ascending, as lower is better)
+    scored.sort(key=lambda x: x[0])
+    
+    # Return the top 5% of indices
+    limit = max(1, len(rows) // 20)
+    return [idx for score, idx in scored[:limit]]
+
+if __name__ == "__main__":
+    # Load data
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Get the best indices
+    best_indices = remember(header, rows)
+    
+    # Print a summary for the customer
+    print(f"Analysis complete. Found {len(best_indices)} historical setups that performed best.")
+    print(f"Indices of top-performing setups: {best_indices}")
+    
+    if best_indices:
+        # Show the first one as an example
+        idx = best_indices[0]
+        print(f"\nExample of a top-performing setup (index {idx}):")
+        print(rows[idx])
+        
+    exit(0)
+```

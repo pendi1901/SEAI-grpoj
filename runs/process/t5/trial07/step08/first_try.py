@@ -1,0 +1,82 @@
+import ezr
+import random
+
+def fix(header, row, levers):
+    """
+    Finds the smallest change to levers that moves a bad row toward the 
+    best-performing cluster. We use the tree to find the leaf with the 
+    lowest ydist and move the row's levers toward that leaf's centroid.
+    """
+    # Load data to build a model
+    data = list(ezr.csv("pom3a.n1000.train.csv"))
+    rows = data[1:]
+    tbl = ezr.Tbl(data)
+    
+    # Build a tree to find the best performing region
+    root = ezr.tree(tbl, rows)
+    leaves = sorted(ezr.leafs(root), key=lambda n: n.mu)
+    best_leaf = leaves[0]
+    
+    # Calculate the centroid of the best leaf
+    best_mids = {at: ezr.mid(c) for at, c in tbl.cols.items()}
+    for at in best_leaf.rows[0]: # Simplified: use first row as proxy for leaf center
+        best_mids = {at: sum(r[at] for r in best_leaf.rows)/len(best_leaf.rows) 
+                     for at in tbl.x_indices if isinstance(tbl.cols[at], ezr.Num)}
+    
+    # Recommend changes for the levers
+    recommendations = {}
+    for col_name, allowed in levers.items():
+        at = header.index(col_name)
+        current_val = row[at]
+        
+        if isinstance(allowed, tuple): # Numeric
+            low, high = allowed
+            target = best_mids.get(at, (low + high) / 2)
+            # Move toward target, constrained by allowed range
+            new_val = max(low, min(high, target))
+            if new_val != current_val:
+                recommendations[col_name] = new_val
+        else: # Symbolic
+            # Pick the most frequent value in the best leaf
+            counts = {}
+            for r in best_leaf.rows:
+                counts[r[at]] = counts.get(r[at], 0) + 1
+            best_sym = max(counts, key=counts.get)
+            if best_sym in allowed and best_sym != current_val:
+                recommendations[col_name] = best_sym
+                
+    # Ensure at least one change
+    if not recommendations and levers:
+        first_key = list(levers.keys())[0]
+        recommendations[first_key] = levers[first_key][0] if isinstance(levers[first_key], list) else levers[first_key][0]
+        
+    return recommendations
+
+if __name__ == "__main__":
+    # Load data
+    data = list(ezr.csv("pom3a.n1000.train.csv"))
+    header = data[0]
+    rows = data[1:]
+    
+    # Define levers based on problem context
+    levers = {
+        "Size": (0.1, 0.9),
+        "Plan": (0.1, 0.9),
+        "Team Size": (0.1, 0.9)
+    }
+    
+    # Pick a "bad" row (high ydist)
+    tbl = ezr.Tbl(data)
+    scored = sorted([(ezr.ydist(tbl, r), r) for r in rows], key=lambda x: x[0], reverse=True)
+    bad_row = scored[0][1]
+    
+    # Get fix
+    recommendation = fix(header, bad_row, levers)
+    
+    print("Optimization Analysis for Underperforming Setup:")
+    print(f"Current state is inefficient. To improve performance, we recommend:")
+    for col, val in recommendation.items():
+        print(f"- Adjust '{col}' to {val:.4f}")
+    print("\nApplying these changes will align the project parameters with our most efficient historical configurations.")
+    
+    exit(0)

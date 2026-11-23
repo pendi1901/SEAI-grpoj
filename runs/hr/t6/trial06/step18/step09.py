@@ -1,0 +1,47 @@
+import ezr
+import random
+
+def spot(header, rows):
+    """
+    Finds rows that look wrong (outliers).
+    We use the distance to the nearest neighbor (xdist) as a measure of 
+    suspicion. Rows that are very far from all other rows in the 
+    input space (x-columns) are likely to be data entry errors.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate the average distance of each row to its k-nearest neighbors.
+    # A high average distance indicates the row is an outlier.
+    k = 5
+    scores = []
+    for i, r1 in enumerate(rows):
+        # Calculate distance to all other rows
+        distances = [ezr.xdist(tbl, r1, r2) for j, r2 in enumerate(rows) if i != j]
+        # Sort and take the average of the k closest neighbors
+        distances.sort()
+        avg_dist = sum(distances[:k]) / k
+        scores.append((i, avg_dist))
+    
+    # Sort by suspicion (highest distance first)
+    scores.sort(key=lambda x: x[1], reverse=True)
+    
+    # Return the indices of the most suspicious rows
+    return [i for i, score in scores]
+
+if __name__ == "__main__":
+    file_path = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(file_path))
+    header = data[0]
+    rows = data[1:]
+    
+    suspicious = spot(header, rows)
+    
+    print("Analysis: Identifying potential data entry errors.")
+    print(f"Found {len(suspicious)} records. The top 5 most suspicious rows are:")
+    for i in range(min(5, len(suspicious))):
+        idx = suspicious[i]
+        print(f"  Row {idx} (Suspicion score: High)")
+    
+    print("-" * 40)
+    print("Strategy: Rows with the largest distance to their neighbors in the")
+    print("input space are flagged as potential outliers or entry errors.")

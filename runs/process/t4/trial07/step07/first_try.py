@@ -1,0 +1,94 @@
+import csv
+import numpy as np
+import pandas as pd
+from sklearn.ensemble import RandomForestRegressor
+from step01 import remember
+
+def choose(header, rows, label):
+    """
+    Finds the best row by using a surrogate model (Random Forest) to predict 
+    the aggregate score of all rows, then querying the 50 most promising ones.
+    """
+    # Identify columns
+    inputs = [col for col in header if not (col.endswith('-') or col.endswith('+'))]
+    goals = [col for col in header if col.endswith(('-', '+'))]
+    
+    # 1. Identify rows that have labels (the training set)
+    # The prompt implies we have some rows with data and some with '?'
+    # Based on the requirement, we assume rows with numeric values are known.
+    known_indices = [i for i, row in enumerate(rows) if isinstance(row[-1], (int, float))]
+    unknown_indices = [i for i, row in enumerate(rows) if not isinstance(row[-1], (int, float))]
+    
+    # 2. Train a surrogate model to predict aggregate performance
+    df_known = pd.DataFrame([rows[i] for i in known_indices], columns=header)
+    
+    # Calculate aggregate score for known rows
+    scores = pd.DataFrame(index=df_known.index)
+    for goal in goals:
+        norm = (df_known[goal] - df_known[goal].min()) / (df_known[goal].max() - df_known[goal].min() + 1e-9)
+        scores[goal] = 1 - norm if goal.endswith('-') else norm
+    df_known['aggregate'] = scores.mean(axis=1)
+    
+    # Train model
+    model = RandomForestRegressor(n_estimators=100, random_state=42)
+    model.fit(df_known[inputs], df_known['aggregate'])
+    
+    # 3. Predict aggregate for unknown rows
+    df_unknown = pd.DataFrame([rows[i] for i in unknown_indices], columns=header)
+    preds = model.predict(df_unknown[inputs])
+    
+    # 4. Select top 50 candidates
+    top_50_indices = np.argsort(preds)[-50:]
+    best_overall_idx = -1
+    best_score = -float('inf')
+    
+    for i in top_50_indices:
+        real_idx = unknown_indices[i]
+        # Query the label
+        true_goals = label(real_idx)
+        
+        # Calculate score for this row
+        row_score = 0
+        for j, goal in enumerate(goals):
+            # Normalize based on known data range
+            g_min, g_max = df_known[goal].min(), df_known[goal].max()
+            norm = (true_goals[j] - g_min) / (g_max - g_min + 1e-9)
+            row_score += (1 - norm) if goal.endswith('-') else norm
+        
+        if row_score > best_score:
+            best_score = row_score
+            best_overall_idx = real_idx
+            
+    return best_overall_idx
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                # Convert to float if possible, else keep as string
+                processed = []
+                for val in row:
+                    try: processed.append(float(val))
+                    except: processed.append(val)
+                rows.append(processed)
+        
+        # Simulation of the label function
+        def label(i):
+            # Return the goal columns for the row
+            return [rows[i][j] for j, col in enumerate(header) if col.endswith(('-', '+'))]
+            
+        # Mask rows for the test
+        masked_rows = []
+        for r in rows:
+            masked_rows.append(r[:len(header)-3] + ['?'] * 3)
+            
+        best_idx = choose(header, masked_rows, label)
+        print(f"Best setup found at index: {best_idx}")
+        
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

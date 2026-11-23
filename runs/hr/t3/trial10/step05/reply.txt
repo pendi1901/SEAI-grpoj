@@ -1,0 +1,67 @@
+```python
+import csv
+
+def blame(header, rows):
+    """
+    Identifies input columns that correlate with short stays (low 'YearsAtCompany+').
+    We define 'worst rows' as the bottom 20% by 'YearsAtCompany+'.
+    We then identify input columns that show the highest variance or 
+    distinctive values in this group compared to the rest.
+    """
+    years_idx = header.index('YearsAtCompany+')
+    
+    # Sort rows by YearsAtCompany+ to find the worst performers
+    sorted_rows = sorted(rows, key=lambda x: x[years_idx])
+    worst_rows = sorted_rows[:len(rows) // 5]
+    
+    # Identify input columns (exclude goals)
+    input_cols = [i for i, h in enumerate(header) if not (h.endswith('+') or h.endswith('-'))]
+    
+    # Simple heuristic: find columns where the distribution in 'worst' rows 
+    # is most distinct from the global average.
+    # For symbolic, we look for high frequency of specific categories.
+    # For numeric, we look for low values.
+    scores = []
+    for i in input_cols:
+        col_name = header[i]
+        vals = [r[i] for r in worst_rows]
+        
+        if isinstance(vals[0], float):
+            # For numeric, low values might explain short stays
+            avg = sum(vals) / len(vals)
+            scores.append((avg, col_name))
+        else:
+            # For symbolic, count the most frequent value
+            counts = {}
+            for v in vals:
+                counts[v] = counts.get(v, 0) + 1
+            top_val = max(counts, key=counts.get)
+            # Score based on how dominant this value is in the worst group
+            scores.append((counts[top_val] / len(vals), col_name))
+            
+    # Return the top 3 columns that seem to characterize the short-stay group
+    # We prioritize low numeric values and high categorical frequency
+    scores.sort()
+    return [s[1] for s in scores[:3]]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    result = blame(header, rows)
+    print("Factors contributing to short employee tenure:")
+    for factor in result:
+        print(f"- {factor}")
+    print("\nThese columns show the strongest correlation with the bottom 20% of tenure.")
+```

@@ -1,0 +1,54 @@
+import csv
+from step01 import remember
+
+def flow(header, row, seen):
+    """
+    Decides if a row needs a 'what would keep you here' conversation.
+    We define this as being in the top 5% of 'YearsAtCompany+' 
+    relative to the history seen so far.
+    """
+    idx = header.index('YearsAtCompany+')
+    val = row[idx]
+    
+    # If this is the first row, we can't compare, so default to False
+    if not seen:
+        return False
+    
+    # Get all previous values for 'YearsAtCompany+'
+    past_values = [r[idx] for r in seen]
+    
+    # Calculate the 95th percentile threshold of the history
+    sorted_past = sorted(past_values, reverse=True)
+    limit = max(1, int(len(past_values) * 0.05))
+    threshold = sorted_past[limit - 1]
+    
+    # If the current row meets or exceeds the threshold of the past, 
+    # it is a candidate for a retention conversation.
+    return val >= threshold
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Simulate the arrival process
+    seen = []
+    retention_candidates = 0
+    for row in rows:
+        if flow(header, row, seen):
+            retention_candidates += 1
+        seen.append(row)
+
+    print(f"Processed {len(rows)} employees.")
+    print(f"Number of employees identified for a 'what would keep you here' conversation: {retention_candidates}")
+    print("Decision logic: Identified employees whose tenure (YearsAtCompany+) is in the top 5% of the history seen so far.")

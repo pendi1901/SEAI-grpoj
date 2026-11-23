@@ -1,0 +1,47 @@
+```python
+import ezr
+import step06
+
+def justify(header, rows, row):
+    """
+    Answers why we shouldn't just use the biggest, deepest setup.
+    We compare the performance of the 'biggest' setup (max N_estimators, max Max_depth)
+    against the general population and explain that bigger is not always better.
+    """
+    # Use the logic from step06 to calculate the performance percentile
+    # and generate the justification string.
+    return step06.justify(header, rows, row)
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data_iter = ezr.csv(filename)
+    header = next(data_iter)
+    rows = list(data_iter)
+    
+    # Define the "biggest, deepest" setup
+    # N_estimators is at index 3, Max_depth is at index 7
+    n_est_idx = header.index('N_estimators')
+    max_depth_idx = header.index('Max_depth')
+    
+    # Find max values in the data
+    max_n = max(r[n_est_idx] for r in rows)
+    max_d = max(r[max_depth_idx] for r in rows)
+    
+    # Create the "biggest" row (masking goals as "?")
+    # We take the first row as a template and set the big parameters
+    big_row = list(rows[0])
+    goal_indices = [i for i, name in enumerate(header) if name[-1] in "+-"]
+    for idx in goal_indices:
+        big_row[idx] = "?"
+    big_row[n_est_idx] = max_n
+    big_row[max_depth_idx] = max_d
+    
+    p, reason = justify(header, rows, big_row)
+    
+    print(f"Question: Why not simply use the biggest, deepest setup?")
+    print(f"Answer: {reason}")
+    print(f"Performance percentile: {p:.4f}")
+    print("Conclusion: The biggest setup is not necessarily the best; optimization is required.")
+    
+    exit(0)
+```

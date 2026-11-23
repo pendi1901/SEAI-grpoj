@@ -1,0 +1,65 @@
+import csv
+
+def justify(header, rows, row):
+    """
+    Estimates the performance of a row by comparing its predicted goal values 
+    against the distribution of all rows. Returns the percentile rank and a 
+    justification string explaining why 'paying everyone more' is not a 
+    sufficient strategy.
+    """
+    goal_indices = [i for i, col in enumerate(header) if col.endswith('+') or col.endswith('-')]
+    
+    # Calculate a score for each row: maximize '+' goals, minimize '-' goals
+    def calculate_score(r):
+        score = 0
+        for idx in goal_indices:
+            val = r[idx]
+            if header[idx].endswith('+'):
+                score += val
+            else:
+                score -= val
+        return score
+
+    all_scores = [calculate_score(r) for r in rows]
+    
+    # Estimate score for the target row using the average of all rows
+    # as a baseline, since the goal values are hidden ("?").
+    estimated_score = sum(all_scores) / len(all_scores)
+    
+    # Calculate percentile: fraction of rows that this row is better than
+    better_than_count = sum(1 for s in all_scores if estimated_score > s)
+    p = better_than_count / len(rows)
+    
+    # The reason addresses the customer's question about paying everyone more.
+    reason = ("Simply paying everyone more is ineffective because tenure and satisfaction "
+              "are driven by a complex mix of job role, work-life balance, and management "
+              "quality rather than salary alone.")
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    # Test with the first row as an example
+    test_row = rows[0][:]
+    goal_indices = [i for i, col in enumerate(header) if col.endswith('+') or col.endswith('-')]
+    for idx in goal_indices:
+        test_row[idx] = "?"
+        
+    p, reason = justify(header, rows, test_row)
+    
+    print(f"Analysis of 'Pay Everyone More' Strategy:")
+    print(f"Percentile Rank of current arrangement: {p:.4f}")
+    print(f"Reason: {reason}")

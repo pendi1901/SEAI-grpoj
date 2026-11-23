@@ -1,0 +1,52 @@
+import ezr
+import step01
+
+def spot(header, rows):
+    """
+    Identify rows that do not fit the data distribution.
+    We use the distance from the centroid of the data as a measure of 
+    'suspiciousness'. Rows that are outliers in the input space (x-columns) 
+    are flagged as potentially mistyped.
+    """
+    # Create a table to get column statistics
+    data = [header] + rows
+    tbl = ezr.Tbl(data)
+    
+    # Calculate the centroid of the input space
+    # The centroid is the mid of each column
+    centroid = {col.at: ezr.mid(col) for col in tbl.x}
+    
+    # Calculate the distance of each row from the centroid
+    # A row is suspicious if it is far from the centroid of the input space
+    scores = []
+    for i, row in enumerate(rows):
+        # Calculate distance from the centroid using xdist
+        # xdist expects a row and a MIDS object (which is a dict of at: val)
+        d = ezr.xdist(tbl, row, centroid)
+        scores.append((d, i))
+    
+    # Sort by distance descending (most suspicious first)
+    scores.sort(key=lambda x: x[0], reverse=True)
+    
+    # Return the indices of the top 5% most suspicious rows
+    limit = max(1, len(rows) // 20)
+    return [item[1] for item in scores[:limit]]
+
+if __name__ == "__main__":
+    # Load data
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Identify suspicious rows
+    suspicious_indices = spot(header, rows)
+    
+    print(f"Analysis complete. Found {len(suspicious_indices)} potentially mistyped rows.")
+    print("Indices of the most suspicious rows (most suspicious first):")
+    print(suspicious_indices)
+    
+    print("\nSample of the most suspicious row:")
+    if suspicious_indices:
+        idx = suspicious_indices[0]
+        print(f"Row {idx}: {rows[idx]}")

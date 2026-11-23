@@ -1,0 +1,73 @@
+import csv
+
+def certify(xs, ys):
+    """
+    Performs a simple two-sample t-test (Welch's) to determine if two 
+    distributions are significantly different. Returns True if they are 
+    statistically similar (p > 0.05), False if they differ.
+    """
+    n1, n2 = len(xs), len(ys)
+    if n1 < 2 or n2 < 2:
+        return True
+    
+    m1, m2 = sum(xs) / n1, sum(ys) / n2
+    v1 = sum((x - m1) ** 2 for x in xs) / (n1 - 1)
+    v2 = sum((y - m2) ** 2 for y in ys) / (n2 - 1)
+    
+    se = ((v1 / n1) + (v2 / n2)) ** 0.5
+    if se == 0:
+        return m1 == m2
+    
+    t_stat = abs(m1 - m2) / se
+    # Critical value for 95% confidence (two-tailed) is approx 1.96
+    return t_stat < 1.96
+
+def analyze_training_impact(header, rows):
+    """
+    Compares 'YearsWithCurrManager+' for employees with high vs low training.
+    """
+    train_idx = header.index('TrainingTimesLastYear')
+    mgr_idx = header.index('YearsWithCurrManager+')
+    
+    # Split into two groups based on median training
+    all_training = [row[train_idx] for row in rows]
+    median_training = sum(all_training) / len(all_training)
+    
+    high_training = [row[mgr_idx] for row in rows if row[train_idx] >= median_training]
+    low_training = [row[mgr_idx] for row in rows if row[train_idx] < median_training]
+    
+    avg_high = sum(high_training) / len(high_training)
+    avg_low = sum(low_training) / len(low_training)
+    
+    is_same = certify(high_training, low_training)
+    
+    print(f"Analysis: Impact of Training on Tenure with Manager")
+    print(f"Average Years with Manager (High Training): {avg_high:.2f}")
+    print(f"Average Years with Manager (Low Training): {avg_low:.2f}")
+    
+    if not is_same:
+        print("Conclusion: There is a statistically significant difference in tenure with the manager based on training.")
+    else:
+        print("Conclusion: The difference is not statistically significant; training does not appear to change tenure with the manager.")
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = None
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    analyze_training_impact(header, rows)

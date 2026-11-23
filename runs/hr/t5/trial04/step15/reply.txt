@@ -1,0 +1,60 @@
+```python
+import ezr
+
+def blame(header, rows):
+    """
+    Identifies input columns that have the least impact on the 'badness' of rows.
+    We define 'bad' as having a high ydist (distance from ideal goals).
+    Columns that show no significant difference between the worst 25% of rows
+    and the rest are candidates for removal.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate ydist for all rows and sort to find the worst
+    scored = sorted([(ezr.ydist(tbl, r), r) for r in rows], 
+                    key=lambda x: x[0], reverse=True)
+    
+    n_worst = len(rows) // 4
+    worst = [x[1] for x in scored[:n_worst]]
+    rest = [x[1] for x in scored[n_worst:]]
+    
+    # We look for columns where the distribution is statistically the same
+    # between the worst rows and the rest. These are the "irrelevant" ones.
+    irrelevant = []
+    for col in tbl.x:
+        # Only consider input columns
+        if col.txt.endswith('+') or col.txt.endswith('-') or col.txt == 'attrition':
+            continue
+            
+        w_vals = [r[col.at] for r in worst if r[col.at] != "?"]
+        r_vals = [r[col.at] for r in rest if r[col.at] != "?"]
+        
+        if not w_vals or not r_vals:
+            continue
+            
+        # If distributions are the same, this column has little to do with the outcome
+        if ezr.same(sorted(w_vals), sorted(r_vals)):
+            irrelevant.append(col.txt)
+            
+    return irrelevant
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Identify columns that have nothing to do with the goals
+    to_drop = blame(header, rows)
+    
+    print("Analysis: Which columns can we stop collecting?")
+    print("The following input columns show no statistically significant difference "
+          "between the worst-performing employees and the rest of the population:")
+    
+    if to_drop:
+        for i, col_name in enumerate(to_drop):
+            print(f"{i+1}. {col_name}")
+        print("\nRecommendation: Consider removing these columns to simplify data collection.")
+    else:
+        print("None. All input columns appear to have some statistical relationship with performance.")
+```

@@ -1,0 +1,44 @@
+import csv
+from step03 import certify
+
+def get_data():
+    filename = "pom3a.n1000.train.csv"
+    with open(filename, mode='r', encoding='utf-8') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = [[float(x) for x in row] for row in reader]
+    return header, rows
+
+def analyze_shift(header, rows):
+    """
+    To answer if results shifted after a change in how teams decide what to build,
+    we look at the 'Plan' input column. We compare the performance (Cost-) 
+    of projects with 'Plan' values below 0.5 (pre-change) vs above 0.5 (post-change).
+    """
+    plan_idx = header.index('Plan')
+    cost_idx = header.index('Cost-')
+    
+    pre_change = [r[cost_idx] for r in rows if r[plan_idx] < 0.5]
+    post_change = [r[cost_idx] for r in rows if r[plan_idx] >= 0.5]
+    
+    is_same = certify(pre_change, post_change)
+    return is_same, pre_change, post_change
+
+if __name__ == "__main__":
+    try:
+        header, rows = get_data()
+        is_same, pre, post = analyze_shift(header, rows)
+        
+        print("Customer Inquiry: Did the change in team decision-making shift results?")
+        print(f"Analysis: Comparing cost distributions before and after the change.")
+        print(f"Pre-change average cost: {sum(pre)/len(pre):.4f}")
+        print(f"Post-change average cost: {sum(post)/len(post):.4f}")
+        
+        if is_same:
+            print("Conclusion: The results are statistically indistinguishable. The change did not shift performance.")
+        else:
+            print("Conclusion: The results are statistically different. The change significantly impacted performance.")
+            
+    except FileNotFoundError:
+        print("Error: pom3a.n1000.train.csv not found.")
+        exit(1)

@@ -1,0 +1,60 @@
+```python
+import csv
+import step09
+
+def flow(header, row, seen):
+    """
+    Determines if the current row is an anomaly compared to the 'seen' data.
+    We use the Isolation Forest logic from step09 to detect if the new row
+    is an outlier relative to the history.
+    """
+    if len(seen) < 20:
+        return False
+    
+    # Combine history and current row to check if the current row is an outlier
+    # We use the Isolation Forest approach to see if the current row's score
+    # is significantly lower than the distribution of the seen rows.
+    
+    # To keep it efficient and stateless, we perform a quick check:
+    # If the current row is among the bottom 5% of the combined set, flag it.
+    all_data = seen + [row]
+    
+    # Use step09's logic to get anomaly scores
+    # Since we cannot import the full training logic without overhead,
+    # we use a simplified distance-based anomaly check if seen is large enough.
+    # For simplicity and robustness, we flag if the row is an outlier.
+    
+    # Re-using step09's logic:
+    indices = step09.spot(header, all_data)
+    
+    # If the last index (the current row) is in the top 5% of anomalies
+    threshold = int(len(all_data) * 0.05)
+    return indices.index(len(all_data) - 1) < threshold
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    seen = []
+    anomalies = 0
+    for row in rows:
+        if flow(header, row, seen):
+            anomalies += 1
+        seen.append(row)
+    
+    print("Team Stability Analysis:")
+    print(f"Total employees processed: {len(rows)}")
+    print(f"Number of 'unusual' team members detected: {anomalies}")
+    print("Logic: A team member is flagged if their profile is an outlier compared to the historical arrival sequence.")
+```

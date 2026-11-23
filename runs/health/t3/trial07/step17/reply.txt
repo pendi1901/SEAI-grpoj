@@ -1,0 +1,91 @@
+```python
+import csv
+import random
+
+def choose(header, rows, label):
+    """
+    Finds a setup that forecasts well (multi-objective optimization) 
+    and is small (low N_estimators, low Max_depth).
+    Uses a budget of 50 labels to find the best Pareto-optimal candidate.
+    """
+    # Identify goal indices and directions
+    goals = []
+    for i, name in enumerate(header):
+        if name.endswith('-'):
+            goals.append((i, -1))  # Minimize
+        elif name.endswith('+'):
+            goals.append((i, 1))   # Maximize
+
+    # Identify input indices for size constraints
+    n_est_idx = header.index('N_estimators')
+    max_depth_idx = header.index('Max_depth')
+
+    def get_score(row_idx):
+        # Get true goals
+        true_goals = label(row_idx)
+        
+        # Calculate performance score (normalized)
+        perf_score = 0
+        for i, (idx, direction) in enumerate(goals):
+            val = true_goals[i]
+            perf_score += val if direction == 1 else -val
+            
+        # Calculate size penalty (lower is better, so we subtract)
+        # We want small N_estimators and small Max_depth
+        row = rows[row_idx]
+        size_penalty = (row[n_est_idx] / 200.0) + (row[max_depth_idx] / 20.0)
+        
+        # Combine: higher is better
+        return perf_score - size_penalty
+
+    # Sample 50 rows to find the best balance
+    indices = random.sample(range(len(rows)), min(50, len(rows)))
+    
+    best_idx = -1
+    best_score = float('-inf')
+    
+    for i in indices:
+        score = get_score(i)
+        if score > best_score:
+            best_score = score
+            best_idx = i
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    full_rows = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            full_rows.append(processed_row)
+            
+    # Create masked rows
+    masked_rows = []
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    for r in full_rows:
+        m = r[:]
+        for idx in goal_indices:
+            m[idx] = "?"
+        masked_rows.append(m)
+
+    # Define label function
+    def label(i):
+        return [full_rows[i][idx] for idx in goal_indices]
+
+    best_idx = choose(header, masked_rows, label)
+    
+    print(f"Best configuration found at index {best_idx}.")
+    print(f"This setup balances high forecast accuracy with low resource usage.")
+    print(f"Details: {full_rows[best_idx]}")
+    
+    exit(0)
+```

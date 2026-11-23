@@ -1,0 +1,101 @@
+import csv
+from step01 import remember
+
+def fix(header, row, levers):
+    """
+    Finds the single lever change that maximizes the row's performance score.
+    Uses k-nearest neighbors to estimate the goals for the modified row.
+    """
+    input_indices = [i for i, h in enumerate(header) if not (h.endswith('-') or h.endswith('+'))]
+    goal_indices = [i for i, h in enumerate(header) if h.endswith('-') or h.endswith('+')]
+    
+    # Load all data to use for k-NN estimation
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    all_rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header_f = next(reader)
+        for r in reader:
+            all_rows.append([val if header_f[i] == 'criterion' else float(val) for i, val in enumerate(r)])
+
+    def estimate_goals(target_row):
+        def dist(r1, r2):
+            d = 0
+            for i in input_indices:
+                if isinstance(r1[i], str):
+                    d += 0 if r1[i] == r2[i] else 1
+                else:
+                    d += abs(r1[i] - r2[i])
+            return d
+        
+        neighbors = sorted(all_rows, key=lambda r: dist(r, target_row))[:5]
+        return [sum(n[g] for n in neighbors) / 5.0 for g in goal_indices]
+
+    def get_score(r_with_goals):
+        mre = r_with_goals[header.index('MRE-')]
+        acc = r_with_goals[header.index('ACC+')]
+        pred = r_with_goals[header.index('PRED40+')]
+        return (1.0 - mre) + acc + pred
+
+    best_change = {}
+    best_score = -float('inf')
+    
+    for col_name, allowed in levers.items():
+        if col_name not in header: continue
+        idx = header.index(col_name)
+        original_val = row[idx]
+        
+        candidates = []
+        if isinstance(allowed, list):
+            candidates = [v for v in allowed if v != original_val]
+        else:
+            low, high = allowed
+            candidates = [float(low), float(high)]
+            
+        for val in candidates:
+            new_row = list(row)
+            new_row[idx] = val
+            goals = estimate_goals(new_row)
+            for i, g_idx in enumerate(goal_indices):
+                new_row[g_idx] = goals[i]
+            
+            score = get_score(new_row)
+            if score > best_score:
+                best_score = score
+                best_change = {col_name: val}
+                
+    return best_change
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([val if header[i] == 'criterion' else float(val) for i, val in enumerate(row)])
+        
+        levers = {
+            'N_estimators': (10.0, 200.0),
+            'criterion': ['absolute_error', 'poisson', 'squared_error'],
+            'Min_sample_leaves': (1.0, 20.0),
+            'Min_impurity_decrease': (0.0, 10.0),
+            'Max_depth': (1.0, 20.0)
+        }
+        
+        best_indices = remember(header, rows)
+        bad_row = next((r for i, r in enumerate(rows) if i not in best_indices), None)
+        
+        if bad_row:
+            recommendation = fix(header, bad_row, levers)
+            if recommendation:
+                col, val = list(recommendation.items())[0]
+                print(f"To improve your setup, change '{col}' to {val}.")
+            else:
+                print("No single lever change found to improve performance.")
+        else:
+            print("No bad rows found to improve.")
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

@@ -1,0 +1,106 @@
+import csv
+
+def fix(header, row, levers):
+    """
+    Recommends a single change to a 'bad' row to improve its performance.
+    Since we cannot know the true goal values for a specific row (as they are 
+    often hidden or unknown), we estimate the impact of changes by comparing 
+    the row's current state against the global average performance of the 
+    dataset for those specific parameter values.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('-') or name.endswith('+')]
+    
+    # Pre-calculate global averages for each parameter value to estimate performance
+    # This acts as a proxy for the 'goodness' of a specific setting
+    stats = {}
+    for col_name in levers.keys():
+        idx = header.index(col_name)
+        val_performance = {}
+        for r in rows:
+            val = r[idx]
+            score = 0
+            for g_idx in goal_indices:
+                if header[g_idx].endswith('-'): score -= r[g_idx]
+                else: score += r[g_idx]
+            
+            if val not in val_performance:
+                val_performance[val] = []
+            val_performance[val].append(score)
+        
+        # Average score for each value
+        stats[col_name] = {k: sum(v)/len(v) for k, v in val_performance.items()}
+
+    best_change = {}
+    best_score = -float('inf')
+    
+    # Current row's estimated score
+    current_score = 0
+    for col_name in levers.keys():
+        idx = header.index(col_name)
+        val = row[idx]
+        current_score += stats[col_name].get(val, 0)
+
+    # Try changing one lever at a time
+    for col_name, allowed in levers.items():
+        idx = header.index(col_name)
+        original_val = row[idx]
+        
+        candidates = []
+        if isinstance(allowed, list):
+            candidates = [v for v in allowed if v != original_val]
+        else:
+            low, high = allowed
+            # Try a few points in the range
+            candidates = [low, high, (low + high) / 2]
+            candidates = [v for v in candidates if v != original_val]
+        
+        for val in candidates:
+            # Estimate new score
+            new_score = current_score - stats[col_name].get(original_val, 0) + stats[col_name].get(val, 0)
+            if new_score > best_score:
+                best_score = new_score
+                best_change = {col_name: val}
+                
+    return best_change
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed = []
+            for val in row:
+                try:
+                    processed.append(float(val))
+                except ValueError:
+                    processed.append(val)
+            rows.append(processed)
+
+    levers = {
+        'N_estimators': (10.0, 200.0),
+        'criterion': ['absolute_error', 'poisson', 'squared_error'],
+        'Min_sample_leaves': (1.0, 20.0),
+        'Min_impurity_decrease': (0.0, 10.0),
+        'Max_depth': (1.0, 20.0)
+    }
+
+    # Pick a 'bad' row
+    def get_row_score(r):
+        s = 0
+        for i, name in enumerate(header):
+            if name.endswith('-'): s -= r[i]
+            elif name.endswith('+'): s += r[i]
+        return s
+
+    bad_row = min(rows, key=get_row_score)
+    recommendation = fix(header, bad_row, levers)
+    
+    if recommendation:
+        col, val = list(recommendation.items())[0]
+        print(f"Recommended change: Set '{col}' to {val}.")
+    else:
+        print("No improvement found.")

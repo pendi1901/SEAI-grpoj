@@ -1,0 +1,84 @@
+import ezr
+
+def choose(header, rows, label):
+    """
+    Find a setup that forecasts well (low ydist) and is small (low N_estimators).
+    We use the acquisition logic to explore the space, then select the best
+    row based on a multi-objective score that balances accuracy and size.
+    """
+    # The error in the previous version was passing rows with '?' to Tbl,
+    # which caused issues when calculating stats. We must use the original
+    # rows (with goals) to build the table for distance calculations.
+    # Since we only have access to the masked rows and a label function,
+    # we build the table using the rows we label.
+    
+    # Map indices to rows
+    row_to_idx = {i: r for i, r in enumerate(rows)}
+    
+    # We need a table to calculate ydist. We will build it incrementally.
+    # Start with a small sample to initialize the table structure.
+    # We label a few rows to get started.
+    initial_indices = list(range(min(len(rows), 4)))
+    labeled_data = [label(i) for i in initial_indices]
+    full_tbl = ezr.Tbl([header] + labeled_data)
+    
+    # Keep track of all labeled rows
+    labeled_indices = set(initial_indices)
+    
+    def oracle_wrapper(row):
+        # Find which index this row corresponds to
+        for i, r in row_to_idx.items():
+            if r == row:
+                if i not in labeled_indices:
+                    labeled_indices.add(i)
+                    return label(i)
+                return r
+        return row
+
+    # Use acquire to find a good set of candidates within the budget
+    # We pass the table built from initial labels
+    labeled_rows = ezr.acquire(full_tbl, cap=50, label=oracle_wrapper)
+    
+    # Score candidates: balance accuracy (ydist) and size (N_estimators)
+    n_est_idx = header.index('N_estimators')
+    n_vals = [r[n_est_idx] for r in rows]
+    min_n, max_n = min(n_vals), max(n_vals)
+    
+    def score(row):
+        ydist = ezr.ydist(full_tbl, row)
+        n_norm = (row[n_est_idx] - min_n) / (max_n - min_n + 1e-32)
+        # Minimize both ydist and size
+        return ydist + 0.5 * n_norm
+    
+    best_row = min(labeled_rows, key=score)
+    
+    # Return the index of the best row
+    for i, r in row_to_idx.items():
+        if r == best_row:
+            return i
+    return 0
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data_iter = ezr.csv(filename)
+    header = next(data_iter)
+    rows = list(data_iter)
+    
+    # Mask goals for the choose function
+    goal_indices = [i for i, name in enumerate(header) if name[-1] in "+-"]
+    masked_rows = []
+    for row in rows:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_rows.append(new_row)
+        
+    def label(idx):
+        return rows[idx]
+
+    best_idx = choose(header, masked_rows, label)
+    
+    print(f"Analysis complete.")
+    print(f"The best setup that balances accuracy and small size is at index {best_idx} (1-based: {best_idx + 1}).")
+    
+    exit(0)

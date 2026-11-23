@@ -1,0 +1,66 @@
+import csv
+from step02 import guess
+
+def justify(header, rows, row):
+    """
+    Estimates the performance of the given row and compares it to the 
+    distribution of all other rows to justify its quality.
+    """
+    # 1. Estimate the goal values for the input row
+    # We use the guess function from step02 which uses KNN
+    # We need to pass a list containing the row as a test set
+    estimated_mre = guess(header, rows, [row])[0]
+    
+    # For ACC+ and PRED40+, we can use the same KNN logic or simple averages
+    # For simplicity and consistency, we reuse the guess logic
+    # We create temporary headers to trick guess() into predicting other goals
+    def get_pred(goal_idx):
+        # Temporarily swap goal to index 0 for the guess function
+        h = [header[goal_idx]] + [h for i, h in enumerate(header) if i != goal_idx]
+        r_train = [[r[goal_idx]] + [r[i] for i in range(len(header)) if i != goal_idx] for r in rows]
+        r_test = [[0.0] + [row[i] for i in range(len(header)) if i != goal_idx]]
+        return guess(h, r_train, r_test)[0]
+
+    est_acc = get_pred(header.index('ACC+'))
+    est_pred = get_pred(header.index('PRED40+'))
+    
+    # 2. Calculate utility for all rows
+    mre_idx, acc_idx, pred_idx = header.index('MRE-'), header.index('ACC+'), header.index('PRED40+')
+    
+    def calc_utility(r):
+        return -r[mre_idx] + r[acc_idx] + r[pred_idx]
+    
+    utilities = [calc_utility(r) for r in rows]
+    row_utility = -estimated_mre + est_acc + est_pred
+    
+    # 3. Calculate fraction of rows better than this one
+    better_count = sum(1 for u in utilities if u > row_utility)
+    p = 1.0 - (better_count / len(rows))
+    
+    reason = (f"This setup is estimated to outperform {p:.1%} of all possible configurations "
+              "based on its predicted balance of error reduction and accuracy.")
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i] in ['MRE-', 'ACC+', 'PRED40+', 'N_estimators', 
+                                 'Min_sample_leaves', 'Min_impurity_decrease', 'Max_depth']:
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Test with the last row as a hidden query
+    test_row = [row if i in [3, 4, 5, 6, 7] else "?" for i, row in enumerate(rows[-1])]
+    
+    p, reason = justify(header, rows, test_row)
+    print(f"Performance Score: {p:.4f}")
+    print(f"Justification: {reason}")

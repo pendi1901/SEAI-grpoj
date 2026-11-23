@@ -1,0 +1,78 @@
+```python
+import csv
+import pandas as pd
+from sklearn.neighbors import KNeighborsRegressor
+
+def justify(header, rows, row):
+    """
+    Estimates the performance of a given row and returns its percentile rank
+    relative to the existing dataset.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    
+    # Identify input and goal columns
+    input_cols = [c for c in header if not (c.endswith('-') or c.endswith('+'))]
+    goal_cols = [c for c in header if c.endswith('-') or c.endswith('+')]
+    
+    # Train models to estimate the missing goal values for the input row
+    estimates = {}
+    for goal in goal_cols:
+        model = KNeighborsRegressor(n_neighbors=5)
+        model.fit(df[input_cols], df[goal])
+        estimates[goal] = model.predict([row[:len(input_cols)]])[0]
+    
+    # Calculate a composite score for the dataset
+    # Normalize goals: 1 is best, 0 is worst
+    scores = pd.DataFrame(index=df.index)
+    for goal in goal_cols:
+        col = df[goal]
+        if goal.endswith('-'):
+            scores[goal] = (col.max() - col) / (col.max() - col.min())
+        else:
+            scores[goal] = (col - col.min()) / (col.max() - col.min())
+    
+    df['composite'] = scores.mean(axis=1)
+    
+    # Calculate the composite score for the input row
+    row_scores = []
+    for goal in goal_cols:
+        col = df[goal]
+        val = estimates[goal]
+        if goal.endswith('-'):
+            row_scores.append((col.max() - val) / (col.max() - col.min()))
+        else:
+            row_scores.append((val - col.min()) / (col.max() - col.min()))
+    
+    row_composite = sum(row_scores) / len(row_scores)
+    
+    # Calculate percentile (fraction of rows that are worse than this one)
+    p = (df['composite'] < row_composite).mean()
+    
+    reason = f"This setup is estimated to outperform {p:.1%} of all existing configurations based on its predicted performance across all goals."
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) for val in row])
+        
+        # Take the first row as a test case, mask its goals
+        test_row = list(rows[0])
+        goal_indices = [i for i, h in enumerate(header) if h.endswith('-') or h.endswith('+')]
+        for idx in goal_indices:
+            test_row[idx] = "?"
+            
+        p, reason = justify(header, rows, test_row)
+        print(f"Rank: {p:.4f}")
+        print(f"Justification: {reason}")
+        exit(0)
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
+```

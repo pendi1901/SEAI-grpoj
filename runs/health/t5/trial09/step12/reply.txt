@@ -1,0 +1,82 @@
+```python
+import ezr
+import random
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column for each test row.
+    Uses the tree-based ranker from ezr to find similar rows in the training set
+    and returns the mean of the first goal column from those similar rows.
+    """
+    # Create a table from the training data
+    train_tbl = ezr.Tbl([header] + train)
+    
+    # Build a tree to partition the space
+    node = ezr.tree(train_tbl, train_tbl.rows)
+    
+    # Identify the first goal column index
+    first_goal_at = train_tbl.y[0].at
+    
+    results = []
+    for row in test:
+        # Walk the tree to find the leaf containing similar rows
+        leaf_node = ezr.leaf(node, row)
+        
+        # Calculate the mean of the first goal in this leaf
+        if leaf_node.rows:
+            vals = [r[first_goal_at] for r in leaf_node.rows]
+            estimate = sum(vals) / len(vals)
+        else:
+            # Fallback to global mean if leaf is empty
+            all_vals = [r[first_goal_at] for r in train_tbl.rows]
+            estimate = sum(all_vals) / len(all_vals)
+            
+        results.append(float(estimate))
+        
+    return results
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    
+    try:
+        header = next(data_gen)
+        all_rows = list(data_gen)
+    except StopIteration:
+        exit(0)
+        
+    # Split data: 80% train, 20% test
+    random.seed(1234567891)
+    random.shuffle(all_rows)
+    split_idx = int(len(all_rows) * 0.8)
+    train_full = all_rows[:split_idx]
+    test_raw = all_rows[split_idx:]
+    
+    # Halve the training set size to simulate a smaller forecaster
+    train_half = train_full[:len(train_full) // 2]
+    
+    # Mask the goals in the test set
+    goal_indices = [i for i, name in enumerate(header) if name[-1] in "+-"]
+    test = []
+    for row in test_raw:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        test.append(new_row)
+        
+    # Get estimates for both full and halved training sets
+    est_full = guess(header, train_full, test)
+    est_half = guess(header, train_half, test)
+    
+    # Calculate average absolute errors
+    actuals = [row[goal_indices[0]] for row in test_raw]
+    err_full = sum(abs(e - a) for e, a in zip(est_full, actuals)) / len(test)
+    err_half = sum(abs(e - a) for e, a in zip(est_half, actuals)) / len(test)
+    
+    print(f"Analysis complete on {len(all_rows)} records.")
+    print(f"Average error with full training set: {err_full:.4f}")
+    print(f"Average error with halved training set: {err_half:.4f}")
+    print(f"Performance degradation: {((err_half - err_full) / err_full) * 100:.2f}%")
+    
+    exit(0)
+```

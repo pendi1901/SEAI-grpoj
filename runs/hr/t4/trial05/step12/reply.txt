@@ -1,0 +1,64 @@
+```python
+import csv
+from step02 import guess as base_guess
+from step03 import certify
+
+def guess(header, train, test):
+    """
+    Uses the base guesser to estimate tenure.
+    """
+    return base_guess(header, train, test)
+
+def analyze_overtime_impact(header, rows):
+    """
+    Analyzes the impact of overtime on tenure specifically for the Sales department.
+    """
+    dept_idx = header.index('department')
+    overtime_idx = header.index('overTime')
+    tenure_idx = header.index('YearsAtCompany+')
+    
+    # Filter for Sales department
+    sales_rows = [r for r in rows if r[dept_idx] == 'Sales']
+    
+    # Split by overtime
+    yes_overtime = [r[tenure_idx] for r in sales_rows if r[overtime_idx] == 'Yes']
+    no_overtime = [r[tenure_idx] for r in sales_rows if r[overtime_idx] == 'No']
+    
+    # Check if the difference is statistically significant
+    is_noise = certify(yes_overtime, no_overtime)
+    
+    avg_yes = sum(yes_overtime) / len(yes_overtime) if yes_overtime else 0
+    avg_no = sum(no_overtime) / len(no_overtime) if no_overtime else 0
+    
+    return is_noise, avg_yes, avg_no
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    is_noise, avg_yes, avg_no = analyze_overtime_impact(header, rows)
+    
+    print("Analysis: If we cut overtime across Sales, what happens to tenure?")
+    if is_noise:
+        print("Result: The data suggests that the difference in tenure between those working overtime "
+              "and those who do not in the Sales department is not statistically significant.")
+    else:
+        print(f"Result: There is a statistically significant difference.")
+        print(f"Average tenure with overtime: {avg_yes:.2f} years.")
+        print(f"Average tenure without overtime: {avg_no:.2f} years.")
+        if avg_no > avg_yes:
+            print("Conclusion: Cutting overtime in Sales is likely to increase average tenure.")
+        else:
+            print("Conclusion: Cutting overtime in Sales may not improve average tenure based on current trends.")
+```

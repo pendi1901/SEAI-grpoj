@@ -1,0 +1,83 @@
+import ezr
+import random
+
+def fix(header, row, levers):
+    """
+    Suggests a change to a 'bad' row to improve its performance.
+    We evaluate the impact of changing each lever by checking the
+    average ydist of rows in the tree leaf that would contain the modified row.
+    """
+    # Load the full data to build a model
+    filename = "pom3a.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    header_data = next(data_gen)
+    rows = list(data_gen)
+    tbl = ezr.Tbl([header_data] + rows)
+    root = ezr.tree(tbl, tbl.rows)
+
+    best_change = {}
+    best_score = 1e30
+
+    # Try each lever
+    for col_name, allowed in levers.items():
+        at = header.index(col_name)
+        original_val = row[at]
+        
+        # Generate candidates
+        candidates = []
+        if isinstance(allowed, list):  # Symbolic
+            candidates = [v for v in allowed if v != original_val]
+        else:  # Numeric (low, high)
+            low, high = allowed
+            # Try 3 points in the range
+            candidates = [low, (low + high) / 2, high]
+            
+        for val in candidates:
+            row[at] = val
+            # Estimate quality using the tree
+            node = ezr.leaf(root, row)
+            score = node.mu
+            
+            if score < best_score:
+                best_score = score
+                best_change = {col_name: val}
+        
+        # Reset row
+        row[at] = original_val
+        
+    return best_change
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    
+    try:
+        header = next(data_gen)
+        rows = list(data_gen)
+    except StopIteration:
+        exit(1)
+        
+    # Identify a "bad" row (high ydist)
+    tbl = ezr.Tbl([header] + rows)
+    scored = sorted([(ezr.ydist(tbl, r), r) for r in rows], key=lambda x: x[0], reverse=True)
+    bad_row = scored[0][1]
+    
+    # Define levers: numeric ranges based on the data
+    # We exclude Team Size as the customer cannot hire/fire
+    levers = {
+        "Size": (0.1, 0.9),
+        "Plan": (0.1, 0.9),
+        "Initial Known": (0.1, 0.9),
+        "Inter-Dependency": (0.1, 0.9),
+        "Dynamism": (0.1, 0.9)
+    }
+    
+    recommendation = fix(header, bad_row, levers)
+    
+    print("Optimization Analysis: Cutting idle time without hiring.")
+    print("To improve performance, we recommend the following adjustments:")
+    for col, val in recommendation.items():
+        print(f" - Adjust '{col}' to {val:.4f}")
+    print("\nThese changes optimize your existing resources to reduce idle time.")
+    
+    exit(0)

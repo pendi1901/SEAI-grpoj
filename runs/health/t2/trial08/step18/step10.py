@@ -1,0 +1,114 @@
+import csv
+import random
+from step01 import remember
+
+def race(header, rows, label):
+    """
+    Compares three strategies: random, greedy, and explorer.
+    Budget: 50 labels total.
+    """
+    budget = 50
+    labeled = {}
+    
+    def get_labeled(i):
+        if i not in labeled:
+            if len(labeled) >= budget:
+                raise Exception("Budget exceeded")
+            labeled[i] = label(i)
+        return labeled[i]
+
+    def score_row(row_idx, row_goals):
+        # Reconstruct full row with goals
+        full_row = list(rows[row_idx])
+        goal_indices = [i for i, h in enumerate(header) if h.endswith('-') or h.endswith('+')]
+        for j, g_idx in enumerate(goal_indices):
+            full_row[g_idx] = row_goals[j]
+        
+        # Use remember logic to score
+        mre_idx = header.index('MRE-')
+        acc_idx = header.index('ACC+')
+        pred_idx = header.index('PRED40+')
+        
+        # Simple scoring: (1-MRE) + ACC + PRED
+        return (1.0 - full_row[mre_idx]) + full_row[acc_idx] + full_row[pred_idx]
+
+    # Strategies
+    def strategy_random():
+        indices = random.sample(range(len(rows)), 16)
+        best_s, best_i = -1, -1
+        for i in indices:
+            s = score_row(i, get_labeled(i))
+            if s > best_s: best_s, best_i = s, i
+        return best_i
+
+    def strategy_greedy():
+        # Pick first 16, then pick neighbors of the best
+        indices = list(range(16))
+        best_i = -1
+        best_s = -1
+        for i in indices:
+            s = score_row(i, get_labeled(i))
+            if s > best_s: best_s, best_i = s, i
+        # Look at 16 neighbors
+        for i in range(best_i + 1, best_i + 17):
+            if i < len(rows):
+                s = score_row(i, get_labeled(i))
+                if s > best_s: best_s, best_i = s, i
+        return best_i
+
+    def strategy_explorer():
+        # Pick every 3rd row
+        indices = [i for i in range(0, len(rows), 3)][:16]
+        best_s, best_i = -1, -1
+        for i in indices:
+            s = score_row(i, get_labeled(i))
+            if s > best_s: best_s, best_i = s, i
+        return best_i
+
+    results = {
+        "random": strategy_random(),
+        "greedy": strategy_greedy(),
+        "explorer": strategy_explorer()
+    }
+    
+    # Determine winner based on score
+    best_overall = -1
+    winner = ""
+    for name, idx in results.items():
+        s = score_row(idx, labeled[idx])
+        if s > best_overall:
+            best_overall = s
+            winner = name
+            
+    return {"winner": winner, "row": results[winner], "tried": list(results.keys())}
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            true_goals = []
+            for row in reader:
+                processed = []
+                goals = []
+                for j, val in enumerate(row):
+                    if header[j] == 'criterion':
+                        processed.append(val)
+                    elif header[j].endswith('-') or header[j].endswith('+'):
+                        processed.append("?")
+                        goals.append(float(val))
+                    else:
+                        processed.append(float(val))
+                rows.append(processed)
+                true_goals.append(goals)
+        
+        def label(i):
+            return true_goals[i]
+            
+        result = race(header, rows, label)
+        print(f"Winner: {result['winner']} at row {result['row']}")
+        print(f"Strategies tried: {', '.join(result['tried'])}")
+    except Exception as e:
+        print(f"Error: {e}")

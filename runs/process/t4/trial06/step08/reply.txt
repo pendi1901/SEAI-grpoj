@@ -1,0 +1,66 @@
+```python
+import csv
+import pandas as pd
+import numpy as np
+from step01 import remember
+from step05 import blame
+
+def fix(header, row, levers):
+    """
+    Recommends a change to a bad row by identifying the most impactful levers
+    and adjusting them towards values found in top-performing rows.
+    """
+    # Load data to find what "good" looks like
+    filename = 'pom3a.n1000.train.csv'
+    df = pd.read_csv(filename)
+    
+    # Identify best rows using step01 logic
+    best_indices = remember(header, df.values.tolist())
+    best_rows = df.iloc[best_indices]
+    
+    # Identify which levers are most important for the goals (using blame logic)
+    # We focus on the inputs that drive the goals
+    important_levers = blame(header, df.values.tolist())
+    
+    recommendation = {}
+    for lever in important_levers:
+        if lever in levers:
+            # Find the median value of this lever in the best rows
+            target_val = best_rows[lever].median()
+            
+            # Clamp to allowed range
+            low, high = levers[lever]
+            new_val = max(low, min(high, target_val))
+            
+            recommendation[lever] = new_val
+            # We only need one effective change to rescue the project
+            break
+            
+    return recommendation
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        df = pd.read_csv(filename)
+        header = df.columns.tolist()
+        rows = df.values.tolist()
+        
+        # Define levers based on the problem domain (all inputs are numeric 0-1)
+        levers = {col: (0.0, 1.0) for col in header if not (col.endswith('-') or col.endswith('+'))}
+        
+        # Pick a "bad" row (e.g., one with high Cost- and high Idle-)
+        # We define bad as having high Cost- and Idle-
+        df['badness'] = df['Cost-'] + df['Idle-']
+        bad_row = df.sort_values('badness', ascending=False).iloc[0].tolist()
+        
+        change = fix(header, bad_row, levers)
+        
+        print("To rescue this project, we recommend the following adjustment:")
+        for col, val in change.items():
+            print(f"Change '{col}' to {val:.4f}.")
+        print("This adjustment aligns your planning and staffing with the most efficient configurations found in our historical data.")
+        exit(0)
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
+```

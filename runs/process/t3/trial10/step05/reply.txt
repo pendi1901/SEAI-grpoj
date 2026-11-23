@@ -1,0 +1,64 @@
+```python
+import csv
+import pandas as pd
+import numpy as np
+from sklearn.ensemble import RandomForestRegressor
+
+def blame(header, rows):
+    """
+    Identifies input columns that best explain why the worst rows are bad.
+    Uses a Random Forest to rank feature importance relative to the 'Idle-' goal.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    
+    # Identify input columns (not ending in - or +)
+    input_cols = [col for col in header if not (col.endswith('-') or col.endswith('+'))]
+    
+    # The customer asks about 'Idle-', which is a goal to minimize.
+    # We want to find what inputs correlate with high 'Idle-' values.
+    target = 'Idle-'
+    
+    # We focus on the "worst" rows (e.g., top 25% of idle time)
+    threshold = df[target].quantile(0.75)
+    worst_rows = df[df[target] >= threshold]
+    
+    # Train a regressor to predict 'Idle-' using input columns
+    # Feature importance will tell us which inputs drive the idle time
+    X = worst_rows[input_cols]
+    y = worst_rows[target]
+    
+    model = RandomForestRegressor(n_estimators=50, random_state=42)
+    model.fit(X, y)
+    
+    # Get feature importances
+    importances = model.feature_importances_
+    
+    # Pair columns with their importance scores
+    feat_imp = sorted(zip(input_cols, importances), key=lambda x: x[1], reverse=True)
+    
+    # Return the top 3 columns that explain the variance in 'Idle-'
+    return [feat[0] for feat in feat_imp[:3]]
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) for val in row])
+        
+        top_blame = blame(header, rows)
+        
+        print("Customer Inquiry Analysis: Why do setups have high idle time?")
+        print("Our analysis indicates that the following factors are the primary")
+        print("drivers for high idle time in your worst-performing project setups:")
+        for i, col in enumerate(top_blame, 1):
+            print(f"{i}. {col}")
+        print("\nThese inputs show the strongest correlation with idle resources.")
+        
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        exit(1)
+```

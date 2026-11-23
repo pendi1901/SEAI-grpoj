@@ -1,0 +1,81 @@
+```python
+import ezr
+import step01
+
+def fix(header, row, levers):
+    """
+    Finds a change to the 'levers' that minimizes the row's ydist.
+    We evaluate the impact of changing each lever to its boundary values
+    and return the one that results in the lowest ydist.
+    """
+    # Create a table to use ydist. We need the full dataset to establish
+    # the normalization bounds (mu, sd) for the ydist calculation.
+    # The harness provides the header and row, but we need the context of 
+    # the data to make meaningful ydist comparisons.
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    tbl = ezr.Tbl(data)
+    
+    best_change = {}
+    best_ydist = ezr.ydist(tbl, row)
+    
+    # Try changing each lever
+    for col_name, allowed in levers.items():
+        if col_name not in header:
+            continue
+        idx = header.index(col_name)
+        original_val = row[idx]
+        
+        # Try boundary values for numeric levers
+        if isinstance(allowed, tuple):
+            low, high = allowed
+            for val in [low, high]:
+                if val != original_val:
+                    row[idx] = val
+                    current_ydist = ezr.ydist(tbl, row)
+                    if current_ydist < best_ydist:
+                        best_ydist = current_ydist
+                        best_change = {col_name: val}
+                    row[idx] = original_val # backtrack
+        
+        # Try each allowed value for symbolic levers
+        elif isinstance(allowed, list):
+            for val in allowed:
+                if val != original_val:
+                    row[idx] = val
+                    current_ydist = ezr.ydist(tbl, row)
+                    if current_ydist < best_ydist:
+                        best_ydist = current_ydist
+                        best_change = {col_name: val}
+                    row[idx] = original_val # backtrack
+                    
+    return best_change
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Identify a "bad" row (high ydist)
+    tbl = ezr.Tbl(data)
+    scored = sorted([(ezr.ydist(tbl, r), r) for r in rows], key=lambda x: x[0], reverse=True)
+    bad_row = scored[0][1]
+    
+    # Define levers based on the problem description
+    levers = {
+        "Plan": (0.0, 1.0),
+        "Team Size": (0.0, 1.0)
+    }
+    
+    recommendation = fix(header, bad_row, levers)
+    
+    print("Rescue Analysis for under-performing setup:")
+    if recommendation:
+        for col, val in recommendation.items():
+            print(f"Recommendation: Change '{col}' to {val}")
+    else:
+        print("No single lever change found to improve performance.")
+        
+    exit(0)
+```

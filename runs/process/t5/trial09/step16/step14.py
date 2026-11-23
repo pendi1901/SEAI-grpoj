@@ -1,0 +1,69 @@
+import ezr
+import random
+
+def flow(header, row, seen):
+    """
+    Warn the customer when a process starts to go bad.
+    We accept a row if it is 'good' (better than the median of what we have seen).
+    If a row is significantly worse than the median (e.g., in the bottom 10%),
+    we return True to flag it as a 'bad' setup that needs attention.
+    
+    The logic:
+    - If seen is empty, we accept the first row.
+    - Otherwise, we calculate the ydist of the current row and the median ydist of seen rows.
+    - If the current row's ydist is significantly worse (higher) than the median,
+      we return True to signal a warning.
+    """
+    if not seen:
+        return False
+    
+    # Create a table to calculate ydist
+    # We use the 'seen' rows to establish the current performance baseline
+    tbl = ezr.Tbl([header] + seen)
+    
+    # Calculate the distance of the current row to the ideal
+    current_dist = ezr.ydist(tbl, row)
+    
+    # Calculate distances of all seen rows
+    seen_dists = [ezr.ydist(tbl, r) for r in seen]
+    
+    # Calculate the median distance
+    median_dist = sorted(seen_dists)[len(seen_dists) // 2]
+    
+    # If the current row is significantly worse than the median (e.g., 20% worse),
+    # we flag it as a warning.
+    if current_dist > (median_dist * 1.2):
+        return True
+        
+    return False
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    header = next(data_gen)
+    rows = list(data_gen)
+    
+    # Shuffle to simulate random arrival order
+    random.seed(1234567891)
+    random.shuffle(rows)
+    
+    seen = []
+    warnings = 0
+    
+    print("Monitoring System: Detecting performance degradation...")
+    print("-" * 60)
+    
+    for i, row in enumerate(rows):
+        if flow(header, row, seen):
+            warnings += 1
+            print(f"WARNING: Row {i} shows significant performance degradation.")
+        seen.append(row)
+        
+    print("-" * 60)
+    print(f"Monitoring complete.")
+    print(f"Total rows processed: {len(rows)}")
+    print(f"Total performance warnings issued: {warnings}")
+    print("The system flags setups that deviate significantly from the")
+    print("historical performance baseline.")
+    
+    exit(0)

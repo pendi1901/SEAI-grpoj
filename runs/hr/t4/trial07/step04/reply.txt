@@ -1,0 +1,58 @@
+```python
+import csv
+import step01
+
+def flow(header, row, seen):
+    """
+    Decides if the current row needs a retention conversation.
+    We use the logic from step01 to determine if the employee is 'unusually long'
+    tenured. If they are, we prioritize them for a retention conversation.
+    Since we cannot revisit the pile, we use a threshold based on the 
+    distribution of the 'seen' data to decide if the current row is in the top 5%.
+    """
+    idx_at = header.index('YearsAtCompany+')
+    idx_mgr = header.index('YearsWithCurrManager+')
+    
+    current_score = row[idx_at] + row[idx_mgr]
+    
+    if not seen:
+        return False
+    
+    # Calculate scores of seen rows
+    seen_scores = [r[idx_at] + r[idx_mgr] for r in seen]
+    
+    # Threshold: Is this row better than 95% of what we have seen so far?
+    # We use a simple percentile approach.
+    seen_scores.sort()
+    threshold_idx = int(len(seen_scores) * 0.95)
+    threshold = seen_scores[threshold_idx]
+    
+    return current_score >= threshold
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Simulate the arrival process
+    seen = []
+    selected_count = 0
+    for row in rows:
+        if flow(header, row, seen):
+            selected_count += 1
+        seen.append(row)
+    
+    print(f"Processed {len(rows)} employees.")
+    print(f"Retention conversations recommended for: {selected_count} employees.")
+    print("Decision logic: Employees with tenure scores in the top 5% of the current stream.")
+```

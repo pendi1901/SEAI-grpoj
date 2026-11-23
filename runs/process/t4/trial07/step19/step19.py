@@ -1,0 +1,65 @@
+import csv
+import pandas as pd
+import numpy as np
+from sklearn.ensemble import IsolationForest
+
+def spot(header, rows):
+    """
+    Identifies rows that are outliers (unseen/anomalous configurations)
+    using an Isolation Forest model on the input columns.
+    Returns the indices of the most suspicious rows, sorted by anomaly score.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    
+    # Identify input columns (those not ending in - or +)
+    inputs = [col for col in header if not (col.endswith(('-', '+')))]
+    
+    # Isolation Forest is effective for anomaly detection.
+    # We use a contamination factor to identify rows that deviate from the 
+    # distribution of the training data.
+    model = IsolationForest(n_estimators=100, contamination=0.05, random_state=42)
+    
+    # Fit on input columns
+    preds = model.fit_predict(df[inputs])
+    scores = model.decision_function(df[inputs])
+    
+    # Rows with -1 are outliers. 
+    # We sort by decision_function score (lower is more anomalous/unseen)
+    outlier_indices = np.where(preds == -1)[0]
+    sorted_outliers = sorted(outlier_indices, key=lambda i: scores[i])
+    
+    return sorted_outliers
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                # Convert numeric columns to floats
+                processed_row = []
+                for val in row:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        suspicious_rows = spot(header, rows)
+        
+        print("Customer Inquiry: Identifying setups that are unlike anything we have run.")
+        if suspicious_rows:
+            print(f"Analysis: Found {len(suspicious_rows)} setups that deviate significantly from historical data.")
+            print("The following row indices (0-based) are the most 'unseen' or anomalous:")
+            print(suspicious_rows[:10])
+        else:
+            print("Analysis: All setups appear to be within the range of historical experience.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        exit(1)

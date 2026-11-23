@@ -1,0 +1,59 @@
+import ezr
+import random
+
+def flow(header, row, seen):
+    """
+    Decide if the current row is 'good enough' to stop searching.
+    We define 'good enough' as being in the top 5% of the expected 
+    distribution of ydist scores based on the history seen so far.
+    """
+    # Need a baseline to determine what 'good' looks like
+    if len(seen) < 20:
+        return False
+
+    # Create a table using the history to establish the ydist metric
+    # The ydist function in ezr calculates how far a row is from the ideal
+    # based on the normalization of the columns in the table.
+    tbl = ezr.Tbl([header] + seen)
+    
+    # Calculate ydist for all seen rows
+    scores = [ezr.ydist(tbl, r) for r in seen]
+    
+    # Calculate the threshold for the top 5%
+    scores.sort()
+    threshold = scores[int(len(scores) * 0.05)]
+    
+    # Current row's score
+    current_score = ezr.ydist(tbl, row)
+    
+    # If the current row is better than or equal to the 5% threshold, stop
+    return current_score <= threshold
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    
+    try:
+        header = next(data_gen)
+        rows = list(data_gen)
+    except StopIteration:
+        exit(0)
+
+    # Simulate the arrival process
+    random.seed(1234567891)
+    random.shuffle(rows)
+    
+    seen = []
+    found = False
+    for i, row in enumerate(rows):
+        if flow(header, row, seen):
+            print(f"Stopped at record {i+1} out of {len(rows)}.")
+            print("Found a setup that meets the 'top 5%' performance criteria.")
+            found = True
+            break
+        seen.append(row)
+        
+    if not found:
+        print("Processed all records; no setup met the strict 'top 5%' criteria.")
+    
+    exit(0)

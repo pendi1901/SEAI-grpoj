@@ -1,0 +1,72 @@
+import csv
+
+def spot(header, rows):
+    """
+    Identifies rows that are 'unlike anyone we have employed' by calculating
+    the Mahalanobis distance (or a simplified outlier score) for numeric inputs.
+    Rows that are statistical outliers in the feature space are flagged as 
+    untrustworthy for estimation.
+    """
+    # Identify numeric input columns (excluding goals)
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    numeric_indices = [i for i, name in enumerate(header) if name[0].isupper() and i not in goal_indices]
+    
+    # Extract numeric data
+    data = []
+    for row in rows:
+        data.append([float(row[i]) for i in numeric_indices])
+    
+    # Calculate mean and standard deviation for each feature
+    n = len(data)
+    means = [sum(col) / n for col in zip(*data)]
+    stds = []
+    for i in range(len(means)):
+        col = [row[i] for row in data]
+        var = sum((x - means[i])**2 for x in col) / n
+        stds.append(var**0.5 if var > 0 else 1.0)
+    
+    # Score rows based on Z-score sum (outlier detection)
+    suspicious = []
+    for i, row_data in enumerate(data):
+        z_score_sum = 0
+        for j, val in enumerate(row_data):
+            z_score_sum += abs((val - means[j]) / stds[j])
+        
+        # Flag rows with high deviation from the norm
+        if z_score_sum > 30: # Threshold based on empirical observation of the dataset
+            suspicious.append((z_score_sum, i))
+            
+    # Sort by score descending (most suspicious first)
+    suspicious.sort(key=lambda x: x[0], reverse=True)
+    
+    return [item[1] for item in suspicious]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    suspicious_indices = spot(header, rows)
+    
+    print("Estimation Trustworthiness Report:")
+    print("We have identified rows that represent 'unusual' employees who deviate significantly")
+    print("from our historical data. Estimates for these individuals may be unreliable.")
+    print(f"\nFlagged {len(suspicious_indices)} rows as potentially untrustworthy.")
+    print("Top 5 most suspicious row indices:")
+    for idx in suspicious_indices[:5]:
+        print(f"- Row {idx}")

@@ -1,0 +1,82 @@
+```python
+import ezr
+import random
+
+def fix(header, row, levers):
+    """
+    Recommends a change to a 'bad' row to improve its goal metrics.
+    We evaluate the impact of changing each lever by checking the 
+    ydist of the modified row against the global model.
+    """
+    # Create a table of all rows to build a model for ydist calculations
+    # We use the full dataset to understand what 'good' looks like
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header_full = data[0]
+    rows_full = data[1:]
+    tbl = ezr.Tbl([header_full] + rows_full)
+    
+    best_change = {}
+    best_ydist = ezr.ydist(tbl, row)
+    
+    # Try all allowed values for each lever
+    for col_name, allowed in levers.items():
+        idx = header.index(col_name)
+        
+        # Determine candidates based on type
+        if isinstance(allowed, list):
+            candidates = allowed
+        else:
+            # Numeric range: try a few points in the range
+            low, high = allowed
+            candidates = [low, (low + high) / 2, high]
+            
+        for val in candidates:
+            if val == row[idx]:
+                continue
+            
+            # Create a modified row
+            new_row = list(row)
+            new_row[idx] = val
+            
+            # Calculate new ydist
+            current_ydist = ezr.ydist(tbl, new_row)
+            
+            # If this change improves the ydist, keep it
+            if current_ydist < best_ydist:
+                best_ydist = current_ydist
+                best_change = {col_name: val}
+                
+    return best_change
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Define levers (excluding MonthlyIncome as per customer request)
+    levers = {
+        "businessTravel": ["Non-Travel", "Travel_Rarely", "Travel_Frequently"],
+        "overTime": ["No", "Yes"],
+        "TrainingTimesLastYear": (0, 6),
+        "StockOptionLevel": (0, 3),
+        "DistanceFromHome": (1, 29)
+    }
+    
+    # Find a 'bad' row (e.g., one with low tenure)
+    idx_tenure = header.index("YearsAtCompany+")
+    # Sort by tenure ascending to find employees who might leave soon
+    sorted_rows = sorted(rows, key=lambda r: r[idx_tenure])
+    target_row = sorted_rows[0]
+    
+    recommendation = fix(header, target_row, levers)
+    
+    print("Customer Question: There is no money for pay this year. What else can we change?")
+    if recommendation:
+        col, val = list(recommendation.items())[0]
+        print(f"Recommendation: To improve retention for this employee, we suggest changing '{col}' to '{val}'.")
+        print("This change is projected to move the employee's profile closer to our high-retention benchmarks.")
+    else:
+        print("Recommendation: No single lever change was found to significantly improve the retention metrics for this specific profile.")
+```

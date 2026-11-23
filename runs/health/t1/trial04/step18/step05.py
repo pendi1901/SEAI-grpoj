@@ -1,0 +1,79 @@
+import csv
+
+def blame(header, rows):
+    """
+    Identifies input columns that correlate with 'bad' performance.
+    A row is 'bad' if its aggregate goal score is in the bottom 20%.
+    We compare the distribution of input values in the 'bad' set vs the 'good' set.
+    """
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+    
+    # Identify input columns
+    input_indices = [i for i, name in enumerate(header) if name not in ['MRE-', 'ACC+', 'PRED40+']]
+    
+    def get_score(r):
+        # Normalize goals (simple heuristic: MRE is 0-1, ACC/PRED are 0-1)
+        # Score = (1 - MRE) + ACC + PRED
+        return (1.0 - r[mre_idx]) + r[acc_idx] + r[pred_idx]
+
+    # Rank rows by score
+    scored_rows = sorted(rows, key=get_score)
+    
+    # Bottom 20% are the "bad" ones
+    n = len(scored_rows)
+    bad = scored_rows[:n // 5]
+    good = scored_rows[n // 5:]
+    
+    # For each input, calculate the difference in means between bad and good
+    # We want to find inputs where the 'bad' set has a significantly different mean
+    # than the 'good' set.
+    impacts = []
+    for i in input_indices:
+        col_name = header[i]
+        
+        # Handle numeric vs symbolic
+        if isinstance(rows[0][i], (int, float)):
+            bad_vals = [r[i] for r in bad]
+            good_vals = [r[i] for r in good]
+            diff = abs((sum(bad_vals)/len(bad_vals)) - (sum(good_vals)/len(good_vals)))
+            impacts.append((diff, col_name))
+        else:
+            # Symbolic: check frequency distribution
+            bad_cats = {c: 0 for c in set(r[i] for r in rows)}
+            good_cats = {c: 0 for c in bad_cats}
+            for r in bad: bad_cats[r[i]] += 1
+            for r in good: good_cats[r[i]] += 1
+            
+            # Calculate Jensen-Shannon-like distance or simple variance
+            diff = 0
+            for c in bad_cats:
+                diff += abs((bad_cats[c]/len(bad)) - (good_cats[c]/len(good)))
+            impacts.append((diff, col_name))
+            
+    # Sort by impact descending
+    impacts.sort(key=lambda x: x[0], reverse=True)
+    
+    # Return top 3 most impactful columns
+    return [x[1] for x in impacts[:3]]
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i] == 'criterion':
+                    processed_row.append(val)
+                else:
+                    processed_row.append(float(val))
+            rows.append(processed_row)
+            
+    results = blame(header, rows)
+    print("The settings most responsible for poor performance are:")
+    for name in results:
+        print(f"- {name}")

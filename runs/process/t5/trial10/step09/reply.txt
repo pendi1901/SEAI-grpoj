@@ -1,0 +1,56 @@
+```python
+import ezr
+import random
+
+def spot(header, rows):
+    """
+    Identify rows that contain suspicious input values.
+    We define 'suspicious' as rows that have an input value (X column)
+    that is an outlier relative to the distribution of that column.
+    We use the standard deviation (sd) from the Num class to detect
+    values that are more than 3 standard deviations from the mean.
+    """
+    # Create a table to get column summaries
+    data = [header] + rows
+    tbl = ezr.Tbl(data)
+    
+    # Calculate suspiciousness score for each row
+    # A row's score is the maximum number of standard deviations 
+    # any of its input values is from the column mean.
+    scores = []
+    for i, row in enumerate(rows):
+        max_z = 0
+        for col in tbl.x:
+            val = row[col.at]
+            # Only check numeric columns
+            if isinstance(col, ezr.Num) and isinstance(val, (int, float)):
+                # Avoid division by zero
+                sd = col.sd if col.sd > 0 else 1e-32
+                z = abs(val - col.mu) / sd
+                if z > max_z:
+                    max_z = z
+        scores.append((max_z, i))
+    
+    # Sort by suspiciousness descending
+    scores.sort(key=lambda x: x[0], reverse=True)
+    
+    # Return indices of rows that are significantly suspicious (e.g., z > 3)
+    # We return all rows that meet this criteria, sorted by most suspicious.
+    return [i for z, i in scores if z > 3]
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    suspicious_indices = spot(header, rows)
+    
+    print(f"Analysis: Found {len(suspicious_indices)} potentially mistyped rows.")
+    if suspicious_indices:
+        print("The most suspicious rows (indices):")
+        print(suspicious_indices[:10])
+        print("\nThese rows contain input values that are statistical outliers.")
+    else:
+        print("No highly suspicious rows detected.")
+```

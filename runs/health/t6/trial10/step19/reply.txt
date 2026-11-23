@@ -1,0 +1,34 @@
+```python
+import ezr
+import step09
+
+def spot(header, rows):
+    """
+    Identify rows that are 'outliers' in the input space (x-columns).
+    Rows that are very far from the rest of the data in x-space are 
+    suspected of being mis-entered or failed runs.
+    """
+    # We reuse the logic from step09 which calculates distance from the centroid
+    # of the input space. Rows with high xdist are those with settings 
+    # "far outside anything we have tried".
+    return step09.spot(header, rows)
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    all_data = list(ezr.csv(filename))
+    header = all_data[0]
+    rows = all_data[1:]
+    
+    suspects = spot(header, rows)
+    
+    print("Analysis of unusual configurations:")
+    if suspects:
+        print(f"Identified {len(suspects)} rows that contain input values "
+              "far outside the range of typical data.")
+        print("Most suspicious row indices (0-based):")
+        print(suspects[:5])
+        print("\nDetails of the most suspicious row:")
+        print(f"Row {suspects[0]}: {rows[suspects[0]]}")
+    else:
+        print("No unusual configurations detected.")
+```

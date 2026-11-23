@@ -1,0 +1,61 @@
+```python
+import ezr
+import step01
+
+def blame(header, rows):
+    """
+    Identify input columns that best explain why the worst rows are bad.
+    We define 'worst' as the bottom 20% of rows by ydist, 
+    and compare them to the rest of the data.
+    """
+    data = [header] + rows
+    tbl = ezr.Tbl(data)
+    
+    # Calculate ydist for all rows
+    scored = []
+    for row in rows:
+        scored.append((ezr.ydist(tbl, row), row))
+    
+    # Sort by ydist descending (worst first)
+    scored.sort(key=lambda x: x[0], reverse=True)
+    
+    # Split into worst 20% and the rest
+    n_worst = max(1, len(rows) // 5)
+    worst = [x[1] for x in scored[:n_worst]]
+    rest = [x[1] for x in scored[n_worst:]]
+    
+    # For each input column, check if its distribution in 'worst' 
+    # is significantly different from 'rest' using the same logic as step03.
+    # We look for columns where the values in 'worst' are statistically 
+    # distinct from the 'rest'.
+    suspects = []
+    for col in tbl.x:
+        w_vals = [r[col.at] for r in worst if r[col.at] != "?"]
+        r_vals = [r[col.at] for r in rest if r[col.at] != "?"]
+        
+        if not w_vals or not r_vals:
+            continue
+            
+        # If they are NOT the same, this column is a potential explanation
+        if not ezr.same(sorted(w_vals), sorted(r_vals)):
+            suspects.append(col.txt)
+            
+    return suspects
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    suspects = blame(header, rows)
+    
+    print("Analysis of worst-performing setups:")
+    print("The following input factors are significantly different in the worst setups,")
+    print("suggesting they contribute to poor performance:")
+    for s in suspects:
+        print(f" - {s}")
+    
+    if not suspects:
+        print("No specific input factors were found to be statistically significant.")
+```

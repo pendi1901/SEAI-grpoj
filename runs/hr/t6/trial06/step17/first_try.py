@@ -1,0 +1,68 @@
+import ezr
+import step07
+
+def choose(header, rows, label):
+    """
+    Finds the best row for 'Laboratory Technician' staff using the 
+    active learning 'acquire' strategy, limited to 50 labels.
+    """
+    # Filter rows for Laboratory Technician
+    job_role_idx = header.index('jobRole')
+    lab_rows = [r for r in rows if r[job_role_idx] == 'Laboratory Technician']
+    
+    # We need to map the filtered rows back to their original indices for the label function
+    # The harness expects an index relative to the original 'rows' list
+    original_indices = [i for i, r in enumerate(rows) if r[job_role_idx] == 'Laboratory Technician']
+    
+    # Create a table for the lab staff
+    tbl = ezr.Tbl([header] + lab_rows)
+    
+    best_idx = -1
+    best_ydist = 1e30
+    
+    # The oracle needs to return the full row for a given index
+    def oracle_wrapper(row):
+        # Find which original index this row corresponds to
+        for i, r in enumerate(lab_rows):
+            if r is row:
+                orig_i = original_indices[i]
+                full_row = label(orig_i)
+                # Update the table row with real values
+                tbl.rows[i] = full_row
+                # Update best found
+                d = ezr.ydist(tbl, full_row)
+                nonlocal best_idx, best_ydist
+                if d < best_ydist:
+                    best_ydist = d
+                    best_idx = orig_i
+                return full_row
+        return row
+
+    # Use ezr.acquire to select and label the most informative lab rows
+    ezr.acquire(tbl, cap=50, label=oracle_wrapper)
+    
+    return best_idx
+
+if __name__ == "__main__":
+    file_path = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(file_path))
+    header = data[0]
+    rows = data[1:]
+    
+    # Mask goals
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    masked_rows = []
+    for row in rows:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_rows.append(new_row)
+        
+    def label(i):
+        return rows[i]
+    
+    best_idx = choose(header, masked_rows, label)
+    
+    print(f"Best Laboratory Technician arrangement found at index: {best_idx}")
+    print("Strategy: Filtered for Laboratory Technicians and used active learning")
+    print("to find the optimal configuration within a 50-interview budget.")

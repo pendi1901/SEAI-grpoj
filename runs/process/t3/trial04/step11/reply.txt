@@ -1,0 +1,85 @@
+```python
+import csv
+
+def find_similar(header, rows, target_row, k=5):
+    """
+    Finds the k most similar rows to the target_row based on input features.
+    Uses Euclidean distance on normalized input columns.
+    """
+    input_indices = [i for i, name in enumerate(header) 
+                     if not (name.endswith('-') or name.endswith('+'))]
+    
+    # Normalize inputs for distance calculation
+    data = [[row[i] for i in input_indices] for row in rows]
+    mins = [min(col) for col in zip(*data)]
+    maxs = [max(col) for col in zip(*data)]
+    
+    def normalize(r):
+        return [(r[i] - mins[j]) / (maxs[j] - mins[j] + 1e-9) 
+                for j, i in enumerate(input_indices)]
+
+    target_norm = normalize(target_row)
+    
+    distances = []
+    for idx, row in enumerate(rows):
+        row_norm = normalize(row)
+        dist = sum((a - b)**2 for a, b in zip(target_norm, row_norm))**0.5
+        distances.append((idx, dist))
+    
+    # Return indices of k nearest neighbors
+    distances.sort(key=lambda x: x[1])
+    return [d[0] for d in distances[:k]]
+
+def remember(header, rows):
+    """
+    Returns the indices of the top 5% of rows based on goal performance.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    
+    def get_score(row):
+        scores = []
+        for i in goal_indices:
+            col_vals = [r[i] for r in rows]
+            c_min, c_max = min(col_vals), max(col_vals)
+            norm = (row[i] - c_min) / (c_max - c_min + 1e-9)
+            scores.append(1 - norm if header[i].endswith('-') else norm)
+        return sum(scores) / len(scores)
+
+    scored_rows = []
+    for idx, row in enumerate(rows):
+        scored_rows.append((idx, get_score(row)))
+    
+    scored_rows.sort(key=lambda x: x[1], reverse=True)
+    num_to_select = max(1, len(rows) // 20)
+    return [s[0] for s in scored_rows[:num_to_select]]
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) for val in row])
+        
+        # Simulate a customer proposal (using the last row as a sample)
+        target = rows[-1]
+        
+        # Find similar past setups
+        similar_indices = find_similar(header, rows[:-1], target, k=3)
+        
+        print("Customer Inquiry Analysis: Similar Past Setups")
+        print(f"Your proposed setup is similar to the following historical configurations:")
+        
+        goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+        for idx in similar_indices:
+            goals = {header[i]: rows[idx][i] for i in goal_indices}
+            print(f"- Row {idx}: {goals}")
+            
+        print("\nThese past projects provide a baseline for how your proposal might perform.")
+        
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        exit(1)
+```

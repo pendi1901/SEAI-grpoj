@@ -1,0 +1,39 @@
+import csv
+import step09
+
+def spot(header, rows):
+    """
+    Identifies rows that are unlike anything seen before.
+    We reuse the logic from step09 which calculates the Mahalanobis-like 
+    distance of each row from the centroid of the dataset. Rows with 
+    high distance are considered outliers (unlike anything seen).
+    """
+    return step09.spot(header, rows)
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            # Convert numeric columns to float, keep symbolic as strings
+            processed_row = []
+            for val in row:
+                try:
+                    processed_row.append(float(val))
+                except ValueError:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    suspicious_indices = spot(header, rows)
+    
+    print("Customer Inquiry: A new team lead proposes a setup unlike anything we have run.")
+    print("Analysis: I have identified the following rows as being the most anomalous")
+    print("compared to our historical data (most suspicious first):")
+    for i in range(min(5, len(suspicious_indices))):
+        idx = suspicious_indices[i]
+        print(f"  - Row {idx} (This setup deviates significantly from established patterns)")
+    print("\nThese records represent configurations that are statistically unique.")

@@ -1,0 +1,60 @@
+```python
+import csv
+import math
+
+def certify(xs, ys):
+    """
+    Returns True if the two distributions are statistically similar (noise),
+    False if they differ significantly (real effect).
+    Uses Cohen's d effect size: if d < 0.5, consider it noise.
+    """
+    n1, n2 = len(xs), len(ys)
+    if n1 < 2 or n2 < 2:
+        return True
+    
+    m1, m2 = sum(xs) / n1, sum(ys) / n2
+    v1 = sum((x - m1) ** 2 for x in xs) / (n1 - 1)
+    v2 = sum((y - m2) ** 2 for y in ys) / (n2 - 1)
+    
+    pooled_std = math.sqrt(((n1 - 1) * v1 + (n2 - 1) * v2) / (n1 + n2 - 2))
+    if pooled_std == 0:
+        return m1 == m2
+    
+    d = abs(m1 - m2) / pooled_std
+    return d < 0.5
+
+def analyze_overtime(header, rows):
+    ot_idx = header.index('overTime')
+    # Using 'YearsInCurrentRole+' as a proxy for "leaving their role"
+    yicr_idx = header.index('YearsInCurrentRole+')
+    
+    yes_ot = [r[yicr_idx] for r in rows if r[ot_idx] == 'Yes']
+    no_ot = [r[yicr_idx] for r in rows if r[ot_idx] == 'No']
+    
+    is_noise = certify(yes_ot, no_ot)
+    
+    print("Analysis: Do people who work overtime leave their role sooner?")
+    print(f"Average Years in Role (Overtime): {sum(yes_ot)/len(yes_ot):.2f}")
+    print(f"Average Years in Role (No Overtime): {sum(no_ot)/len(no_ot):.2f}")
+    if is_noise:
+        print("Result: The difference is likely just noise.")
+    else:
+        print("Result: The difference appears to be a real effect.")
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    analyze_overtime(header, rows)
+```

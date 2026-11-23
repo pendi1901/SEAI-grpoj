@@ -1,0 +1,55 @@
+```python
+import ezr
+import random
+
+def flow(header, row, seen):
+    """
+    Decide whether to approve a row immediately.
+    We compare the current row's potential against the distribution
+    of rows seen so far. If the current row is in the top 5% of 
+    expected performance, we approve it.
+    """
+    if not seen:
+        return False
+    
+    # Create a table to handle goal normalization
+    data = [header] + seen
+    tbl = ezr.Tbl(data)
+    
+    # Calculate ydist for all seen rows
+    # Lower ydist is better.
+    seen_ydists = [ezr.ydist(tbl, r) for r in seen]
+    
+    # Calculate ydist for the current row
+    # Note: If row has '?', ydist handles it via normalization
+    current_ydist = ezr.ydist(tbl, row)
+    
+    # Threshold: Is this row better than 95% of what we have seen?
+    # We use the 5th percentile of seen rows as our benchmark.
+    threshold = sorted(seen_ydists)[max(0, int(len(seen_ydists) * 0.05))]
+    
+    return current_ydist <= threshold
+
+if __name__ == "__main__":
+    # Load data
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Simulate the arrival process
+    random.seed(1234567891)
+    random.shuffle(rows)
+    
+    seen = []
+    approved_count = 0
+    
+    for row in rows:
+        if flow(header, row, seen):
+            approved_count += 1
+        seen.append(row)
+        
+    print(f"Processed {len(rows)} proposals.")
+    print(f"Approved {approved_count} proposals based on real-time performance thresholds.")
+    exit(0)
+```

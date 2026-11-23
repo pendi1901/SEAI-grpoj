@@ -1,0 +1,66 @@
+import ezr
+import random
+
+def choose(header, rows, label):
+    """
+    Uses the acquire function from ezr to select 50 rows to label,
+    then returns the index of the best row found among those labeled.
+    """
+    # Create a table object. The rows currently have '?' for goals.
+    # We need to pass a wrapper to label() that keeps track of the original index.
+    indexed_rows = []
+    for i, row in enumerate(rows):
+        # Store index in the row temporarily or map it
+        row_with_idx = list(row)
+        row_with_idx.append(i)
+        indexed_rows.append(row_with_idx)
+    
+    # Create a new header for the table including the index column
+    new_header = header + ["idxX"]
+    tbl = ezr.Tbl([new_header] + indexed_rows)
+    
+    # Define an oracle that calls the provided label function
+    # and updates the row with the real goal values
+    def oracle_wrapper(row):
+        idx = int(row[-1])
+        real_goals = label(idx)
+        # Update the row with real values
+        for i, name in enumerate(header):
+            if name.endswith('+') or name.endswith('-'):
+                row[i] = real_goals[i]
+        return row
+
+    # Use ezr.acquire to spend the 50-label budget
+    # ezr.acquire returns the rows that were labeled
+    labeled_rows = ezr.acquire(tbl, cap=50, label=oracle_wrapper)
+    
+    # Find the best row among the labeled ones
+    # A row is better when its ydist is lower
+    best_row = min(labeled_rows, key=lambda r: ezr.ydist(tbl, r))
+    
+    return int(best_row[-1])
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Mask the goals for the input to choose()
+    masked_rows = []
+    for row in rows:
+        new_row = list(row)
+        for i, name in enumerate(header):
+            if name.endswith('+') or name.endswith('-'):
+                new_row[i] = "?"
+        masked_rows.append(new_row)
+    
+    # Define the real label function
+    def real_label(i):
+        return rows[i]
+    
+    # Run the selection
+    best_idx = choose(header, masked_rows, real_label)
+    
+    print(f"Analysis complete. Best employee arrangement found at index: {best_idx}")
+    print(f"Goal values for this employee: {[rows[best_idx][i] for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]}")

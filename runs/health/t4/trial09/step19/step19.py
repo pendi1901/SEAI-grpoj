@@ -1,0 +1,68 @@
+import csv
+import numpy as np
+from sklearn.ensemble import IsolationForest
+
+def spot(header, rows):
+    """
+    Identifies rows containing input values that are 'far outside' 
+    the range of what has been seen, using an Isolation Forest 
+    to detect outliers in the configuration space.
+    """
+    # Identify input columns (all except goals)
+    input_indices = [i for i, col in enumerate(header) 
+                     if not (col.endswith('-') or col.endswith('+'))]
+    
+    # Prepare numeric data for anomaly detection
+    # We only look at inputs to find 'settings far outside anything we have tried'
+    data = []
+    for row in rows:
+        processed = []
+        for i in input_indices:
+            val = row[i]
+            if isinstance(val, str):
+                # Simple encoding for symbolic columns
+                processed.append(float(hash(val) % 100))
+            else:
+                processed.append(float(val))
+        data.append(processed)
+
+    data_array = np.array(data)
+    
+    # Isolation Forest is effective for detecting outliers.
+    # We set a low contamination to find only the most extreme cases.
+    clf = IsolationForest(contamination=0.02, random_state=42)
+    scores = clf.fit_predict(data_array)
+    decision_scores = clf.decision_function(data_array)
+    
+    # Indices where scores are -1 (anomalies), sorted by decision_function score
+    # (most suspicious first, i.e., lowest decision score)
+    suspicious_indices = [i for i, score in enumerate(scores) if score == -1]
+    suspicious_indices.sort(key=lambda i: decision_scores[i])
+    
+    return suspicious_indices
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i] in ['MRE-', 'ACC+', 'PRED40+', 'N_estimators', 
+                                 'Min_sample_leaves', 'Min_impurity_decrease', 'Max_depth']:
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    suspicious = spot(header, rows)
+    
+    print("Analysis: Identifying settings far outside the norm.")
+    if not suspicious:
+        print("No suspicious configurations found.")
+    else:
+        print(f"Found {len(suspicious)} configurations that use settings outside our typical range.")
+        print("The most suspicious row indices are:")
+        print(suspicious[:10])

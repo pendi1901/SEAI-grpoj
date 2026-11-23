@@ -1,0 +1,109 @@
+import ezr
+import random
+
+def race(header, rows, label):
+    """
+    Compare three strategies: random, big-team-bias, and tree-based.
+    The 50-label budget is shared.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    goal_indices = [c.at for c in tbl.y]
+    
+    # Shared label tracker
+    labeled_cache = {}
+    def get_label(idx):
+        if idx not in labeled_cache:
+            if len(labeled_cache) >= 50:
+                raise Exception("Label budget exceeded!")
+            labeled_cache[idx] = label(idx)
+        return labeled_cache[idx]
+
+    def apply_label(row, idx):
+        true_vals = get_label(idx)
+        for i, g_idx in enumerate(goal_indices):
+            row[g_idx] = true_vals[i]
+        return row
+
+    # Strategy 1: Random
+    def strategy_random(budget):
+        indices = random.sample(range(len(rows)), budget)
+        best_idx = indices[0]
+        for idx in indices:
+            row = apply_label(list(rows[idx]), idx)
+            if ezr.ydist(tbl, row) < ezr.ydist(tbl, apply_label(list(rows[best_idx]), best_idx)):
+                best_idx = idx
+        return best_idx
+
+    # Strategy 2: Big Team Bias (Customer's current approach)
+    def strategy_big_teams(budget):
+        # Find rows with high Team Size
+        team_idx = header.index('Team Size')
+        sorted_by_team = sorted(range(len(rows)), key=lambda i: rows[i][team_idx], reverse=True)
+        # Sample from the top of the list
+        indices = sorted_by_team[:budget]
+        best_idx = indices[0]
+        for idx in indices:
+            row = apply_label(list(rows[idx]), idx)
+            if ezr.ydist(tbl, row) < ezr.ydist(tbl, apply_label(list(rows[best_idx]), best_idx)):
+                best_idx = idx
+        return best_idx
+
+    # Strategy 3: Tree-based (Intelligent exploration)
+    def strategy_tree(budget):
+        labeled_rows = ezr.acquire(tbl, cap=budget, label=lambda r: apply_label(r, rows.index(r)))
+        best_row = min(labeled_rows, key=lambda r: ezr.ydist(tbl, r))
+        return rows.index(best_row)
+
+    # Run race (16, 17, 17 labels)
+    strategies = {
+        "random": lambda: strategy_random(16),
+        "big_teams": lambda: strategy_big_teams(17),
+        "tree": lambda: strategy_tree(17)
+    }
+    
+    winners = {}
+    for name, func in strategies.items():
+        idx = func()
+        winners[name] = (idx, ezr.ydist(tbl, apply_label(list(rows[idx]), idx)))
+
+    best_strat = min(winners, key=lambda n: winners[n][1])
+    
+    return {
+        "winner": best_strat,
+        "row": winners[best_strat][0],
+        "tried": list(strategies.keys())
+    }
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    header = next(data_gen)
+    rows = list(data_gen)
+    
+    # Mask goals
+    goal_indices = [i for i, name in enumerate(header) if name[-1] in ('-', '+')]
+    for row in rows:
+        for idx in goal_indices:
+            row[idx] = "?"
+            
+    # Real data for label function
+    full_data = list(ezr.csv(filename))
+    next(iter(full_data)) # skip header
+    
+    def label_func(i):
+        return [full_data[i][c.at] for c in ezr.Tbl([header] + rows).y]
+    
+    result = race(header, rows, label_func)
+    
+    print("Optimization Strategy Comparison:")
+    print(f"The winning strategy was: {result['winner']}")
+    print(f"The best configuration found was at index: {result['row']}")
+    print(f"Strategies tested: {', '.join(result['tried'])}")
+    
+    if result['winner'] == "big_teams":
+        print("\nConclusion: Your current approach of using the biggest teams is optimal.")
+    else:
+        print("\nConclusion: Your current approach is not optimal. Intelligent search strategies")
+        print("outperform simply maximizing team size.")
+    
+    exit(0)

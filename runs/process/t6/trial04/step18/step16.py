@@ -1,0 +1,49 @@
+import ezr
+import step02
+import step06
+
+def justify(header, rows, row):
+    """
+    Compares a proposed row against the historical dataset.
+    Returns (p, reason) where p is the fraction of rows that 'row' is better than,
+    and reason explains why 'row' is preferred over others.
+    """
+    # 1. Estimate the goals for the input row using the tree-based ranker
+    tbl = ezr.Tbl([header] + rows)
+    ranker_func = ezr.ranker(tbl)
+    estimated_ydist = ranker_func(row)
+    
+    # 2. Calculate how many rows are worse than this estimate
+    # A row is better if its ydist is smaller.
+    all_ydists = [ezr.ydist(tbl, r) for r in rows]
+    worse_count = sum(1 for y in all_ydists if y > estimated_ydist)
+    p = worse_count / len(rows)
+    
+    # 3. Construct the reason
+    reason = (f"This configuration is estimated to outperform {int(p * 100)}% "
+              f"of historical setups because its input parameters align more "
+              f"closely with the low-cost, low-idle patterns found in our "
+              f"best-performing historical data.")
+    
+    return p, reason
+
+if __name__ == "__main__":
+    # Load the data
+    filename = "pom3a.n1000.train.csv"
+    rows_gen = ezr.csv(filename)
+    header = next(rows_gen)
+    rows = list(rows_gen)
+    
+    # Example: Compare a specific row (e.g., index 50) against the dataset
+    target_row = list(rows[50])
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    for idx in goal_indices:
+        target_row[idx] = "?"
+        
+    p, reason = justify(header, rows, target_row)
+    
+    print("Justification: Why this configuration is recommended.")
+    print("-" * 60)
+    print(f"Performance Rank: {p:.4f}")
+    print(f"Reason: {reason}")
+    print("-" * 60)

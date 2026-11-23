@@ -1,0 +1,44 @@
+import ezr
+import step01
+
+def certify(xs, ys):
+    """
+    Returns True if xs and ys are statistically indistinguishable,
+    False if they really differ.
+    """
+    return ezr.same(xs, ys)
+
+def analyze():
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    all_rows = list(ezr.csv(filename))
+    header = all_rows[0]
+    rows = all_rows[1:]
+    
+    tbl = ezr.Tbl(all_rows)
+    
+    # Identify "big" vs "small" setups based on N_estimators
+    # Find the index of N_estimators
+    idx = header.index("N_estimators")
+    
+    # Get all values for N_estimators to find the median
+    vals = [r[idx] for r in rows]
+    median = sorted(vals)[len(vals) // 2]
+    
+    # Split rows into two groups based on N_estimators
+    big = [ezr.ydist(tbl, r) for r in rows if r[idx] > median]
+    small = [ezr.ydist(tbl, r) for r in rows if r[idx] <= median]
+    
+    # Check if they are the same
+    is_same = certify(big, small)
+    
+    print(f"Analysis of setup size vs accuracy:")
+    print(f"Big setups (N_estimators > {median}) count: {len(big)}")
+    print(f"Small setups (N_estimators <= {median}) count: {len(small)}")
+    if is_same:
+        print("Result: The difference is statistically insignificant (noise).")
+    else:
+        print("Result: There is a statistically significant difference between setup sizes.")
+    return is_same
+
+if __name__ == "__main__":
+    analyze()

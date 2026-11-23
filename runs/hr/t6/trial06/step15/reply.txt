@@ -1,0 +1,60 @@
+```python
+import ezr
+import step05
+
+def blame(header, rows):
+    """
+    Identifies input columns that have 'nothing to do' with performance.
+    We define 'nothing to do' as columns where the distribution of values
+    in the best 25% of rows is statistically indistinguishable from the
+    distribution in the worst 25% of rows.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Sort rows by ydist (distance to ideal goals)
+    # Higher ydist means worse performance
+    sorted_rows = sorted(rows, key=lambda r: ezr.ydist(tbl, r))
+    
+    n = len(sorted_rows) // 4
+    best = sorted_rows[:n]
+    worst = sorted_rows[-n:]
+    
+    irrelevant = []
+    for col in tbl.x:
+        # Extract values for this column from best and worst groups
+        b_vals = [r[col.at] for r in best if r[col.at] != "?"]
+        w_vals = [r[col.at] for r in worst if r[col.at] != "?"]
+        
+        if not b_vals or not w_vals:
+            continue
+            
+        # If distributions are indistinguishable (same), 
+        # this column has little impact on the performance difference.
+        if ezr.same(b_vals, w_vals):
+            irrelevant.append(header[col.at])
+            
+    return irrelevant
+
+if __name__ == "__main__":
+    file_path = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(file_path))
+    header = data[0]
+    rows = data[1:]
+    
+    # Identify columns that don't correlate with performance
+    useless_cols = blame(header, rows)
+    
+    print("Analysis: Which columns have no impact on retention?")
+    if useless_cols:
+        print(f"The following columns appear to have no significant impact on retention:")
+        for col in useless_cols:
+            print(f" - {col}")
+        print("\nThese columns could potentially be removed to simplify data collection.")
+    else:
+        print("All input columns show some statistical correlation with retention performance.")
+    
+    print("-" * 40)
+    print("Strategy: We compared the distributions of the best and worst 25% of")
+    print("employees. Columns where these distributions are statistically")
+    print("indistinguishable (using cliffs and ks tests) are flagged as irrelevant.")
+```

@@ -1,0 +1,66 @@
+import csv
+import pandas as pd
+import numpy as np
+from step01 import remember
+
+def flow(header, row, seen):
+    """
+    Decides whether to accept a row based on the 'Secretary Problem' logic.
+    We observe a sample to establish a baseline of 'good' performance,
+    then accept the first row that exceeds that baseline.
+    """
+    # If this is the first row, we cannot compare it yet
+    if not seen:
+        return False
+    
+    # Use the first 20% of the data as a calibration phase to define 'good'
+    # We use the logic from step01 to identify what a 'good' row looks like
+    all_rows = seen + [row]
+    if len(seen) < len(all_rows) * 0.2:
+        return False
+    
+    # Identify goal columns
+    goals = [c for c in header if c.endswith('-') or c.endswith('+')]
+    
+    # Calculate the 'goodness' of the current row relative to seen rows
+    df = pd.DataFrame(all_rows, columns=header)
+    
+    # Normalize goals
+    norm_df = pd.DataFrame(index=df.index)
+    for goal in goals:
+        col = df[goal].astype(float)
+        norm = (col - col.min()) / (col.max() - col.min())
+        norm_df[goal] = (1 - norm) if goal.endswith('-') else norm
+    
+    scores = norm_df.prod(axis=1)
+    
+    # Threshold: Is the current row better than the median of what we've seen?
+    current_score = scores.iloc[-1]
+    median_score = scores.iloc[:-1].median()
+    
+    # Accept if it's better than the median of previous observations
+    return current_score > median_score
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [[float(val) for val in row] for row in reader]
+        
+        seen = []
+        accepted_count = 0
+        for row in rows:
+            if flow(header, row, seen):
+                accepted_count += 1
+            seen.append(row)
+            
+        print("Customer Inquiry: Sequential Approval Strategy")
+        print(f"Processed {len(rows)} proposals.")
+        print(f"Accepted {accepted_count} proposals based on performance baseline.")
+        print("Strategy: Accept proposals that outperform the median of previously seen data.")
+        
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

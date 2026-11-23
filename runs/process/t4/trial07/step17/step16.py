@@ -1,0 +1,65 @@
+import csv
+import pandas as pd
+import numpy as np
+from sklearn.neighbors import KNeighborsRegressor
+from step01 import remember
+
+def justify(header, rows, row):
+    """
+    Estimates the performance of a given row and returns its percentile rank
+    relative to the provided dataset.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    inputs = [col for col in header if not (col.endswith(('-', '+')))]
+    goals = [col for col in header if col.endswith(('-', '+'))]
+
+    # Estimate missing goals for the input row using KNN
+    predictions = {}
+    for goal in goals:
+        model = KNeighborsRegressor(n_neighbors=5)
+        model.fit(df[inputs], df[goal])
+        # Extract inputs from the provided row
+        row_inputs = [row[header.index(col)] for col in inputs]
+        predictions[goal] = model.predict([row_inputs])[0]
+
+    # Calculate aggregate score for all rows
+    def get_aggregate(data_df):
+        scores = pd.DataFrame(index=data_df.index)
+        for goal in goals:
+            col_min, col_max = data_df[goal].min(), data_df[goal].max()
+            norm = (data_df[goal] - col_min) / (col_max - col_min + 1e-9)
+            scores[goal] = (1 - norm) if goal.endswith('-') else norm
+        return scores.mean(axis=1)
+
+    all_scores = get_aggregate(df)
+    
+    # Calculate score for the input row
+    row_data = [row[header.index(col)] if col in inputs else predictions[col] for col in header]
+    row_df = pd.DataFrame([row_data], columns=header)
+    row_score = get_aggregate(row_df).iloc[0]
+
+    # Calculate percentile (fraction of rows that are worse than this one)
+    p = (all_scores < row_score).mean()
+    
+    reason = f"This setup is better than {p:.2f} of all known configurations based on its estimated performance."
+    return p, reason
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [[float(val) for val in row] for row in reader]
+        
+        # Example: Compare a hypothetical setup B (index 1) vs A (index 0)
+        # The customer asks why A is better than B.
+        row_b = rows[1][:len(header)-3] + ['?'] * 3
+        p, reason = justify(header, rows, row_b)
+        
+        print(f"Justification: {reason}")
+        print(f"Rank: {p:.4f}")
+        
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

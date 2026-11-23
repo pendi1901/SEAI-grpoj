@@ -1,0 +1,120 @@
+import ezr
+import random
+
+def race(header, rows, label):
+    """
+    Compare three strategies for finding the best row within a 50-label budget.
+    Strategies:
+    1. random: Randomly samples rows.
+    2. greedy: Picks the row closest to the current best.
+    3. acquire: Uses the intelligent acquisition function from ezr.
+    """
+    budget = 50
+    # We must ensure we don't label more than 50 rows total across all strategies.
+    # The harness enforces this globally.
+    
+    # To calculate ydist, we need a table with populated goals.
+    # Since we only have 50 labels, we build a TBL from the labeled rows.
+    
+    def get_best_idx(labeled_indices, tbl_full):
+        # Find the best row among those labeled
+        return min(labeled_indices, key=lambda i: ezr.ydist(tbl_full, rows[i]))
+
+    # 1. Random Strategy
+    def strategy_random(budget_left):
+        indices = random.sample(range(len(rows)), budget_left)
+        for i in indices: label(i)
+        return indices
+
+    # 2. Greedy Strategy
+    def strategy_greedy(budget_left):
+        indices = random.sample(range(len(rows)), min(5, budget_left))
+        for i in indices: label(i)
+        
+        # Build a temporary table to calculate ydist for the labeled set
+        while len(indices) < budget_left:
+            # We need a table of currently labeled rows to define the 'best'
+            labeled_rows = [rows[i] for i in indices]
+            tbl_lab = ezr.Tbl([header] + labeled_rows)
+            
+            best_i = min(indices, key=lambda i: ezr.ydist(tbl_lab, rows[i]))
+            
+            # Find closest unlabelled to best
+            unlabelled = [i for i in range(len(rows)) if i not in indices]
+            next_i = min(unlabelled, key=lambda i: ezr.xdist(tbl_lab, rows[i], rows[best_i]))
+            label(next_i)
+            indices.append(next_i)
+        return indices
+
+    # 3. Acquire Strategy
+    def strategy_acquire(budget_left):
+        # Acquire needs a TBL with all rows (even if goals are '?')
+        tbl = ezr.Tbl([header] + rows)
+        
+        # We need to wrap the label function to update the rows in the table
+        def oracle_wrapper(i):
+            true_vals = label(i)
+            # Update the row in the table
+            for col_idx, val in enumerate(true_vals):
+                rows[i][col_idx] = val
+            return rows[i]
+            
+        # ezr.acquire returns the rows that were labeled
+        labeled = ezr.acquire(tbl, cap=budget_left, label=oracle_wrapper)
+        # Return indices of labeled rows
+        return [i for i, r in enumerate(rows) if r in labeled]
+
+    # Run race
+    strategies = [
+        ("random", strategy_random),
+        ("greedy", strategy_greedy),
+        ("acquire", strategy_acquire)
+    ]
+    
+    results = {}
+    # We split the 50 budget equally among 3 strategies
+    per_budget = budget // 3
+    
+    for name, func in strategies:
+        indices = func(per_budget)
+        # Build a table from the labeled rows to evaluate them
+        labeled_rows = [rows[i] for i in indices]
+        tbl_lab = ezr.Tbl([header] + labeled_rows)
+        best_i = min(indices, key=lambda i: ezr.ydist(tbl_lab, rows[i]))
+        results[name] = (best_i, ezr.ydist(tbl_lab, rows[best_i]))
+
+    winner_name = min(results, key=lambda n: results[n][1])
+    
+    return {
+        "winner": winner_name,
+        "row": results[winner_name][0],
+        "tried": [s[0] for s in strategies]
+    }
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    try:
+        header = next(data_gen)
+        all_rows = list(data_gen)
+    except StopIteration:
+        exit(0)
+
+    # Mask goals
+    goal_indices = [i for i, name in enumerate(header) if name[-1] in "+-"]
+    masked_rows = []
+    for row in all_rows:
+        new_row = list(row)
+        for idx in goal_indices: new_row[idx] = "?"
+        masked_rows.append(new_row)
+
+    def label(i):
+        return all_rows[i]
+
+    random.seed(1234567891)
+    result = race(header, masked_rows, label)
+    
+    print(f"Race complete. Winner: {result['winner']}")
+    print(f"Best row found at index: {result['row']}")
+    print(f"Strategies compared: {', '.join(result['tried'])}")
+    exit(0)

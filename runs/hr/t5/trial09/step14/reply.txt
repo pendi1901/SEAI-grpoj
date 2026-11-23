@@ -1,0 +1,56 @@
+```python
+import ezr
+import random
+
+def flow(header, row, seen):
+    """
+    Detects if the current team (represented by 'seen' + 'row') has shifted
+    significantly from the historical norm. We use the distribution of 
+    ydist (goal performance) as our metric. If the current row is a 
+    statistical outlier compared to the 'seen' population, we flag it.
+    """
+    if len(seen) < 20:
+        return False
+    
+    # Create a table of the history to establish the "normal" distribution
+    tbl = ezr.Tbl([header] + seen)
+    
+    # Calculate the ydist of the current row
+    current_ydist = ezr.ydist(tbl, row)
+    
+    # Calculate the distribution of ydist in the seen rows
+    seen_ydists = [ezr.ydist(tbl, r) for r in seen]
+    
+    # Use the mean and standard deviation to detect if the current row
+    # is an outlier (e.g., > 2 standard deviations from the mean)
+    mu = sum(seen_ydists) / len(seen_ydists)
+    var = sum((x - mu) ** 2 for x in seen_ydists) / len(seen_ydists)
+    sd = var ** 0.5
+    
+    # Flag if the row is significantly different (e.g., 2 standard deviations)
+    # This indicates the team's performance profile has shifted.
+    return abs(current_ydist - mu) > (2 * sd)
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Simulate the arrival process
+    random.seed(1234567891)
+    random.shuffle(rows)
+    
+    seen = []
+    flags = 0
+    
+    for row in rows:
+        if flow(header, row, seen):
+            flags += 1
+        seen.append(row)
+    
+    print("Analysis: Detecting shifts in team performance.")
+    print(f"Processed {len(rows)} employee records.")
+    print(f"Flagged {flags} records where the team's performance profile shifted significantly.")
+    print("Strategy: Flagged rows that are statistical outliers (2+ SD) in goal-distance from the historical norm.")
+```

@@ -1,0 +1,95 @@
+import ezr
+import random
+
+def fix(header, row, levers):
+    """
+    Finds the best change to a bad row to minimize 'Idle-'.
+    We evaluate changes by predicting the improvement in the 'Idle-' goal.
+    """
+    # Load the full dataset to provide context for normalization and ydist
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    tbl = ezr.Tbl(data)
+    
+    # Identify the index of the 'Idle-' goal
+    idle_idx = header.index("Idle-")
+    
+    # We want to minimize Idle-. 
+    # Since we don't have the actual goal value for the 'bad' row,
+    # we use the tree-based ranker to predict the performance.
+    ranker = ezr.ranker(tbl)
+    
+    best_change = {}
+    # We use the ranker to predict the 'Idle-' value.
+    # Note: ranker returns the mean ydist of the leaf.
+    # To specifically target Idle-, we look at the leaf's mean for that column.
+    node = ezr.tree(tbl, tbl.rows)
+    
+    def get_idle_prediction(r):
+        leaf_node = ezr.leaf(node, r)
+        vals = [row[idle_idx] for row in leaf_node.rows if row[idle_idx] != "?"]
+        return sum(vals) / len(vals) if vals else 1.0
+
+    best_val = get_idle_prediction(row)
+    
+    # Try changing each lever
+    for col_name, allowed in levers.items():
+        if col_name not in header:
+            continue
+            
+        col_idx = header.index(col_name)
+        
+        candidates = []
+        if isinstance(allowed, tuple):  # Numeric (low, high)
+            low, high = allowed
+            # Try 10 points in the range
+            for i in range(10):
+                val = low + (high - low) * (i / 9)
+                candidates.append(val)
+        else:  # Symbolic
+            candidates = allowed
+        
+        for val in candidates:
+            new_row = list(row)
+            new_row[col_idx] = val
+            
+            # Predict the impact on Idle-
+            pred = get_idle_prediction(new_row)
+            if pred < best_val:
+                best_val = pred
+                best_change = {col_name: val}
+                
+    return best_change
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Identify a "bad" row (high Idle-)
+    tbl = ezr.Tbl(data)
+    idle_idx = header.index("Idle-")
+    
+    # Sort by Idle- descending to find a bad row
+    scored = sorted([(r[idle_idx], r) for r in rows if r[idle_idx] != "?"], 
+                    key=lambda x: x[0], reverse=True)
+    bad_row = scored[0][1]
+    
+    # Levers excluding Team Size (since we aren't allowed to hire)
+    levers = {
+        "Culture": (0.0, 1.0),
+        "Criticality": (0.0, 1.0),
+        "Dynamism": (0.0, 1.0),
+        "Size": (0.0, 1.0),
+        "Plan": (0.0, 1.0)
+    }
+    
+    recommendation = fix(header, bad_row, levers)
+    
+    print("Analysis: How to cut idle time without hiring?")
+    if recommendation:
+        for col, val in recommendation.items():
+            print(f"Recommendation: Change '{col}' to {val:.4f}.")
+    else:
+        print("No simple lever change found to improve idle time.")

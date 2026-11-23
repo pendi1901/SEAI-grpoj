@@ -1,0 +1,44 @@
+```python
+import ezr
+
+def certify(xs, ys):
+    """
+    Returns True if the distributions are statistically indistinguishable 
+    (same apart from noise), False if they really differ.
+    """
+    # Using ezr's same() which performs cliffs and ks tests
+    # We pass eps=0 to skip the cohen test as per the function signature
+    return ezr.same(xs, ys, eps=0)
+
+if __name__ == "__main__":
+    # Load data
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Find indices
+    # 'overTime' is at index 22
+    # 'YearsInCurrentRole+' is at index 32
+    ot_idx = header.index('overTime')
+    yicr_idx = header.index('YearsInCurrentRole+')
+    
+    # Split data into two groups based on overtime
+    yes_ot = [r[yicr_idx] for r in rows if r[ot_idx] == 'Yes']
+    no_ot = [r[yicr_idx] for r in rows if r[ot_idx] == 'No']
+    
+    # Perform certification
+    is_same = certify(yes_ot, no_ot)
+    
+    print("Analysis: Do people who work overtime leave their role sooner?")
+    if is_same:
+        print("Result: The difference is statistically insignificant (noise).")
+    else:
+        print("Result: There is a statistically significant difference.")
+        avg_yes = sum(yes_ot) / len(yes_ot)
+        avg_no = sum(no_ot) / len(no_ot)
+        print(f"Average years in role (Overtime): {avg_yes:.2f}")
+        print(f"Average years in role (No Overtime): {avg_no:.2f}")
+    
+    exit(0)
+```

@@ -1,0 +1,65 @@
+import csv
+import pandas as pd
+import numpy as np
+from sklearn.neighbors import KNeighborsRegressor
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column for test rows using K-Nearest Neighbors.
+    """
+    df_train = pd.DataFrame(train, columns=header)
+    df_test = pd.DataFrame(test, columns=header)
+    
+    # Identify input columns (those not ending in - or +)
+    input_cols = [col for col in header if not (col.endswith('-') or col.endswith('+'))]
+    
+    # Identify the first goal column
+    goal_col = [col for col in header if col.endswith(('-', '+'))][0]
+    
+    # Prepare features and target
+    X_train = df_train[input_cols]
+    y_train = df_train[goal_col]
+    X_test = df_test[input_cols]
+    
+    # Use KNN to predict the goal value
+    # k=5 is a standard heuristic for small datasets
+    model = KNeighborsRegressor(n_neighbors=5)
+    model.fit(X_train, y_train)
+    
+    predictions = model.predict(X_test)
+    return predictions.tolist()
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed_row = [float(val) for val in row]
+                rows.append(processed_row)
+        
+        # Split data: use first 700 for training, next 100 as a test set
+        train_data = rows[:700]
+        test_data = [row[:] for row in rows[700:800]]
+        
+        # Mask the goals in test data as per requirements
+        goal_indices = [i for i, col in enumerate(header) if col.endswith(('-', '+'))]
+        for row in test_data:
+            for idx in goal_indices:
+                row[idx] = "?"
+        
+        predictions = guess(header, train_data, test_data)
+        
+        # Calculate average prediction for the customer
+        avg_cost = sum(predictions) / len(predictions)
+        
+        print("Customer Inquiry Summary:")
+        print(f"Based on the provided data, the estimated average for the primary goal")
+        print(f"({header[goal_indices[0]]}) is approximately {avg_cost:.4f}.")
+        print("This estimate is derived from analyzing similar project setups in the training history.")
+        
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        exit(1)

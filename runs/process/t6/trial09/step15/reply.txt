@@ -1,0 +1,43 @@
+```python
+import ezr
+import step05
+
+def blame(header, rows):
+    """
+    Identify input columns that best explain why the worst rows are bad.
+    We reuse the logic from step05 which compares the distribution of 
+    input values in the worst 25% of rows against the rest.
+    """
+    return step05.blame(header, rows)
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data_iter = ezr.csv(filename)
+    
+    try:
+        header = next(data_iter)
+        rows = list(data_iter)
+    except StopIteration:
+        exit(0)
+        
+    blamed = blame(header, rows)
+    
+    # The customer wants to know what matters most and what to stop worrying about.
+    # We define 'matters most' as the columns identified by blame().
+    # We define 'stop worrying' as the input columns NOT identified by blame().
+    
+    tbl = ezr.Tbl([header] + rows)
+    all_inputs = [col.txt for col in tbl.x]
+    safe_to_ignore = [col for col in all_inputs if col not in blamed]
+    
+    print("Project Analysis: What matters for Cost?")
+    print("\nFactors that matter most (High impact on performance):")
+    for col in blamed:
+        print(f"- {col}")
+        
+    print("\nFactors you can safely stop worrying about (Low impact):")
+    for col in safe_to_ignore:
+        print(f"- {col}")
+        
+    exit(0)
+```

@@ -1,0 +1,76 @@
+import csv
+import random
+
+def choose(header, rows, label):
+    """
+    Finds the best working arrangement for 'Laboratory Technician' staff.
+    We filter for this role, then sample up to 50 rows to find the best one.
+    """
+    idx_role = header.index('jobRole')
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('+', '-'))]
+    
+    # Filter rows for Laboratory Technicians
+    lab_indices = [i for i, row in enumerate(rows) if row[idx_role] == 'Laboratory Technician']
+    
+    # If no lab techs, fallback to all rows
+    search_pool = lab_indices if lab_indices else range(len(rows))
+    
+    # Sample up to 50
+    sample_size = min(50, len(search_pool))
+    indices_to_sample = random.sample(search_pool, sample_size)
+    
+    best_idx = -1
+    best_score = float('-inf')
+    
+    for idx in indices_to_sample:
+        true_goals = label(idx)
+        
+        # Calculate score: Maximize '+' goals, minimize '-' goals
+        current_score = 0
+        for i, goal_idx in enumerate(goal_indices):
+            val = true_goals[i]
+            if header[goal_idx].endswith('+'):
+                current_score += val
+            else:
+                current_score -= val
+        
+        if current_score > best_score:
+            best_score = current_score
+            best_idx = idx
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed = [float(val) if header[i][0].isupper() else val for i, val in enumerate(row)]
+            rows.append(processed)
+
+    # Mask goals
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('+', '-'))]
+    for row in rows:
+        for idx in goal_indices:
+            row[idx] = "?"
+
+    # Setup label function
+    labeled = set()
+    def label(i):
+        if len(labeled) >= 50 and i not in labeled:
+            raise ValueError("Budget exceeded")
+        labeled.add(i)
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            next(reader)
+            for row_idx, row in enumerate(reader):
+                if row_idx == i:
+                    return [float(row[g]) if header[g][0].isupper() else row[g] for g in goal_indices]
+
+    best_idx = choose(header, rows, label)
+    
+    print(f"Analysis complete for Laboratory Technicians.")
+    print(f"The best working arrangement was found at row index: {best_idx}")
+    print("This selection was optimized by sampling the laboratory staff subset within the 50-label budget.")

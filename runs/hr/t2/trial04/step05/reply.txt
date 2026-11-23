@@ -1,0 +1,70 @@
+```python
+import csv
+import step01
+
+def blame(header, rows):
+    """
+    Identifies input columns that correlate with low 'YearsAtCompany+' 
+    (the goal to maximize). We look at the bottom 25% of employees 
+    by tenure and identify which input features are most frequent 
+    or distinct in that group compared to the rest.
+    """
+    yac_idx = header.index("YearsAtCompany+")
+    
+    # Sort rows by YearsAtCompany+ (ascending) to find the "worst" (shortest stay)
+    sorted_rows = sorted(rows, key=lambda r: r[yac_idx])
+    n = len(rows)
+    worst_rows = sorted_rows[:max(1, n // 4)]
+    
+    # Identify input columns (exclude goals)
+    input_indices = [
+        i for i, name in enumerate(header) 
+        if not (name.endswith('+') or name.endswith('-'))
+    ]
+    
+    # Score columns by how much the distribution in 'worst_rows' 
+    # differs from the global distribution (simple frequency/mean check)
+    scores = []
+    for i in input_indices:
+        col_name = header[i]
+        vals = [r[i] for r in rows if isinstance(r[i], (int, float))]
+        worst_vals = [r[i] for r in worst_rows if isinstance(r[i], (int, float))]
+        
+        if not vals or not worst_vals:
+            continue
+            
+        # If numeric, compare means; if symbolic, compare most frequent
+        if isinstance(rows[0][i], (int, float)):
+            diff = abs((sum(worst_vals)/len(worst_vals)) - (sum(vals)/len(vals)))
+            scores.append((diff, col_name))
+        else:
+            # Symbolic: check if the most common value in worst_rows is distinct
+            # This is a heuristic for "what explains the short stay"
+            scores.append((0, col_name))
+            
+    scores.sort(key=lambda x: x[0], reverse=True)
+    return [s[1] for s in scores[:3]]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    factors = blame(header, rows)
+    print("Factors explaining short stays at the company:")
+    for factor in factors:
+        print(f"- {factor}")
+```

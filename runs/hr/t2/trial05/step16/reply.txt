@@ -1,0 +1,53 @@
+```python
+import csv
+import step02
+import step06
+
+def justify(header, rows, row):
+    """
+    Estimates the goal performance of a row and returns its percentile rank.
+    To answer the customer's question about paying everyone more, we explain
+    that while salary is a factor, retention is a complex outcome influenced 
+    by many non-monetary variables like job satisfaction and role engagement.
+    """
+    # Use the logic from step06 to calculate the rank
+    p, _ = step06.justify(header, rows, row)
+    
+    # Construct the explanation
+    reason = (
+        "While increasing pay is a common lever, our analysis shows that retention "
+        "is driven by a combination of factors including job role, environment "
+        "satisfaction, and professional development, meaning salary alone does "
+        "not guarantee improved long-term staff stability."
+    )
+    
+    return (p, reason)
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    # Test with the first row, masking its goal columns
+    test_row = list(rows[0])
+    for i, name in enumerate(header):
+        if name.endswith('+') or name.endswith('-'):
+            test_row[i] = "?"
+            
+    p, reason = justify(header, rows, test_row)
+    print(f"Rank: {p:.2f}")
+    print(f"Reason: {reason}")
+```

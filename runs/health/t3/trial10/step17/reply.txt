@@ -1,0 +1,83 @@
+```python
+import csv
+import random
+
+def choose(header, rows, label):
+    """
+    Finds a setup that balances performance (MRE-, ACC+, PRED40+) 
+    and efficiency (N_estimators).
+    
+    We use a simple acquisition function:
+    Score = (Normalized Performance) - (Normalized N_estimators)
+    We sample 50 rows to find the best balance.
+    """
+    goal_indices = [i for i, h in enumerate(header) if h.endswith('-') or h.endswith('+')]
+    n_est_idx = header.index('N_estimators')
+    
+    # Get all N_estimators to normalize them
+    n_ests = [r[n_est_idx] for r in rows]
+    min_n, max_n = min(n_ests), max(n_ests)
+    
+    def get_norm_n(n):
+        return (n - min_n) / (max_n - min_n) if max_n > min_n else 0
+
+    # We will sample 50 random rows to find a good balance
+    # This is a robust approach given the budget and the nature of the data
+    indices = random.sample(range(len(rows)), 50)
+    
+    best_idx = -1
+    best_score = -float('inf')
+    
+    for i in indices:
+        goals = label(i)
+        mre, acc, pred = goals
+        
+        # Normalize goals (MRE is min, others are max)
+        # Since we don't have global goal stats, we use the values from the sample
+        # to estimate relative performance.
+        perf = -mre + acc + pred
+        
+        # Efficiency: smaller N_estimators is better
+        efficiency = -get_norm_n(rows[i][n_est_idx])
+        
+        # Combined score: balance performance and size
+        score = perf + efficiency
+        
+        if score > best_score:
+            best_score = score
+            best_idx = i
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                try:
+                    processed_row.append(float(val))
+                except ValueError:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Prepare true goals for the label function
+    true_goals = {}
+    goal_indices = [i for i, h in enumerate(header) if h.endswith('-') or h.endswith('+')]
+    for i, row in enumerate(rows):
+        true_goals[i] = [row[g] for g in goal_indices]
+        for g in goal_indices:
+            row[g] = "?"
+
+    def label(i):
+        return true_goals[i]
+
+    best_idx = choose(header, rows, label)
+    
+    print(f"Recommended setup found at index {best_idx}.")
+    print("This configuration provides a strong balance between predictive accuracy and computational efficiency.")
+    exit(0)
+```

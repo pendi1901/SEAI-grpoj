@@ -1,0 +1,66 @@
+```python
+import csv
+
+def spot(header, rows):
+    """
+    Identifies rows that are 'unlike anyone we have employed' by calculating
+    the distance of each row from the centroid of the existing dataset.
+    Rows with high distance (outliers) are flagged as untrustworthy for estimation.
+    """
+    # Identify numeric columns for distance calculation
+    numeric_indices = [i for i, name in enumerate(header) if name[0].isupper()]
+    
+    # Calculate mean and std for each numeric column to normalize
+    means = []
+    stds = []
+    for i in numeric_indices:
+        vals = [row[i] for row in rows if isinstance(row[i], (int, float))]
+        m = sum(vals) / len(vals)
+        s = (sum((x - m)**2 for x in vals) / len(vals))**0.5
+        means.append(m)
+        stds.append(s if s > 0 else 1.0)
+    
+    # Calculate anomaly score for each row based on Mahalanobis-like distance
+    scores = []
+    for idx, row in enumerate(rows):
+        dist = 0
+        for j, col_idx in enumerate(numeric_indices):
+            val = row[col_idx]
+            # Normalize and add squared distance
+            dist += ((val - means[j]) / stds[j])**2
+        scores.append((idx, dist**0.5))
+    
+    # Sort by distance descending (most suspicious/unlike others first)
+    scores.sort(key=lambda x: x[1], reverse=True)
+    
+    return [item[0] for item in scores]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    suspects = spot(header, rows)
+    
+    print("Analysis: Identifying rows that are 'unlike' our historical data.")
+    print("When a new hire's profile is statistically distant from our existing employees,")
+    print("our estimation models cannot be trusted because they lack relevant training data.")
+    print("\nTop 5 most suspicious (unlike) rows:")
+    for idx in suspects[:5]:
+        print(f"- Row {idx} is highly anomalous compared to the current workforce.")
+```

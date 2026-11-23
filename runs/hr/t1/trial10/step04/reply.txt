@@ -1,0 +1,74 @@
+```python
+import csv
+
+def flow(header, row, seen):
+    """
+    Decides if the current employee needs a 'what would keep you here' 
+    conversation. We target employees who are high-performers or have 
+    high potential (long tenure) but might be at risk.
+    
+    Strategy: Use a simple threshold based on 'YearsAtCompany+' and 
+    'YearsInCurrentRole+'. If the current row is in the top 20% of 
+    historical data seen so far, flag it.
+    """
+    # Identify goal indices
+    yac_idx = header.index('YearsAtCompany+')
+    yicr_idx = header.index('YearsInCurrentRole+')
+    
+    # Current values
+    yac = row[yac_idx]
+    yicr = row[yicr_idx]
+    
+    # If no history, we can't compare, so default to False
+    if not seen:
+        return False
+    
+    # Calculate thresholds from seen data (top 20%)
+    seen_yac = sorted([r[yac_idx] for r in seen], reverse=True)
+    seen_yicr = sorted([r[yicr_idx] for r in seen], reverse=True)
+    
+    limit = max(1, len(seen) // 5)
+    yac_threshold = seen_yac[min(limit, len(seen_yac) - 1)]
+    yicr_threshold = seen_yicr[min(limit, len(seen_yicr) - 1)]
+    
+    # Flag if the employee is a long-tenured veteran (top 20%)
+    # These are the most valuable to retain.
+    if yac >= yac_threshold and yicr >= yicr_threshold:
+        return True
+        
+    return False
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    # Simulate the stream
+    seen = []
+    count = 0
+    flagged = 0
+    for row in rows:
+        if flow(header, row, seen):
+            flagged += 1
+        seen.append(row)
+        count += 1
+        
+    print(f"Processed {count} employees.")
+    print(f"Identified {flagged} employees for retention conversations.")
+    print("Logic: Flagged employees with tenure in the top 20% of historical data.")
+```

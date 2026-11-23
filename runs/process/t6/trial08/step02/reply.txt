@@ -1,0 +1,62 @@
+```python
+import ezr
+import step01
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column for each test row by training a 
+    tree on the provided training data and predicting the mean of the 
+    leaf node where the test row lands.
+    """
+    # Create a table from the training data
+    data = [header] + train
+    tbl = ezr.Tbl(data)
+    
+    # Build a tree on the training data
+    node = ezr.tree(tbl, tbl.rows)
+    
+    # Identify the index of the first goal column
+    # The first goal column is the first one ending in '-' or '+'
+    goal_idx = -1
+    for i, name in enumerate(header):
+        if name.endswith('-') or name.endswith('+'):
+            goal_idx = i
+            break
+            
+    # For each test row, find its leaf and return the mean of the goal column
+    results = []
+    for row in test:
+        leaf_node = ezr.leaf(node, row)
+        # Calculate mean of the goal column in this leaf
+        vals = [r[goal_idx] for r in leaf_node.rows if r[goal_idx] != "?"]
+        mean_val = sum(vals) / len(vals) if vals else 0
+        results.append(mean_val)
+        
+    return results
+
+if __name__ == "__main__":
+    # Load data
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Split into train and test (simulated)
+    # Using the first 800 rows as training as per instructions
+    train = rows[:800]
+    # Use the remaining rows as test, masking the goal columns
+    test = []
+    for r in rows[800:]:
+        new_row = list(r)
+        # Mask all goal columns (ending in - or +)
+        for i, name in enumerate(header):
+            if name.endswith('-') or name.endswith('+'):
+                new_row[i] = "?"
+        test.append(new_row)
+        
+    estimates = guess(header, train, test)
+    
+    print(f"Estimated Cost- for the first 5 test setups:")
+    for i in range(min(5, len(estimates))):
+        print(f"Setup {i+1}: {estimates[i]:.4f}")
+```

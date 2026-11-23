@@ -1,0 +1,49 @@
+import ezr
+import step03
+
+def certify(xs, ys):
+    """
+    Returns True if xs and ys are statistically indistinguishable,
+    False if they differ significantly.
+    """
+    return step03.certify(xs, ys)
+
+def compare_rules(header, rows):
+    """
+    Compares the two built-in rules:
+    1. The tree-based ranker (default in ezr.ranker).
+    2. The distance-based ranker (ydist).
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Rule 1: Tree-based ranker
+    ranker_tree = ezr.ranker(tbl)
+    scores_tree = [ranker_tree(r) for r in rows]
+    
+    # Rule 2: Distance-based ranker (ydist)
+    # We negate ydist so that higher is better, matching the ranker's logic
+    scores_dist = [-ezr.ydist(tbl, r) for r in rows]
+    
+    # Compare the two sets of scores
+    is_same = certify(scores_tree, scores_dist)
+    
+    return is_same, scores_tree, scores_dist
+
+if __name__ == "__main__":
+    file_path = "Health-ClosedIssues0000.n1000.train.csv"
+    all_data = list(ezr.csv(file_path))
+    header = all_data[0]
+    rows = all_data[1:]
+    
+    is_same, scores_tree, scores_dist = compare_rules(header, rows)
+    
+    print("Comparison of the two built-in ranking rules:")
+    if is_same:
+        print("Result: The difference between the rules is statistically insignificant.")
+        print("Advice: You can stop arguing about it; both rules perform similarly.")
+    else:
+        print("Result: The difference between the rules is statistically significant.")
+        print("Advice: The choice of rule matters for your analysis.")
+    
+    print(f"\nMean score (Tree-based): {sum(scores_tree)/len(scores_tree):.4f}")
+    print(f"Mean score (Distance-based): {sum(scores_dist)/len(scores_dist):.4f}")

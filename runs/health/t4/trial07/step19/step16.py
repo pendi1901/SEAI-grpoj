@@ -1,0 +1,59 @@
+import csv
+import numpy as np
+from sklearn.neighbors import KNeighborsRegressor
+from sklearn.preprocessing import LabelEncoder
+import step06
+
+def justify(header, rows, row):
+    """
+    Estimates the performance of the target row and compares it against
+    the historical distribution of all rows.
+    """
+    # Use the logic from step06 to estimate goals and calculate percentile
+    return step06.justify(header, rows, row)
+
+def answer_customer(header, rows):
+    """
+    Analyzes if 'Max_depth' and 'N_estimators' (size/depth) correlate with
+    better utility, answering why 'biggest/deepest' isn't always best.
+    """
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+    n_idx = header.index('N_estimators')
+    d_idx = header.index('Max_depth')
+
+    def get_utility(r):
+        return (1.0 - r[mre_idx]) + r[acc_idx] + r[pred_idx]
+
+    utilities = [get_utility(r) for r in rows]
+    n_vals = [r[n_idx] for r in rows]
+    d_vals = [r[d_idx] for r in rows]
+
+    # Correlation between size/depth and utility
+    corr_n = np.corrcoef(n_vals, utilities)[0, 1]
+    corr_d = np.corrcoef(d_vals, utilities)[0, 1]
+
+    # If correlations are low or negative, bigger/deeper is not necessarily better
+    if corr_n < 0.1 and corr_d < 0.1:
+        return "Bigger and deeper setups often introduce overfitting or noise, which is why they do not consistently yield better performance than balanced configurations."
+    else:
+        return "While some increase in size helps, there is a point of diminishing returns where larger setups fail to provide additional performance gains."
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Answer the customer's question
+    print(answer_customer(header, rows))

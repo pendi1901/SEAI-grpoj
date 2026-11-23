@@ -1,0 +1,60 @@
+import csv
+
+def blame(header, rows):
+    """
+    Identifies input columns that correlate with short stays.
+    'YearsAtCompany+' is a goal to maximize. 'Worst' rows are those with 
+    the lowest 'YearsAtCompany+' values.
+    """
+    goal_idx = header.index('YearsAtCompany+')
+    
+    # Identify input columns (numeric or symbolic, excluding goals)
+    input_indices = [i for i, name in enumerate(header) 
+                     if not name.endswith('+') and not name.endswith('-')]
+    
+    # Sort rows by YearsAtCompany+ ascending to find the 'worst' (shortest stays)
+    sorted_rows = sorted(rows, key=lambda r: r[goal_idx])
+    worst_rows = sorted_rows[:len(rows) // 10]  # Bottom 10%
+    
+    # Calculate average of input features for the worst rows
+    # and compare against the global average to find 'blame'
+    def get_val(row, i):
+        return row[i]
+
+    scores = []
+    for i in input_indices:
+        col_data = [r[i] for r in rows if isinstance(r[i], (int, float))]
+        if not col_data:
+            continue
+            
+        global_avg = sum(col_data) / len(col_data)
+        worst_avg = sum(r[i] for r in worst_rows if isinstance(r[i], (int, float))) / len(worst_rows)
+        
+        # We look for features where the worst rows deviate significantly from the mean
+        # e.g., lower JobSatisfaction or higher DistanceFromHome
+        diff = abs(worst_avg - global_avg)
+        scores.append((diff, header[i]))
+    
+    # Return top 3 columns that explain the short stays
+    scores.sort(key=lambda x: x[0], reverse=True)
+    return [s[1] for s in scores[:3]]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    blame_factors = blame(header, rows)
+    print("Factors explaining short stays in departments:")
+    for factor in blame_factors:
+        print(f"- {factor}")

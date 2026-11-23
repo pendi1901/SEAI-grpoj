@@ -1,0 +1,68 @@
+import ezr
+import random
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column for each test row by training a tree
+    on the provided training data and predicting the mean value of the
+    first goal column at the corresponding leaf node.
+    """
+    # Create a table object for the training data
+    data = [header] + train
+    tbl = ezr.Tbl(data)
+    
+    # Identify the index of the first goal column
+    # Goal columns end in '-' or '+'
+    goal_indices = [i for i, h in enumerate(header) if h.endswith(('-', '+'))]
+    first_goal_idx = goal_indices[0]
+    
+    # Build a tree on the training data
+    # We use the tree structure to group similar rows
+    root = ezr.tree(tbl, tbl.rows)
+    
+    # For each test row, find the leaf node and return the mean of the 
+    # first goal column for all training rows that fell into that leaf.
+    predictions = []
+    for row in test:
+        leaf_node = ezr.leaf(root, row)
+        # Calculate the mean of the first goal column for rows in this leaf
+        vals = [r[first_goal_idx] for r in leaf_node.rows if r[first_goal_idx] != "?"]
+        if vals:
+            predictions.append(sum(vals) / len(vals))
+        else:
+            # Fallback to global mean if leaf is empty or has no valid data
+            all_vals = [r[first_goal_idx] for r in train if r[first_goal_idx] != "?"]
+            predictions.append(sum(all_vals) / len(all_vals))
+            
+    return predictions
+
+if __name__ == "__main__":
+    # Load the data
+    file_path = "pom3a.n1000.train.csv"
+    rows_gen = ezr.csv(file_path)
+    header = next(rows_gen)
+    all_rows = list(rows_gen)
+    
+    # Split data: 80% train, 20% test
+    random.seed(1234567891)
+    random.shuffle(all_rows)
+    split = int(len(all_rows) * 0.8)
+    train = all_rows[:split]
+    test_raw = all_rows[split:]
+    
+    # Mask the goals in the test set to simulate "unknown"
+    goal_indices = [i for i, h in enumerate(header) if h.endswith(('-', '+'))]
+    test = []
+    for row in test_raw:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        test.append(new_row)
+        
+    # Get predictions
+    preds = guess(header, train, test)
+    
+    # Print a summary for the customer
+    print(f"Estimated {header[goal_indices[0]]} for {len(preds)} test configurations.")
+    print(f"Average predicted cost: {sum(preds)/len(preds):.4f}")
+    print(f"Sample predictions: {[round(p, 4) for p in preds[:5]]}")

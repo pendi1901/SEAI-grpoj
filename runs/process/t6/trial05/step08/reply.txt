@@ -1,0 +1,78 @@
+```python
+import ezr
+import step01
+
+def fix(header, row, levers):
+    """
+    Finds a change to the 'levers' that minimizes the row's ydist.
+    We simulate small changes to the levers and pick the one that 
+    results in the best improvement in ydist.
+    """
+    # Create a temporary table to use ydist
+    # We need a dummy table to calculate ydist
+    # We use the header to construct a Tbl, but we only need it for ydist
+    # which relies on the column goals.
+    tbl = ezr.Tbl([header])
+    
+    best_change = {}
+    best_ydist = ezr.ydist(tbl, row)
+    
+    # Try changing each lever
+    for col_name, allowed in levers.items():
+        idx = header.index(col_name)
+        original_val = row[idx]
+        
+        # For numeric levers, try moving towards the center or boundaries
+        if isinstance(allowed, tuple):
+            low, high = allowed
+            # Try a few points in the range
+            for val in [low, (low + high) / 2, high]:
+                if val != original_val:
+                    row[idx] = val
+                    current_ydist = ezr.ydist(tbl, row)
+                    if current_ydist < best_ydist:
+                        best_ydist = current_ydist
+                        best_change = {col_name: val}
+                    row[idx] = original_val # backtrack
+        
+        # For symbolic levers, try each allowed value
+        elif isinstance(allowed, list):
+            for val in allowed:
+                if val != original_val:
+                    row[idx] = val
+                    current_ydist = ezr.ydist(tbl, row)
+                    if current_ydist < best_ydist:
+                        best_ydist = current_ydist
+                        best_change = {col_name: val}
+                    row[idx] = original_val # backtrack
+                    
+    return best_change
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Identify a "bad" row (e.g., one with high ydist)
+    tbl = ezr.Tbl([header] + rows)
+    scored = sorted([(ezr.ydist(tbl, r), r) for r in rows], key=lambda x: x[0], reverse=True)
+    bad_row = scored[0][1]
+    
+    # Define levers: Plan (numeric 0-1), Team Size (numeric 0-1)
+    levers = {
+        "Plan": (0.0, 1.0),
+        "Team Size": (0.0, 1.0)
+    }
+    
+    recommendation = fix(header, bad_row, levers)
+    
+    print("Rescue Analysis for under-performing setup:")
+    if recommendation:
+        for col, val in recommendation.items():
+            print(f"Recommendation: Change '{col}' to {val:.3f}")
+    else:
+        print("No single lever change found to improve performance.")
+        
+    exit(0)
+```

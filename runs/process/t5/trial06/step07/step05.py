@@ -1,0 +1,59 @@
+import ezr
+import random
+
+def blame(header, rows):
+    """
+    Identify input columns that best explain why the worst rows are bad.
+    We define 'worst' as the rows with the highest ydist.
+    We then compare the distribution of input values in the worst rows
+    against the rest of the data to find the most significant differences.
+    """
+    # Create a table to handle normalization and distance
+    data = [header] + rows
+    tbl = ezr.Tbl(data)
+    
+    # Calculate ydist for all rows
+    scored = [(ezr.ydist(tbl, r), r) for r in rows]
+    scored.sort(key=lambda x: x[0], reverse=True)
+    
+    # Define worst as the bottom 25%
+    n_worst = len(rows) // 4
+    worst = [x[1] for x in scored[:n_worst]]
+    rest = [x[1] for x in scored[n_worst:]]
+    
+    # For each input column, check if the distribution in 'worst' 
+    # is statistically different from 'rest' using the same logic as ezr.same
+    # We look for columns where the values are significantly different.
+    # Since we want to explain why they are bad, we look for columns 
+    # that show a clear shift in distribution.
+    
+    explanations = []
+    for col in tbl.x:
+        w_vals = [r[col.at] for r in worst if r[col.at] != "?"]
+        r_vals = [r[col.at] for r in rest if r[col.at] != "?"]
+        
+        if not w_vals or not r_vals:
+            continue
+            
+        # If they are NOT the same, this column contributes to the difference
+        if not ezr.same(sorted(w_vals), sorted(r_vals)):
+            explanations.append(col.txt)
+            
+    return explanations
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    factors = blame(header, rows)
+    
+    print("--- Analysis: Why are the worst setups idle/costly? ---")
+    print("The following input factors show a statistically significant difference")
+    print("in the worst-performing setups compared to the rest:")
+    for factor in factors:
+        print(f" - {factor}")
+    
+    print("\nThese factors are the primary drivers of the poor performance observed.")
+    exit(0)

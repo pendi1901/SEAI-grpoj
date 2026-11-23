@@ -1,0 +1,56 @@
+```python
+import csv
+import pandas as pd
+import numpy as np
+from sklearn.ensemble import IsolationForest
+
+def spot(header, rows):
+    """
+    Identifies rows that are outliers (potentially mistyped or made up)
+    using an Isolation Forest algorithm.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    
+    # We only care about input columns for detecting "mistyped" data
+    # (Goal columns are outputs, which might be extreme but valid)
+    inputs = [col for col in header if not (col.endswith('-') or col.endswith('+'))]
+    
+    # Isolation Forest returns -1 for outliers and 1 for inliers
+    # The 'decision_function' returns the anomaly score (lower is more abnormal)
+    clf = IsolationForest(contamination=0.05, random_state=42)
+    scores = clf.decision_function(df[inputs])
+    
+    # Get indices of rows sorted by anomaly score (most suspicious first)
+    # The lower the score, the more suspicious the row
+    suspicious_indices = np.argsort(scores)
+    
+    return suspicious_indices.tolist()
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed_row = []
+                for val in row:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        outlier_indices = spot(header, rows)
+        
+        print("Customer Inquiry: Which records look mistyped or made up?")
+        print(f"Analysis: Identified {len(outlier_indices[:10])} most suspicious records based on input distribution.")
+        print("The following row indices are the most likely to contain errors:")
+        print(outlier_indices[:10])
+        print("\nConclusion: These rows deviate significantly from the patterns observed in the rest of the dataset.")
+        
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
+```

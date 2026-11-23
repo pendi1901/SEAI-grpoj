@@ -1,0 +1,74 @@
+```python
+import ezr
+import random
+
+def find_similar(header, rows, target_row, n=5):
+    """
+    Finds the n most similar rows to target_row based on input (x) columns.
+    Returns a list of indices.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate distance from target_row to all other rows
+    distances = []
+    for i, row in enumerate(rows):
+        # Skip comparing to itself if it's in the list
+        if row == target_row:
+            continue
+        d = ezr.xdist(tbl, target_row, row)
+        distances.append((d, i))
+    
+    # Sort by distance ascending (most similar first)
+    distances.sort(key=lambda x: x[0])
+    
+    return [idx for d, idx in distances[:n]]
+
+def remember(header, rows):
+    """
+    Finds the best rows based on the goals defined in the header.
+    Returns the indices of the top 5% of rows.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate ydist for all rows.
+    scored = []
+    for i, row in enumerate(rows):
+        d = ezr.ydist(tbl, row)
+        scored.append((d, i))
+    
+    # Sort by ydist ascending (best first)
+    scored.sort(key=lambda x: x[0])
+    
+    # Return the top 5% of rows (or at least 1)
+    limit = max(1, len(rows) // 20)
+    return [idx for score, idx in scored[:limit]]
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Pick a random target employee to demonstrate the request
+    target_idx = random.randint(0, len(rows) - 1)
+    target_row = rows[target_idx]
+    
+    # Find 5 most similar people
+    similar_indices = find_similar(header, rows, target_row, n=5)
+    
+    print(f"Analysis: Finding people most like employee at index {target_idx}.")
+    print("-" * 60)
+    print(f"Target Employee Role: {target_row[header.index('jobRole')]}")
+    print(f"Target Employee Tenure: {target_row[header.index('YearsAtCompany+')]} years")
+    print("-" * 60)
+    print("Most similar employees:")
+    
+    tenure_idx = header.index('YearsAtCompany+')
+    for idx in similar_indices:
+        row = rows[idx]
+        print(f" - Index {idx:3}: {row[header.index('jobRole')]:25} | Tenure: {row[tenure_idx]} years")
+    
+    avg_tenure = sum(rows[i][tenure_idx] for i in similar_indices) / len(similar_indices)
+    print("-" * 60)
+    print(f"Average tenure of similar employees: {avg_tenure:.1f} years.")
+```

@@ -1,0 +1,61 @@
+import csv
+
+def remember(header, rows):
+    """
+    Finds the 5% of rows most similar to the 'current' setup (the last row).
+    Similarity is based on Euclidean distance of input parameters.
+    """
+    # Identify input columns (excluding goals)
+    input_indices = [i for i, name in enumerate(header) if name not in ['MRE-', 'ACC+', 'PRED40+']]
+    
+    # The 'current' setup is defined as the last row in the dataset
+    current_row = rows[-1]
+    
+    def distance(r1, r2):
+        d = 0
+        for i in input_indices:
+            v1, v2 = r1[i], r2[i]
+            if isinstance(v1, str):
+                d += 0 if v1 == v2 else 1
+            else:
+                # Normalize numeric distance by range if possible, 
+                # but simple absolute difference works for relative ranking
+                d += abs(v1 - v2)
+        return d
+
+    # Calculate distance of every row to the current setup
+    distances = []
+    for i in range(len(rows) - 1):
+        dist = distance(current_row, rows[i])
+        distances.append((dist, i))
+    
+    # Sort by distance ascending (most similar first)
+    distances.sort(key=lambda x: x[0])
+    
+    # Return top 5% (or at least 1)
+    limit = max(1, len(rows) // 20)
+    return [item[1] for item in distances[:limit]]
+
+def get_score(row, header):
+    """Calculates a score where higher is better."""
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+    return (1.0 - row[mre_idx]) + row[acc_idx] + row[pred_idx]
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed = [val if header[i] == 'criterion' else float(val) for i, val in enumerate(row)]
+            rows.append(processed)
+            
+    best_indices = remember(header, rows)
+    
+    print("Analysis: Setups most similar to your current configuration:")
+    for idx in best_indices:
+        score = get_score(rows[idx], header)
+        print(f"Row {idx}: Score {score:.4f} | Data: {rows[idx]}")

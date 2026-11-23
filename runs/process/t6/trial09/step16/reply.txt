@@ -1,0 +1,50 @@
+```python
+import ezr
+import step06
+
+def justify(header, rows, row):
+    """
+    Returns (p, reason): p is the fraction of rows that 'row' is better than,
+    and a sentence explaining the justification.
+    
+    We reuse the logic from step06 which estimates the goals of the input row
+    using a tree-based ranker and compares its performance (ydist) against
+    the historical data.
+    """
+    return step06.justify(header, rows, row)
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data_iter = ezr.csv(filename)
+    
+    try:
+        header = next(data_iter)
+        rows = list(data_iter)
+    except StopIteration:
+        exit(0)
+        
+    # Example: Compare a specific row (B) against the recommendation (A)
+    # Let's assume row 10 is the customer's "B" and row 0 is our "A"
+    row_a = rows[0][:]
+    row_b = rows[10][:]
+    
+    # Mask goals for the justification function
+    for i in range(9, 12):
+        row_a[i] = "?"
+        row_b[i] = "?"
+        
+    p_a, reason_a = justify(header, rows, row_a)
+    p_b, reason_b = justify(header, rows, row_b)
+    
+    print("Comparison Report: Why A over B?")
+    print(f"Recommendation A performance rank: {p_a:.4f}")
+    print(f"Customer choice B performance rank: {p_b:.4f}")
+    
+    if p_a >= p_b:
+        print(f"Justification: {reason_a}")
+        print("Setup B was not recommended because it performs worse than A according to our multi-objective model.")
+    else:
+        print("Setup B is actually performing better than our initial recommendation.")
+        
+    exit(0)
+```

@@ -1,0 +1,80 @@
+import csv
+
+def certify(xs, ys):
+    """
+    Performs a simple two-sample t-test (Welch's) to check if two 
+    distributions are significantly different. Returns True if they 
+    are statistically similar (p > 0.05), False if they differ.
+    """
+    n1, n2 = len(xs), len(ys)
+    if n1 < 2 or n2 < 2:
+        return True
+    
+    m1, m2 = sum(xs) / n1, sum(ys) / n2
+    v1 = sum((x - m1) ** 2 for x in xs) / (n1 - 1)
+    v2 = sum((y - m2) ** 2 for y in ys) / (n2 - 1)
+    
+    # Standard error
+    se = ((v1 / n1) + (v2 / n2)) ** 0.5
+    if se == 0:
+        return m1 == m2
+    
+    # t-statistic
+    t = abs(m1 - m2) / se
+    
+    # For a large enough sample, t > 1.96 corresponds to p < 0.05
+    return t < 1.96
+
+def analyze_training_impact(header, rows):
+    """
+    Splits data into 'high training' and 'low training' groups 
+    and compares 'YearsWithCurrManager+' to see if training 
+    correlates with longer manager tenure.
+    """
+    train_idx = header.index('TrainingTimesLastYear')
+    ywcm_idx = header.index('YearsWithCurrManager+')
+    
+    # Split by median training days
+    train_vals = [row[train_idx] for row in rows]
+    median_train = sorted(train_vals)[len(train_vals) // 2]
+    
+    high_train = [row[ywcm_idx] for row in rows if row[train_idx] >= median_train]
+    low_train = [row[ywcm_idx] for row in rows if row[train_idx] < median_train]
+    
+    is_similar = certify(high_train, low_train)
+    
+    avg_high = sum(high_train) / len(high_train)
+    avg_low = sum(low_train) / len(low_train)
+    
+    return is_similar, avg_high, avg_low
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    is_similar, avg_high, avg_low = analyze_training_impact(header, rows)
+    
+    print("Analysis: Does more training lead to longer tenure with the same manager?")
+    print(f"Average years with manager (High Training): {avg_high:.2f}")
+    print(f"Average years with manager (Low Training): {avg_low:.2f}")
+    
+    if not is_similar:
+        print("Conclusion: There is a statistically significant difference. Training correlates with manager tenure.")
+    else:
+        print("Conclusion: The difference is likely noise; training does not show a significant impact on manager tenure.")

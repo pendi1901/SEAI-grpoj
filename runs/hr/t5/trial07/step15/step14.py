@@ -1,0 +1,56 @@
+import ezr
+import random
+
+def flow(header, row, seen):
+    """
+    Detects if a team's composition has drifted significantly.
+    We compare the current row to the distribution of 'seen' rows.
+    If the current row is a significant outlier in the input space (x-columns)
+    relative to the 'seen' data, we flag it as a change in team dynamics.
+    """
+    if len(seen) < 10:
+        return False
+    
+    # Create a table from seen rows to establish the "normal" distribution
+    tbl = ezr.Tbl([header] + seen)
+    
+    # Calculate the distance of the current row to the centroid of the seen rows
+    # We use xdist because we are monitoring the input space (team composition)
+    # rather than the goal outcomes.
+    mids = ezr.mids(tbl)
+    dist_to_normal = ezr.xdist(tbl, row, mids)
+    
+    # Calculate distances of all seen rows to the centroid to establish a threshold
+    seen_dists = [ezr.xdist(tbl, r, mids) for r in seen]
+    
+    # If the current row's distance is significantly higher than the 95th percentile
+    # of the seen rows, we flag it as a shift in team composition.
+    seen_dists.sort()
+    threshold = seen_dists[int(len(seen_dists) * 0.95)]
+    
+    return dist_to_normal > threshold * 1.5
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    seen = []
+    drift_count = 0
+    
+    # Simulate monthly arrivals
+    for i, row in enumerate(rows):
+        if flow(header, row, seen):
+            drift_count += 1
+            # Print only a few to avoid flooding the console
+            if drift_count <= 5:
+                print(f"Month {i}: Team composition drift detected.")
+        seen.append(row)
+        
+    print(f"\nAnalysis complete.")
+    print(f"Total records processed: {len(rows)}")
+    print(f"Total instances of team composition drift detected: {drift_count}")
+    print("A drift indicates the team no longer looks like the historical norm.")
+    
+    exit(0)

@@ -1,0 +1,67 @@
+```python
+import csv
+
+def flow(header, row, seen):
+    """
+    Decides whether to stop at the current row based on a threshold.
+    We define 'good enough' as being in the top 5% of the expected 
+    performance range based on the history seen so far.
+    """
+    if not seen:
+        return False
+
+    # Identify goal indices
+    idx_mre = header.index('MRE-')
+    idx_acc = header.index('ACC+')
+    idx_pred = header.index('PRED40+')
+
+    # Collect all seen goals to establish a baseline
+    mres = [r[idx_mre] for r in seen]
+    accs = [r[idx_acc] for r in seen]
+    preds = [r[idx_pred] for r in seen]
+
+    # Calculate current row score
+    # Normalize against the history seen so far
+    def norm(val, col_data, reverse=False):
+        min_v, max_v = min(col_data), max(col_data)
+        if max_v == min_v: return 0.5
+        res = (val - min_v) / (max_v - min_v)
+        return (1.0 - res) if reverse else res
+
+    score = (norm(row[idx_mre], mres, True) + 
+             norm(row[idx_acc], accs) + 
+             norm(row[idx_pred], preds)) / 3.0
+
+    # Threshold: Stop if score is in the top 5% of observed scores
+    # We use a heuristic: if score > 0.9 (very high relative to history)
+    return score >= 0.9
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed = []
+                for i, val in enumerate(row):
+                    processed.append(val if header[i] == 'criterion' else float(val))
+                rows.append(processed)
+
+        seen = []
+        found = False
+        for i, row in enumerate(rows):
+            if flow(header, row, seen):
+                print(f"Stopped at row {i}: {row}")
+                found = True
+                break
+            seen.append(row)
+        
+        if not found:
+            print("No row met the criteria; processed all data.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

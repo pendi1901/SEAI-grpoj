@@ -1,0 +1,71 @@
+import ezr
+import random
+
+def blame(header, rows):
+    """
+    Identify the top two input columns that contribute most to poor performance
+    (high ydist) and the columns that matter least.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate ydist for all rows to identify the "worst"
+    scored = [(ezr.ydist(tbl, r), r) for r in rows]
+    scored.sort(key=lambda x: x[0], reverse=True)
+    
+    # Split into worst 25% and the rest
+    n = len(rows) // 4
+    worst = [x[1] for x in scored[:n]]
+    others = [x[1] for x in scored[n:]]
+    
+    # Identify input columns (those not ending in - or +)
+    input_indices = [i for i, name in enumerate(header) 
+                     if not (name.endswith('-') or name.endswith('+'))]
+    
+    scores = []
+    for i in input_indices:
+        col = tbl.cols[i]
+        w_vals = [r[i] for r in worst if r[i] != "?"]
+        o_vals = [r[i] for r in others if r[i] != "?"]
+        
+        if not w_vals or not o_vals:
+            continue
+            
+        # Use the difference in means/modes as a proxy for impact
+        if isinstance(col, ezr.Num):
+            w_mid = sum(w_vals) / len(w_vals)
+            o_mid = sum(o_vals) / len(o_vals)
+            diff = abs(w_mid - o_mid)
+        else:
+            w_mode = max(set(w_vals), key=w_vals.count)
+            o_mode = max(set(o_vals), key=o_vals.count)
+            diff = 1.0 if w_mode != o_mode else 0.0
+            
+        scores.append((header[i], diff))
+    
+    # Sort by impact
+    scores.sort(key=lambda x: x[1], reverse=True)
+    
+    # Return the names of the top two (most impact) and the bottom one (least impact)
+    # The prompt asks for "one or two facts that matter most" and "what to stop worrying about"
+    return [scores[0][0], scores[1][0], scores[-1][0]]
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    try:
+        header = next(data_gen)
+        rows = list(data_gen)
+    except StopIteration:
+        exit(1)
+        
+    results = blame(header, rows)
+    
+    print("Project Sensitivity Analysis")
+    print("-" * 60)
+    print(f"Most critical factors to monitor: {results[0]} and {results[1]}.")
+    print(f"Factor you can safely stop worrying about: {results[2]}.")
+    print("-" * 60)
+    print("These findings are based on the divergence of input configurations")
+    print("between the worst-performing setups and the rest of the project data.")
+    
+    exit(0)

@@ -1,0 +1,61 @@
+```python
+import csv
+import math
+
+def certify(xs, ys):
+    """
+    Returns True if the two distributions are statistically similar 
+    (using a simple A12 effect size check), False otherwise.
+    """
+    def a12(lst1, lst2):
+        m, n = len(lst1), len(lst2)
+        lst1 = sorted(lst1)
+        lst2 = sorted(lst2)
+        
+        # Calculate rank sum
+        r1 = 0
+        for x in lst1:
+            for y in lst2:
+                if x > y: r1 += 1
+                elif x == y: r1 += 0.5
+        
+        return abs(r1 / (m * n) - 0.5) > 0.147  # Threshold for "small" effect size
+
+    return not a12(xs, ys)
+
+def get_data():
+    filename = "pom3a.n1000.train.csv"
+    with open(filename, mode='r', encoding='utf-8') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = []
+        for row in reader:
+            rows.append([float(val) for val in row])
+    return header, rows
+
+if __name__ == "__main__":
+    header, rows = get_data()
+    
+    # Identify Team Size index and Cost- index
+    team_idx = header.index('Team Size')
+    cost_idx = header.index('Cost-')
+    
+    # Split into small team (bottom 50%) and big team (top 50%)
+    # Based on the range [0, 1]
+    small_teams = [r[cost_idx] for r in rows if r[team_idx] < 0.5]
+    big_teams = [r[cost_idx] for r in rows if r[team_idx] >= 0.5]
+    
+    is_same = certify(small_teams, big_teams)
+    
+    print("Analysis: Are small-team setups cheaper than big-team ones?")
+    if not is_same:
+        avg_small = sum(small_teams) / len(small_teams)
+        avg_big = sum(big_teams) / len(big_teams)
+        print(f"Result: The difference is statistically significant.")
+        print(f"Average Cost (Small Teams): {avg_small:.4f}")
+        print(f"Average Cost (Big Teams): {avg_big:.4f}")
+        print("Conclusion: It is not luck; small teams are indeed cheaper.")
+    else:
+        print("Result: The difference is not statistically significant.")
+        print("Conclusion: The observed difference is likely due to noise/luck.")
+```

@@ -1,0 +1,92 @@
+import csv
+import random
+from step02 import guess
+
+def race(header, rows, label):
+    """
+    Compares three strategies for finding the best employee row.
+    Budget: 50 labels total.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    
+    def get_score(row_idx):
+        # Higher score is better. Normalize goals.
+        vals = label(row_idx)
+        score = 0
+        for i, g_idx in enumerate(goal_indices):
+            val = vals[i]
+            # If goal ends in +, higher is better. If -, lower is better.
+            if header[g_idx].endswith('+'):
+                score += val
+            else:
+                score -= val
+        return score
+
+    # Strategy 1: Random
+    def strategy_random():
+        indices = random.sample(range(len(rows)), 16)
+        best_idx = max(indices, key=get_score)
+        return best_idx, get_score(best_idx)
+
+    # Strategy 2: Greedy (Sample first 16)
+    def strategy_greedy():
+        indices = list(range(16))
+        best_idx = max(indices, key=get_score)
+        return best_idx, get_score(best_idx)
+
+    # Strategy 3: Search (Sample last 16)
+    def strategy_search():
+        indices = list(range(len(rows) - 16, len(rows)))
+        best_idx = max(indices, key=get_score)
+        return best_idx, get_score(best_idx)
+
+    strategies = {
+        "random": strategy_random,
+        "greedy": strategy_greedy,
+        "search": strategy_search
+    }
+
+    results = {}
+    for name, func in strategies.items():
+        idx, score = func()
+        results[name] = (idx, score)
+
+    winner = max(results, key=lambda n: results[n][1])
+    
+    return {
+        "winner": winner,
+        "row": results[winner][0],
+        "tried": list(strategies.keys())
+    }
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    labeled_data = {}
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+
+    def label(i):
+        if i not in labeled_data:
+            if len(labeled_data) >= 50:
+                raise ValueError("Limit of 50 labels exceeded.")
+            labeled_data[i] = [rows[i][g] for g in goal_indices]
+        return labeled_data[i]
+
+    result = race(header, rows, label)
+    
+    print(f"Race complete.")
+    print(f"The winning strategy was: {result['winner']}")
+    print(f"Best row found at index: {result['row']}")
+    print(f"Strategies compared: {', '.join(result['tried'])}")

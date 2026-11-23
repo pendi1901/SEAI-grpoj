@@ -1,0 +1,75 @@
+```python
+import csv
+
+def justify(header, rows, row):
+    """
+    Returns (p, reason) where p is the fraction of rows that 'row' is better than,
+    and reason is a human-readable explanation.
+    """
+    # Identify goal indices
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    
+    # Estimate goal values for the target row using the mean of the entire dataset
+    # (Simple baseline estimation since the row has '?' goals)
+    estimates = []
+    for g_idx in goal_indices:
+        vals = [r[g_idx] for r in rows if isinstance(r[g_idx], (int, float))]
+        estimates.append(sum(vals) / len(vals) if vals else 0.0)
+    
+    # Define 'better' logic: 
+    # A row is better if it dominates or has a higher aggregate score
+    def get_score(r_goals):
+        score = 0
+        for i, g_idx in enumerate(goal_indices):
+            val = r_goals[i]
+            name = header[g_idx]
+            # Normalize: 0 to 1
+            col_vals = [r[g_idx] for r in rows if isinstance(r[g_idx], (int, float))]
+            min_v, max_v = min(col_vals), max(col_vals)
+            norm = (val - min_v) / (max_v - min_v + 1e-9)
+            if name.endswith('-'):
+                score += (1.0 - norm)
+            else:
+                score += norm
+        return score / len(goal_indices)
+
+    target_score = get_score(estimates)
+    
+    better_count = 0
+    for r in rows:
+        r_goals = [r[i] for i in goal_indices]
+        if get_score(r_goals) < target_score:
+            better_count += 1
+            
+    p = better_count / len(rows)
+    reason = f"This configuration outperforms {p:.1%} of all historical setups based on its estimated multi-objective performance score."
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed = []
+                for i, val in enumerate(row):
+                    processed.append(val if header[i] == 'criterion' else float(val))
+                rows.append(processed)
+        
+        # Example: Justify the first row as if its goals were hidden
+        test_row = rows[0][:]
+        for i, name in enumerate(header):
+            if name.endswith(('-', '+')):
+                test_row[i] = "?"
+        
+        p, reason = justify(header, rows, test_row)
+        print(f"Performance Rank: {p:.4f}")
+        print(f"Justification: {reason}")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

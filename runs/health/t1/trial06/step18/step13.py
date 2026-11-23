@@ -1,0 +1,84 @@
+import csv
+
+def certify(xs, ys):
+    """
+    Returns True if the distributions of xs and ys are statistically 
+    indistinguishable (same apart from noise), False otherwise.
+    Uses the Vargha-Delaney A12 effect size test.
+    """
+    if not xs or not ys:
+        return True
+    
+    n_x = len(xs)
+    n_y = len(ys)
+    
+    greater = 0
+    less = 0
+    for x in xs:
+        for y in ys:
+            if x > y:
+                greater += 1
+            elif x < y:
+                less += 1
+                
+    a12 = (greater + 0.5 * (n_x * n_y - greater - less)) / (n_x * n_y)
+    
+    # A12 threshold: 0.56 is the standard small effect size threshold.
+    # If A12 is between 0.44 and 0.56, the difference is negligible.
+    return 0.44 <= a12 <= 0.56
+
+def analyze_criterion(header, rows):
+    """
+    Compares the performance (MRE-) of the two most common criteria 
+    to see if the choice makes a significant difference.
+    """
+    idx_mre = header.index('MRE-')
+    idx_crit = header.index('criterion')
+    
+    # Group MRE- by criterion
+    groups = {}
+    for row in rows:
+        crit = row[idx_crit]
+        if crit not in groups:
+            groups[crit] = []
+        groups[crit].append(row[idx_mre])
+    
+    # Compare the two most frequent criteria
+    crit_names = sorted(groups.keys(), key=lambda k: len(groups[k]), reverse=True)
+    if len(crit_names) < 2:
+        return True, "Insufficient variety in criteria to compare."
+    
+    c1, c2 = crit_names[0], crit_names[1]
+    is_same = certify(groups[c1], groups[c2])
+    
+    return is_same, f"Comparing {c1} vs {c2}"
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed = []
+                for i, val in enumerate(row):
+                    if header[i] == 'criterion':
+                        processed.append(val)
+                    else:
+                        processed.append(float(val))
+                rows.append(processed)
+        
+        same, details = analyze_criterion(header, rows)
+        
+        print(f"Analysis: {details}")
+        if same:
+            print("Answer: The choice between these criteria makes no real difference; "
+                  "the performance variation is statistically indistinguishable.")
+        else:
+            print("Answer: Yes, the choice of criterion leads to a statistically "
+                  "significant difference in performance.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

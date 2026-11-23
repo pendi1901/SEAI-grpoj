@@ -1,0 +1,85 @@
+```python
+import ezr
+import step01
+
+def choose(header, rows, label):
+    """
+    Find the best row by using a budget of 50 labels.
+    We use the acquire logic from ezr to intelligently sample the space.
+    """
+    # Create a table structure to handle the data
+    # We need to handle the '?' in the goal columns for the initial table
+    # ezr.Tbl expects rows with values. We'll use a placeholder for the goals.
+    # Since we need to call label(i), we will build a table of labeled rows.
+    
+    # We have 800 rows. We can label 50.
+    # We'll use the acquire function from ezr which is designed for this.
+    # We need to wrap the label function to work with row indices.
+    
+    labeled_rows = []
+    
+    # We need to pass a TBL to acquire. Let's create one with the first few rows
+    # to initialize the column statistics.
+    # We label 50 rows.
+    indices = list(range(len(rows)))
+    
+    # Use the acquire logic:
+    # 1. Start with a small random sample
+    # 2. Iteratively pick rows that are near the best and far from the rest
+    
+    # We need a TBL object. We'll create a dummy one with the header.
+    # We'll use the first 50 rows as a proxy to initialize the TBL structure.
+    # Note: ezr.acquire expects a TBL where rows have goals.
+    
+    def oracle_wrapper(row):
+        # Find index of this row in the original list to call the provided label()
+        # This is inefficient but safe given the constraints.
+        for i, r in enumerate(rows):
+            if r is row:
+                goals = label(i)
+                # Update the row with the true goals
+                row[0], row[1], row[2] = goals[0], goals[1], goals[2]
+                return row
+        return row
+
+    # Create a TBL with the header and some rows to initialize columns
+    # We use the first 50 rows to initialize the TBL structure
+    tbl = ezr.Tbl([header] + [list(r) for r in rows[:50]])
+    
+    # Replace the rows in the table with the ones we will label
+    tbl.rows = []
+    
+    # Use ezr.acquire to pick the best rows
+    # We set the budget to 50
+    ezr.the.Stop = 50
+    ezr.the.Start = 4
+    
+    best_rows = ezr.acquire(tbl, cap=50, label=oracle_wrapper)
+    
+    # Find the best row among the labeled ones
+    best_row = min(best_rows, key=lambda r: ezr.ydist(tbl, r))
+    
+    # Return the index of the best row
+    for i, r in enumerate(rows):
+        if r is best_row:
+            return i
+    return 0
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    all_data = list(ezr.csv(filename))
+    header = all_data[0]
+    rows = all_data[1:]
+    
+    # Mock label function for the main block
+    def mock_label(i):
+        # Return the actual goals from the row
+        return [rows[i][0], rows[i][1], rows[i][2]]
+    
+    # Mask the goals
+    for row in rows:
+        row[0] = row[1] = row[2] = "?"
+        
+    best_idx = choose(header, rows, mock_label)
+    print(f"Best setup found at index: {best_idx}")
+```

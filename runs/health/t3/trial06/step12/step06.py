@@ -1,0 +1,79 @@
+import csv
+from sklearn.ensemble import RandomForestRegressor
+
+def justify(header, rows, row):
+    """
+    Estimates the performance of the given row and compares it to the dataset.
+    Returns (p, reason) where p is the fraction of rows outperformed by the input.
+    """
+    # Identify indices
+    goal_indices = [i for i, h in enumerate(header) if h.endswith('-') or h.endswith('+')]
+    input_indices = [i for i, h in enumerate(header) if not (h.endswith('-') or h.endswith('+'))]
+    
+    # Prepare training data for the goals
+    X_train = [[r[i] for i in input_indices] for r in rows]
+    # Convert symbolic inputs to numeric
+    for i, idx in enumerate(input_indices):
+        if isinstance(rows[0][idx], str):
+            mapping = {val: j for j, val in enumerate(set(r[idx] for r in rows))}
+            for r_idx in range(len(X_train)):
+                X_train[r_idx][i] = mapping[rows[r_idx][idx]]
+            # Update row input
+            row[idx] = mapping.get(row[idx], 0)
+
+    # Train models for each goal
+    predictions = []
+    for g_idx in goal_indices:
+        y_train = [r[g_idx] for r in rows]
+        model = RandomForestRegressor(n_estimators=50, random_state=42)
+        model.fit(X_train, y_train)
+        predictions.append(model.predict([[row[i] for i in input_indices]])[0])
+    
+    # Utility function: minimize '-' goals, maximize '+' goals
+    def get_utility(goals):
+        u = 0.0
+        for i, g_idx in enumerate(goal_indices):
+            col_name = header[g_idx]
+            val = goals[i]
+            # Normalize to 0-1 range based on column min/max
+            col_vals = [r[g_idx] for r in rows]
+            mi, ma = min(col_vals), max(col_vals)
+            norm = (val - mi) / (ma - mi) if ma > mi else 0
+            if col_name.endswith('-'):
+                u += (1.0 - norm)
+            else:
+                u += norm
+        return u / len(goal_indices)
+
+    # Compare against all rows
+    target_utility = get_utility(predictions)
+    better_count = 0
+    for r in rows:
+        row_utility = get_utility([r[i] for i in goal_indices])
+        if target_utility > row_utility:
+            better_count += 1
+            
+    p = better_count / len(rows)
+    reason = f"This configuration is estimated to outperform {p:.1%} of all possible setups based on its predicted performance metrics."
+    return (p, reason)
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for line in reader:
+            processed_row = []
+            for i, val in enumerate(line):
+                if header[i] == 'criterion':
+                    processed_row.append(val)
+                else:
+                    processed_row.append(float(val))
+            rows.append(processed_row)
+    
+    # Test with a sample row (masking goals)
+    sample_row = ["?"] * 3 + rows[0][3:]
+    p, reason = justify(header, rows, sample_row)
+    print(f"Fraction outperformed: {p:.4f}")
+    print(f"Reason: {reason}")

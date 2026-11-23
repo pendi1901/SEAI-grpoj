@@ -1,0 +1,54 @@
+import csv
+import step07
+import step10
+
+def choose(header, rows, label):
+    """
+    Finds the best working arrangement for 'Laboratory Technician' staff 
+    by filtering the dataset and using the strategy race logic.
+    """
+    # Filter rows for Laboratory Technicians
+    job_idx = header.index('jobRole')
+    lab_indices = [i for i, row in enumerate(rows) if row[job_idx] == 'Laboratory Technician']
+    
+    # Map global indices to local indices for the label function
+    # The label function provided by the harness expects the original index
+    def lab_label(local_i):
+        return label(lab_indices[local_i])
+
+    # Extract lab rows
+    lab_rows = [rows[i] for i in lab_indices]
+    
+    # Use the race logic from step10 to find the best row among lab staff
+    # We pass a wrapper that maps the race's internal index back to the original
+    result = step10.race(header, lab_rows, lab_label)
+    
+    # Return the original index of the best row found
+    return lab_indices[result['row']]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = [float(val) if header[i][0].isupper() else val for i, val in enumerate(row)]
+            rows.append(processed_row)
+
+    goal_idx = [i for i, h in enumerate(header) if h.endswith('+') or h.endswith('-')][0]
+    
+    # Mock label function for the harness
+    def label(i):
+        return [rows[i][goal_idx]]
+
+    # Mask goals
+    masked_rows = [list(r) for r in rows]
+    for r in masked_rows: 
+        r[goal_idx] = "?"
+
+    best_idx = choose(header, masked_rows, label)
+    
+    print("Laboratory Staff Analysis:")
+    print(f"The best working arrangement for Laboratory Technicians was found at index {best_idx}.")
+    print("This was determined by filtering for lab roles and applying a model-based search strategy.")

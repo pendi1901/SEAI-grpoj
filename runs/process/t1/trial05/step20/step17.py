@@ -1,0 +1,88 @@
+import csv
+import random
+
+def choose(header, rows, label):
+    """
+    Finds the best setup for a large, high-criticality project.
+    We prioritize rows where 'Size' and 'Criticality' are high,
+    then use a small budget of 50 labels to find the best among them.
+    """
+    goal_indices = []
+    for i, name in enumerate(header):
+        if name.endswith('-') or name.endswith('+'):
+            goal_indices.append((i, name[-1]))
+
+    def score_goals(goals):
+        total = 0
+        for i, (idx, op) in enumerate(goal_indices):
+            val = float(goals[i])
+            if op == '-':
+                total += val
+            else:
+                total += (1.0 - val)
+        return total
+
+    # Filter for "large" and "high criticality" projects
+    # Indices for Size and Criticality
+    size_idx = header.index('Size')
+    crit_idx = header.index('Criticality')
+    
+    candidates = []
+    for i, row in enumerate(rows):
+        if float(row[size_idx]) > 0.7 and float(row[crit_idx]) > 0.7:
+            candidates.append(i)
+            
+    # If we don't have enough candidates, sample from all
+    if len(candidates) < 50:
+        candidates = list(range(len(rows)))
+        
+    # Sample up to 50 from the candidates
+    sample_indices = random.sample(candidates, min(len(candidates), 50))
+    
+    best_score = float('inf')
+    best_idx = sample_indices[0]
+    
+    for i in sample_indices:
+        goals = label(i)
+        score = score_goals(goals)
+        if score < best_score:
+            best_score = score
+            best_idx = i
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [row for row in reader]
+        
+        labeled_cache = {}
+        
+        def label(i):
+            if i not in labeled_cache:
+                if len(labeled_cache) >= 50:
+                    raise Exception("Limit of 50 labels exceeded.")
+                row = rows[i]
+                goals = [row[idx] for idx, name in enumerate(header) 
+                         if name.endswith('-') or name.endswith('+')]
+                labeled_cache[i] = goals
+            return labeled_cache[i]
+
+        best_idx = choose(header, rows, label)
+        
+        print("Customer Inquiry: Best setup for a large, high-criticality project")
+        print("-" * 60)
+        print(f"The best setup found is at index: {best_idx}")
+        print("Summary of the best setup:")
+        for h, v in zip(header, rows[best_idx]):
+            print(f"  {h}: {v}")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

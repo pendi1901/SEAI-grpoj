@@ -1,0 +1,77 @@
+import csv
+
+def flow(header, row, seen):
+    """
+    Decides whether to stop at the current row based on a simple thresholding 
+    strategy. We define 'good enough' as being in the top 5% of the 
+    distribution of the goals seen so far.
+    """
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+
+    # If this is the first row, we can't evaluate it against others yet
+    if not seen:
+        return False
+
+    # Calculate normalized score for the current row
+    # We need the range of values seen so far to normalize
+    all_rows = seen + [row]
+    mres = [r[mre_idx] for r in all_rows]
+    accs = [r[acc_idx] for r in all_rows]
+    preds = [r[pred_idx] for r in all_rows]
+
+    def get_norm(val, vals, reverse=False):
+        min_v, max_v = min(vals), max(vals)
+        if max_v == min_v: return 0.0
+        norm = (val - min_v) / (max_v - min_v)
+        return 1.0 - norm if reverse else norm
+
+    s1 = get_norm(row[mre_idx], mres, reverse=True)
+    s2 = get_norm(row[acc_idx], accs)
+    s3 = get_norm(row[pred_idx], preds)
+    current_score = (s1 + s2 + s3) / 3.0
+
+    # Calculate scores for all seen rows
+    seen_scores = []
+    for r in seen:
+        ss1 = get_norm(r[mre_idx], mres, reverse=True)
+        ss2 = get_norm(r[acc_idx], accs)
+        ss3 = get_norm(r[pred_idx], preds)
+        seen_scores.append((ss1 + ss2 + ss3) / 3.0)
+
+    # If current row is better than 95% of what we've seen, stop
+    threshold = 0.95
+    better_than = sum(1 for s in seen_scores if current_score > s)
+    if len(seen) > 20 and (better_than / len(seen)) >= threshold:
+        return True
+    
+    return False
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed_row = [val if header[i] == 'criterion' else float(val) 
+                                 for i, val in enumerate(row)]
+                rows.append(processed_row)
+        
+        seen = []
+        found = False
+        for i, row in enumerate(rows):
+            if flow(header, row, seen):
+                print(f"Stopped at row {i+1}: Found a setup good enough to ship.")
+                found = True
+                break
+            seen.append(row)
+        
+        if not found:
+            print("Reached the end of the data without finding a 'good enough' setup.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

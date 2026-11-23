@@ -1,0 +1,61 @@
+```python
+import ezr
+import step01
+
+def blame(header, rows):
+    """
+    Identify input columns that best explain why the worst rows are bad.
+    We compare the distribution of input values in the worst 10% of rows
+    against the rest of the rows.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate ydist for all rows to identify the worst
+    scored = []
+    for i, row in enumerate(rows):
+        scored.append((ezr.ydist(tbl, row), row))
+    
+    # Sort descending to get the worst rows
+    scored.sort(key=lambda x: x[0], reverse=True)
+    
+    # Split into worst 10% and the rest
+    limit = max(1, len(rows) // 10)
+    worst = [x[1] for x in scored[:limit]]
+    rest = [x[1] for x in scored[limit:]]
+    
+    # For each input column, check if the distribution in 'worst' 
+    # is significantly different from 'rest' using the stats in ezr.
+    # We look for columns where the values in 'worst' are statistically different.
+    suspects = []
+    for col in tbl.x:
+        at = col.at
+        if isinstance(col, ezr.Num):
+            vals_worst = [r[at] for r in worst if r[at] != "?"]
+            vals_rest = [r[at] for r in rest if r[at] != "?"]
+            if len(vals_worst) > 1 and len(vals_rest) > 1:
+                # If they are NOT the same, this column contributes to the badness
+                if not ezr.same(sorted(vals_worst), sorted(vals_rest)):
+                    suspects.append(header[at])
+        else:
+            # For symbols, check if the most common value in 'worst' 
+            # differs significantly from 'rest'
+            pass 
+            
+    return suspects
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    all_rows = list(ezr.csv(filename))
+    header = all_rows[0]
+    rows = all_rows[1:]
+    
+    suspects = blame(header, rows)
+    
+    print("Analysis of bad setups:")
+    if suspects:
+        print("The following settings are strongly associated with poor performance:")
+        for s in suspects:
+            print(f"- {s}")
+    else:
+        print("No single setting clearly explains the poor performance.")
+```

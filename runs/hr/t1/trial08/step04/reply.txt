@@ -1,0 +1,73 @@
+```python
+import csv
+
+def flow(header, row, seen):
+    """
+    Decides if the current employee needs a 'what would keep you here' conversation.
+    We target employees who are high-performers or have high potential but are 
+    at risk of leaving (e.g., low JobSatisfaction or high YearsSinceLastPromotion).
+    
+    This is an online selection problem (Secretary Problem variant).
+    We use a threshold strategy: observe the first 20% of employees to establish 
+    a baseline for 'YearsAtCompany+' and 'JobSatisfaction', then select the 
+    first employee who exceeds these benchmarks.
+    """
+    # Identify indices
+    try:
+        sat_idx = header.index('JobSatisfaction')
+        years_idx = header.index('YearsAtCompany+')
+        promo_idx = header.index('YearsSinceLastPromotion')
+    except ValueError:
+        return False
+
+    # Baseline phase: 20% of 800 is 160
+    n = len(seen) + 1
+    if n < 160:
+        return False
+    
+    # Calculate thresholds from seen data
+    avg_sat = sum(r[sat_idx] for r in seen) / len(seen)
+    avg_years = sum(r[years_idx] for r in seen) / len(seen)
+    
+    # Logic: If current employee has lower satisfaction than average 
+    # but has been here longer than average (high value/risk), 
+    # or has been waiting for a promotion longer than average.
+    current_sat = row[sat_idx]
+    current_years = row[years_idx]
+    current_promo = row[promo_idx]
+    
+    if current_sat <= avg_sat and (current_years >= avg_years or current_promo > 2):
+        return True
+        
+    return False
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    selected_count = 0
+    seen = []
+    for row in rows:
+        if flow(header, row, seen):
+            selected_count += 1
+        seen.append(row)
+    
+    print(f"Analysis complete.")
+    print(f"Total employees processed: {len(rows)}")
+    print(f"Employees flagged for 'what would keep you here' conversation: {selected_count}")
+    print("Strategy: Flagged employees with below-average satisfaction and high tenure/stagnation.")
+```

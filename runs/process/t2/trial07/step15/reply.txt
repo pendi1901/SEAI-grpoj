@@ -1,0 +1,45 @@
+```python
+import csv
+import step05
+
+def blame(header, rows):
+    """
+    Identifies the top two input columns that correlate with the worst 
+    performance in the 'Cost-' goal.
+    """
+    # The logic in step05 identifies inputs associated with high 'Idle-' values.
+    # We adapt this to focus on 'Cost-' as requested by the customer.
+    
+    # Temporarily swap 'Idle-' for 'Cost-' to reuse the robust logic from step05
+    original_idle_idx = header.index('Idle-')
+    cost_idx = header.index('Cost-')
+    
+    # Rename 'Cost-' to 'Idle-' temporarily so step05 uses it
+    header[original_idle_idx] = 'Idle-Temp'
+    header[cost_idx] = 'Idle-'
+    
+    # Get the blame
+    reasons = step05.blame(header, rows)
+    
+    # Restore header
+    header[cost_idx] = 'Cost-'
+    header[original_idle_idx] = 'Idle-'
+    
+    return reasons
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            rows.append([float(x) for x in row])
+            
+    reasons = blame(header, rows)
+    
+    print("Customer Inquiry: Which project facts matter most to cost?")
+    print(f"Analysis: The factors most strongly associated with high costs are: {', '.join(reasons)}.")
+    print("You should focus your management attention on these areas.")
+    print("Other input factors have less impact and can be monitored less frequently.")
+```

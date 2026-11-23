@@ -1,0 +1,75 @@
+```python
+import ezr
+import random
+
+def justify(header, rows, row):
+    """
+    Estimates the retention outcome for a row and compares it to the population.
+    To answer the customer's question about paying everyone more, we analyze
+    if 'MonthlyIncome' is a primary driver of the retention goal (ydist).
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Build a model to estimate the goal distance (ydist)
+    # We use the tree-based ranker to estimate the quality of the current row
+    root = ezr.tree(tbl, tbl.rows)
+    leaf_node = ezr.leaf(root, row)
+    estimated_ydist = leaf_node.mu
+    
+    # Calculate how many rows are worse (have a higher ydist) than our estimate
+    all_ydists = [ezr.ydist(tbl, r) for r in rows]
+    better_than = [y for y in all_ydists if y > estimated_ydist]
+    p = len(better_than) / len(all_ydists)
+    
+    # Analyze if MonthlyIncome is a strong predictor of retention
+    # We compare the correlation of MonthlyIncome with ydist
+    # If the correlation is low, paying more won't significantly improve retention
+    income_idx = header.index("MonthlyIncome")
+    incomes = [r[income_idx] for r in rows]
+    
+    # Simple correlation check: compare mean income of top 25% vs bottom 25%
+    sorted_rows = sorted(rows, key=lambda r: ezr.ydist(tbl, r))
+    n = len(sorted_rows) // 4
+    best_inc = [r[income_idx] for r in sorted_rows[:n]]
+    worst_inc = [r[income_idx] for r in sorted_rows[-n:]]
+    
+    mean_best = sum(best_inc) / len(best_inc)
+    mean_worst = sum(worst_inc) / len(worst_inc)
+    
+    # If the difference in income is small relative to the mean, money is not the main lever
+    diff = abs(mean_best - mean_worst)
+    avg_inc = sum(incomes) / len(incomes)
+    
+    if diff / avg_inc < 0.1:
+        reason = ("While increasing pay is a common strategy, our data shows that "
+                  "retention is driven more by role-specific factors than by "
+                  "MonthlyIncome alone, meaning pay raises may not yield the "
+                  "expected improvements in employee tenure.")
+    else:
+        reason = ("Our analysis indicates that MonthlyIncome is a significant "
+                  "factor in retention, suggesting that targeted compensation "
+                  "adjustments could be an effective lever for improving "
+                  "employee outcomes.")
+                  
+    return p, reason
+
+if __name__ == "__main__":
+    # Load data
+    data = list(ezr.csv("WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"))
+    header = data[0]
+    rows = data[1:]
+    
+    # Pick a sample row and mask its goals
+    sample_row = list(rows[0])
+    goal_indices = [i for i, name in enumerate(header) if name[-1] in "+-"]
+    for idx in goal_indices:
+        sample_row[idx] = "?"
+        
+    p, reason = justify(header, rows, sample_row)
+    
+    print("Analysis: Is paying everyone more the solution?")
+    print(f"Ranking of current arrangement: {p:.2f}")
+    print(f"Recommendation: {reason}")
+    
+    exit(0)
+```

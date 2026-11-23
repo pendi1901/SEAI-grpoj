@@ -1,0 +1,70 @@
+```python
+import csv
+import pandas as pd
+from sklearn.neighbors import KNeighborsRegressor
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column (Cost-) for test rows using K-Nearest Neighbors.
+    """
+    df_train = pd.DataFrame(train, columns=header)
+    df_test = pd.DataFrame(test, columns=header)
+    
+    # Identify goal columns and input columns
+    goals = [c for c in header if c.endswith('-') or c.endswith('+')]
+    inputs = [c for c in header if c not in goals]
+    
+    # Target is the first goal column
+    target_col = goals[0]
+    
+    # Prepare X and y
+    # Note: The data provided is numeric, so we use all input columns
+    X_train = df_train[inputs]
+    y_train = df_train[target_col]
+    X_test = df_test[inputs]
+    
+    # Use KNN to predict the target
+    # n_neighbors=5 is a standard heuristic for this size of dataset
+    model = KNeighborsRegressor(n_neighbors=5)
+    model.fit(X_train, y_train)
+    
+    predictions = model.predict(X_test)
+    return predictions.tolist()
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed_row = [float(val) if header[i][0].isupper() else val for i, val in enumerate(row)]
+                rows.append(processed_row)
+        
+        # Split data: use first 700 for training, next 100 for testing
+        train_data = rows[:700]
+        test_data = rows[700:]
+        
+        # Mask the goals in test data to simulate "?"
+        goals = [i for i, h in enumerate(header) if h.endswith('-') or h.endswith('+')]
+        masked_test = []
+        for row in test_data:
+            new_row = list(row)
+            for g in goals:
+                new_row[g] = "?"
+            masked_test.append(new_row)
+            
+        predictions = guess(header, train_data, masked_test)
+        
+        print("Customer Inquiry: Estimated Cost- for test setups")
+        print("-" * 45)
+        for i, pred in enumerate(predictions[:5]):
+            print(f"Setup {i+1}: Estimated Cost- = {pred:.4f}")
+        print("...")
+        print(f"Successfully estimated {len(predictions)} setups.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

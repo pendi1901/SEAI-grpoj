@@ -1,0 +1,88 @@
+```python
+import ezr
+import random
+
+def choose(header, rows, label):
+    """
+    Find the best working arrangement using at most 50 labels.
+    We use the 'acquire' strategy from ezr to intelligently select
+    rows to label, then return the index of the best one found.
+    """
+    # The error in the previous version occurred because ezr.ydist 
+    # was called on rows containing '?' (strings).
+    # We must only call ydist on rows that have been fully labeled.
+    
+    # Create a table object. We use a copy of rows to avoid modifying the input
+    # until we have the true values.
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Track which rows have been labeled to avoid re-labeling
+    labeled_indices = {}
+
+    def oracle_wrapper(row):
+        # Find the index of this row in the input list
+        # We use id() or index matching to find the original row
+        idx = -1
+        for i, r in enumerate(rows):
+            if r is row:
+                idx = i
+                break
+        
+        if idx not in labeled_indices:
+            true_vals = label(idx)
+            # Update the row in place with true values
+            for i, val in enumerate(true_vals):
+                row[i] = val
+            labeled_indices[idx] = row
+        return row
+
+    # Use ezr.acquire to select and label rows.
+    # ezr.acquire returns the rows that were labeled.
+    # Note: ezr.acquire uses ydist internally, so it will only work
+    # correctly once rows are labeled. We ensure the initial set 
+    # is labeled before the main loop logic in acquire kicks in.
+    labeled_rows = ezr.acquire(tbl, cap=50, label=oracle_wrapper)
+    
+    # After labeling, find the best row among those labeled.
+    # A row is better when its ydist is lower.
+    best_row = min(labeled_rows, key=lambda r: ezr.ydist(tbl, r))
+    
+    # Return the index of the best row
+    for i, r in enumerate(rows):
+        if r is best_row:
+            return i
+    return 0
+
+if __name__ == "__main__":
+    # Load the data
+    data = list(ezr.csv("WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"))
+    header = data[0]
+    rows = data[1:]
+    
+    # Keep a copy of the original rows to provide to the label function
+    full_data = [list(r) for r in rows]
+    
+    # Mask the goals in the rows provided to the choose function
+    goal_indices = [i for i, name in enumerate(header) if name[-1] in "+-"]
+    masked_rows = []
+    for row in full_data:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_rows.append(new_row)
+        
+    # Define the label function
+    def label(i):
+        return full_data[i]
+    
+    # Run the selection
+    best_idx = choose(header, masked_rows, label)
+    
+    # Print the result
+    print(f"Best employee arrangement found at index: {best_idx}")
+    print("Goal values for this employee:")
+    for idx in goal_indices:
+        print(f"  {header[idx]}: {full_data[best_idx][idx]}")
+    
+    exit(0)
+```

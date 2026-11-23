@@ -1,0 +1,86 @@
+```python
+import csv
+import pandas as pd
+import numpy as np
+from sklearn.neighbors import KNeighborsRegressor
+from step01 import remember
+
+def choose(header, rows, label):
+    """
+    Finds the best row by sampling 50 rows using an acquisition strategy:
+    1. Label 10 random rows to build an initial model.
+    2. Use the model to predict goals for remaining rows.
+    3. Label the remaining 40 rows that have the highest predicted aggregate score.
+    """
+    n_rows = len(rows)
+    inputs = [c for c in header if not (c.endswith('-') or c.endswith('+'))]
+    goals = [c for c in header if c.endswith(('-', '+'))]
+    
+    labeled_indices = []
+    
+    # 1. Initial random sample
+    initial_samples = np.random.choice(n_rows, 10, replace=False).tolist()
+    for i in initial_samples:
+        rows[i][len(inputs):] = label(i)
+        labeled_indices.append(i)
+        
+    # 2. Iterative selection
+    for _ in range(40):
+        # Train model on currently labeled data
+        df_train = pd.DataFrame([rows[i] for i in labeled_indices], columns=header)
+        
+        # Predict for all unlabeled rows
+        unlabeled = [i for i in range(n_rows) if i not in labeled_indices]
+        X_train = df_train[inputs]
+        X_unlabeled = pd.DataFrame([rows[i][:len(inputs)] for i in unlabeled], columns=inputs)
+        
+        # Predict aggregate score
+        scores = pd.DataFrame(index=unlabeled)
+        for goal in goals:
+            model = KNeighborsRegressor(n_neighbors=3)
+            model.fit(X_train, df_train[goal])
+            preds = model.predict(X_unlabeled)
+            
+            # Normalize predictions
+            norm = (preds - df_train[goal].min()) / (df_train[goal].max() - df_train[goal].min())
+            scores[goal] = (1 - norm) if goal.endswith('-') else norm
+            
+        scores['agg'] = scores.mean(axis=1)
+        best_unlabeled = scores['agg'].idxmax()
+        
+        # Label the best candidate
+        rows[best_unlabeled][len(inputs):] = label(best_unlabeled)
+        labeled_indices.append(best_unlabeled)
+        
+    # Return index of the best row found
+    final_df = pd.DataFrame([rows[i] for i in labeled_indices], columns=header, index=labeled_indices)
+    # Re-calculate aggregate for all labeled rows to find the absolute best
+    scores = pd.DataFrame(index=final_df.index)
+    for goal in goals:
+        col_data = final_df[goal]
+        norm = (col_data - col_data.min()) / (col_data.max() - col_data.min())
+        scores[goal] = (1 - norm) if goal.endswith('-') else norm
+    
+    return scores.mean(axis=1).idxmax()
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        data = []
+        for row in reader:
+            data.append([float(x) for x in row[:len(header)-3]] + ['?'] * 3)
+            
+    # Keep true values for the label function
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        next(reader)
+        true_data = [[float(x) for x in row] for row in reader]
+        
+    def label(i):
+        return true_data[i][len(header)-3:]
+        
+    best_idx = choose(header, data, label)
+    print(f"The best setup found is at index {best_idx}.")
+```

@@ -1,0 +1,63 @@
+import ezr
+import random
+
+def blame(header, rows):
+    """
+    Identifies input columns that best explain why the worst rows are bad.
+    We define 'bad' as having a high ydist (far from ideal goals).
+    We compare the distribution of values in the worst 25% of rows 
+    against the best 25% of rows for each input column.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate ydist for all rows and sort them
+    scored = sorted([(ezr.ydist(tbl, r), r) for r in rows], key=lambda x: x[0])
+    
+    n = len(scored) // 4
+    best = [x[1] for x in scored[:n]]
+    worst = [x[1] for x in scored[-n:]]
+    
+    # We look for input columns where the distribution of values differs significantly
+    # between the best and worst rows.
+    explanations = []
+    
+    for col in tbl.x:
+        # Collect values for this column
+        best_vals = [r[col.at] for r in best if r[col.at] != "?"]
+        worst_vals = [r[col.at] for r in worst if r[col.at] != "?"]
+        
+        if not best_vals or not worst_vals:
+            continue
+            
+        # If symbolic, check if the most common value in 'worst' is different from 'best'
+        if isinstance(col, ezr.Sym):
+            best_mode = max(set(best_vals), key=best_vals.count)
+            worst_mode = max(set(worst_vals), key=worst_vals.count)
+            if best_mode != worst_mode:
+                explanations.append(col.txt)
+        # If numeric, check if the means are significantly different
+        else:
+            best_mu = sum(best_vals) / len(best_vals)
+            worst_mu = sum(worst_vals) / len(worst_vals)
+            # If the difference is large relative to the range, it's a candidate
+            if abs(best_mu - worst_mu) > (col.sd * 0.5 if col.sd > 0 else 1):
+                explanations.append(col.txt)
+                
+    return explanations
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Get the columns that explain the worst performance
+    factors = blame(header, rows)
+    
+    print("Analysis: What factors contribute to short stays (worst outcomes)?")
+    print("The following input columns show the strongest correlation with poor performance:")
+    for factor in factors[:5]:
+        print(f"- {factor}")
+        
+    print("\nThese factors differentiate the employees with the shortest stays from those who stay longer.")
+    exit(0)

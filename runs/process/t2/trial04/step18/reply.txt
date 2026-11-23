@@ -1,0 +1,73 @@
+```python
+import csv
+import step01
+import step06
+import step08
+
+def fix(header, row, levers):
+    """
+    Finds the best change to a row to minimize 'Idle-' by testing 
+    all provided levers and picking the one that results in the 
+    best estimated performance score.
+    """
+    best_change = {}
+    best_score = float('inf')
+    
+    # We need to score the row. We use the logic from step06.
+    # We iterate through each lever and test the suggested values.
+    for col_name, allowed in levers.items():
+        idx = header.index(col_name)
+        original_val = row[idx]
+        
+        candidates = []
+        if isinstance(allowed, tuple):  # Numeric (low, high)
+            # Test bounds and midpoint
+            candidates = [allowed[0], (allowed[0] + allowed[1]) / 2, allowed[1]]
+        else:  # Symbolic
+            candidates = allowed
+            
+        for val in candidates:
+            row[idx] = val
+            # Use step06.get_score to evaluate the change
+            score = step06.get_score(header, row)
+            if score < best_score:
+                best_score = score
+                best_change = {col_name: val}
+        
+        # Reset row to original state
+        row[idx] = original_val
+        
+    return best_change
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) for val in row])
+        
+        # Levers available to the customer (excluding hiring/team size)
+        # Based on the dataset, we can adjust Plan, Size, or Dynamism
+        levers = {
+            'Plan': (0.0, 1.0),
+            'Size': (0.0, 1.0),
+            'Dynamism': (0.0, 1.0)
+        }
+        
+        # Find a "bad" row (highest Idle-)
+        idle_idx = header.index('Idle-')
+        bad_row = max(rows, key=lambda r: r[idle_idx])
+        
+        recommendation = fix(header, bad_row, levers)
+        
+        print("To cut idle time without hiring, we recommend the following changes:")
+        for col, val in recommendation.items():
+            print(f"- Adjust {col} to {val:.4f}")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

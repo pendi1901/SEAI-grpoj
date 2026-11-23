@@ -1,0 +1,69 @@
+import csv
+
+def remember(header, rows):
+    """
+    Identifies the best rows based on multi-objective optimization.
+    Goals: Minimize columns ending in '-', Maximize columns ending in '+'.
+    Uses a simple Pareto-based ranking approach to find the most trustworthy setups.
+    """
+    goals = []
+    for i, name in enumerate(header):
+        if name.endswith('-'):
+            goals.append((i, -1))  # Minimize
+        elif name.endswith('+'):
+            goals.append((i, 1))   # Maximize
+
+    def get_score(row):
+        # Normalize values to compare across different scales
+        # Since we want to find the "handful", we calculate a weighted score
+        # based on how close each goal is to the best observed value.
+        return 0
+
+    # Calculate scores: for each goal, we want to be as far from the worst
+    # and as close to the best as possible.
+    scores = []
+    for idx, row in enumerate(rows):
+        # Simple scalarization: normalize goals and sum them
+        # We use the min/max of the column to normalize
+        val = 0
+        for col_idx, direction in goals:
+            col_data = [float(r[col_idx]) for r in rows]
+            min_v, max_v = min(col_data), max(col_data)
+            norm = (row[col_idx] - min_v) / (max_v - min_v + 1e-9)
+            val += norm if direction == 1 else (1 - norm)
+        scores.append((val, idx))
+
+    # Sort by score descending
+    scores.sort(key=lambda x: x[0], reverse=True)
+    
+    # Return top 5% (800 rows * 0.05 = 40)
+    limit = max(1, int(len(rows) * 0.05))
+    return [item[1] for item in scores[:limit]]
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    header = []
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            for row in reader:
+                # Convert numeric columns to float
+                processed_row = []
+                for i, val in enumerate(row):
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        best_indices = remember(header, rows)
+        
+        print(f"Analysis complete. Found {len(best_indices)} trustworthy setups.")
+        print("Indices of top performing rows:")
+        print(best_indices)
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

@@ -1,0 +1,57 @@
+```python
+import csv
+import step01
+
+def flow(header, row, seen):
+    """
+    Decides if the current row is a candidate for a 'what would keep you here' 
+    conversation. We use the logic from step01: if the employee has stayed 
+    'unusually long' (top 5% of the historical data), they are a priority.
+    
+    Since we cannot keep state, we calculate the threshold based on the 
+    'seen' data plus the current row.
+    """
+    years_idx = header.index('YearsAtCompany+')
+    
+    # If this is the first row, we can't compare yet, so let it go
+    if not seen:
+        return False
+    
+    # Combine seen rows and current row to determine the distribution
+    all_years = [r[years_idx] for r in seen] + [row[years_idx]]
+    
+    # Calculate threshold for "unusually long" (top 5%)
+    sorted_years = sorted(all_years, reverse=True)
+    threshold = sorted_years[int(len(all_years) * 0.05)]
+    
+    # If the current row meets or exceeds the threshold, flag it
+    return row[years_idx] >= threshold
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    # Simulate the arrival process
+    seen = []
+    selected_count = 0
+    for row in rows:
+        if flow(header, row, seen):
+            selected_count += 1
+        seen.append(row)
+    
+    print("Retention Analysis Report:")
+    print(f"Total employees processed: {len(rows)}")
+    print(f"Employees flagged for 'what would keep you here' conversation: {selected_count}")
+    print("Logic: Flagged employees are those in the top 5% of 'YearsAtCompany+' based on arrival history.")
+```

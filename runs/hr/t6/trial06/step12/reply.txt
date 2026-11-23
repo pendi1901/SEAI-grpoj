@@ -1,0 +1,66 @@
+```python
+import ezr
+import random
+
+def guess(header, train, test):
+    """
+    Estimates the value of the first goal column ('YearsAtCompany+')
+    by training a tree on the provided training data.
+    """
+    # Create a table object from the training data
+    tbl = ezr.Tbl([header] + train)
+    
+    # Build a decision tree using the training data
+    root = ezr.tree(tbl, tbl.rows)
+    
+    # Identify the first goal column index
+    goal_col = tbl.y[0]
+    
+    results = []
+    for row in test:
+        # Walk the tree to find the leaf node for this test row
+        node = ezr.leaf(root, row)
+        
+        # Calculate the mean of the goal column for all rows in this leaf
+        vals = [r[goal_col.at] for r in node.rows]
+        mean_val = sum(vals) / len(vals) if vals else 0
+        results.append(float(mean_val))
+        
+    return results
+
+if __name__ == "__main__":
+    file_path = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(file_path))
+    header = data[0]
+    rows = data[1:]
+    
+    # Filter for Sales department
+    dept_idx = header.index('department')
+    sales_rows = [r for r in rows if r[dept_idx] == 'Sales']
+    
+    # Create two scenarios: Current (original) vs Counterfactual (Overtime = No)
+    # We use the full dataset to train the model, then predict for the Sales group
+    # under the assumption that Overtime is set to 'No'.
+    
+    def get_predictions(rows_to_test):
+        test_rows = []
+        for r in rows_to_test:
+            new_row = list(r)
+            new_row[header.index('overTime')] = 'No'
+            # Mask goals
+            for i, name in enumerate(header):
+                if name.endswith(('-', '+')):
+                    new_row[i] = '?'
+            test_rows.append(new_row)
+        return guess(header, rows, test_rows)
+
+    predictions = get_predictions(sales_rows)
+    avg_stay = sum(predictions) / len(predictions)
+    
+    print("Analysis: If we cut overtime across Sales, what happens to tenure?")
+    print(f"Estimated average tenure (YearsAtCompany+) for Sales staff if Overtime=No:")
+    print(f"{avg_stay:.2f} years.")
+    print("-" * 40)
+    print("Strategy: We trained a decision tree on the full dataset and predicted")
+    print("tenure for all Sales employees assuming a 'No' overtime policy.")
+```

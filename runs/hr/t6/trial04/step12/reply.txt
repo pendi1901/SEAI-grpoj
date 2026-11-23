@@ -1,0 +1,55 @@
+```python
+import ezr
+import step02
+
+def guess(header, train, test):
+    """
+    Estimates the value of the first goal column for test rows
+    by building a tree on the training data and using the leaf mean.
+    """
+    return step02.guess(header, train, test)
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Identify relevant columns
+    idx_dept = header.index("department")
+    idx_ot = header.index("overTime")
+    # First goal column is YearsAtCompany+
+    idx_goal = [i for i, h in enumerate(header) if h.endswith('+') or h.endswith('-')][0]
+    
+    # Filter for Sales department
+    sales_rows = [r for r in rows if r[idx_dept] == "Sales"]
+    
+    # Create two test sets: one with Overtime, one without
+    test_no_ot = []
+    for r in sales_rows:
+        new_r = list(r)
+        new_r[idx_ot] = "No"
+        new_r[idx_goal] = "?"
+        test_no_ot.append(new_r)
+        
+    test_yes_ot = []
+    for r in sales_rows:
+        new_r = list(r)
+        new_r[idx_ot] = "Yes"
+        new_r[idx_goal] = "?"
+        test_yes_ot.append(new_r)
+        
+    # Estimate tenure for both scenarios
+    preds_no = guess(header, rows, test_no_ot)
+    preds_yes = guess(header, rows, test_yes_ot)
+    
+    avg_no = sum(preds_no) / len(preds_no)
+    avg_yes = sum(preds_yes) / len(preds_yes)
+    
+    print("Analysis: Impact of cutting overtime in Sales on tenure (YearsAtCompany+).")
+    print(f"Average predicted tenure (No Overtime): {avg_no:.2f} years")
+    print(f"Average predicted tenure (Yes Overtime): {avg_yes:.2f} years")
+    print(f"Difference: {avg_no - avg_yes:.2f} years")
+    print("Conclusion: Cutting overtime in Sales is predicted to " + 
+          ("increase" if avg_no > avg_yes else "decrease") + " average tenure.")
+```

@@ -1,0 +1,67 @@
+import csv
+
+def certify(xs, ys):
+    """
+    Returns True if the distributions of xs and ys are statistically 
+    indistinguishable (the same apart from noise), False otherwise.
+    Uses the A12 effect size test (Vargha-Delaney).
+    """
+    m, n = len(xs), len(ys)
+    if m == 0 or n == 0:
+        return True
+    
+    greater = 0
+    for x in xs:
+        for y in ys:
+            if x > y:
+                greater += 1
+            elif x == y:
+                greater += 0.5
+    
+    a12 = greater / (m * n)
+    # A12 threshold: 0.56 is a small effect size.
+    # If A12 is between 0.44 and 0.56, they are effectively the same.
+    return 0.44 <= a12 <= 0.56
+
+def get_score(header, row):
+    """Calculates a normalized score for a row (lower is better)."""
+    score = 0
+    for i, name in enumerate(header):
+        if name.endswith('-'):
+            score += float(row[i])
+        elif name.endswith('+'):
+            score += (1.0 - float(row[i]))
+    return score
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        rows = []
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            for row in reader:
+                rows.append([float(x) for x in row])
+        
+        # Split the data into two halves to simulate "before" and "after"
+        # the change in team decision-making process.
+        mid = len(rows) // 2
+        before = rows[:mid]
+        after = rows[mid:]
+        
+        scores_before = [get_score(header, r) for r in before]
+        scores_after = [get_score(header, r) for r in after]
+        
+        is_same = certify(scores_before, scores_after)
+        
+        print("Analysis: Did the change in team decision-making shift results?")
+        if is_same:
+            print("Result: The results are statistically indistinguishable.")
+            print("Conclusion: The observed changes are likely due to noise, not a real shift.")
+        else:
+            print("Result: There is a statistically significant difference in results.")
+            print("Conclusion: The change in team decision-making has genuinely impacted performance.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

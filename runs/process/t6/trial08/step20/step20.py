@@ -1,0 +1,98 @@
+import ezr
+import random
+import step07
+
+def race(header, rows, label):
+    """
+    Compare three strategies: random, biggest_team, and tree-based.
+    Budget is 50 labels total.
+    """
+    budget = 50
+    labeled_data = {}
+    
+    # Ensure rows are updated with real values before calculating ydist
+    def oracle_wrapper(idx):
+        if idx not in labeled_data:
+            if len(labeled_data) >= budget:
+                raise Exception("Label budget exceeded!")
+            labeled_data[idx] = label(idx)
+            for i, val in enumerate(labeled_data[idx]):
+                rows[idx][i] = val
+        return rows[idx]
+
+    # Helper to calculate ydist safely
+    def get_ydist(tbl, row):
+        # If row still has '?', we cannot calculate ydist. 
+        # We treat it as worst possible distance.
+        if "?" in row: return 1e30
+        return ezr.ydist(tbl, row)
+
+    # Strategy 1: Random
+    def strategy_random(tbl, rows):
+        indices = random.sample(range(len(rows)), budget // 3)
+        for i in indices: oracle_wrapper(i)
+        return min(indices, key=lambda i: get_ydist(tbl, rows[i]))
+
+    # Strategy 2: Biggest Team (The customer's current approach)
+    def strategy_biggest_team(tbl, rows):
+        team_idx = header.index("Team Size")
+        indices = sorted(range(len(rows)), key=lambda i: rows[i][team_idx], reverse=True)
+        top_n = budget // 3
+        for i in indices[:top_n]: oracle_wrapper(i)
+        return min(indices[:top_n], key=lambda i: get_ydist(tbl, rows[i]))
+
+    # Strategy 3: Tree-based (The AI approach)
+    def strategy_tree(tbl, rows):
+        def label_proxy(idx):
+            return oracle_wrapper(idx)
+        return step07.choose(header, rows, label_proxy)
+
+    tbl = ezr.Tbl([header] + rows)
+    strategies = {
+        "random": strategy_random,
+        "biggest_team": strategy_biggest_team,
+        "tree": strategy_tree
+    }
+    
+    results = {}
+    for name, func in strategies.items():
+        results[name] = func(tbl, rows)
+        
+    winner = min(results, key=lambda n: get_ydist(tbl, rows[results[n]]))
+    
+    return {
+        "winner": winner,
+        "row": results[winner],
+        "tried": list(strategies.keys())
+    }
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    full_rows = [list(r) for r in data[1:]]
+    
+    masked_rows = []
+    for r in full_rows:
+        new_row = list(r)
+        for i, name in enumerate(header):
+            if name.endswith(('-', '+')):
+                new_row[i] = "?"
+        masked_rows.append(new_row)
+        
+    def label_func(idx):
+        return full_rows[idx]
+        
+    result = race(header, masked_rows, label_func)
+    
+    print("Comparison: AI-driven search vs. 'Biggest Team' strategy.")
+    print(f"Winner: {result['winner']}")
+    print(f"Best row index found: {result['row']}")
+    print(f"Strategies tried: {', '.join(result['tried'])}")
+    
+    if result['winner'] == 'tree':
+        print("\nConclusion: The AI-driven tree search outperformed the 'biggest team' approach.")
+    else:
+        print("\nConclusion: The current 'biggest team' strategy remains competitive.")
+    
+    exit(0)

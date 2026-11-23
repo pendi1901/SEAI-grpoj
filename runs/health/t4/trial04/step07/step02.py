@@ -1,0 +1,72 @@
+import csv
+import numpy as np
+from sklearn.neighbors import KNeighborsRegressor
+from sklearn.preprocessing import LabelEncoder
+from step01 import remember
+
+def guess(header, train, test):
+    """
+    Predicts the MRE- (first goal column) for test rows using K-Nearest Neighbors.
+    Handles symbolic columns by encoding them into numeric values.
+    """
+    # Identify goal index
+    goal_idx = 0
+    
+    # Identify symbolic column indices
+    symbolic_indices = [i for i, col in enumerate(header) if col == 'criterion']
+    
+    # Combine train and test to ensure consistent encoding
+    all_data = train + test
+    data_arr = np.array(all_data, dtype=object)
+    
+    # Encode symbolic columns
+    for idx in symbolic_indices:
+        le = LabelEncoder()
+        data_arr[:, idx] = le.fit_transform(data_arr[:, idx].astype(str))
+    
+    # Convert everything to float
+    data_numeric = data_arr.astype(float)
+    
+    # Split back into train and test
+    train_len = len(train)
+    X = data_numeric[:, 3:]  # Features are columns 3 to end
+    y = data_numeric[:, goal_idx]
+    
+    X_train = X[:train_len]
+    y_train = y[:train_len]
+    X_test = X[train_len:]
+    
+    # Use KNN to estimate the MRE
+    model = KNeighborsRegressor(n_neighbors=5)
+    model.fit(X_train, y_train)
+    
+    return model.predict(X_test).tolist()
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i] == 'criterion':
+                    processed_row.append(val)
+                else:
+                    processed_row.append(float(val))
+            rows.append(processed_row)
+
+    # Split data for demonstration: use last 10 rows as 'test'
+    train_data = rows[:-10]
+    test_data = [r[:] for r in rows[-10:]]
+    
+    # Mask goals in test data
+    for row in test_data:
+        row[0] = row[1] = row[2] = "?"
+        
+    predictions = guess(header, train_data, test_data)
+    
+    print("Forecasted MRE- for the last 10 setups:")
+    for i, pred in enumerate(predictions):
+        print(f"Setup {i+1}: Estimated MRE = {pred:.4f}")

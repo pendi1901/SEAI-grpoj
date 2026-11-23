@@ -1,0 +1,56 @@
+import ezr
+
+def blame(header, rows):
+    """
+    Identify input columns that best explain why the worst rows are bad.
+    We compare the distribution of input values in the worst 25% of rows
+    against the rest of the data. Columns where the distribution is 
+    significantly different are flagged as 'blameworthy'.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Rank rows by ydist (lower is better, so higher ydist is 'bad')
+    scored = sorted(rows, key=lambda r: ezr.ydist(tbl, r), reverse=True)
+    
+    # Split into worst 25% and the rest
+    n_worst = len(rows) // 4
+    worst = scored[:n_worst]
+    rest = scored[n_worst:]
+    
+    blame_list = []
+    
+    # Check each input column
+    for col in tbl.x:
+        at = col.at
+        # Extract values for this column
+        vals_worst = [r[at] for r in worst if r[at] != "?"]
+        vals_rest = [r[at] for r in rest if r[at] != "?"]
+        
+        if not vals_worst or not vals_rest:
+            continue
+            
+        # If the distributions are significantly different, the column is a suspect
+        # We use ezr.same (cliffs + ks tests) to check for difference
+        if not ezr.same(vals_worst, vals_rest):
+            blame_list.append(header[at])
+            
+    return blame_list
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    all_data = list(ezr.csv(filename))
+    header = all_data[0]
+    rows = all_data[1:]
+    
+    suspects = blame(header, rows)
+    
+    print("Analysis: Which settings are causing poor performance?")
+    if suspects:
+        print(f"The following input settings significantly differ in the worst-performing setups:")
+        for s in suspects:
+            print(f" - {s}")
+        print("\nThese columns are the primary suspects for the observed performance degradation.")
+    else:
+        print("No single input setting clearly distinguishes the worst setups from the rest.")
+    
+    exit(0)

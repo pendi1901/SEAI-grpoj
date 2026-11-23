@@ -1,0 +1,95 @@
+import csv
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column ('YearsAtCompany+') for test rows.
+    To answer the customer's question: "If we cut overtime across Sales, 
+    what happens to how long people stay?", we use a K-Nearest Neighbors 
+    approach that considers the 'department' and 'overTime' status.
+    """
+    goal_idx = next(i for i, h in enumerate(header) if h.endswith('+') or h.endswith('-'))
+    dept_idx = header.index('department')
+    ot_idx = header.index('overTime')
+    
+    # Identify numeric input columns for distance calculation
+    # Ensure we only use columns that are actually numeric (float)
+    input_indices = [i for i, h in enumerate(header) if h[0].isupper() and i != goal_idx]
+
+    predictions = []
+    for t_row in test:
+        # We simulate the "cut overtime" scenario by forcing 'overTime' to 'No'
+        # if the employee is in 'Sales'.
+        simulated_ot = t_row[ot_idx]
+        if t_row[dept_idx] == 'Sales':
+            simulated_ot = 'No'
+            
+        distances = []
+        for r_row in train:
+            # Calculate distance based on numeric features
+            dist = 0.0
+            for i in input_indices:
+                val_t = t_row[i]
+                val_r = r_row[i]
+                # Ensure both are numeric before subtraction
+                if isinstance(val_t, (int, float)) and isinstance(val_r, (int, float)):
+                    dist += (val_t - val_r) ** 2
+                else:
+                    dist += 1.0 # Penalty for non-numeric mismatch
+            
+            # Add penalty for categorical mismatch
+            if t_row[dept_idx] != r_row[dept_idx]:
+                dist += 100.0
+            if simulated_ot != r_row[ot_idx]:
+                dist += 50.0
+                
+            distances.append((dist**0.5, r_row[goal_idx]))
+        
+        # Average of 5 nearest neighbors
+        distances.sort(key=lambda x: x[0])
+        k = 5
+        neighbors = distances[:k]
+        avg_val = sum(n[1] for n in neighbors) / k
+        predictions.append(float(avg_val))
+        
+    return predictions
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Filter for Sales department to answer the specific customer question
+    sales_rows = [r for r in rows if r[header.index('department')] == 'Sales']
+    
+    # Split into train/test
+    train_data = sales_rows[:int(len(sales_rows) * 0.8)]
+    test_data = sales_rows[int(len(sales_rows) * 0.8):]
+    
+    goal_idx = next(i for i, h in enumerate(header) if h.endswith('+') or h.endswith('-'))
+    masked_test = []
+    for row in test_data:
+        new_row = list(row)
+        new_row[goal_idx] = "?"
+        masked_test.append(new_row)
+    
+    results = guess(header, train_data, masked_test)
+    
+    avg_tenure = sum(results) / len(results) if results else 0
+    print("Analysis: Impact of cutting overtime in Sales on employee tenure.")
+    print(f"Estimated average tenure after cutting overtime: {avg_tenure:.2f} years.")
+    print("Conclusion: By removing overtime requirements in Sales, we estimate the average tenure based on current patterns.")

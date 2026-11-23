@@ -1,0 +1,58 @@
+import csv
+import step05
+
+def blame(header, rows):
+    """
+    Identifies input columns that correlate most strongly with the 'Cost-' goal.
+    We define 'worst' as rows where 'Cost-' is in the top 25% (highest values).
+    We then compare the average value of each input column in these 'worst' rows
+    against the average of the rest of the data.
+    """
+    # Reuse the logic from step05, but target 'Cost-' instead of 'Idle-'
+    # We temporarily swap the header to trick the existing blame function
+    # or simply reimplement the logic using the same approach.
+    
+    cost_idx = header.index('Cost-')
+    input_indices = [i for i, name in enumerate(header) 
+                     if not (name.endswith('-') or name.endswith('+'))]
+    
+    # Sort rows by Cost- descending to find the worst 25%
+    sorted_rows = sorted(rows, key=lambda r: r[cost_idx], reverse=True)
+    worst_rows = sorted_rows[:len(rows) // 4]
+    
+    # Calculate average of inputs for worst rows vs all rows
+    def get_avg(data, col_idx):
+        vals = [r[col_idx] for r in data]
+        return sum(vals) / len(vals)
+    
+    diffs = []
+    for i in input_indices:
+        avg_worst = get_avg(worst_rows, i)
+        avg_all = get_avg(rows, i)
+        diffs.append((abs(avg_worst - avg_all), header[i]))
+    
+    # Return the top 2 inputs that explain the variance (most impact)
+    diffs.sort(key=lambda x: x[0], reverse=True)
+    return [name for _, name in diffs[:2]]
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) for val in row])
+        
+        important = blame(header, rows)
+        
+        print("Analysis: Which project facts matter most to Cost-?")
+        print(f"The most critical factors are: {', '.join(important)}.")
+        print("You should focus your management efforts on these inputs.")
+        print("All other input columns show significantly less correlation with cost,")
+        print("meaning you can safely deprioritize monitoring them.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

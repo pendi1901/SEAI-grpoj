@@ -1,0 +1,69 @@
+```python
+import csv
+
+def certify(xs, ys):
+    """
+    Returns True if the two lists of numbers are statistically similar 
+    (same mean), False if they differ significantly.
+    Uses a simple t-test approximation.
+    """
+    n1, n2 = len(xs), len(ys)
+    if n1 < 2 or n2 < 2:
+        return True
+    
+    m1, m2 = sum(xs) / n1, sum(ys) / n2
+    v1 = sum((x - m1) ** 2 for x in xs) / (n1 - 1)
+    v2 = sum((y - m2) ** 2 for y in ys) / (n2 - 1)
+    
+    pooled_std = ((v1 / n1) + (v2 / n2)) ** 0.5
+    if pooled_std == 0:
+        return m1 == m2
+    
+    t_stat = abs(m1 - m2) / pooled_std
+    # Threshold for 95% confidence (approx 1.96)
+    return t_stat < 1.96
+
+def analyze_training_impact(header, rows):
+    """
+    Compares 'YearsWithCurrManager+' for employees with low vs high training.
+    """
+    train_idx = header.index('TrainingTimesLastYear')
+    mgr_idx = header.index('YearsWithCurrManager+')
+    
+    # Split into two groups: low training (0-2) vs high training (3-6)
+    low_training = [row[mgr_idx] for row in rows if row[train_idx] <= 2]
+    high_training = [row[mgr_idx] for row in rows if row[train_idx] > 2]
+    
+    is_same = certify(low_training, high_training)
+    
+    print("Analysis: Do people with more training stay longer with their manager?")
+    print(f"Average years (Low Training 0-2): {sum(low_training)/len(low_training):.2f}")
+    print(f"Average years (High Training 3-6): {sum(high_training)/len(high_training):.2f}")
+    
+    if is_same:
+        print("Result: No, the difference is statistically insignificant.")
+    else:
+        print("Result: Yes, there is a statistically significant difference.")
+    
+    return is_same
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for line in reader:
+            processed_row = []
+            for i, val in enumerate(line):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    analyze_training_impact(header, rows)
+    exit(0)
+```

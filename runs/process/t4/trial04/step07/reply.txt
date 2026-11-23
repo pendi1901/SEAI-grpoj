@@ -1,0 +1,98 @@
+```python
+import csv
+import pandas as pd
+import numpy as np
+from sklearn.ensemble import RandomForestRegressor
+from step01 import remember
+
+def choose(header, rows, label):
+    """
+    Finds the best row by using a surrogate model (Random Forest) to predict 
+    the performance of rows and querying the most promising ones.
+    """
+    goals = [col for col in header if col.endswith(('-', '+'))]
+    inputs = [col for col in header if col not in goals]
+    
+    # 1. Initial sample: Label 20 rows to build an initial model
+    # We pick them spread out to get a good view of the space
+    indices = np.linspace(0, len(rows) - 1, 20, dtype=int)
+    
+    labeled_data = []
+    for i in indices:
+        true_goals = label(i)
+        row_data = rows[i][:]
+        for j, goal in enumerate(goals):
+            row_data[header.index(goal)] = true_goals[j]
+        labeled_data.append(row_data)
+    
+    # 2. Active Learning loop: 30 more queries
+    for _ in range(30):
+        df_train = pd.DataFrame(labeled_data, columns=header)
+        
+        # Train models for each goal
+        models = {}
+        for goal in goals:
+            model = RandomForestRegressor(n_estimators=20, random_state=42)
+            model.fit(df_train[inputs], df_train[goal])
+            models[goal] = model
+            
+        # Predict on all unlabeled rows
+        unlabeled_indices = [i for i in range(len(rows)) if i not in indices]
+        df_unlabeled = pd.DataFrame([rows[i] for i in unlabeled_indices], columns=header)
+        
+        scores = pd.DataFrame(index=unlabeled_indices)
+        for goal in goals:
+            pred = models[goal].predict(df_unlabeled[inputs])
+            # Normalize predictions to [0, 1] based on current model range
+            norm = (pred - pred.min()) / (pred.max() - pred.min() + 1e-9)
+            scores[goal] = (1 - norm) if goal.endswith('-') else norm
+            
+        # Pick the row with the highest predicted aggregate score
+        best_unlabeled_idx = scores.prod(axis=1).idxmax()
+        
+        # Label it
+        true_goals = label(best_unlabeled_idx)
+        row_data = rows[best_unlabeled_idx][:]
+        for j, goal in enumerate(goals):
+            row_data[header.index(goal)] = true_goals[j]
+        labeled_data.append(row_data)
+        indices.append(best_unlabeled_idx)
+        
+    # 3. Return the best row found among all labeled ones
+    df_final = pd.DataFrame(labeled_data, columns=header)
+    best_idx_in_labeled = remember(header, df_final.values.tolist())[0]
+    
+    return indices[best_idx_in_labeled]
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) if val.replace('.','',1).isdigit() or (val.startswith('-') and val[1:].replace('.','',1).isdigit()) else val for val in row])
+        
+        # Keep track of true goals for the label function
+        true_goals_map = {i: [row[header.index(g)] for g in header if g.endswith(('-', '+'))] for i, row in enumerate(rows)}
+        
+        # Mask rows
+        masked_rows = []
+        for row in rows:
+            m_row = row[:]
+            for g in [c for c in header if c.endswith(('-', '+'))]:
+                m_row[header.index(g)] = "?"
+            masked_rows.append(m_row)
+            
+        def label(i):
+            return true_goals_map[i]
+            
+        best_idx = choose(header, masked_rows, label)
+        print(f"Best setup found at index: {best_idx}")
+        print(f"Setup data: {rows[best_idx]}")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

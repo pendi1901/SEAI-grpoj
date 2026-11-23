@@ -1,0 +1,48 @@
+import ezr
+import step01
+
+def flow(header, row, seen):
+    """
+    Decide whether to approve a row based on whether it is better than
+    the current best seen so far.
+    """
+    # If this is the first row, we have no baseline, so we let it go
+    # or accept it if we want to start somewhere. Let's wait for a baseline.
+    if not seen:
+        return False
+
+    # Create a table to handle normalization and goal distance
+    data = [header] + seen
+    tbl = ezr.Tbl(data)
+    
+    # Calculate the ydist (distance from ideal) for the new row
+    # and the best row seen so far.
+    # Note: ezr.ydist uses normalized goals (0 to 1).
+    # A row is better if its ydist is smaller.
+    current_ydist = ezr.ydist(tbl, row)
+    best_ydist = min(ezr.ydist(tbl, s) for s in seen)
+    
+    # Approve if the new row is significantly better than the best seen.
+    # We use a small threshold to avoid approving minor fluctuations.
+    return current_ydist < (best_ydist * 0.95)
+
+if __name__ == "__main__":
+    # Load the data
+    filename = "pom3a.n1000.train.csv"
+    rows_gen = ezr.csv(filename)
+    header = next(rows_gen)
+    rows = list(rows_gen)
+    
+    # Simulate the arrival process
+    seen = []
+    approved_count = 0
+    
+    for row in rows:
+        if flow(header, row, seen):
+            approved_count += 1
+        seen.append(row)
+        
+    print(f"Simulation complete.")
+    print(f"Total configurations processed: {len(rows)}")
+    print(f"Total configurations approved: {approved_count}")
+    print("Strategy: Approved configurations that were at least 5% better than the previous best.")

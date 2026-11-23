@@ -1,0 +1,75 @@
+```python
+import ezr
+import random
+
+def choose(header, rows, label):
+    """
+    Find the best setup by using the acquire logic from ezr.
+    We have a budget of 50 labels. We use the 'acquire' function
+    which is designed to find the best rows in a multi-objective space.
+    """
+    # Create a table object to handle the data
+    tbl = ezr.Tbl([header] + rows)
+    
+    # We need to track which rows we have already labeled to return the index.
+    # Since rows are lists (unhashable), we store them by their original index.
+    labeled_data = {}
+    
+    def oracle_wrapper(row):
+        # Find the index of the row in the original list.
+        # We search for the row that matches the input.
+        for i, r in enumerate(rows):
+            if r == row and i not in labeled_data:
+                labeled_data[i] = label(row)
+                return labeled_data[i]
+        # Fallback if row not found (should not happen with correct logic)
+        return label(row)
+
+    # Use the acquire function to explore the space.
+    # It will call our oracle_wrapper up to 50 times.
+    ezr.acquire(tbl, cap=50, label=oracle_wrapper)
+    
+    # Now we have a set of labeled rows. Find the best one among them.
+    # We create a temporary table of the labeled rows to use ydist.
+    labeled_rows_list = [labeled_data[i] for i in labeled_data]
+    best_tbl = ezr.Tbl([header] + labeled_rows_list)
+    
+    best_idx = -1
+    best_ydist = 1e30
+    
+    for i, row in labeled_data.items():
+        d = ezr.ydist(best_tbl, row)
+        if d < best_ydist:
+            best_ydist = d
+            best_idx = i
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data_iter = ezr.csv(filename)
+    header = next(data_iter)
+    all_rows = list(data_iter)
+    
+    # The customer wants to find the best row.
+    # We simulate the label function.
+    def label(row):
+        # In this dataset, the goals are already present in the original rows.
+        # We find the original row that matches the masked row.
+        for r in all_rows:
+            if r[3:] == row[3:]:
+                return r
+        return row
+    
+    # Mask the goals for the choose function
+    masked_rows = []
+    for row in all_rows:
+        masked_row = ["?"] * 3 + row[3:]
+        masked_rows.append(masked_row)
+        
+    best_index = choose(header, masked_rows, label)
+    
+    print(f"Analysis complete.")
+    print(f"The best configuration found is at index {best_index}.")
+    print(f"Row data: {all_rows[best_index]}")
+```

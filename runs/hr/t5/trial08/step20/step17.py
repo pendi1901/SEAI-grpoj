@@ -1,0 +1,99 @@
+import ezr
+import random
+
+def choose(header, rows, label):
+    """
+    Finds the best arrangement for 'Laboratory Technician' staff using 
+    at most 50 labels.
+    """
+    # Identify the index for jobRole
+    job_role_idx = header.index("jobRole")
+    
+    # Filter rows to only include 'Laboratory Technician'
+    lab_indices = [i for i, row in enumerate(rows) if row[job_role_idx] == "Laboratory Technician"]
+    
+    # If no lab staff found, return 0
+    if not lab_indices:
+        return 0
+    
+    # Track labeled rows to ensure we don't exceed budget
+    labeled_count = 0
+    
+    def oracle_wrapper(row):
+        nonlocal labeled_count
+        # Find original index of this row
+        idx = -1
+        for i, r in enumerate(rows):
+            if r is row:
+                idx = i
+                break
+        
+        # If row is already labeled (has numeric values in goals), return it
+        goal_indices = [i for i, name in enumerate(header) if name[-1] in "+-"]
+        if row[goal_indices[0]] != "?":
+            return row
+            
+        # If we have budget, label it
+        if labeled_count < 50:
+            true_vals = label(idx)
+            for col_idx, val in enumerate(true_vals):
+                row[col_idx] = val
+            labeled_count += 1
+        return row
+
+    # Create a table for the lab staff. 
+    # We must only include rows that have been labeled to avoid TypeError in ydist.
+    # We start by labeling a small initial set to build the table context.
+    initial_sample = random.sample(lab_indices, min(len(lab_indices), 4))
+    for i in initial_sample:
+        oracle_wrapper(rows[i])
+        
+    # Build table from currently labeled lab rows
+    labeled_lab_rows = [rows[i] for i in lab_indices if rows[i][header.index("YearsAtCompany+")] != "?"]
+    tbl = ezr.Tbl([header] + labeled_lab_rows)
+    
+    # Use acquire to intelligently select remaining rows to label
+    # We pass the oracle_wrapper which handles the labeling logic
+    # We pass the full set of lab rows to acquire
+    lab_rows = [rows[i] for i in lab_indices]
+    labeled = ezr.acquire(tbl, cap=50, label=oracle_wrapper)
+    
+    # Find the best row among those labeled
+    # A row is better when its ydist is lower
+    best_row = min(labeled, key=lambda r: ezr.ydist(tbl, r))
+    
+    # Return the original index of the best row
+    for i, r in enumerate(rows):
+        if r is best_row:
+            return i
+    return lab_indices[0]
+
+if __name__ == "__main__":
+    # Load data
+    data = list(ezr.csv("WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"))
+    header = data[0]
+    rows = data[1:]
+    
+    # Create a copy for the label function
+    full_data = [list(r) for r in rows]
+    
+    # Mask the goals
+    goal_indices = [i for i, name in enumerate(header) if name[-1] in "+-"]
+    masked_rows = []
+    for row in full_data:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_rows.append(new_row)
+        
+    def label(i):
+        return full_data[i]
+    
+    best_idx = choose(header, masked_rows, label)
+    
+    print(f"Best laboratory technician arrangement found at index: {best_idx}")
+    print("Goal values for this employee:")
+    for idx in goal_indices:
+        print(f"  {header[idx]}: {full_data[best_idx][idx]}")
+    
+    exit(0)

@@ -1,0 +1,78 @@
+import csv
+import pandas as pd
+import numpy as np
+from sklearn.neighbors import KNeighborsRegressor
+from step01 import remember
+
+def justify(header, rows, row):
+    """
+    Estimates goal values for the target row, calculates its rank relative to 
+    all rows, and provides a justification string explaining why it is 
+    better or worse than other configurations.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    input_cols = [col for col in header if not (col.endswith('-') or col.endswith('+'))]
+    goal_cols = [col for col in header if col.endswith(('-', '+'))]
+    
+    # Estimate goals for the target row using KNN
+    X_train = df[input_cols]
+    y_train = df[goal_cols]
+    model = KNeighborsRegressor(n_neighbors=5)
+    model.fit(X_train, y_train)
+    
+    # Predict goals for the target row
+    target_inputs = pd.DataFrame([row[:len(input_cols)]], columns=input_cols)
+    predicted_goals = model.predict(target_inputs)[0]
+    
+    # Create a combined dataset to calculate aggregate scores
+    all_data = df.copy()
+    # Add the predicted row to the dataset
+    predicted_row = list(target_inputs.iloc[0]) + list(predicted_goals)
+    all_data.loc[len(all_data)] = predicted_row
+    
+    # Calculate aggregate scores
+    scores = pd.DataFrame(index=all_data.index)
+    for goal in goal_cols:
+        col_data = all_data[goal].astype(float)
+        diff = col_data.max() - col_data.min()
+        normalized = (col_data - col_data.min()) / diff if diff != 0 else 0
+        if goal.endswith('-'):
+            scores[goal] = 1 - normalized
+        else:
+            scores[goal] = normalized
+    
+    all_data['aggregate'] = scores.mean(axis=1)
+    
+    # Calculate rank (fraction of rows worse than target)
+    target_score = all_data['aggregate'].iloc[-1]
+    others = all_data['aggregate'].iloc[:-1]
+    p = (others < target_score).mean()
+    
+    reason = f"This setup is better than {p:.1%} of all configurations because its predicted performance metrics balance the goals more effectively than the alternative."
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [[float(val) for val in row] for row in reader]
+        
+        # Pick two rows to compare: row 0 (A) and row 1 (B)
+        row_a = rows[0][:9] + ["?"] * 3
+        row_b = rows[1][:9] + ["?"] * 3
+        
+        p_a, reason_a = justify(header, rows, row_a)
+        p_b, reason_b = justify(header, rows, row_b)
+        
+        print(f"Comparison: Setup A (Rank {p_a:.4f}) vs Setup B (Rank {p_b:.4f})")
+        if p_a >= p_b:
+            print(f"Justification: {reason_a}")
+        else:
+            print(f"Justification: Setup B is actually better than {p_b:.1%} of configurations, outperforming Setup A.")
+        exit(0)
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

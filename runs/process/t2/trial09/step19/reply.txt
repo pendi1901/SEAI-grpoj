@@ -1,0 +1,43 @@
+```python
+import csv
+import math
+from step09 import spot as step09_spot
+
+def spot(header, rows):
+    """
+    Identifies rows that are outliers. We use the logic from step09
+    to identify rows that deviate significantly from the input patterns.
+    """
+    return step09_spot(header, rows)
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', newline='') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed_row = []
+                for val in row:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+            
+            suspicious = spot(header, rows)
+            
+            print("Customer Inquiry: A new team lead proposes a setup unlike anything we have run.")
+            print("Tell me when I am asking you about something you have never seen.")
+            if suspicious:
+                print(f"Analysis: I have identified {len(suspicious)} rows that are highly unusual.")
+                print(f"The most suspicious setup is at index {suspicious[0]}.")
+                print("These setups deviate significantly from the input patterns of our historical data.")
+            else:
+                print("Analysis: The proposed setup appears consistent with our historical data.")
+                
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

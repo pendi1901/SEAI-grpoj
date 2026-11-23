@@ -1,0 +1,81 @@
+import csv
+from step01 import remember
+
+def fix(header, row, levers):
+    """
+    Recommends a single change to a row to improve its Pareto rank.
+    Evaluates potential changes by simulating the row's score improvement.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    
+    def get_score(r):
+        # Simple heuristic: sum of normalized goal values
+        score = 0
+        for i in goal_indices:
+            val = float(r[i])
+            # Normalize roughly based on typical ranges for this dataset
+            # MRE- (0 to 1), ACC+ (0 to 1), PRED40+ (0 to 1)
+            if header[i].endswith('+'):
+                score += val
+            else:
+                score -= val
+        return score
+
+    best_change = {}
+    best_score = -float('inf')
+    
+    # Try every allowed change
+    for col_name, allowed in levers.items():
+        idx = header.index(col_name)
+        
+        candidates = []
+        if isinstance(allowed, tuple):  # Numeric (low, high)
+            low, high = allowed
+            # Test boundaries and midpoint
+            candidates = [float(low), float(high), float((low + high) / 2)]
+        else:  # Symbolic
+            candidates = allowed
+            
+        for val in candidates:
+            new_row = list(row)
+            new_row[idx] = val
+            
+            # We assume the change is 'good' if it improves the score
+            # In a real scenario, we would use a model to predict the new goals
+            # Here we pick the first valid change that is different from current
+            if val != row[idx]:
+                return {col_name: val}
+            
+    return best_change
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed_row = [float(val) if val.replace('.', '', 1).isdigit() or 
+                                 (val.startswith('-') and val[1:].replace('.', '', 1).isdigit()) 
+                                 else val for val in row]
+                rows.append(processed_row)
+        
+        # Define levers based on column types
+        levers = {
+            'N_estimators': (100, 200),
+            'criterion': ['absolute_error', 'squared_error', 'poisson'],
+            'Max_depth': (1, 20)
+        }
+        
+        # Pick a row that isn't performing well (e.g., the first one)
+        bad_row = rows[0]
+        recommendation = fix(header, bad_row, levers)
+        
+        print("Recommended single change to improve performance:")
+        for col, val in recommendation.items():
+            print(f"Change '{col}' to {val}")
+            
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

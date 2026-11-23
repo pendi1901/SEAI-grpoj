@@ -1,0 +1,43 @@
+import csv
+import step03
+
+def certify(xs, ys):
+    """
+    Uses the statistical test from step03 to determine if two groups
+    are significantly different.
+    """
+    return step03.certify(xs, ys)
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    idx_training = header.index('TrainingTimesLastYear')
+    idx_manager = header.index('YearsWithCurrManager+')
+
+    # Split population into two groups:
+    # Low training (0-2 days) vs High training (3-6 days)
+    low_training = [r[idx_manager] for r in rows if r[idx_training] <= 2]
+    high_training = [r[idx_training] for r in rows if r[idx_training] > 2]
+    
+    # We compare the 'YearsWithCurrManager+' for those with low vs high training
+    high_training_tenure = [r[idx_manager] for r in rows if r[idx_training] > 2]
+    
+    is_noise = certify(low_training, high_training_tenure)
+    
+    print("Analysis: Do people with more training stay longer with their manager?")
+    if is_noise:
+        print("Result: No, the difference in tenure is likely just noise.")
+    else:
+        print("Result: Yes, there is a statistically significant difference in tenure.")

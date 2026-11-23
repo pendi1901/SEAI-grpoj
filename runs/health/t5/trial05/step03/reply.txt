@@ -1,0 +1,46 @@
+```python
+import ezr
+
+def certify(xs, ys):
+    """
+    Returns True if xs and ys are statistically indistinguishable,
+    False if they differ significantly.
+    """
+    # Sort the lists as required by the statistical tests in ezr
+    xs_sorted = sorted(xs)
+    ys_sorted = sorted(ys)
+    
+    # Use the same() function from ezr which combines cliffs, ks, and cohen tests
+    # eps=0.35 is a standard effect size for Cohen's d
+    return ezr.same(xs_sorted, ys_sorted, eps=0.35)
+
+if __name__ == "__main__":
+    # Load data
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data_iter = ezr.csv(filename)
+    header = next(data_iter)
+    rows = list(data_iter)
+    
+    # Identify the 'N_estimators' column index
+    at = header.index("N_estimators")
+    
+    # Split data into "big" (above median) and "small" (below or equal to median)
+    # based on N_estimators. We compare the 'ACC+' goal (index 1).
+    vals = [row[at] for row in rows]
+    median = sorted(vals)[len(vals) // 2]
+    
+    big = [row[1] for row in rows if row[at] > median]
+    small = [row[1] for row in rows if row[at] <= median]
+    
+    # Perform certification
+    is_same = certify(big, small)
+    
+    print("--- Analysis: Big vs Small Setups ---")
+    print(f"Big setups (n={len(big)}), Small setups (n={len(small)})")
+    print(f"Are they statistically the same? {is_same}")
+    
+    if is_same:
+        print("Conclusion: The observed difference is likely just noise.")
+    else:
+        print("Conclusion: There is a statistically significant difference between the groups.")
+```

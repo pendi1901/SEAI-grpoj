@@ -1,0 +1,56 @@
+import ezr
+import step03
+
+def certify(xs, ys):
+    """
+    Returns True if the two distributions are statistically indistinguishable,
+    False if they really differ. Uses ezr.same.
+    """
+    return ezr.same(xs, ys)
+
+def analyze_training_impact(header, rows):
+    """
+    Splits the data into two groups based on training days:
+    - Low training (<= 2 days)
+    - High training (> 2 days)
+    Compares their 'YearsWithCurrManager+' (a goal to maximize).
+    """
+    train_idx = header.index('TrainingTimesLastYear')
+    manager_idx = header.index('YearsWithCurrManager+')
+    
+    low_training = []
+    high_training = []
+    
+    for row in rows:
+        t_val = row[train_idx]
+        m_val = row[manager_idx]
+        if t_val == "?" or m_val == "?":
+            continue
+            
+        if t_val <= 2:
+            low_training.append(m_val)
+        else:
+            high_training.append(m_val)
+            
+    is_same = certify(low_training, high_training)
+    return is_same, low_training, high_training
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    is_same, low_tr, high_tr = analyze_training_impact(header, rows)
+    
+    avg_low = sum(low_tr) / len(low_tr)
+    avg_high = sum(high_tr) / len(high_tr)
+    
+    print("Analysis: Do people with more training stay longer with their manager?")
+    print(f"  Average tenure (Low training, <=2 days): {avg_low:.2f} years")
+    print(f"  Average tenure (High training, >2 days): {avg_high:.2f} years")
+    
+    if is_same:
+        print("Result: The difference is statistically insignificant (noise).")
+    else:
+        print("Result: The difference is statistically significant (real).")

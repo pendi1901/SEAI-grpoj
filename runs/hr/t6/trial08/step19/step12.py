@@ -1,0 +1,57 @@
+import ezr
+import step02
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column for test rows by training a tree
+    on the provided training data and predicting the mean of the leaf
+    where the test row lands.
+    """
+    return step02.guess(header, train, test)
+
+if __name__ == "__main__":
+    # Load data
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+
+    # Identify indices
+    overtime_idx = header.index("overTime")
+    dept_idx = header.index("department")
+    # First goal column is YearsAtCompany+ (index 31)
+    goal_idx = 31 
+
+    # Filter for Sales department
+    sales_rows = [r for r in rows if r[dept_idx] == "Sales"]
+
+    # Create two scenarios:
+    # 1. Current state (keep original overtime)
+    # 2. Counterfactual (set overtime to "No")
+    test_rows = []
+    for r in sales_rows:
+        new_r = list(r)
+        new_r[overtime_idx] = "No"
+        # Mask goals
+        for i, name in enumerate(header):
+            if name.endswith('+') or name.endswith('-'):
+                new_r[i] = "?"
+        test_rows.append(new_r)
+
+    # Train on all data
+    estimates = guess(header, rows, test_rows)
+
+    # Compare average tenure
+    original_tenure = [r[goal_idx] for r in sales_rows]
+    avg_orig = sum(original_tenure) / len(original_tenure)
+    avg_new = sum(estimates) / len(estimates)
+
+    print("Impact Analysis: Cutting Overtime in Sales")
+    print("-" * 45)
+    print(f"Average tenure (current): {avg_orig:.2f} years")
+    print(f"Average tenure (if overtime cut): {avg_new:.2f} years")
+    print("-" * 45)
+    if avg_new > avg_orig:
+        print("Result: Cutting overtime is predicted to increase average tenure.")
+    else:
+        print("Result: Cutting overtime is predicted to have little positive impact on tenure.")

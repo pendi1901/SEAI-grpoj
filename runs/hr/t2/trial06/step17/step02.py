@@ -1,0 +1,64 @@
+import csv
+import step01
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column (YearsAtCompany+) based on the average 
+    value of that column in the training set.
+    """
+    # Find the index of the first goal column ending in '+'
+    goal_idx = -1
+    for i, name in enumerate(header):
+        if name.endswith('+'):
+            goal_idx = i
+            break
+    
+    if goal_idx == -1:
+        return [0.0] * len(test)
+    
+    # Calculate the mean of the first goal column from the training data
+    total = sum(row[goal_idx] for row in train)
+    mean_val = total / len(train) if train else 0.0
+    
+    # Return the mean as the estimate for every test row
+    return [mean_val] * len(test)
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    # Split data: use first 700 for train, next 100 for test
+    train_data = rows[:700]
+    test_data = rows[700:]
+    
+    # Mask the goal columns in test data to simulate "?"
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    masked_test = []
+    for row in test_data:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_test.append(new_row)
+        
+    predictions = guess(header, train_data, masked_test)
+    
+    print("Estimation for 'YearsAtCompany+' for new hires:")
+    for i, val in enumerate(predictions[:5]):
+        print(f"Test row {i}: Estimated tenure = {val:.2f} years")
+    print("...")

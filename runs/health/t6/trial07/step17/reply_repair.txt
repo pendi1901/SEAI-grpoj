@@ -1,0 +1,77 @@
+```python
+import ezr
+
+def choose(header, rows, label):
+    """
+    Finds a setup that forecasts well (low ydist) and is small (low N_estimators).
+    We use the acquire logic to explore the space, balancing performance and size.
+    """
+    # Create a table to handle column roles
+    data = [header] + rows
+    tbl = ezr.Tbl(data)
+    
+    # Identify the N_estimators column index
+    n_est_idx = header.index("N_estimators")
+    
+    # Track the best row found during the labeling process.
+    best_row_info = {"idx": -1, "score": 1e30}
+
+    def oracle_wrapper(row):
+        # Find the index of this row in the original list.
+        # Since rows are passed in, we find the index to call the oracle.
+        # We use the row content to find the index.
+        idx = -1
+        for i, r in enumerate(rows):
+            # Compare non-masked columns to identify the row
+            if all(r[j] == row[j] for j in range(len(row)) if row[j] != "?"):
+                idx = i
+                break
+        
+        if idx == -1: return row
+        
+        full_row = label(idx)
+        
+        # Calculate score: performance (ydist) + size penalty (N_estimators)
+        yd = ezr.ydist(tbl, full_row)
+        # Normalize N_estimators: assume range 0-200 based on data
+        norm_n = full_row[n_est_idx] / 200.0 
+        score = yd + (0.2 * norm_n)
+        
+        if score < best_row_info["score"]:
+            best_row_info["score"] = score
+            best_row_info["idx"] = idx
+            
+        return full_row
+
+    # Use ezr.acquire to perform the search.
+    # The acquire function will call label at most 50 times.
+    ezr.acquire(tbl, cap=50, label=oracle_wrapper)
+    
+    return best_row_info["idx"]
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    all_data = list(ezr.csv(filename))
+    header = all_data[0]
+    rows = all_data[1:]
+    
+    # Mask goals for the input to choose()
+    temp_tbl = ezr.Tbl([header] + rows)
+    goal_indices = [c.at for c in temp_tbl.y]
+    masked_rows = []
+    for row in rows:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_rows.append(new_row)
+        
+    # Define the label function for the harness.
+    def label(i):
+        return rows[i]
+        
+    best_idx = choose(header, masked_rows, label)
+    
+    print(f"Analysis complete. The best setup (balancing performance and size) is at index {best_idx}.")
+    print(f"Row details: {rows[best_idx]}")
+    exit(0)
+```

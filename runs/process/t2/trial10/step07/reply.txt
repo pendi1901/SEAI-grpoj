@@ -1,0 +1,62 @@
+```python
+import csv
+import step01
+import random
+
+def choose(header, rows, label):
+    """
+    Finds the best row by sampling 50 rows, labeling them, 
+    and returning the index of the best one found.
+    """
+    # Identify goal indices
+    goal_indices = [i for i, name in enumerate(header) 
+                    if name.endswith('-') or name.endswith('+')]
+    
+    # We have 800 rows. We can label 50.
+    # We pick 50 random indices to sample.
+    indices = random.sample(range(len(rows)), min(50, len(rows)))
+    
+    best_idx = -1
+    best_score = float('inf')
+    
+    for i in indices:
+        # Get true goal values
+        goals = label(i)
+        
+        # Calculate score for this row
+        # Goals ending in '-' are minimized, '+' are maximized
+        current_score = 0
+        for j, goal_idx in enumerate(goal_indices):
+            val = float(goals[j])
+            op = header[goal_idx][-1]
+            current_score += val if op == '-' else -val
+            
+        if current_score < best_score:
+            best_score = current_score
+            best_idx = i
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', newline='') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [row for row in reader]
+            
+            # Create a local label function for the harness
+            def label(i):
+                return [rows[i][j] for j, name in enumerate(header) 
+                        if name.endswith('-') or name.endswith('+')]
+            
+            best_idx = choose(header, rows, label)
+            
+            print("Customer Inquiry: Finding the best setup from 50 trials.")
+            print(f"The best setup found is at index {best_idx}.")
+            print(f"Row data: {rows[best_idx]}")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

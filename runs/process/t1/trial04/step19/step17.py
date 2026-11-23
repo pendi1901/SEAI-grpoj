@@ -1,0 +1,86 @@
+import csv
+import random
+
+def choose(header, rows, label):
+    """
+    Finds the best setup for a large, high-criticality project.
+    We prioritize 'Size' and 'Criticality' to identify the relevant subset,
+    then use a small budget to find the best performer within that subset.
+    """
+    # Identify indices
+    size_idx = header.index('Size')
+    crit_idx = header.index('Criticality')
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('-') or name.endswith('+')]
+    is_min = [name.endswith('-') for name in header if name.endswith('-') or name.endswith('+')]
+
+    def get_score(goal_values):
+        total = 0
+        for i, val in enumerate(goal_values):
+            total += val if is_min[i] else (1.0 - val)
+        return total
+
+    # Filter for "large" and "high criticality" projects (top 25% in both)
+    # This focuses our search on the high-stakes domain requested.
+    size_threshold = sorted([r[size_idx] for r in rows])[int(0.75 * len(rows))]
+    crit_threshold = sorted([r[crit_idx] for r in rows])[int(0.75 * len(rows))]
+    
+    candidates = [
+        i for i, r in enumerate(rows) 
+        if r[size_idx] >= size_threshold and r[crit_idx] >= crit_threshold
+    ]
+    
+    # If no candidates found, fallback to all rows
+    if not candidates:
+        candidates = list(range(len(rows)))
+
+    # Use our budget of 50 to sample the most promising candidates
+    # We sample up to 50, or all if fewer exist.
+    sample_size = min(50, len(candidates))
+    sample_indices = random.sample(candidates, sample_size)
+    
+    best_idx = -1
+    best_score = float('inf')
+    
+    for idx in sample_indices:
+        goals = label(idx)
+        score = get_score(goals)
+        if score < best_score:
+            best_score = score
+            best_idx = idx
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            true_goals = []
+            for row in reader:
+                processed = []
+                goals = []
+                for i, val in enumerate(row):
+                    if header[i].endswith('-') or header[i].endswith('+'):
+                        goals.append(float(val))
+                        processed.append("?")
+                    else:
+                        processed.append(float(val))
+                rows.append(processed)
+                true_goals.append(goals)
+
+        def label(i):
+            return true_goals[i]
+
+        best_idx = choose(header, rows, label)
+        
+        print(f"Analysis complete for high-criticality, large-scale projects.")
+        print(f"The recommended setup is at index: {best_idx}")
+        print("This selection was made by filtering for high-stakes parameters and evaluating")
+        print("the best-performing configurations within that specific risk profile.")
+        exit(0)
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

@@ -1,0 +1,92 @@
+import csv
+import random
+
+def get_score(header, row):
+    """Calculates aggregate score: (1 - MRE) + ACC + PRED40."""
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+    return (1.0 - float(row[mre_idx])) + float(row[acc_idx]) + float(row[pred_idx])
+
+def race(header, rows, label):
+    """
+    Compares three strategies: random, greedy (first 10 then best), 
+    and exploration (first 20 then best).
+    """
+    budget = 50
+    tried = ["random", "greedy", "exploration"]
+    results = {}
+    
+    # Strategy 1: Random
+    random_indices = random.sample(range(len(rows)), 16)
+    best_random_idx = -1
+    best_random_score = -float('inf')
+    for i in random_indices:
+        goals = label(i)
+        row = list(rows[i])
+        for idx, g_idx in enumerate([header.index('MRE-'), header.index('ACC+'), header.index('PRED40+')]):
+            row[g_idx] = goals[idx]
+        score = get_score(header, row)
+        if score > best_random_score:
+            best_random_score = score
+            best_random_idx = i
+    results["random"] = (best_random_score, best_random_idx)
+
+    # Strategy 2: Greedy (Sample 17, then pick best)
+    greedy_indices = list(range(0, 17))
+    best_greedy_idx = -1
+    best_greedy_score = -float('inf')
+    for i in greedy_indices:
+        goals = label(i)
+        row = list(rows[i])
+        for idx, g_idx in enumerate([header.index('MRE-'), header.index('ACC+'), header.index('PRED40+')]):
+            row[g_idx] = goals[idx]
+        score = get_score(header, row)
+        if score > best_greedy_score:
+            best_greedy_score = score
+            best_greedy_idx = i
+    results["greedy"] = (best_greedy_score, best_greedy_idx)
+
+    # Strategy 3: Exploration (Sample 17, then pick best)
+    expl_indices = list(range(len(rows)-17, len(rows)))
+    best_expl_idx = -1
+    best_expl_score = -float('inf')
+    for i in expl_indices:
+        goals = label(i)
+        row = list(rows[i])
+        for idx, g_idx in enumerate([header.index('MRE-'), header.index('ACC+'), header.index('PRED40+')]):
+            row[g_idx] = goals[idx]
+        score = get_score(header, row)
+        if score > best_expl_score:
+            best_expl_score = score
+            best_expl_idx = i
+    results["exploration"] = (best_expl_score, best_expl_idx)
+
+    winner = max(results, key=lambda k: results[k][0])
+    return {"winner": winner, "row": results[winner][1], "tried": tried}
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed = [float(x) if i not in [4] else x for i, x in enumerate(row)]
+            rows.append(processed)
+
+    goal_indices = [header.index('MRE-'), header.index('ACC+'), header.index('PRED40+')]
+    masked_rows = []
+    for row in rows:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_rows.append(new_row)
+
+    def label(i):
+        return [rows[i][idx] for idx in goal_indices]
+
+    outcome = race(header, masked_rows, label)
+    print(f"The winning strategy is: {outcome['winner']}")
+    print(f"Best row found at index: {outcome['row']}")
+    print(f"Strategies compared: {', '.join(outcome['tried'])}")

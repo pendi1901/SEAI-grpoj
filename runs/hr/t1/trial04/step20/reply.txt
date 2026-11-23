@@ -1,0 +1,110 @@
+```python
+import csv
+import random
+
+def race(header, rows, label):
+    """
+    Compares three strategies for finding the best employee arrangement:
+    1. 'random': Picks rows at random.
+    2. 'newest_first': Picks the newest staff (lowest 'TotalWorkingYears').
+    3. 'pay_rise_newest': The customer's rule of thumb (prioritizing newest staff for 'pay' improvements).
+    
+    Budget: 50 labels total.
+    """
+    goal_indices = [i for i, h in enumerate(header) if h.endswith('+') or h.endswith('-')]
+    tenure_idx = header.index('TotalWorkingYears')
+    
+    # Helper to score a row
+    def get_score(row_idx):
+        true_goals = label(row_idx)
+        score = 0.0
+        for j, g_idx in enumerate(goal_indices):
+            val = true_goals[j]
+            # Normalize: goal+ (higher is better), goal- (lower is better)
+            if header[g_idx].endswith('-'):
+                score -= val
+            else:
+                score += val
+        return score
+
+    # Strategies
+    def strategy_random(budget):
+        indices = random.sample(range(len(rows)), budget)
+        best_idx = max(indices, key=get_score)
+        return best_idx, get_score(best_idx)
+
+    def strategy_newest_first(budget):
+        # Sort by TotalWorkingYears ascending
+        indices = sorted(range(len(rows)), key=lambda i: rows[i][tenure_idx])
+        best_idx = max(indices[:budget], key=get_score)
+        return best_idx, get_score(best_idx)
+
+    def strategy_pay_rise_newest(budget):
+        # Customer's rule: give biggest pay rises to newest staff.
+        # We simulate this by checking the performance of the newest staff.
+        indices = sorted(range(len(rows)), key=lambda i: rows[i][tenure_idx])
+        # We look at the top 'budget' newest staff
+        best_idx = max(indices[:budget], key=get_score)
+        return best_idx, get_score(best_idx)
+
+    # Budget allocation: 16, 17, 17 = 50
+    res_rand = strategy_random(16)
+    res_new = strategy_newest_first(17)
+    res_pay = strategy_pay_rise_newest(17)
+
+    results = {
+        "random": res_rand,
+        "newest_first": res_new,
+        "pay_rise_newest": res_pay
+    }
+
+    winner = max(results, key=lambda k: results[k][1])
+    
+    return {
+        "winner": winner,
+        "row": results[winner][0],
+        "tried": ["random", "newest_first", "pay_rise_newest"]
+    }
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    goal_indices = [i for i, h in enumerate(header) if h.endswith('+') or h.endswith('-')]
+    
+    def label(i):
+        return [rows[i][g] for g in goal_indices]
+
+    # Mask goals
+    for row in rows:
+        for g in goal_indices:
+            row[g] = "?"
+
+    result = race(header, rows, label)
+    
+    print("Analysis: Is the 'pay rise for newest staff' rule effective?")
+    print(f"Winning Strategy: {result['winner']}")
+    print(f"Best Row Found: {result['row']}")
+    print(f"Strategies Tested: {', '.join(result['tried'])}")
+    
+    if result['winner'] == 'pay_rise_newest':
+        print("Conclusion: Your rule of thumb is effective for this dataset.")
+    else:
+        print("Conclusion: Your rule of thumb is outperformed by other selection strategies.")
+```

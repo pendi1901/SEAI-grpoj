@@ -1,0 +1,76 @@
+import csv
+import step02
+import numpy as np
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column ('YearsAtCompany+') for test rows
+    using the Random Forest Regressor from step02.
+    """
+    return step02.guess(header, train, test)
+
+def analyze_sales_overtime(header, rows):
+    """
+    Analyzes the impact of cutting overtime in the Sales department.
+    We compare the predicted 'YearsAtCompany+' for Sales employees 
+    with 'overTime'='Yes' vs 'overTime'='No'.
+    """
+    dept_idx = header.index('department')
+    ot_idx = header.index('overTime')
+    goal_idx = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')][0]
+    
+    sales_rows = [row for row in rows if row[dept_idx] == 'Sales']
+    
+    # Create two scenarios for Sales employees currently working overtime
+    # Scenario 1: Keep Overtime = Yes
+    # Scenario 2: Change Overtime = No
+    test_rows = []
+    for row in sales_rows:
+        if row[ot_idx] == 'Yes':
+            # Create a copy with Overtime set to 'No'
+            new_row = row[:]
+            new_row[ot_idx] = 'No'
+            new_row[goal_idx] = '?'
+            test_rows.append(new_row)
+            
+    if not test_rows:
+        return "No Sales employees currently working overtime found."
+
+    # Predict tenure if overtime is cut
+    predictions = guess(header, rows, test_rows)
+    
+    # Compare with current average tenure of Sales employees with Overtime = Yes
+    current_tenure = [row[goal_idx] for row in sales_rows if row[ot_idx] == 'Yes']
+    
+    avg_current = np.mean(current_tenure)
+    avg_predicted = np.mean(predictions)
+    
+    return (avg_current, avg_predicted)
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    result = analyze_sales_overtime(header, rows)
+    
+    if isinstance(result, str):
+        print(result)
+    else:
+        avg_current, avg_predicted = result
+        print("Impact Analysis: Cutting Overtime in Sales")
+        print(f"Average tenure (with Overtime): {avg_current:.2f} years")
+        print(f"Predicted average tenure (if Overtime is cut): {avg_predicted:.2f} years")
+        diff = avg_predicted - avg_current
+        action = "increase" if diff > 0 else "decrease"
+        print(f"Conclusion: Cutting overtime is predicted to {action} average tenure by {abs(diff):.2f} years.")

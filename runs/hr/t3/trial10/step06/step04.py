@@ -1,0 +1,67 @@
+import csv
+
+def flow(header, row, seen):
+    """
+    Decides if the current employee needs a 'what would keep you here' conversation.
+    We prioritize employees who have high 'YearsAtCompany+' and 'YearsInCurrentRole+'
+    but are currently experiencing 'overTime' (Yes), as these are high-value 
+    employees at risk of burnout.
+    
+    We use a simple thresholding strategy based on the distribution of the 
+    seen data to decide if the current row is in the top 10% of value.
+    """
+    # Identify indices
+    try:
+        years_idx = header.index('YearsAtCompany+')
+        role_idx = header.index('YearsInCurrentRole+')
+        ot_idx = header.index('overTime')
+    except ValueError:
+        return False
+
+    # If this is the first row, we can't compare, so wait
+    if not seen:
+        return False
+
+    # Calculate a simple "retention score"
+    # Higher years = higher value. Overtime = higher risk.
+    def get_score(r):
+        score = r[years_idx] + r[role_idx]
+        if r[ot_idx] == 'Yes':
+            score += 5  # Bonus for being a high-value employee working overtime
+        return score
+
+    current_score = get_score(row)
+    seen_scores = [get_score(r) for r in seen]
+    
+    # Threshold: Is this employee in the top 10% of the seen population?
+    threshold = sorted(seen_scores, reverse=True)[max(0, len(seen_scores) // 10)]
+    
+    return current_score >= threshold
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Simulate the arrival process
+    seen = []
+    selected_count = 0
+    for row in rows:
+        if flow(header, row, seen):
+            selected_count += 1
+        seen.append(row)
+
+    print(f"Analysis complete.")
+    print(f"Total employees processed: {len(rows)}")
+    print(f"Employees identified for 'what would keep you here' conversation: {selected_count}")
+    print("Strategy: Identified high-tenure employees working overtime who are at risk of burnout.")

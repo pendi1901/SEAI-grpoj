@@ -1,0 +1,68 @@
+```python
+import ezr
+import step01
+
+def blame(header, rows):
+    """
+    Identify input columns that best explain why the worst rows are bad.
+    We compare the distribution of input values in the worst 10% of rows
+    against the rest, using the variance/spread as a proxy for 'damage'.
+    """
+    # Create a table to identify input columns (X)
+    data = [header] + rows
+    tbl = ezr.Tbl(data)
+    
+    # Rank rows by ydist (higher ydist = worse performance)
+    scored = []
+    for i, row in enumerate(rows):
+        scored.append((ezr.ydist(tbl, row), row))
+    
+    # Sort descending to get the worst rows at the top
+    scored.sort(key=lambda x: x[0], reverse=True)
+    
+    # Define the "worst" set (top 10%)
+    limit = max(1, int(len(rows) * 0.1))
+    worst_rows = [x[1] for x in scored[:limit]]
+    
+    # For each input column, calculate how much its values in the worst rows
+    # deviate from the global mean/mode.
+    impact = []
+    for col in tbl.x:
+        # Get values for this column in the worst rows
+        vals = [r[col.at] for r in worst_rows if r[col.at] != "?"]
+        if not vals:
+            continue
+            
+        # Score based on how much the 'worst' rows differ from the global 'mid'
+        # We use the distance between the local mid and global mid
+        global_mid = ezr.mid(col)
+        
+        if isinstance(col, ezr.Sym):
+            # For symbols, count frequency deviation
+            local_mid = max(set(vals), key=vals.count)
+            score = 1.0 if local_mid != global_mid else 0.0
+        else:
+            # For numbers, use normalized difference
+            local_mid = sum(vals) / len(vals)
+            score = abs(ezr.norm(col, local_mid) - ezr.norm(col, global_mid))
+            
+        impact.append((score, col.txt))
+    
+    # Return names of columns with the highest impact
+    impact.sort(key=lambda x: x[0], reverse=True)
+    return [name for score, name in impact[:3]]
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    all_data = list(ezr.csv(filename))
+    header = all_data[0]
+    rows = all_data[1:]
+    
+    blame_cols = blame(header, rows)
+    
+    print("--- Analysis: What causes bad performance? ---")
+    print("The following input settings are most strongly associated with poor outcomes:")
+    for col in blame_cols:
+        print(f"- {col}")
+    print("\nThese settings show the most significant deviation in the worst-performing setups.")
+```

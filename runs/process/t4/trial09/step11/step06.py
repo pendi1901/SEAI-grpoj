@@ -1,0 +1,74 @@
+import csv
+import pandas as pd
+import numpy as np
+from sklearn.neighbors import KNeighborsRegressor
+from step01 import remember
+from step02 import guess
+
+def justify(header, rows, row):
+    """
+    Estimates the goal values for the provided row using KNN, 
+    then compares it against all other rows to determine its percentile rank.
+    """
+    # 1. Estimate the goals for the input row
+    # We need to provide a list of rows to guess()
+    predictions = guess(header, rows, [row])
+    
+    # 2. Reconstruct the row with predicted goals
+    goal_indices = [i for i, h in enumerate(header) if h.endswith(('-', '+'))]
+    full_row = list(row)
+    for i, idx in enumerate(goal_indices):
+        full_row[idx] = predictions[0][i] if isinstance(predictions[0], list) else predictions[0]
+    
+    # 3. Calculate aggregate scores for all rows
+    # We use the logic from step01 to rank performance
+    df = pd.DataFrame(rows + [full_row], columns=header)
+    goals = [col for col in header if col.endswith(('-', '+'))]
+    
+    normalized_scores = []
+    for goal in goals:
+        col_min = df[goal].min()
+        col_max = df[goal].max()
+        norm = (df[goal] - col_min) / (col_max - col_min + 1e-9)
+        if goal.endswith('-'):
+            normalized_scores.append(1 - norm)
+        else:
+            normalized_scores.append(norm)
+            
+    df['aggregate'] = np.mean(normalized_scores, axis=0)
+    
+    # 4. Determine percentile rank
+    # p is the fraction of rows that this row is better than
+    my_score = df['aggregate'].iloc[-1]
+    others = df['aggregate'].iloc[:-1]
+    p = (others < my_score).mean()
+    
+    reason = f"This setup is better than {p:.1%} of all known configurations based on its predicted performance across all goal metrics."
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) for val in row])
+        
+        # Pick a sample row to justify (e.g., the last one)
+        test_row = list(rows[-1])
+        goal_indices = [i for i, h in enumerate(header) if h.endswith(('-', '+'))]
+        for idx in goal_indices:
+            test_row[idx] = "?"
+            
+        p, reason = justify(header, rows, test_row)
+        
+        print("Customer Inquiry: Justification of Setup Performance")
+        print(f"Rank: {p:.4f}")
+        print(f"Reason: {reason}")
+        
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

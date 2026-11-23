@@ -1,0 +1,73 @@
+import csv
+import step01
+
+def flow(header, row, seen):
+    """
+    Decides if the current row is 'good enough' to stop the build process.
+    We define 'good enough' as being in the top 5% of the expected distribution 
+    based on the historical data provided in step01.
+    """
+    if not seen:
+        return False
+
+    # Combine seen rows with the current row to establish a context
+    all_rows = seen + [row]
+    
+    # Use step01 logic to identify the top 5% threshold
+    # We calculate the score of the current row relative to all seen rows
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+
+    def get_score(r, rows):
+        mres = [x[mre_idx] for x in rows]
+        accs = [x[acc_idx] for x in rows]
+        preds = [x[pred_idx] for x in rows]
+        
+        def norm(val, vals, rev=False):
+            lo, hi = min(vals), max(vals)
+            if hi == lo: return 0.5
+            n = (val - lo) / (hi - lo)
+            return (1 - n) if rev else n
+        
+        return (norm(r[mre_idx], mres, True) + 
+                norm(r[acc_idx], accs, False) + 
+                norm(r[pred_idx], preds, False)) / 3
+
+    # If the current row is in the top 5% of the currently seen population, stop.
+    current_score = get_score(row, all_rows)
+    scores = [get_score(r, all_rows) for r in all_rows]
+    scores.sort(reverse=True)
+    
+    limit = max(1, int(len(all_rows) * 0.05))
+    threshold = scores[limit - 1]
+    
+    return current_score >= threshold
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed = [val if header[i] == 'criterion' else float(val) 
+                             for i, val in enumerate(row)]
+                rows.append(processed)
+        
+        seen = []
+        stopped = False
+        for i, row in enumerate(rows):
+            if flow(header, row, seen):
+                print(f"Stopped at row {i+1}: Found a high-performing setup.")
+                stopped = True
+                break
+            seen.append(row)
+        
+        if not stopped:
+            print("Processed all rows without finding a 'good enough' setup.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

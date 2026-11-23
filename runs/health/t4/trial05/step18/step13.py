@@ -1,0 +1,57 @@
+import csv
+from scipy import stats
+
+def certify(xs, ys):
+    """
+    Returns True if the difference between two distributions is statistically 
+    insignificant (noise), False if they really differ.
+    Uses a T-test for independent samples.
+    """
+    # If the variance is too low or samples are empty, treat as noise
+    if len(xs) < 2 or len(ys) < 2:
+        return True
+    t_stat, p_value = stats.ttest_ind(xs, ys, equal_var=False)
+    # If p_value > 0.05, we fail to reject the null hypothesis (they are the same)
+    return p_value > 0.05
+
+def get_data():
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i] == 'criterion':
+                    processed_row.append(val)
+                else:
+                    processed_row.append(float(val))
+            rows.append(processed_row)
+    return header, rows
+
+if __name__ == "__main__":
+    header, rows = get_data()
+    
+    # The customer asks about the "two built-in rules". 
+    # In the provided data, the symbolic column 'criterion' has three values:
+    # 'absolute_error', 'poisson', 'squared_error'.
+    # We compare the two most common ones to see if the choice makes a difference.
+    idx_crit = header.index('criterion')
+    idx_acc = header.index('ACC+')
+    
+    # Filter rows by criterion
+    abs_err_accs = [r[idx_acc] for r in rows if r[idx_crit] == 'absolute_error']
+    sq_err_accs = [r[idx_acc] for r in rows if r[idx_crit] == 'squared_error']
+    
+    is_noise = certify(abs_err_accs, sq_err_accs)
+    
+    print("Customer Inquiry: Does the choice of 'criterion' make a real difference?")
+    if is_noise:
+        print("Result: True. The observed difference between criteria is likely just noise.")
+        print("You can stop arguing about it; the choice does not significantly impact performance.")
+    else:
+        print("Result: False. The difference is statistically significant.")
+        print("The choice of criterion does matter for your results.")
+    
+    exit(0)

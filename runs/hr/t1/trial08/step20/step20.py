@@ -1,0 +1,111 @@
+import csv
+import random
+
+def race(header, rows, label):
+    """
+    Compares three strategies for finding the best employee arrangement:
+    1. 'random': Random sampling.
+    2. 'rule_of_thumb': Give biggest pay rises to newest staff (low YearsAtCompany+).
+    3. 'tenure_focus': Target high tenure (high YearsAtCompany+).
+    Budget: 50 labels total.
+    """
+    goal_indices = [i for i, col in enumerate(header) if col.endswith('+') or col.endswith('-')]
+    
+    def get_score(row_idx):
+        goals = label(row_idx)
+        score = 0
+        for j, goal_idx in enumerate(goal_indices):
+            val = goals[j]
+            # Normalize: + is maximize, - is minimize
+            if header[goal_idx].endswith('+'):
+                score += val
+            else:
+                score -= val
+        return score
+
+    # Strategies
+    def strategy_random(budget):
+        indices = random.sample(range(len(rows)), budget)
+        return {i: get_score(i) for i in indices}
+
+    def strategy_rule_of_thumb(budget):
+        # Rule of thumb: biggest pay rises to newest staff.
+        # We interpret this as finding the newest staff (lowest YearsAtCompany+).
+        idx = header.index('YearsAtCompany+')
+        sorted_indices = sorted(range(len(rows)), key=lambda i: rows[i][idx])
+        indices = sorted_indices[:budget]
+        return {i: get_score(i) for i in indices}
+
+    def strategy_tenure_focus(budget):
+        # Focus on high tenure (YearsAtCompany+)
+        idx = header.index('YearsAtCompany+')
+        sorted_indices = sorted(range(len(rows)), key=lambda i: rows[i][idx], reverse=True)
+        indices = sorted_indices[:budget]
+        return {i: get_score(i) for i in indices}
+
+    # Budget allocation: 16 labels per strategy (48 total)
+    budget_per = 16
+    results = {}
+    results["random"] = strategy_random(budget_per)
+    results["rule_of_thumb"] = strategy_rule_of_thumb(budget_per)
+    results["tenure_focus"] = strategy_tenure_focus(budget_per)
+
+    best_overall = None
+    best_row = -1
+    best_strategy = ""
+
+    for name, data in results.items():
+        for row_idx, score in data.items():
+            if best_overall is None or score > best_overall:
+                best_overall = score
+                best_row = row_idx
+                best_strategy = name
+
+    return {
+        "winner": best_strategy,
+        "row": best_row,
+        "tried": ["random", "rule_of_thumb", "tenure_focus"]
+    }
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = None
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        goal_indices = [i for i, col in enumerate(header) if col.endswith('+') or col.endswith('-')]
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Keep true values for label function
+    true_data = [[row[idx] for idx in goal_indices] for row in rows]
+    
+    # Mask rows
+    for row in rows:
+        for idx in goal_indices:
+            row[idx] = "?"
+
+    def label(i):
+        return true_data[i]
+
+    result = race(header, rows, label)
+    
+    print("Retention Strategy Comparison:")
+    print(f"The winning strategy is: {result['winner']}")
+    print(f"The 'rule_of_thumb' (prioritizing new staff) was compared against tenure-focused and random strategies.")
+    if result['winner'] == 'rule_of_thumb':
+        print("Conclusion: Your rule of thumb is effective.")
+    else:
+        print("Conclusion: Your rule of thumb is outperformed by focusing on high-tenure employees.")
+    exit(0)

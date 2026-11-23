@@ -1,0 +1,44 @@
+```python
+import ezr
+
+def spot(header, rows):
+    """
+    Find rows that look like they failed (outliers).
+    We define 'suspicious' as rows that are significantly distant from the 
+    rest of the data in the input (X) space.
+    """
+    # Create a table to handle normalization and distance calculations
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate the centroid of the input space
+    # We use the cached mids from the table
+    mids = ezr.mids(tbl)
+    
+    # Calculate xdist for every row from the centroid
+    # Rows with high xdist are outliers (suspicious)
+    scored = []
+    for i, row in enumerate(rows):
+        d = ezr.xdist(tbl, row, mids)
+        scored.append((d, i))
+    
+    # Sort by distance descending (most suspicious first)
+    scored.sort(key=lambda x: x[0], reverse=True)
+    
+    # Return the indices of the top 5% most suspicious rows
+    limit = max(1, int(len(rows) * 0.05))
+    return [idx for _, idx in scored[:limit]]
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    suspicious_indices = spot(header, rows)
+    
+    print(f"Analysis complete on {len(rows)} records.")
+    print(f"Identified {len(suspicious_indices)} suspicious rows that may be failed runs.")
+    print("Top 5 most suspicious row indices:", suspicious_indices[:5])
+    
+    exit(0)
+```

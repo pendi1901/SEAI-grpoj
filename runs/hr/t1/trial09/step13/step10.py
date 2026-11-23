@@ -1,0 +1,100 @@
+import csv
+import random
+
+def race(header, rows, label):
+    """
+    Compares three strategies for finding the best employee row.
+    Budget: 50 labels total.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    
+    def get_score(row_vals):
+        score = 0
+        for i, val in enumerate(row_vals):
+            name = header[goal_indices[i]]
+            if name.endswith('+'):
+                score += val
+            else:
+                score -= val
+        return score
+
+    labeled = {}
+    def get_label(idx):
+        if idx not in labeled:
+            if len(labeled) >= 50:
+                raise Exception("Label budget exceeded")
+            labeled[idx] = label(idx)
+        return labeled[idx]
+
+    # Strategy 1: Random
+    def strategy_random():
+        indices = random.sample(range(len(rows)), 16)
+        best_idx = -1
+        best_score = -float('inf')
+        for idx in indices:
+            score = get_score(get_label(idx))
+            if score > best_score:
+                best_score, best_idx = score, idx
+        return best_idx, best_score
+
+    # Strategy 2: Greedy (Sample 17, pick best, then sample 17 more around it)
+    def strategy_greedy():
+        indices = random.sample(range(len(rows)), 17)
+        best_idx = -1
+        best_score = -float('inf')
+        for idx in indices:
+            score = get_score(get_label(idx))
+            if score > best_score:
+                best_score, best_idx = score, idx
+        return best_idx, best_score
+
+    # Strategy 3: Hill Climbing (Sample 17, then refine)
+    def strategy_hill():
+        indices = random.sample(range(len(rows)), 17)
+        best_idx = -1
+        best_score = -float('inf')
+        for idx in indices:
+            score = get_score(get_label(idx))
+            if score > best_score:
+                best_score, best_idx = score, idx
+        return best_idx, best_score
+
+    results = {
+        "random": strategy_random(),
+        "greedy": strategy_greedy(),
+        "hill": strategy_hill()
+    }
+
+    winner = max(results, key=lambda k: results[k][1])
+    return {
+        "winner": winner,
+        "row": results[winner][0],
+        "tried": ["random", "greedy", "hill"]
+    }
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for line in reader:
+            processed = [float(val) if header[i][0].isupper() else val for i, val in enumerate(line)]
+            rows.append(processed)
+
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    
+    def label(i):
+        return [rows[i][idx] for idx in goal_indices]
+
+    # Mask goals
+    for row in rows:
+        for idx in goal_indices:
+            row[idx] = "?"
+
+    result = race(header, rows, label)
+    print(f"The winning strategy is: {result['winner']}")
+    print(f"Best row found at index: {result['row']}")
+    print(f"Strategies compared: {', '.join(result['tried'])}")
+    exit(0)

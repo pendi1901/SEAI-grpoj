@@ -1,0 +1,49 @@
+```python
+import ezr
+import random
+
+def certify(xs, ys):
+    """
+    Returns True if the two distributions are statistically indistinguishable,
+    False if they are significantly different.
+    """
+    # Use ezr.same which performs Cliff's Delta and Kolmogorov-Smirnov tests
+    # to determine if two distributions are effectively the same.
+    return ezr.same(xs, ys)
+
+if __name__ == "__main__":
+    # Load the data
+    file_path = "pom3a.n1000.train.csv"
+    rows_gen = ezr.csv(file_path)
+    header = next(rows_gen)
+    rows = list(rows_gen)
+    
+    # The customer asks if results shifted after a change in how teams decide what to build.
+    # We use 'Plan' as a proxy for the decision-making process.
+    # We split the data into two groups: those with low 'Plan' values vs high 'Plan' values.
+    plan_idx = header.index('Plan')
+    # We compare the primary goal 'Cost-' to see if the outcome shifted.
+    cost_idx = header.index('Cost-')
+    
+    valid_rows = [r for r in rows if r[plan_idx] != "?" and r[cost_idx] != "?"]
+    plan_values = [r[plan_idx] for r in valid_rows]
+    median = sorted(plan_values)[len(plan_values) // 2]
+    
+    before = [r[cost_idx] for r in valid_rows if r[plan_idx] <= median]
+    after = [r[cost_idx] for r in valid_rows if r[plan_idx] > median]
+    
+    # Perform the certification
+    is_same = certify(before, after)
+    
+    print("Analysis: Did the change in decision-making ('Plan') shift results ('Cost-')?")
+    print(f"Group 1 (Low Plan) count: {len(before)}, Group 2 (High Plan) count: {len(after)}")
+    print(f"Average Cost- (Low Plan):  {sum(before)/len(before):.4f}")
+    print(f"Average Cost- (High Plan): {sum(after)/len(after):.4f}")
+    
+    if is_same:
+        print("Conclusion: The difference is statistically insignificant.")
+        print("The results are effectively the same as before; the change did not have a real impact.")
+    else:
+        print("Conclusion: The difference is statistically significant.")
+        print("The results have shifted; the change in decision-making had a real effect.")
+```

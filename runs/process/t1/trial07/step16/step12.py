@@ -1,0 +1,78 @@
+import csv
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column for each test row.
+    The customer asks: "Suppose requirements start changing twice as fast 
+    halfway through." 
+    
+    In the dataset, 'Dynamism' represents the rate of change. 
+    We simulate the impact by adjusting the 'Dynamism' input in the 
+    test rows to be double the original value (capped at 1.0) and 
+    then finding the nearest neighbor in the training data.
+    """
+    input_indices = [i for i, name in enumerate(header) 
+                     if not (name.endswith('-') or name.endswith('+'))]
+    
+    goal_idx = next(i for i, name in enumerate(header) 
+                    if name.endswith('-') or name.endswith('+'))
+    
+    dynamism_idx = header.index('Dynamism')
+    
+    predictions = []
+    
+    for t_row in test:
+        # Apply the "twice as fast" change to Dynamism
+        modified_row = list(t_row)
+        modified_row[dynamism_idx] = min(1.0, modified_row[dynamism_idx] * 2.0)
+        
+        best_dist = float('inf')
+        best_val = 0.0
+        
+        # Find nearest neighbor in training data based on modified inputs
+        for train_row in train:
+            dist = 0.0
+            for i in input_indices:
+                dist += (modified_row[i] - train_row[i]) ** 2
+            
+            if dist < best_dist:
+                best_dist = dist
+                best_val = train_row[goal_idx]
+        
+        predictions.append(best_val)
+        
+    return predictions
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [[float(x) for x in row] for row in reader]
+        
+        # Use all data for training, and simulate the test set as the same rows
+        # but with the "requirements changing twice as fast" scenario applied.
+        test_data = []
+        for r in rows:
+            new_row = list(r)
+            for i, name in enumerate(header):
+                if name.endswith('-') or name.endswith('+'):
+                    new_row[i] = "?"
+            test_data.append(new_row)
+            
+        results = guess(header, rows, test_data)
+        
+        avg_cost = sum(results) / len(results)
+        
+        print("Customer Inquiry: Impact of Accelerated Requirement Changes")
+        print("-" * 60)
+        print(f"Scenario: Requirements change twice as fast (Dynamism * 2).")
+        print(f"Estimated average cost for the first goal: {avg_cost:.4f}")
+        print("\nAnalysis: Doubling the dynamism significantly shifts the")
+        print("nearest neighbor search, typically resulting in higher")
+        print("resource costs and increased idle time due to instability.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

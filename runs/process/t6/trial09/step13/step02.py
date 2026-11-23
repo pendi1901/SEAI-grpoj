@@ -1,0 +1,74 @@
+import ezr
+import step01
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column (Cost-) for each test row.
+    Uses the tree-based ranker from ezr to find the mean of the 
+    first goal column in the leaf node where the test row lands.
+    """
+    # Create a table from training data
+    data = [header] + train
+    tbl = ezr.Tbl(data)
+    
+    # Build a tree on the training data
+    node = ezr.tree(tbl, tbl.rows)
+    
+    # Identify the index of the first goal column (Cost-)
+    # Based on the header, 'Cost-' is at index 9
+    goal_idx = 9
+    
+    results = []
+    for row in test:
+        # Find the leaf node for this test row
+        leaf_node = ezr.leaf(node, row)
+        
+        # Calculate the mean of the goal column for all rows in this leaf
+        vals = [r[goal_idx] for r in leaf_node.rows if r[goal_idx] != "?"]
+        if vals:
+            mean_val = sum(vals) / len(vals)
+        else:
+            # Fallback to global mean if leaf is empty or missing data
+            all_vals = [r[goal_idx] for r in train if r[goal_idx] != "?"]
+            mean_val = sum(all_vals) / len(all_vals)
+            
+        results.append(mean_val)
+        
+    return results
+
+if __name__ == "__main__":
+    # Load the data
+    filename = "pom3a.n1000.train.csv"
+    data_iter = ezr.csv(filename)
+    
+    try:
+        header = next(data_iter)
+        rows = list(data_iter)
+    except StopIteration:
+        exit(0)
+        
+    # Split data: 80% train, 20% test
+    split_idx = int(len(rows) * 0.8)
+    train = rows[:split_idx]
+    test_raw = rows[split_idx:]
+    
+    # Mask goals in test rows to simulate the requirement
+    # Goals are the last 3 columns: Cost-, Score-, Idle-
+    test = []
+    for r in test_raw:
+        new_row = r[:]
+        new_row[9] = "?"
+        new_row[10] = "?"
+        new_row[11] = "?"
+        test.append(new_row)
+        
+    # Get estimates
+    estimates = guess(header, train, test)
+    
+    # Print a summary for the customer
+    print("Estimation Report (Cost-):")
+    print(f"Processed {len(test)} test configurations.")
+    print(f"Average estimated cost: {sum(estimates)/len(estimates):.4f}")
+    print(f"First 5 estimates: {[round(x, 4) for x in estimates[:5]]}")
+    
+    exit(0)

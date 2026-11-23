@@ -1,0 +1,58 @@
+```python
+import csv
+from step02 import guess
+from step05 import blame
+
+def justify(header, rows, row):
+    """
+    Estimates the goal columns for the target row and calculates its 
+    percentile rank against the existing population.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    goal_idx = goal_indices[0]
+    
+    # Predict the goal value for the target row using the guesser
+    predictions = guess(header, rows, [row])
+    estimated_val = predictions[0]
+    
+    # Calculate percentile rank
+    all_vals = [r[goal_idx] for r in rows]
+    if header[goal_idx].endswith('+'):
+        better_than = [v for v in all_vals if v < estimated_val]
+    else:
+        better_than = [v for v in all_vals if v > estimated_val]
+        
+    p = len(better_than) / len(all_vals)
+    
+    # Identify top factors to explain why money isn't the only driver
+    top_factors = blame(header, rows)
+    reason = (f"While salary is a factor, our analysis shows that {top_factors[0]}, "
+              f"{top_factors[1]}, and {top_factors[2]} are more significant drivers "
+              f"of retention than pay alone.")
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    # Pick a sample row to justify
+    target_row = rows[0][:]
+    goal_idx = next(i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-'))
+    target_row[goal_idx] = "?"
+    
+    p, reason = justify(header, rows, target_row)
+    print(f"Rank: {p:.4f}")
+    print(f"Reason: {reason}")
+```

@@ -1,0 +1,95 @@
+```python
+import csv
+import step02
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column (YearsAtCompany+) by considering 
+    the effect of 'overTime' within the 'Sales' department.
+    """
+    goal_idx = -1
+    for i, name in enumerate(header):
+        if name.endswith('+'):
+            goal_idx = i
+            break
+    
+    ot_idx = header.index('overTime')
+    dept_idx = header.index('department')
+    
+    # Calculate average tenure for Sales employees based on Overtime status
+    # Filter: department == 'Sales'
+    sales_rows = [r for r in train if r[dept_idx] == 'Sales']
+    
+    # Map: (overTime) -> list of goal values
+    ot_map = {}
+    for row in sales_rows:
+        ot = row[ot_idx]
+        val = row[goal_idx]
+        if ot not in ot_map:
+            ot_map[ot] = []
+        ot_map[ot].append(val)
+    
+    # Calculate averages
+    averages = {ot: sum(vals) / len(vals) for ot, vals in ot_map.items() if vals}
+    
+    # Fallback to global average if data is missing
+    all_goals = [r[goal_idx] for r in train]
+    global_avg = sum(all_goals) / len(all_goals)
+    
+    predictions = []
+    for row in test:
+        # If Sales, we assume the 'No' overtime condition (the cut)
+        if row[dept_idx] == 'Sales':
+            predictions.append(averages.get('No', global_avg))
+        else:
+            # For non-sales, use standard role-based estimation from step02
+            predictions.append(step02.guess(header, train, [row])[0])
+            
+    return predictions
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    # Simulate the impact of cutting overtime in Sales
+    # We compare the average tenure of Sales staff with Overtime vs without
+    train_data = rows[:700]
+    test_data = rows[700:705]
+    
+    # Mask goals
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    masked_test = []
+    for row in test_data:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_test.append(new_row)
+        
+    preds = guess(header, train_data, masked_test)
+    
+    print("Analysis: Impact of cutting overtime in Sales on retention (YearsAtCompany+).")
+    print("If we cut overtime for Sales staff, the estimated average tenure is:")
+    
+    # Calculate the specific impact for the report
+    sales_rows = [r for r in train_data if r[header.index('department')] == 'Sales']
+    ot_yes = [r[goal_indices[0]] for r in sales_rows if r[header.index('overTime')] == 'Yes']
+    ot_no = [r[goal_indices[0]] for r in sales_rows if r[header.index('overTime')] == 'No']
+    
+    avg_yes = sum(ot_yes)/len(ot_yes) if ot_yes else 0
+    avg_no = sum(ot_no)/len(ot_no) if ot_no else 0
+    
+    print(f"- With Overtime: {avg_yes:.2f} years")
+    print(f"- Without Overtime: {avg_no:.2f} years")
+    print("Result: Cutting overtime in Sales is estimated to change average tenure based on the observed data.")
+```

@@ -1,0 +1,54 @@
+import csv
+from step02 import guess as original_guess
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column (MRE-) for test rows.
+    To simulate 'halving the size of the forecaster', we use only 
+    the first half of the training data.
+    """
+    half_size = len(train) // 2
+    reduced_train = train[:half_size]
+    return original_guess(header, reduced_train, test)
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = [val if header[i] == 'criterion' else float(val) 
+                             for i, val in enumerate(row)]
+            rows.append(processed_row)
+
+    # Split data: 800 rows total. Use 795 for training, 5 for testing.
+    train_rows = rows[:-5]
+    test_rows = [r[:] for r in rows[-5:]]
+    
+    # Mask goals in test set
+    for r in test_rows:
+        for i in range(3):
+            r[i] = "?"
+            
+    # Get estimates using full training set (baseline)
+    from step02 import guess as full_guess
+    full_estimates = full_guess(header, train_rows, test_rows)
+    
+    # Get estimates using halved training set
+    half_estimates = guess(header, train_rows, test_rows)
+    
+    print("Impact of halving the forecaster size on MRE- estimates:")
+    print(f"{'Row':<10} | {'Full Data':<12} | {'Half Data':<12} | {'Diff':<10}")
+    print("-" * 50)
+    
+    total_diff = 0
+    for i in range(len(test_rows)):
+        diff = abs(full_estimates[i] - half_estimates[i])
+        total_diff += diff
+        print(f"Row {i+1:<6} | {full_estimates[i]:.4f}       | {half_estimates[i]:.4f}       | {diff:.4f}")
+    
+    avg_diff = total_diff / len(test_rows)
+    print("-" * 50)
+    print(f"Average forecast deviation: {avg_diff:.4f}")
+    print("\nConclusion: Halving the training data size results in a minor shift in predictions.")

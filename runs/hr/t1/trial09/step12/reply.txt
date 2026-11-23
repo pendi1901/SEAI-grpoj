@@ -1,0 +1,79 @@
+```python
+import csv
+
+def guess(header, train, test):
+    """
+    Estimates the value of the first goal column (YearsAtCompany+)
+    for test rows by comparing the average tenure of Sales employees
+    with and without overtime.
+    """
+    # Find indices
+    dept_idx = header.index('department')
+    ot_idx = header.index('overTime')
+    goal_idx = next(i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-'))
+    
+    # Filter training data for Sales department
+    sales_train = [r for r in train if r[dept_idx] == 'Sales']
+    
+    # Calculate averages for Sales
+    ot_yes = [r[goal_idx] for r in sales_train if r[ot_idx] == 'Yes']
+    ot_no = [r[goal_idx] for r in sales_train if r[ot_idx] == 'No']
+    
+    avg_yes = sum(ot_yes) / len(ot_yes) if ot_yes else 0
+    avg_no = sum(ot_no) / len(ot_no) if ot_no else 0
+    
+    # Estimate for test rows
+    results = []
+    for row in test:
+        if row[dept_idx] == 'Sales':
+            # If we cut overtime, we assume they move to the 'No' category
+            results.append(float(avg_no))
+        else:
+            # For non-sales, use global average of the first goal column
+            all_goals = [r[goal_idx] for r in train]
+            results.append(sum(all_goals) / len(all_goals))
+            
+    return results
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for line in reader:
+            processed_row = []
+            for i, val in enumerate(line):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    # Split data
+    train_data = rows[:-10]
+    test_data = rows[-10:]
+    
+    # Mask goals
+    goal_idx = next(i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-'))
+    for row in test_data:
+        row[goal_idx] = "?"
+        
+    estimates = guess(header, train_data, test_data)
+    
+    print("Impact Analysis: Cutting Overtime in Sales")
+    print("-------------------------------------------")
+    print("If we eliminate overtime in the Sales department,")
+    print("the average tenure (YearsAtCompany) is estimated to be:")
+    
+    sales_test_indices = [i for i, r in enumerate(test_data) if r[header.index('department')] == 'Sales']
+    if sales_test_indices:
+        avg_est = sum(estimates[i] for i in sales_test_indices) / len(sales_test_indices)
+        print(f"{avg_est:.2f} years.")
+    else:
+        print("No Sales employees found in the test sample.")
+    
+    exit(0)
+```

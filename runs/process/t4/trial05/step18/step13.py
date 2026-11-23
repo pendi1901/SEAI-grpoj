@@ -1,0 +1,44 @@
+import csv
+import pandas as pd
+from scipy import stats
+from step03 import certify
+
+def analyze_shift(header, rows):
+    """
+    Analyzes if the 'Score-' goal shifted significantly between the first 
+    and second half of the data (simulating a change in team decision process).
+    """
+    df = pd.DataFrame(rows, columns=header)
+    
+    # Split data into two halves
+    mid = len(df) // 2
+    first_half = df.iloc[:mid]['Score-']
+    second_half = df.iloc[mid:]['Score-']
+    
+    # Use the certify function from step03 to check for significant difference
+    is_same = certify(first_half.tolist(), second_half.tolist())
+    
+    return is_same, first_half.mean(), second_half.mean()
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [[float(val) for val in row] for row in reader]
+        
+        is_same, mean_first, mean_second = analyze_shift(header, rows)
+        
+        print("Customer Inquiry: Did the results shift after changing the team decision process?")
+        print(f"Mean Score (Before): {mean_first:.4f}")
+        print(f"Mean Score (After):  {mean_second:.4f}")
+        
+        if is_same:
+            print("Conclusion: The difference is statistically insignificant. The results are effectively the same.")
+        else:
+            print("Conclusion: The difference is statistically significant. The change in process had a real impact.")
+            
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

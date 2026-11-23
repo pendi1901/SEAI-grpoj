@@ -1,0 +1,81 @@
+import csv
+import random
+
+def choose(header, rows, label):
+    """
+    Finds the best row by sampling 50 rows and evaluating their goals.
+    Uses a simple random sampling strategy to explore the search space.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    
+    def get_score(goals):
+        scores = []
+        for i, g_idx in enumerate(goal_indices):
+            # Since we don't have the full distribution, we normalize based on 
+            # the values we have sampled so far.
+            # For this implementation, we use a simple weighted sum of goals.
+            # Lower is better for '-', higher for '+'
+            val = goals[i]
+            if header[g_idx].endswith('-'):
+                scores.append(1.0 - val)
+            else:
+                scores.append(val)
+        return sum(scores) / len(scores)
+
+    # We have 50 trials. We will sample 50 indices randomly.
+    # If the dataset is smaller than 50, we sample all of them.
+    num_samples = min(len(rows), 50)
+    indices = random.sample(range(len(rows)), num_samples)
+    
+    best_idx = -1
+    best_score = -1.0
+    
+    for idx in indices:
+        # label(i) returns the true goal values
+        goals = label(idx)
+        score = get_score(goals)
+        
+        if score > best_score:
+            best_score = score
+            best_idx = idx
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    
+    def load_data(fname):
+        with open(fname, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            true_goals = []
+            for row in reader:
+                processed = []
+                goals = []
+                for i, val in enumerate(row):
+                    if header[i].endswith(('-', '+')):
+                        goals.append(float(val))
+                        processed.append('?')
+                    else:
+                        processed.append(float(val))
+                rows.append(processed)
+                true_goals.append(goals)
+            return header, rows, true_goals
+
+    try:
+        header, rows, true_goals = load_data(filename)
+        
+        # Define the label function for the harness
+        def label(i):
+            return true_goals[i]
+        
+        best_idx = choose(header, rows, label)
+        
+        print("Customer Inquiry Analysis: Best Setup Found")
+        print(f"After trialing 50 setups, the best configuration was found at index {best_idx}.")
+        print(f"Goal values for this setup: {true_goals[best_idx]}")
+        
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        exit(1)

@@ -1,0 +1,82 @@
+import csv
+
+def spot(header, rows):
+    """
+    Identifies rows that are 'outliers' based on the Mahalanobis-like distance
+    or simply by checking if input values are outside the expected range [0, 1].
+    Since the data is normalized [0, 1], any value outside this range is suspicious.
+    Additionally, we calculate the distance of each row from the centroid of the data
+    to find rows that are statistically unusual.
+    """
+    input_indices = [i for i, name in enumerate(header) 
+                     if not (name.endswith('-') or name.endswith('+'))]
+    
+    suspicious = []
+    
+    # 1. Check for values outside [0, 1] (Data entry errors)
+    for i, row in enumerate(rows):
+        for idx in input_indices:
+            val = float(row[idx])
+            if val < 0 or val > 1:
+                suspicious.append((1.0, i)) # High priority
+                break
+    
+    # 2. Check for statistical outliers (rows far from the mean)
+    # Calculate column means
+    means = []
+    for idx in input_indices:
+        vals = [float(r[idx]) for r in rows]
+        means.append(sum(vals) / len(vals))
+    
+    # Calculate distance from centroid
+    distances = []
+    for i, row in enumerate(rows):
+        d = 0
+        for j, idx in enumerate(input_indices):
+            d += (float(row[idx]) - means[j]) ** 2
+        distances.append((d**0.5, i))
+    
+    # Sort by distance descending (furthest are most suspicious)
+    distances.sort(key=lambda x: x[0], reverse=True)
+    
+    # Add top 5% of statistical outliers to suspicious list if not already there
+    limit = len(rows) // 20
+    for d, i in distances[:limit]:
+        suspicious.append((d, i))
+        
+    # Sort by suspicion score (descending) and return unique indices
+    suspicious.sort(key=lambda x: x[0], reverse=True)
+    
+    seen = set()
+    result = []
+    for _, i in suspicious:
+        if i not in seen:
+            result.append(i)
+            seen.add(i)
+            
+    return result
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [row for row in reader]
+        
+        outliers = spot(header, rows)
+        
+        print("Customer Inquiry: Identifying suspicious/mistyped records")
+        print("-" * 60)
+        if outliers:
+            print(f"Found {len(outliers)} suspicious rows.")
+            print("The most suspicious row indices are:")
+            print(outliers[:10])
+            print("\nThese rows contain values that deviate significantly from the norm")
+            print("or fall outside the expected [0, 1] range.")
+        else:
+            print("No suspicious records found.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

@@ -1,0 +1,49 @@
+```python
+import ezr
+import step08
+
+def fix(header, row, levers):
+    """
+    Finds the best change for a 'bad' row by testing all provided levers,
+    excluding 'MonthlyIncome' to respect the 'no money' constraint.
+    """
+    # Filter out MonthlyIncome if it exists in the levers
+    if "MonthlyIncome" in levers:
+        levers = {k: v for k, v in levers.items() if k != "MonthlyIncome"}
+    
+    # Reuse the logic from step08
+    return step08.fix(header, row, levers)
+
+if __name__ == "__main__":
+    # Load data
+    data = list(ezr.csv("WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"))
+    header = data[0]
+    rows = data[1:]
+    tbl = ezr.Tbl(data)
+    
+    # Define levers excluding salary-related ones
+    levers = {
+        "businessTravel": ["Non-Travel", "Travel_Frequently", "Travel_Rarely"],
+        "overTime": ["No", "Yes"],
+        "TrainingTimesLastYear": (0.0, 6.0),
+        "StockOptionLevel": (0.0, 3.0),
+        "JobInvolvement": (1.0, 4.0),
+        "EnvironmentSatisfaction": (1.0, 4.0)
+    }
+    
+    # Find a 'bad' row (high ydist)
+    sorted_rows = sorted(rows, key=lambda r: ezr.ydist(tbl, r), reverse=True)
+    bad_row = sorted_rows[0]
+    
+    # Get recommendation
+    recommendation = fix(header, bad_row, levers)
+    
+    print("Analysis: Recommended non-monetary changes for high-attrition risk employees:")
+    if recommendation:
+        for col, val in recommendation.items():
+            print(f"- Change '{col}' to: {val}")
+    else:
+        print("- No non-monetary lever change significantly improves the outcome.")
+    
+    exit(0)
+```

@@ -1,0 +1,76 @@
+import csv
+
+def spot(header, rows):
+    """
+    Identifies rows containing input values that are 'out of distribution'
+    compared to the rest of the dataset. We use a simple range-based 
+    suspicion score: values outside the observed min/max of the training 
+    data are highly suspicious.
+    """
+    # Identify input columns (non-goal columns)
+    goal_cols = [c for c in header if c.endswith('-') or c.endswith('+')]
+    input_indices = [i for i, h in enumerate(header) if h not in goal_cols]
+    
+    # Calculate observed ranges for numeric inputs
+    ranges = {}
+    for i in input_indices:
+        col_name = header[i]
+        # Only check numeric inputs
+        if isinstance(rows[0][i], (int, float)):
+            vals = [r[i] for r in rows if r[i] != "?"]
+            if vals:
+                ranges[i] = (min(vals), max(vals))
+    
+    # Calculate suspicion score for each row
+    # A row is suspicious if it contains values outside the observed range
+    suspicion = []
+    for row_idx, row in enumerate(rows):
+        score = 0
+        for i in input_indices:
+            val = row[i]
+            if val == "?":
+                continue
+            
+            # If numeric, check if it's outside the range
+            if i in ranges:
+                low, high = ranges[i]
+                if val < low or val > high:
+                    score += 1
+            # If symbolic, we could check for unknown categories, 
+            # but range check on numeric inputs is the primary indicator here.
+        
+        if score > 0:
+            suspicion.append((score, row_idx))
+            
+    # Sort by suspicion score descending
+    suspicion.sort(key=lambda x: x[0], reverse=True)
+    
+    return [item[1] for item in suspicion]
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                # Convert numeric columns, keep symbolic as strings
+                try:
+                    processed_row.append(float(val))
+                except ValueError:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    suspects = spot(header, rows)
+    
+    if not suspects:
+        print("No suspicious rows found; all inputs are within historical ranges.")
+    else:
+        print(f"Identified {len(suspects)} rows with potentially erroneous input settings.")
+        print("The most suspicious rows (indices) are:")
+        print(suspects[:10])
+        print("These rows contain settings that deviate from the observed historical bounds.")

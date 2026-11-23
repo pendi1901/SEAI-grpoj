@@ -1,0 +1,64 @@
+```python
+import csv
+import math
+
+def flow(header, row, seen):
+    """
+    Detects if the current team (represented by the 'seen' history) has shifted 
+    significantly. We compare the distribution of the 'YearsAtCompany+' 
+    goal column in the 'seen' history against the current row.
+    
+    If the current row's tenure is more than 2 standard deviations away from 
+    the mean of the seen history, we flag it as a shift in team composition.
+    """
+    if not seen:
+        return False
+
+    idx_years = header.index('YearsAtCompany+')
+    
+    # Extract numeric tenure values from seen rows
+    tenures = [r[idx_years] for r in seen if isinstance(r[idx_years], (int, float))]
+    
+    if len(tenures) < 10:
+        return False
+    
+    mean = sum(tenures) / len(tenures)
+    variance = sum((x - mean) ** 2 for x in tenures) / len(tenures)
+    std = math.sqrt(variance)
+    
+    if std == 0:
+        return False
+    
+    # Flag if the new row is an outlier (more than 2 standard deviations)
+    current_val = row[idx_years]
+    z_score = abs(current_val - mean) / std
+    
+    return z_score > 2.0
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    seen = []
+    shifts = 0
+    for row in rows:
+        if flow(header, row, seen):
+            shifts += 1
+        seen.append(row)
+
+    print(f"Analysis complete.")
+    print(f"Total records processed: {len(rows)}")
+    print(f"Number of times the team composition shifted significantly: {shifts}")
+    print("The system flags rows that deviate significantly from the historical tenure mean.")
+```

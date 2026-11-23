@@ -1,0 +1,68 @@
+import csv
+
+def spot(header, rows):
+    """
+    Identifies rows that are outliers in the input space.
+    Uses the Interquartile Range (IQR) method on each numeric input column
+    to flag rows that contain values significantly outside the expected range.
+    """
+    input_indices = [i for i, name in enumerate(header) 
+                     if not (name.endswith('-') or name.endswith('+'))]
+    
+    # Calculate stats for each input column
+    stats = {}
+    for i in input_indices:
+        col_vals = sorted([row[i] for row in rows if isinstance(row[i], (int, float))])
+        q1 = col_vals[len(col_vals) // 4]
+        q3 = col_vals[3 * len(col_vals) // 4]
+        iqr = q3 - q1
+        stats[i] = (q1 - 1.5 * iqr, q3 + 1.5 * iqr)
+
+    # Score rows based on how many inputs are outside the "normal" range
+    # A row is more suspicious if it has more outliers or extreme values
+    suspicion_scores = []
+    for idx, row in enumerate(rows):
+        score = 0
+        for i in input_indices:
+            val = row[i]
+            if isinstance(val, (int, float)):
+                low, high = stats[i]
+                if val < low or val > high:
+                    score += 1
+        if score > 0:
+            suspicion_scores.append((score, idx))
+    
+    # Sort by score descending (most suspicious first)
+    suspicion_scores.sort(key=lambda x: x[0], reverse=True)
+    
+    return [item[1] for item in suspicion_scores]
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed_row = []
+                for val in row:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        suspicious_indices = spot(header, rows)
+        
+        print("Outlier Detection Analysis:")
+        if not suspicious_indices:
+            print("No suspicious records found.")
+        else:
+            print(f"Found {len(suspicious_indices)} rows that appear to be outliers.")
+            print("The most suspicious rows (by index) are:", suspicious_indices[:10])
+            print("These rows contain input values that fall outside the statistical norms of the dataset.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

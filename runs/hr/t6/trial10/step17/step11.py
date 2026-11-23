@@ -1,0 +1,53 @@
+import ezr
+import step01
+
+def find_similar(header, rows, target_row, n=5):
+    """
+    Finds the n rows most similar to target_row based on x-columns.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    # Calculate distance from target_row to all other rows
+    distances = []
+    for i, row in enumerate(rows):
+        if row == target_row:
+            continue
+        d = ezr.xdist(tbl, target_row, row)
+        distances.append((d, i))
+    
+    # Sort by distance ascending (most similar first)
+    distances.sort(key=lambda x: x[0])
+    return [idx for d, idx in distances[:n]]
+
+def remember(header, rows):
+    """
+    Returns the indices of the 5% of rows most similar to the 
+    first row in the dataset, as a representative example.
+    """
+    target = rows[0]
+    limit = max(1, int(len(rows) * 0.05))
+    return find_similar(header, rows, target, n=limit)
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    target_idx = 0
+    target_row = rows[target_idx]
+    
+    similar_indices = remember(header, rows)
+    
+    print(f"Target Employee (Index {target_idx}):")
+    print(f"  Role: {target_row[header.index('jobRole')]}")
+    print(f"  Years at Company: {target_row[header.index('YearsAtCompany+')]}")
+    
+    print(f"\nFound {len(similar_indices)} most similar employees:")
+    tenure_idx = header.index('YearsAtCompany+')
+    
+    for idx in similar_indices:
+        row = rows[idx]
+        print(f"  Index {idx}: {row[tenure_idx]} years at company")
+        
+    avg_tenure = sum(rows[i][tenure_idx] for i in similar_indices) / len(similar_indices)
+    print(f"\nAverage tenure of similar employees: {avg_tenure:.2f} years.")

@@ -1,0 +1,52 @@
+```python
+import csv
+from step03 import certify
+
+def get_data():
+    """Reads the csv and returns header and rows."""
+    filename = "pom3a.n1000.train.csv"
+    with open(filename, mode='r', newline='') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = []
+        for row in reader:
+            rows.append([float(x) for x in row])
+    return header, rows
+
+def analyze_shift(header, rows):
+    """
+    Splits the data into two halves (before and after the 'spring' change)
+    and checks if the goal distributions are statistically different.
+    """
+    # We use the first half vs second half as a proxy for the 'spring' change
+    mid = len(rows) // 2
+    first_half = rows[:mid]
+    second_half = rows[mid:]
+    
+    # We evaluate based on the first goal column (e.g., Cost-)
+    goal_idx = -1
+    for i, name in enumerate(header):
+        if name.endswith('-') or name.endswith('+'):
+            goal_idx = i
+            break
+            
+    xs = [r[goal_idx] for r in first_half]
+    ys = [r[goal_idx] for r in second_half]
+    
+    return certify(xs, ys)
+
+if __name__ == "__main__":
+    try:
+        header, rows = get_data()
+        is_same = analyze_shift(header, rows)
+        
+        print("Customer Inquiry: In spring we changed how teams decide what to build first.")
+        print("Did results really shift, or are they the same as before?")
+        if is_same:
+            print("Answer: The results are statistically indistinguishable. The change did not have a significant impact.")
+        else:
+            print("Answer: The results have shifted significantly. The change in decision-making had a real effect.")
+    except FileNotFoundError:
+        print("Error: pom3a.n1000.train.csv not found.")
+        exit(1)
+```

@@ -1,0 +1,90 @@
+```python
+import ezr
+import random
+
+def fix(header, row, levers):
+    """
+    Finds the change to levers that moves the row toward the 
+    best possible performance (minimizing ydist).
+    """
+    # Create a table to use ydist. We use all rows to ensure 
+    # normalization (norm) is calculated correctly across the domain.
+    # Note: The harness provides the row, but we need the full table context.
+    # We use a dummy table with the header to define the column roles.
+    tbl = ezr.Tbl([header])
+    
+    # We need to calculate ydist for the row. 
+    # Since ydist uses norm(c, v), we need the column statistics.
+    # We add the row to the table to get the stats.
+    ezr.addRow(tbl, row)
+    
+    best_ydist = ezr.ydist(tbl, row)
+    best_change = {}
+    
+    # Try changing each lever
+    for col_name, bounds in levers.items():
+        if col_name not in header:
+            continue
+            
+        col_idx = header.index(col_name)
+        
+        # Determine test values
+        if isinstance(bounds, (list, tuple)):
+            # Numeric: try low, high, and midpoint
+            low, high = bounds
+            test_vals = [low, high, (low + high) / 2]
+        else:
+            # Symbolic
+            test_vals = bounds
+            
+        for val in test_vals:
+            if val == row[col_idx]:
+                continue
+                
+            # Create a candidate row
+            candidate = row[:]
+            candidate[col_idx] = val
+            
+            # Evaluate
+            d = ezr.ydist(tbl, candidate)
+            if d < best_ydist:
+                best_ydist = d
+                best_change = {col_name: val}
+                
+    return best_change
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data_iter = ezr.csv(filename)
+    header = next(data_iter)
+    rows = list(data_iter)
+    
+    # Define levers based on the problem domain (numeric inputs 0-8)
+    levers = {
+        "Culture": (0, 1),
+        "Criticality": (0, 1),
+        "Criticality Modifier": (0, 1),
+        "Initial Known": (0, 1),
+        "Inter-Dependency": (0, 1),
+        "Dynamism": (0, 1),
+        "Size": (0, 1),
+        "Plan": (0, 1),
+        "Team Size": (0, 1)
+    }
+    
+    # Pick a "bad" row (high ydist)
+    tbl = ezr.Tbl([header] + rows)
+    scored = sorted([(ezr.ydist(tbl, r), r) for r in rows], key=lambda x: x[0], reverse=True)
+    bad_row = scored[0][1]
+    
+    recommendation = fix(header, bad_row, levers)
+    
+    print("Rescue Plan for Underperforming Configuration:")
+    if recommendation:
+        for col, val in recommendation.items():
+            print(f"Change '{col}' to {val:.4f} to improve performance.")
+    else:
+        print("No simple lever change found to improve this configuration.")
+    
+    exit(0)
+```

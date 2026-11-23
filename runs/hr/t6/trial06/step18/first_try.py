@@ -1,0 +1,51 @@
+import ezr
+import step08
+
+def fix(header, row, levers):
+    """
+    Suggests a change to a 'bad' row to improve its goal performance,
+    excluding 'MonthlyIncome' as a lever since there is no money.
+    """
+    # Filter out MonthlyIncome if it exists in the provided levers
+    # to respect the "no money" constraint.
+    if "MonthlyIncome" in levers:
+        levers = {k: v for k, v in levers.items() if k != "MonthlyIncome"}
+    
+    # Reuse the logic from step08 which evaluates potential changes
+    # by simulating the row's new ydist.
+    return step08.fix(header, row, levers)
+
+if __name__ == "__main__":
+    file_path = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(file_path))
+    header = data[0]
+    rows = data[1:]
+    
+    # Define levers excluding salary/income
+    levers = {
+        "businessTravel": ["Non-Travel", "Travel_Frequently", "Travel_Rarely"],
+        "overTime": ["No", "Yes"],
+        "TrainingTimesLastYear": (0.0, 6.0),
+        "PercentSalaryHike": (11.0, 25.0),
+        "StockOptionLevel": (0.0, 3.0),
+        "JobInvolvement": (1.0, 4.0),
+        "WorkLifeBalance": (1.0, 4.0)
+    }
+    
+    # Pick a "bad" row (high ydist)
+    tbl = ezr.Tbl([header] + rows)
+    sorted_rows = sorted(rows, key=lambda r: ezr.ydist(tbl, r), reverse=True)
+    bad_row = sorted_rows[0]
+    
+    # Get recommendation
+    recommendation = fix(header, bad_row, levers)
+    
+    print("Analysis: How to improve retention without increasing pay?")
+    if recommendation:
+        col, val = list(recommendation.items())[0]
+        print(f"Recommended change: Set {col} to {val}.")
+    else:
+        print("No single lever change found that improves retention metrics.")
+    print("Strategy: We tested non-monetary levers to find the one that minimizes")
+    print("the distance to the ideal retention goals.")
+    exit(0)

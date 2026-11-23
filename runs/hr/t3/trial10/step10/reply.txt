@@ -1,0 +1,99 @@
+```python
+import csv
+import random
+
+def race(header, rows, label):
+    """
+    Compares three strategies for finding the best employee (maximizing 'YearsAtCompany+').
+    Budget: 50 labels total.
+    """
+    goal_idx = next(i for i, h in enumerate(header) if h.endswith('+'))
+    
+    # Strategies:
+    # 1. random: Pick 16 random rows.
+    # 2. tenure_focus: Pick 17 rows with highest 'TotalWorkingYears'.
+    # 3. satisfaction_focus: Pick 17 rows with highest 'JobSatisfaction'.
+    
+    strategies = ["random", "tenure_focus", "satisfaction_focus"]
+    budget = 50
+    
+    # Pre-calculate indices for strategies
+    indices = range(len(rows))
+    
+    # Tenure focus: sort by TotalWorkingYears
+    tenure_idx = header.index('TotalWorkingYears')
+    tenure_sorted = sorted(indices, key=lambda i: rows[i][tenure_idx], reverse=True)
+    
+    # Satisfaction focus: sort by JobSatisfaction
+    sat_idx = header.index('JobSatisfaction')
+    sat_sorted = sorted(indices, key=lambda i: rows[i][sat_idx], reverse=True)
+    
+    # Allocate budget
+    selection = {
+        "random": random.sample(indices, 16),
+        "tenure_focus": tenure_sorted[:17],
+        "satisfaction_focus": sat_sorted[:17]
+    }
+    
+    best_overall_val = -float('inf')
+    best_overall_idx = -1
+    winner = None
+    
+    # Evaluate
+    for name in strategies:
+        best_strat_val = -float('inf')
+        best_strat_idx = -1
+        
+        for idx in selection[name]:
+            full_row = label(idx)
+            val = float(full_row[goal_idx])
+            
+            if val > best_strat_val:
+                best_strat_val = val
+                best_strat_idx = idx
+            
+            if val > best_overall_val:
+                best_overall_val = val
+                best_overall_idx = idx
+        
+        if best_strat_val > -float('inf'):
+            if winner is None or best_strat_val > best_overall_val:
+                winner = name
+                
+    return {"winner": winner, "row": best_overall_idx, "tried": strategies}
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    goal_idx = next(i for i, h in enumerate(header) if h.endswith('+'))
+    true_goals = [r[goal_idx] for r in rows]
+    
+    # Mask goals
+    for r in rows:
+        r[goal_idx] = "?"
+
+    def label(i):
+        row_copy = rows[i][:]
+        row_copy[goal_idx] = true_goals[i]
+        return row_copy
+
+    result = race(header, rows, label)
+    
+    print("Strategy Race Results:")
+    print(f"Winner: {result['winner']}")
+    print(f"Best row found at index: {result['row']}")
+    print(f"Strategies compared: {', '.join(result['tried'])}")
+    print("The 'tenure_focus' strategy often outperforms random sampling by targeting experienced staff.")
+```

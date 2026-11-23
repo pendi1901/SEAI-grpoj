@@ -1,0 +1,71 @@
+import csv
+import pandas as pd
+from sklearn.neighbors import KNeighborsRegressor
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column for test rows using K-Nearest Neighbors.
+    """
+    df_train = pd.DataFrame(train, columns=header)
+    df_test = pd.DataFrame(test, columns=header)
+
+    # Identify input columns (those not ending in - or +)
+    input_cols = [c for c in header if not (c.endswith('-') or c.endswith('+'))]
+    
+    # Identify the first goal column
+    goal_cols = [c for c in header if c.endswith('-') or c.endswith('+')]
+    target_col = goal_cols[0]
+
+    # Prepare data
+    X_train = df_train[input_cols]
+    y_train = df_train[target_col]
+    X_test = df_test[input_cols]
+
+    # Use KNN to predict the value of the first goal
+    # n_neighbors=5 is a standard heuristic for this size of dataset
+    model = KNeighborsRegressor(n_neighbors=5)
+    model.fit(X_train, y_train)
+    
+    predictions = model.predict(X_test)
+    return predictions.tolist()
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) for val in row])
+
+        # Split data: use 80% for training, 20% as a test set
+        split_idx = int(len(rows) * 0.8)
+        train_data = rows[:split_idx]
+        test_data = rows[split_idx:]
+
+        # Mask the goals in the test set to simulate the "?" requirement
+        goal_indices = [i for i, h in enumerate(header) if h.endswith('-') or h.endswith('+')]
+        masked_test = []
+        for row in test_data:
+            new_row = list(row)
+            for idx in goal_indices:
+                new_row[idx] = "?"
+            masked_test.append(new_row)
+
+        # Get predictions
+        predictions = guess(header, train_data, masked_test)
+
+        # Print summary for the customer
+        first_goal = header[goal_indices[0]]
+        print(f"Customer Inquiry: Estimating '{first_goal}' for new setups.")
+        print(f"Based on the training data, the estimated '{first_goal}' for the first 5 test cases are:")
+        for i in range(min(5, len(predictions))):
+            print(f"  Setup {i+1}: {predictions[i]:.4f}")
+        
+        print("\nNote: Estimates are generated using K-Nearest Neighbors regression.")
+        exit(0)
+
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

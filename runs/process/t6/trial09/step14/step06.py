@@ -1,0 +1,61 @@
+import ezr
+import step01
+import step02
+
+def justify(header, rows, row):
+    """
+    Returns (p, reason): p is the fraction of rows that 'row' is better than,
+    and a sentence explaining the justification.
+    """
+    # Create table to handle goal normalization and distance calculation
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Estimate the goals for the input 'row' using the tree-based ranker
+    # We use the training data (rows) to build the model
+    node = ezr.tree(tbl, rows)
+    
+    # Predict goals: for each goal column, find the leaf mean
+    # We create a copy of the row to fill in the '?'
+    estimated_row = row[:]
+    leaf_node = ezr.leaf(node, row)
+    
+    # Fill missing goals with the leaf's mean values
+    for col in tbl.y:
+        vals = [r[col.at] for r in leaf_node.rows if r[col.at] != "?"]
+        estimated_row[col.at] = sum(vals) / len(vals) if vals else 0
+        
+    # Calculate ydist for the estimated row and all existing rows
+    target_dist = ezr.ydist(tbl, estimated_row)
+    all_dists = [ezr.ydist(tbl, r) for r in rows]
+    
+    # p is the fraction of rows that have a higher (worse) ydist than our target
+    better_than = [d for d in all_dists if d > target_dist]
+    p = len(better_than) / len(rows)
+    
+    reason = (f"This configuration is in the top {int((1-p)*100)}% of all "
+              f"possible setups based on our multi-objective performance model.")
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data_iter = ezr.csv(filename)
+    
+    try:
+        header = next(data_iter)
+        rows = list(data_iter)
+    except StopIteration:
+        exit(0)
+        
+    # Pick a sample row and mask its goals to test the justification
+    test_row = rows[0][:]
+    for i in range(9, 12):
+        test_row[i] = "?"
+        
+    p, reason = justify(header, rows, test_row)
+    
+    print(f"Justification Report:")
+    print(f"Performance Rank (p): {p:.4f}")
+    print(f"Reason: {reason}")
+    
+    exit(0)

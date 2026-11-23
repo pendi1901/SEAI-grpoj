@@ -1,0 +1,80 @@
+import csv
+import step01
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column ('YearsAtCompany+') for test rows.
+    Uses a k-Nearest Neighbors approach based on numeric input columns,
+    ensuring only numeric columns are used for distance calculation.
+    """
+    # Identify goal column (first one ending in + or -)
+    goal_idx = -1
+    for i, name in enumerate(header):
+        if name.endswith('+') or name.endswith('-'):
+            goal_idx = i
+            break
+    
+    # Identify numeric input columns (excluding the goal column)
+    # Ensure we only use columns that are actually numeric (float)
+    input_indices = []
+    for i, name in enumerate(header):
+        if i != goal_idx and name[0].isupper():
+            # Check if the column is numeric by inspecting the first training row
+            if isinstance(train[0][i], (int, float)):
+                input_indices.append(i)
+    
+    def get_dist(row1, row2):
+        d = 0
+        for i in input_indices:
+            d += (row1[i] - row2[i])**2
+        return d**0.5
+
+    results = []
+    for t_row in test:
+        # Find nearest neighbor in training set
+        best_dist = float('inf')
+        best_val = 0.0
+        for train_row in train:
+            dist = get_dist(t_row, train_row)
+            if dist < best_dist:
+                best_dist = dist
+                best_val = train_row[goal_idx]
+        results.append(float(best_val))
+        
+    return results
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Split: use first 700 for training, next 100 for testing
+    train_data = rows[:700]
+    test_data = rows[700:800]
+    
+    # Mask goals in test data
+    goal_idx = next(i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-'))
+    masked_test = []
+    for row in test_data:
+        new_row = list(row)
+        new_row[goal_idx] = "?"
+        masked_test.append(new_row)
+        
+    predictions = guess(header, train_data, masked_test)
+    
+    print("Estimates for 'YearsAtCompany+' (first 5 test rows):")
+    for i in range(min(5, len(predictions))):
+        print(f"Row {700 + i}: Estimated Years = {predictions[i]:.2f}")

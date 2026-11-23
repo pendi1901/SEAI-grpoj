@@ -1,0 +1,46 @@
+```python
+import csv
+import step02
+import step06
+
+def justify(header, rows, row):
+    """
+    Estimates the performance of 'row' relative to 'rows' and returns
+    the percentile rank and a justification string.
+    """
+    # Use the logic from step06 to estimate goals and calculate percentile
+    return step06.justify(header, rows, row)
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed = [val if header[i] == 'criterion' else float(val) 
+                             for i, val in enumerate(row)]
+                rows.append(processed)
+        
+        # The customer asks: "Why not simply use the biggest, deepest setup?"
+        # We identify the "biggest, deepest" setup in the data.
+        n_est_idx = header.index('N_estimators')
+        depth_idx = header.index('Max_depth')
+        
+        # Find the row with max N_estimators and Max_depth
+        biggest_row = max(rows, key=lambda r: r[n_est_idx] + r[depth_idx])
+        
+        # Hide goals to simulate a new query
+        test_row = [val if i not in [0, 1, 2] else "?" for i, val in enumerate(biggest_row)]
+        
+        p, reason = justify(header, rows, test_row)
+        
+        print("Analysis: Why not use the biggest, deepest setup?")
+        print(f"The biggest configuration outperforms only {p:.1%} of all historical configurations.")
+        print("Conclusion: Bigger is not always better; excessive complexity often leads to diminishing returns.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

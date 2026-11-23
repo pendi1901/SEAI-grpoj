@@ -1,0 +1,57 @@
+import ezr
+import step01
+
+def find_similar(header, rows, target_row, n=5):
+    """
+    Finds the n most similar rows to the target_row based on input (x) columns.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate xdist between target_row and all other rows
+    # We ignore the target_row itself if it exists in the dataset
+    distances = []
+    for i, row in enumerate(rows):
+        # Skip if it's the exact same row (by identity)
+        if row is target_row:
+            continue
+        d = ezr.xdist(tbl, target_row, row)
+        distances.append((d, i))
+    
+    # Sort by distance ascending (closest first)
+    distances.sort(key=lambda x: x[0])
+    
+    return [idx for d, idx in distances[:n]]
+
+def remember(header, rows):
+    """
+    Returns the indices of the 5% of rows that are most similar to the 
+    first row in the dataset, as a representative example.
+    """
+    target = rows[0]
+    limit = max(1, len(rows) // 20)
+    
+    # Find similar rows
+    similar_indices = find_similar(header, rows, target, n=limit)
+    return similar_indices
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Get indices of similar employees
+    indices = remember(header, rows)
+    
+    # Identify tenure columns
+    tenure_cols = [i for i, h in enumerate(header) if h.endswith("+")]
+    
+    print(f"Analysis: Finding employees similar to the first record (Row 0).")
+    print(f"Found {len(indices)} similar employees.")
+    print("\nTenure details for these similar employees:")
+    for idx in indices:
+        row = rows[idx]
+        tenure_info = ", ".join([f"{header[i]}={row[i]}" for i in tenure_cols])
+        print(f"- Row {idx}: {tenure_info}")
+    
+    print("\nThese individuals share similar characteristics in their job roles and background.")

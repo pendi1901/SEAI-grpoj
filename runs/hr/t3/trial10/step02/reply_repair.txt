@@ -1,0 +1,82 @@
+```python
+import csv
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import LabelEncoder
+
+def guess(header, train, test):
+    """
+    Estimates the value of the first goal column (YearsAtCompany+)
+    using a Random Forest Regressor.
+    """
+    # Identify the first goal column (ends with + or -)
+    goal_cols = [i for i, h in enumerate(header) if h.endswith('+') or h.endswith('-')]
+    target_idx = goal_cols[0]
+    
+    # Prepare encoders for symbolic columns
+    encoders = {}
+    for i, col_name in enumerate(header):
+        if i != target_idx and not header[i][0].isupper():
+            encoders[i] = LabelEncoder()
+            all_vals = [r[i] for r in train]
+            encoders[i].fit(all_vals)
+
+    def transform_row(row, is_test=False):
+        new_row = []
+        for i, val in enumerate(row):
+            if i == target_idx and is_test:
+                # Placeholder for the goal column in test data
+                new_row.append(0.0)
+            elif i in encoders:
+                # Handle potential unseen labels in test data by mapping to 0
+                try:
+                    new_row.append(float(encoders[i].transform([val])[0]))
+                except ValueError:
+                    new_row.append(0.0)
+            else:
+                new_row.append(float(val))
+        return new_row
+
+    # Prepare training features and target
+    X_train = [transform_row(r) for r in train]
+    y_train = [float(r[target_idx]) for r in train]
+    
+    # Prepare test features
+    X_test = [transform_row(r, is_test=True) for r in test]
+    
+    # Train model
+    model = RandomForestRegressor(n_estimators=100, random_state=42)
+    model.fit(X_train, y_train)
+    
+    # Predict
+    return model.predict(X_test).tolist()
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    # Split data for demonstration: use last 10 rows as 'test'
+    train_data = rows[:-10]
+    test_data = [r[:] for r in rows[-10:]]
+    
+    # Mask the goal column in test data
+    goal_idx = next(i for i, h in enumerate(header) if h.endswith('+'))
+    for row in test_data:
+        row[goal_idx] = "?"
+        
+    predictions = guess(header, train_data, test_data)
+    
+    print("Estimates for 'YearsAtCompany+' for the last 10 employees:")
+    for i, pred in enumerate(predictions):
+        print(f"Employee {i+1}: Predicted {pred:.2f} years")
+```

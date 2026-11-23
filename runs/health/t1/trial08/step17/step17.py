@@ -1,0 +1,81 @@
+import csv
+import random
+
+def choose(header, rows, label):
+    """
+    Finds a setup that forecasts well (high score) and is small (low N_estimators).
+    We define 'small' as having N_estimators below the median.
+    We sample 50 rows, label them, and pick the best one based on a 
+    multi-objective score that penalizes high N_estimators.
+    """
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+    n_est_idx = header.index('N_estimators')
+
+    # Calculate median N_estimators to define 'small'
+    all_n = [r[n_est_idx] for r in rows]
+    median_n = sorted(all_n)[len(all_n) // 2]
+
+    def get_score(i, goals):
+        # goals = [mre, acc, pred]
+        # Score = (1 - MRE) + ACC + PRED
+        # We add a penalty if N_estimators is larger than the median
+        base_score = (1.0 - goals[0]) + goals[1] + goals[2]
+        n_est = rows[i][n_est_idx]
+        
+        # Penalty: if n_est > median, reduce score proportionally
+        if n_est > median_n:
+            penalty = (n_est - median_n) / (max(all_n) - median_n + 1e-9)
+            return base_score - penalty
+        return base_score
+
+    # Sample 50 random indices
+    indices = random.sample(range(len(rows)), 50)
+    
+    best_idx = -1
+    best_score = -float('inf')
+    
+    for i in indices:
+        goals = label(i)
+        score = get_score(i, goals)
+        if score > best_score:
+            best_score = score
+            best_idx = i
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed = []
+            for i, val in enumerate(row):
+                if header[i] == 'criterion':
+                    processed.append(val)
+                else:
+                    processed.append(float(val))
+            rows.append(processed)
+            
+    # Store true goals for the label function
+    true_goals = [[r[0], r[1], r[2]] for r in rows]
+    
+    def label(i):
+        return true_goals[i]
+    
+    # Mask rows
+    masked_rows = [r[:] for r in rows]
+    for r in masked_rows:
+        r[0], r[1], r[2] = "?", "?", "?"
+        
+    best_idx = choose(header, masked_rows, label)
+    
+    print("Optimization complete.")
+    print(f"Best setup found at index {best_idx}.")
+    print(f"N_estimators: {rows[best_idx][header.index('N_estimators')]}")
+    print(f"Goals: MRE={rows[best_idx][0]:.4f}, ACC={rows[best_idx][1]:.4f}, PRED40={rows[best_idx][2]:.4f}")

@@ -1,0 +1,80 @@
+import csv
+from sklearn.neighbors import KNeighborsRegressor
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+import numpy as np
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column (MRE-) for test rows using a K-Nearest Neighbors regressor.
+    Handles the '?' in test rows by excluding the goal column from the input features.
+    """
+    # The first column is the goal (MRE-)
+    goal_idx = 0
+    
+    # Input features are all columns except the goal column
+    input_indices = [i for i in range(len(header)) if i != goal_idx]
+    
+    # Prepare training data
+    X_train = [[row[i] for i in input_indices] for row in train]
+    y_train = [row[goal_idx] for row in train]
+    
+    # Prepare test data: remove the goal column (which is '?')
+    X_test = [[row[i] for i in input_indices] for row in test]
+    
+    # Identify categorical columns for preprocessing
+    # Columns are symbolic if they contain strings
+    cat_features = [i for i, val in enumerate(train[0]) if isinstance(val, str)]
+    
+    # Map original column indices to the indices in X_train/X_test
+    cat_indices_in_input = [input_indices.index(i) for i in cat_features if i in input_indices]
+    
+    preprocessor = ColumnTransformer(
+        transformers=[('cat', OneHotEncoder(handle_unknown='ignore'), cat_indices_in_input)],
+        remainder='passthrough'
+    )
+    
+    # Use KNN to estimate the MRE- value
+    model = Pipeline(steps=[
+        ('preprocessor', preprocessor),
+        ('regressor', KNeighborsRegressor(n_neighbors=5))
+    ])
+    
+    model.fit(X_train, y_train)
+    return model.predict(X_test).tolist()
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            for row in reader:
+                processed_row = []
+                for val in row:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        # Split data for demonstration: use last 10 rows as test
+        train_data = rows[:-10]
+        # Create test rows with '?' in the goal column (index 0)
+        test_data = []
+        for row in rows[-10:]:
+            test_row = list(row)
+            test_row[0] = "?"
+            test_data.append(test_row)
+        
+        predictions = guess(header, train_data, test_data)
+        
+        print("Forecast estimation for the last 10 configurations (MRE-):")
+        for i, pred in enumerate(predictions):
+            print(f"Row {len(rows)-10+i}: Estimated MRE = {pred:.4f}")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

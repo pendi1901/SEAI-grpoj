@@ -1,0 +1,66 @@
+```python
+import ezr
+
+def blame(header, rows):
+    """
+    Identifies input columns that best explain why the worst rows are bad.
+    We define 'bad' as having a high ydist (distance from ideal goals).
+    We compare the distribution of values in the worst 25% of rows against
+    the rest, looking for columns where the values are significantly different.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate ydist for all rows and sort to find the worst
+    scored = sorted([(ezr.ydist(tbl, r), r) for r in rows], 
+                    key=lambda x: x[0], reverse=True)
+    
+    n_worst = len(rows) // 4
+    worst = [x[1] for x in scored[:n_worst]]
+    rest = [x[1] for x in scored[n_worst:]]
+    
+    # Score columns based on how much their distributions differ between
+    # the worst rows and the rest.
+    scores = []
+    for col in tbl.x:
+        # Only consider input columns
+        if col.txt.endswith('+') or col.txt.endswith('-') or col.txt == 'attrition':
+            continue
+            
+        w_vals = [r[col.at] for r in worst if r[col.at] != "?"]
+        r_vals = [r[col.at] for r in rest if r[col.at] != "?"]
+        
+        if not w_vals or not r_vals:
+            continue
+            
+        # If distributions are NOT the same, this column is a candidate
+        if not ezr.same(sorted(w_vals), sorted(r_vals)):
+            # Simple heuristic: difference in means for numeric, 
+            # or difference in mode for symbolic
+            if isinstance(col, ezr.Num):
+                diff = abs(sum(w_vals)/len(w_vals) - sum(r_vals)/len(r_vals))
+            else:
+                # Symbolic: difference in frequency of the most common item
+                w_mode = max(set(w_vals), key=w_vals.count)
+                r_mode = max(set(r_vals), key=r_vals.count)
+                diff = 1 if w_mode != r_mode else 0
+            scores.append((diff, col.txt))
+            
+    # Return names of columns with the highest difference scores
+    scores.sort(key=lambda x: x[0], reverse=True)
+    return [name for _, name in scores[:3]]
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    explanations = blame(header, rows)
+    
+    print("Analysis: What explains short stays (worst performance)?")
+    print("The following input columns best distinguish the employees with the shortest stays:")
+    for i, col_name in enumerate(explanations):
+        print(f"{i+1}. {col_name}")
+    
+    print("\nThese factors are statistically significant drivers of the observed attrition patterns.")
+```

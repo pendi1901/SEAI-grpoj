@@ -1,0 +1,53 @@
+import ezr
+import random
+
+def flow(header, row, seen):
+    """
+    Decide if the current row is worth a 'stay' conversation.
+    We compare the current row's ydist to the distribution of ydist 
+    values seen so far. If the current row is in the top 10% of 
+    desirability (lowest ydist) relative to what we have seen, 
+    we flag it.
+    """
+    # Create a table to handle column definitions and ydist calculations
+    tbl = ezr.Tbl([header] + (seen if seen else [row]))
+    
+    # Calculate ydist for the current row
+    current_ydist = ezr.ydist(tbl, row)
+    
+    # If this is the first row, we can't compare, so let it go
+    if not seen:
+        return False
+    
+    # Calculate ydist for all previously seen rows
+    seen_ydists = [ezr.ydist(tbl, r) for r in seen]
+    
+    # We want to find the best (lowest) ydist values.
+    # If the current row is better than 90% of what we've seen,
+    # it's a candidate for the conversation.
+    threshold = sorted(seen_ydists)[int(len(seen_ydists) * 0.1)]
+    
+    return current_ydist <= threshold
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Simulate the arrival process
+    random.seed(1234567891)
+    random.shuffle(rows)
+    
+    seen = []
+    selected_count = 0
+    
+    for row in rows:
+        if flow(header, row, seen):
+            selected_count += 1
+        seen.append(row)
+        
+    print(f"Processed {len(rows)} employee reviews.")
+    print(f"Identified {selected_count} employees for 'what would keep you here' conversations.")
+    print("Decision logic: Flagged employees whose performance/tenure metrics")
+    print("rank in the top 10% of all records seen up to that point.")

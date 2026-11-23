@@ -1,0 +1,77 @@
+import ezr
+import random
+
+def fix(header, row, levers):
+    """
+    Finds the best change for a 'bad' row by testing all provided levers.
+    A row is 'bad' if its ydist is high. We want to minimize ydist.
+    """
+    # Create a dummy table to use ydist
+    # We need a table with the same structure to calculate distances
+    # We use a minimal table with just the header
+    tbl = ezr.Tbl([header])
+    
+    best_change = {}
+    best_ydist = ezr.ydist(tbl, row)
+    
+    # Try each lever
+    for col_name, allowed in levers.items():
+        idx = header.index(col_name)
+        original_val = row[idx]
+        
+        # If numeric, try a few points in the range (low, high)
+        if isinstance(allowed, tuple):
+            low, high = allowed
+            # Test a few points: min, max, and midpoint
+            for val in [low, (low + high) / 2, high]:
+                row[idx] = val
+                current_ydist = ezr.ydist(tbl, row)
+                if current_ydist < best_ydist:
+                    best_ydist = current_ydist
+                    best_change = {col_name: val}
+        # If symbolic, try each allowed value
+        elif isinstance(allowed, list):
+            for val in allowed:
+                if val == original_val: continue
+                row[idx] = val
+                current_ydist = ezr.ydist(tbl, row)
+                if current_ydist < best_ydist:
+                    best_ydist = current_ydist
+                    best_change = {col_name: val}
+        
+        # Reset row
+        row[idx] = original_val
+        
+    return best_change
+
+if __name__ == "__main__":
+    # Load data
+    data = list(ezr.csv("WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"))
+    header = data[0]
+    rows = data[1:]
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Define levers
+    levers = {
+        "businessTravel": ["Non-Travel", "Travel_Frequently", "Travel_Rarely"],
+        "overTime": ["No", "Yes"],
+        "TrainingTimesLastYear": (0, 6),
+        "PercentSalaryHike": (11, 25),
+        "StockOptionLevel": (0, 3)
+    }
+    
+    # Find a 'bad' row (high ydist)
+    sorted_rows = sorted(rows, key=lambda r: ezr.ydist(tbl, r), reverse=True)
+    bad_row = sorted_rows[0]
+    
+    # Get recommendation
+    recommendation = fix(header, bad_row, levers)
+    
+    print("Analysis: Recommended changes for high-attrition risk employees:")
+    if recommendation:
+        for col, val in recommendation.items():
+            print(f"- Change '{col}' to: {val}")
+    else:
+        print("- No single lever change significantly improves the outcome.")
+    
+    exit(0)

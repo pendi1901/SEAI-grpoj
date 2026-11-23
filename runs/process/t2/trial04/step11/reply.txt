@@ -1,0 +1,59 @@
+```python
+import csv
+import step01
+
+def remember(header, rows):
+    """
+    Identifies the best performing rows based on goal columns.
+    Uses the logic from step01 to rank and return the top 5%.
+    """
+    # Identify goal indices
+    goal_indices = [i for i, name in enumerate(header) 
+                    if name.endswith('-') or name.endswith('+')]
+
+    def score_row(row):
+        # Calculate a normalized score for the row.
+        # Minimize '-' (lower is better), Maximize '+' (higher is better)
+        total = 0
+        for i in goal_indices:
+            val = row[i]
+            if header[i].endswith('-'):
+                total += val
+            else:
+                total += (1.0 - val)
+        return total
+
+    # Score all rows
+    scored = []
+    for i, row in enumerate(rows):
+        scored.append((score_row(row), i))
+    
+    # Sort by score ascending (lower is better)
+    scored.sort()
+    
+    # Return top 5% (or at least 1)
+    limit = max(1, len(rows) // 20)
+    return [item[1] for item in scored[:limit]]
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) for val in row])
+        
+        best_indices = remember(header, rows)
+        
+        print("Past setups most like the best configurations:")
+        for idx in best_indices:
+            goals = {header[i]: rows[idx][i] for i, name in enumerate(header) 
+                     if name.endswith('-') or name.endswith('+')}
+            print(f"Row {idx}: {goals}")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

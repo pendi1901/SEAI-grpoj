@@ -1,0 +1,80 @@
+```python
+import ezr
+import random
+
+def choose(header, rows, label):
+    """
+    Find the best setup by using the acquire logic from ezr.
+    We have a budget of 50 labels. We use the acquire function
+    which intelligently samples the space to find the best rows.
+    """
+    # Create a table object. The rows currently have '?' for goals.
+    # We need to wrap the label function to handle the row indices.
+    # The acquire function expects an oracle that takes a row and returns a row.
+    
+    # Map rows to their original indices to return the correct position
+    indexed_rows = []
+    for i, row in enumerate(rows):
+        # We store the index in the row temporarily or use a closure
+        indexed_rows.append((i, list(row)))
+    
+    # Create a lookup for the original index
+    row_map = {id(r): i for i, r in indexed_rows}
+    
+    def oracle_wrapper(row):
+        # Find the original index of this row
+        idx = row_map[id(row)]
+        # Get the true values from the provided label function
+        true_row = label(idx)
+        # Update the row with true values
+        for i, val in enumerate(true_row):
+            row[i] = val
+        return row
+
+    # Initialize the table with the header
+    tbl = ezr.Tbl([header] + [r[1] for r in indexed_rows])
+    
+    # Use ezr.acquire to spend the budget of 50 labels
+    # ezr.acquire returns the rows that were labeled
+    labeled_rows = ezr.acquire(tbl, cap=50, label=oracle_wrapper)
+    
+    # Find the best row among the labeled ones
+    # A row is better if its ydist is smaller
+    best_row = min(labeled_rows, key=lambda r: ezr.ydist(tbl, r))
+    
+    # Find the index of the best row
+    return row_map[id(best_row)]
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    
+    try:
+        header = next(data_gen)
+        all_rows = list(data_gen)
+    except StopIteration:
+        exit(0)
+
+    # Prepare the data for the choose function
+    # Mask the goals
+    goal_indices = [i for i, name in enumerate(header) if name[-1] in "+-"]
+    masked_rows = []
+    for row in all_rows:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_rows.append(new_row)
+
+    # Define the label function
+    def label(i):
+        return all_rows[i]
+
+    # Run the selection
+    best_idx = choose(header, masked_rows, label)
+    
+    print(f"Analysis complete on {len(all_rows)} records.")
+    print(f"The best configuration found is at index {best_idx}.")
+    print(f"Configuration details: {all_rows[best_idx]}")
+    
+    exit(0)
+```

@@ -1,0 +1,92 @@
+```python
+import csv
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import LabelEncoder
+
+def guess(header, train, test):
+    """
+    Estimates 'YearsAtCompany+' for employees in the test set.
+    To answer the customer's question about cutting overtime in Sales,
+    we simulate the effect by setting 'overTime' to 'No' for all 'Sales' 
+    department rows in the test set before prediction.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('+', '-'))]
+    target_idx = goal_indices[0]  # YearsAtCompany+
+    feature_indices = [i for i in range(len(header)) if i not in goal_indices]
+    
+    idx_dept = header.index('department')
+    idx_ot = header.index('overTime')
+
+    # Prepare data
+    def get_features(row):
+        return [row[i] for i in feature_indices]
+
+    # Encode symbolic data
+    combined = [get_features(r) for r in train] + [get_features(r) for r in test]
+    encoders = {}
+    for i in range(len(combined[0])):
+        if isinstance(combined[0][i], str):
+            le = LabelEncoder()
+            col_data = [row[i] for row in combined]
+            le.fit(col_data)
+            encoders[i] = le
+
+    def transform(data):
+        transformed = []
+        for row in data:
+            new_row = []
+            for i, val in enumerate(row):
+                if i in encoders:
+                    new_row.append(encoders[i].transform([val])[0])
+                else:
+                    new_row.append(val)
+            transformed.append(new_row)
+        return transformed
+
+    # Apply the "cut overtime in Sales" intervention to the test set
+    modified_test = []
+    for row in test:
+        new_row = list(row)
+        if new_row[idx_dept] == 'Sales':
+            new_row[idx_ot] = 'No'
+        modified_test.append(new_row)
+
+    X_train = transform([get_features(r) for r in train])
+    y_train = [r[target_idx] for r in train]
+    X_test = transform([get_features(r) for r in modified_test])
+
+    model = RandomForestRegressor(n_estimators=100, random_state=42)
+    model.fit(X_train, y_train)
+    
+    return model.predict(X_test).tolist()
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = [float(val) if header[i][0].isupper() else val for i, val in enumerate(row)]
+            rows.append(processed_row)
+
+    # Split: train on first 700, test on next 100
+    train_data = rows[:700]
+    test_data = rows[700:800]
+    
+    # Mask goals in test data
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('+', '-'))]
+    masked_test = []
+    for row in test_data:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_test.append(new_row)
+
+    predictions = guess(header, train_data, masked_test)
+    
+    avg_tenure = sum(predictions) / len(predictions)
+    print("Impact Analysis: Cutting Overtime in Sales")
+    print(f"Estimated average tenure (YearsAtCompany+) after cutting overtime: {avg_tenure:.2f} years.")
+    print("This estimate assumes that removing overtime for Sales staff improves retention metrics.")
+```

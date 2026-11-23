@@ -1,0 +1,84 @@
+import csv
+import step01
+import step07
+
+def choose(header, rows, label):
+    """
+    Finds a setup that balances performance (multi-objective score) 
+    and efficiency (minimizing N_estimators).
+    """
+    # We have a budget of 50 labels.
+    # We sample 50 indices spread across the dataset.
+    indices = [int(i * (len(rows) - 1) / 49) for i in range(50)]
+    
+    labeled_data = []
+    for i in indices:
+        goals = label(i)
+        row = list(rows[i])
+        goal_indices = [j for j, h in enumerate(header) if h.endswith(('-', '+'))]
+        for idx, g_val in zip(goal_indices, goals):
+            row[idx] = g_val
+        labeled_data.append((row, i))
+    
+    # Identify indices
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+    n_est_idx = header.index('N_estimators')
+    
+    # Extract values for normalization
+    mres = [r[0][mre_idx] for r in labeled_data]
+    accs = [r[0][acc_idx] for r in labeled_data]
+    preds = [r[0][pred_idx] for r in labeled_data]
+    n_ests = [r[0][n_est_idx] for r in labeled_data]
+    
+    def normalize(val, vals, reverse=False):
+        min_v, max_v = min(vals), max(vals)
+        if max_v == min_v: return 0.5
+        norm = (val - min_v) / (max_v - min_v)
+        return (1 - norm) if reverse else norm
+    
+    best_score = -float('inf')
+    best_idx = -1
+    
+    for row, original_idx in labeled_data:
+        # Score = (Performance Score) - (Cost Penalty)
+        # We want high performance and low N_estimators
+        perf = (normalize(row[mre_idx], mres, True) +
+                normalize(row[acc_idx], accs, False) +
+                normalize(row[pred_idx], preds, False)) / 3
+        
+        cost = normalize(row[n_est_idx], n_ests, False)
+        
+        # Balance performance and cost (weighting performance higher)
+        s = perf - (0.3 * cost)
+        
+        if s > best_score:
+            best_score = s
+            best_idx = original_idx
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed = [val if header[i] == 'criterion' else float(val) for i, val in enumerate(row)]
+                rows.append(processed)
+            
+        def label(i):
+            return [rows[i][0], rows[i][1], rows[i][2]]
+        
+        hidden_rows = [[val if i > 2 else "?" for i, val in enumerate(r)] for r in rows]
+        
+        best_idx = choose(header, hidden_rows, label)
+        print(f"Recommended setup found at index {best_idx}.")
+        print("This setup balances high forecast accuracy with low computational cost.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

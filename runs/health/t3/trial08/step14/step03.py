@@ -1,0 +1,69 @@
+import csv
+from scipy import stats
+
+def certify(xs, ys):
+    """
+    Returns True if the difference between two distributions is likely noise,
+    False if they are statistically significantly different.
+    Uses the Mann-Whitney U test as it does not assume normal distribution.
+    """
+    # A p-value threshold of 0.05 is standard for statistical significance.
+    # If p > 0.05, we fail to reject the null hypothesis (they are the same).
+    stat, p_value = stats.mannwhitneyu(xs, ys, alternative='two-sided')
+    return p_value > 0.05
+
+def analyze_setup_size(header, rows):
+    """
+    Analyzes if 'big' setups (high N_estimators) are more accurate (lower MRE-)
+    than 'small' setups.
+    """
+    idx_mre = header.index('MRE-')
+    idx_n = header.index('N_estimators')
+    
+    # Extract numeric values
+    mre_values = [float(row[idx_mre]) for row in rows]
+    n_values = [float(row[idx_n]) for row in rows]
+    
+    # Split into two groups based on the median of N_estimators
+    median_n = sorted(n_values)[len(n_values) // 2]
+    
+    small_setups = [mre for n, mre in zip(n_values, mre_values) if n <= median_n]
+    big_setups = [mre for n, mre in zip(n_values, mre_values) if n > median_n]
+    
+    # Check if they are statistically different
+    is_noise = certify(small_setups, big_setups)
+    
+    return is_noise, small_setups, big_setups
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            for row in reader:
+                processed_row = []
+                for val in row:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        is_noise, small, big = analyze_setup_size(header, rows)
+        
+        avg_small = sum(small) / len(small)
+        avg_big = sum(big) / len(big)
+        
+        print(f"Average MRE for small setups: {avg_small:.4f}")
+        print(f"Average MRE for big setups:   {avg_big:.4f}")
+        
+        if is_noise:
+            print("Conclusion: The difference in accuracy between setup sizes is likely just noise.")
+        else:
+            print("Conclusion: There is a statistically significant difference in accuracy between setup sizes.")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

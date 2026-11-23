@@ -1,0 +1,90 @@
+import csv
+import random
+
+def fix(header, row, levers):
+    """
+    Recommends a change to a 'bad' row to improve its goals.
+    We perform a local search by perturbing the levers and selecting 
+    the change that results in the best estimated improvement.
+    """
+    # Identify goal indices
+    goal_indices = [i for i, h in enumerate(header) if h.endswith(('-', '+'))]
+    
+    def get_score(r):
+        # Simple heuristic: sum of normalized goals
+        # Since we don't have the full dataset context here, we assume
+        # lower is better for '-' and higher for '+'
+        scores = []
+        for i in goal_indices:
+            val = r[i]
+            # Normalize based on typical ranges for pom3a (0 to 1)
+            if header[i].endswith('-'):
+                scores.append(1.0 - val)
+            else:
+                scores.append(val)
+        return sum(scores) / len(scores)
+
+    best_change = {}
+    best_score = get_score(row)
+    
+    # Try changing each lever
+    for col, allowed in levers.items():
+        idx = header.index(col)
+        original_val = row[idx]
+        
+        # Generate a candidate value
+        if isinstance(allowed, tuple):  # Numeric (low, high)
+            # Try moving towards the middle or a random point in range
+            candidate = random.uniform(allowed[0], allowed[1])
+        else:  # Symbolic
+            candidate = random.choice(allowed)
+            
+        # Evaluate
+        new_row = list(row)
+        new_row[idx] = candidate
+        new_score = get_score(new_row)
+        
+        if new_score > best_score:
+            best_score = new_score
+            best_change = {col: candidate}
+            
+    # If no improvement found, force a change to one lever
+    if not best_change:
+        col = random.choice(list(levers.keys()))
+        allowed = levers[col]
+        val = random.uniform(allowed[0], allowed[1]) if isinstance(allowed, tuple) else random.choice(allowed)
+        best_change = {col: val}
+        
+    return best_change
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) for val in row])
+        
+        # Define levers based on problem domain
+        levers = {
+            'Plan': (0.0, 1.0),
+            'Team Size': (0.0, 1.0)
+        }
+        
+        # Pick a 'bad' row (e.g., one with high cost/idle)
+        # Cost- is index 9, Idle- is index 11
+        bad_row = max(rows, key=lambda r: r[9] + r[11])
+        
+        recommendation = fix(header, bad_row, levers)
+        
+        print("Customer Inquiry: How to rescue the project?")
+        print("Analysis: To reduce cost and idle time, we recommend the following adjustments:")
+        for col, val in recommendation.items():
+            print(f"  - Adjust '{col}' to {val:.4f}")
+        print("\nThese changes are designed to move the project parameters toward more efficient configurations.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

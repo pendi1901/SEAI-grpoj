@@ -1,0 +1,71 @@
+import csv
+
+def flow(header, row, seen):
+    """
+    Detects if a new row represents a 'drift' from the historical norm.
+    We compare the current row's numeric input distribution against the 
+    distribution of the 'seen' population. If the row's average Z-score 
+    across numeric inputs exceeds a threshold, we flag it as a change.
+    """
+    if not seen:
+        return False
+
+    input_indices = [
+        i for i, name in enumerate(header) 
+        if name[0].isupper() and not (name.endswith('+') or name.endswith('-'))
+    ]
+
+    # Calculate mean and std dev for numeric inputs in 'seen'
+    stats = {}
+    for i in input_indices:
+        col_vals = [r[i] for r in seen if isinstance(r[i], (int, float))]
+        if len(col_vals) > 1:
+            mean = sum(col_vals) / len(col_vals)
+            var = sum((x - mean) ** 2 for x in col_vals) / len(col_vals)
+            std = var ** 0.5
+            stats[i] = (mean, std)
+
+    # Calculate Z-score for the current row
+    z_scores = []
+    for i in input_indices:
+        if i in stats and isinstance(row[i], (int, float)):
+            mean, std = stats[i]
+            if std > 0:
+                z_scores.append(abs(row[i] - mean) / std)
+    
+    if not z_scores:
+        return False
+        
+    # If the average Z-score is high (e.g., > 2.0), the row is an outlier
+    avg_z = sum(z_scores) / len(z_scores)
+    return avg_z > 2.0
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    seen = []
+    flagged_count = 0
+    for row in rows:
+        if flow(header, row, seen):
+            flagged_count += 1
+        seen.append(row)
+
+    print("Team Composition Drift Analysis:")
+    print(f"Processed {len(rows)} records.")
+    print(f"Identified {flagged_count} records that deviate significantly from the historical norm.")
+    print("These records represent points where the team composition shifted.")

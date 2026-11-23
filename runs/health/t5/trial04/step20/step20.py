@@ -1,0 +1,97 @@
+import ezr
+import random
+
+def race(header, rows, label):
+    """
+    Compare three strategies for finding the best row with a 50-label budget.
+    Strategies:
+    1. random: Randomly samples rows.
+    2. acquire: Uses ezr's active learning.
+    3. greedy: Iteratively picks the row closest to the current best.
+    """
+    budget = 50
+    labeled = {}
+
+    def oracle_wrapper(idx):
+        if idx not in labeled:
+            if len(labeled) >= budget:
+                return None
+            labeled[idx] = label(idx)
+        return labeled[idx]
+
+    # Shared table for distance calculations
+    tbl = ezr.Tbl([header] + rows)
+
+    # Strategy 1: Random
+    def strategy_random():
+        indices = random.sample(range(len(rows)), budget // 3)
+        for i in indices:
+            oracle_wrapper(i)
+        return min(indices, key=lambda i: ezr.ydist(tbl, labeled[i]))
+
+    # Strategy 2: Acquire
+    def strategy_acquire():
+        # Prepare indexed rows for acquire
+        indexed = [r + [i] for i, r in enumerate(rows)]
+        temp_tbl = ezr.Tbl([header + ["idx"]] + indexed)
+        
+        def local_oracle(row):
+            idx = int(row[-1])
+            true_vals = oracle_wrapper(idx)
+            if true_vals:
+                for i, name in enumerate(header):
+                    if name[-1] in "+-": row[i] = true_vals[i]
+            return row
+        
+        res = ezr.acquire(temp_tbl, cap=budget // 3, label=local_oracle)
+        best = min(res, key=lambda r: ezr.ydist(temp_tbl, r))
+        return int(best[-1])
+
+    # Strategy 3: Greedy
+    def strategy_greedy():
+        best_idx = random.choice(range(len(rows)))
+        oracle_wrapper(best_idx)
+        for _ in range((budget // 3) - 1):
+            best_row = labeled[best_idx]
+            # Find unlabelled row closest to current best
+            candidates = [i for i in range(len(rows)) if i not in labeled]
+            if not candidates: break
+            next_idx = min(candidates, key=lambda i: ezr.xdist(tbl, rows[i], best_row))
+            oracle_wrapper(next_idx)
+            if ezr.ydist(tbl, labeled[next_idx]) < ezr.ydist(tbl, best_row):
+                best_idx = next_idx
+        return best_idx
+
+    strategies = {"random": strategy_random, "acquire": strategy_acquire, "greedy": strategy_greedy}
+    results = {}
+    
+    for name, func in strategies.items():
+        try:
+            idx = func()
+            results[name] = (idx, ezr.ydist(tbl, labeled[idx]))
+        except Exception:
+            continue
+
+    winner = min(results, key=lambda n: results[n][1])
+    return {"winner": winner, "row": results[winner][0], "tried": list(strategies.keys())}
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    all_data = list(ezr.csv(filename))
+    header = all_data[0]
+    rows = all_data[1:]
+    
+    def label(i):
+        return all_data[i+1]
+
+    result = race(header, rows, label)
+    print(f"Race Results:")
+    print(f"Winner: {result['winner']}")
+    print(f"Best row index found: {result['row']}")
+    print(f"Strategies tried: {', '.join(result['tried'])}")
+    
+    if result['winner'] != 'random':
+        print("\nConclusion: Active learning strategies outperform random sampling.")
+    else:
+        print("\nConclusion: Random sampling was surprisingly effective here.")
+    exit(0)

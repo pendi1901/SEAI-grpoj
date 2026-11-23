@@ -1,0 +1,57 @@
+import ezr
+import random
+
+def spot(header, rows):
+    """
+    Returns the indices of rows that are most suspicious.
+    A row is suspicious if it is an outlier in the input space (x-columns).
+    We use the distance to the nearest neighbor in the input space as a 
+    measure of suspicion: rows that are very far from all other rows 
+    are likely to contain typos or invalid entries.
+    """
+    # Create a table to handle the data and distance calculations
+    tbl = ezr.Tbl([header] + rows)
+    
+    n = len(rows)
+    if n < 2:
+        return []
+    
+    # Calculate suspicion score for each row: distance to the nearest neighbor.
+    # A higher distance to the nearest neighbor means the row is an outlier.
+    suspicion = []
+    for i in range(n):
+        min_dist = float('inf')
+        for j in range(n):
+            if i == j:
+                continue
+            # xdist calculates distance based on input columns (x-columns)
+            d = ezr.xdist(tbl, rows[i], rows[j])
+            if d < min_dist:
+                min_dist = d
+        suspicion.append((min_dist, i))
+    
+    # Sort by distance descending: the rows with the largest "nearest neighbor"
+    # distance are the most isolated/suspicious.
+    suspicion.sort(key=lambda x: x[0], reverse=True)
+    
+    # Return the indices of the rows, most suspicious first
+    return [item[1] for item in suspicion]
+
+if __name__ == "__main__":
+    # Load the data
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Identify suspicious rows
+    suspicious_indices = spot(header, rows)
+    
+    print("Analysis: Identifying rows where estimates cannot be trusted.")
+    print("The following rows are the most suspicious based on input space outliers:")
+    # Print the top 5 most suspicious rows
+    for i, idx in enumerate(suspicious_indices[:5]):
+        print(f"  {i+1}. Row index {idx} (Highly isolated in input space)")
+    
+    print("\nThese rows represent candidates where the model's estimate is likely unreliable.")
+    exit(0)

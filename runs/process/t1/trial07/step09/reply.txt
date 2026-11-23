@@ -1,0 +1,70 @@
+```python
+import csv
+
+def spot(header, rows):
+    """
+    Identifies rows that are outliers in the input space.
+    We use the Mahalanobis-like distance (or simple Euclidean distance to the centroid)
+    to find rows that deviate significantly from the rest of the data.
+    """
+    # Identify input columns (those not ending in - or +)
+    input_indices = [i for i, name in enumerate(header) 
+                     if not (name.endswith('-') or name.endswith('+'))]
+    
+    # Calculate the centroid of the input space
+    num_rows = len(rows)
+    if num_rows == 0:
+        return []
+    
+    centroid = []
+    for i in input_indices:
+        col_vals = [row[i] for row in rows]
+        centroid.append(sum(col_vals) / num_rows)
+    
+    # Calculate distance of each row from the centroid
+    # Rows with high distance are considered "mistyped" or outliers
+    distances = []
+    for idx, row in enumerate(rows):
+        dist_sq = 0.0
+        for i, col_idx in enumerate(input_indices):
+            dist_sq += (row[col_idx] - centroid[i]) ** 2
+        distances.append((dist_sq**0.5, idx))
+    
+    # Sort by distance descending (most suspicious first)
+    distances.sort(key=lambda x: x[0], reverse=True)
+    
+    # Return the indices of the top 5% most suspicious rows
+    limit = max(1, num_rows // 20)
+    return [item[1] for item in distances[:limit]]
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                # Convert numeric columns to float
+                processed_row = []
+                for val in row:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        suspicious_indices = spot(header, rows)
+        
+        print("Customer Inquiry: Identifying Anomalous Records")
+        print("-" * 50)
+        print(f"Detected {len(suspicious_indices)} potentially mistyped records.")
+        print("The following row indices are the most suspicious (most deviant from norm):")
+        print(suspicious_indices[:10])
+        print("\nThese rows contain input values that deviate significantly from the")
+        print("average configuration, suggesting they may be errors or outliers.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

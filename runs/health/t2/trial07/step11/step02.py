@@ -1,0 +1,68 @@
+import csv
+import step01
+
+def guess(header, train, test):
+    """
+    Estimates the first goal (MRE-) for test rows using a K-Nearest Neighbors 
+    approach based on the input features (non-goal columns).
+    """
+    # Identify goal columns and input columns
+    # Goals are columns ending in '-' or '+'
+    goal_indices = [i for i, h in enumerate(header) if h.endswith(('-', '+'))]
+    target_idx = goal_indices[0]
+    input_indices = [i for i in range(len(header)) if i not in goal_indices]
+
+    def dist(row1, row2):
+        d = 0
+        for i in input_indices:
+            v1, v2 = row1[i], row2[i]
+            if isinstance(v1, str):  # Symbolic column
+                d += 0 if v1 == v2 else 1
+            else:  # Numeric column
+                d += (v1 - v2)**2
+        return d**0.5
+
+    predictions = []
+    for t_row in test:
+        # Find nearest neighbor in training set
+        best_d = float('inf')
+        best_val = 0
+        for train_row in train:
+            d = dist(t_row, train_row)
+            if d < best_d:
+                best_d = d
+                best_val = train_row[target_idx]
+        predictions.append(best_val)
+    
+    return predictions
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    rows = []
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            for row in reader:
+                processed_row = []
+                for i, val in enumerate(row):
+                    if header[i] == 'criterion':
+                        processed_row.append(val)
+                    else:
+                        processed_row.append(float(val))
+                rows.append(processed_row)
+        
+        # Split: use first 700 for training, next 100 for testing
+        train_data = rows[:700]
+        test_data = [[val if i not in [0, 1, 2] else "?" for i, val in enumerate(r)] 
+                     for r in rows[700:]]
+        
+        results = guess(header, train_data, test_data)
+        
+        print("Forecast estimate for the first 5 test rows (MRE-):")
+        for i in range(min(5, len(results))):
+            print(f"Row {700 + i}: {results[i]:.4f}")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

@@ -1,0 +1,58 @@
+import csv
+
+def guess(header, train, test):
+    """
+    Estimates the value of the first goal column (YearsAtCompany+)
+    for test rows based on the average value of that column in the training set.
+    """
+    # Find the index of the first goal column
+    goal_idx = -1
+    for i, name in enumerate(header):
+        if name.endswith('+') or name.endswith('-'):
+            goal_idx = i
+            break
+    
+    if goal_idx == -1:
+        return [0.0] * len(test)
+    
+    # Calculate the average of the first goal column from training data
+    total = sum(row[goal_idx] for row in train)
+    avg = total / len(train)
+    
+    # Return the average as the estimate for every test row
+    return [float(avg)] * len(test)
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for line in reader:
+            processed_row = []
+            for i, val in enumerate(line):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    # For demonstration, we use the last 10 rows as 'test' data
+    train_data = rows[:-10]
+    test_data = rows[-10:]
+    
+    # Mask the goal columns in test data
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    for row in test_data:
+        for idx in goal_indices:
+            row[idx] = "?"
+            
+    estimates = guess(header, train_data, test_data)
+    
+    print("Estimation of 'YearsAtCompany+' for new hires:")
+    print(f"{'Test Row Index':<15} | {'Estimated Years':<15}")
+    print("-" * 35)
+    for i, est in enumerate(estimates):
+        print(f"{i:<15} | {est:<15.2f}")

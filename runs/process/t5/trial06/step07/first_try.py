@@ -1,0 +1,77 @@
+import ezr
+import random
+
+def choose(header, rows, label):
+    """
+    Find the best row by using the acquire strategy from ezr.
+    We have a budget of 50 labels.
+    """
+    # Create a table object to manage the data
+    # We need to handle the fact that rows currently have '?' for goals
+    # The label function will provide the true values.
+    
+    # We initialize the table with the header
+    tbl = ezr.Tbl([header])
+    
+    # We need to keep track of which rows we have already labeled
+    # to ensure we don't exceed the budget of 50.
+    labeled_indices = {}
+    
+    def oracle_wrapper(row):
+        # Find the original index of this row to call label()
+        # Since rows are passed by reference, we can find the index
+        for i, r in enumerate(rows):
+            if r is row:
+                if i not in labeled_indices:
+                    labeled_indices[i] = label(i)
+                # Update the row with the true values
+                for j, val in enumerate(labeled_indices[i]):
+                    row[j] = val
+                return row
+        return row
+
+    # Use the acquire function from ezr to perform the active learning
+    # It will use the oracle_wrapper to get labels up to the budget
+    # We pass the full list of rows to the table
+    tbl.rows = rows
+    
+    # Perform acquisition
+    # ezr.acquire uses the.Stop (default 50) as the budget
+    final_rows = ezr.acquire(tbl, cap=50, label=oracle_wrapper)
+    
+    # After acquisition, find the best row among the ones we have labeled
+    # The best row is the one with the lowest ydist
+    best_row = min(final_rows, key=lambda r: ezr.ydist(tbl, r))
+    
+    # Return the index of the best row
+    for i, r in enumerate(rows):
+        if r is best_row:
+            return i
+    return 0
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Mask the goals
+    for row in rows:
+        for i, name in enumerate(header):
+            if name.endswith(("-", "+")):
+                row[i] = "?"
+                
+    # Define the label function
+    # In this context, we need to fetch the original values from the file
+    # We reload the file to get the ground truth
+    full_data = list(ezr.csv(filename))
+    full_rows = full_data[1:]
+    
+    def label_func(i):
+        return full_rows[i]
+    
+    best_idx = choose(header, rows, label_func)
+    
+    print(f"Best row found at index: {best_idx}")
+    print(f"Row data: {rows[best_idx]}")
+    exit(0)

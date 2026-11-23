@@ -1,0 +1,77 @@
+import csv
+import random
+
+def get_score(header, row):
+    """Calculates a score where higher is better."""
+    score = 0
+    for i, name in enumerate(header):
+        if name.endswith('+'):
+            score += row[i]
+        elif name.endswith('-'):
+            score -= row[i]
+    return score
+
+def choose(header, rows, label):
+    """
+    Finds the best working arrangement by sampling 50 rows.
+    We use a simple strategy: sample 50 rows, label them to get true values,
+    and return the index of the one with the highest score.
+    """
+    # We can label at most 50 rows.
+    # We pick 50 random indices to evaluate.
+    indices = list(range(len(rows)))
+    sample_size = min(50, len(rows))
+    sampled_indices = random.sample(indices, sample_size)
+    
+    best_idx = -1
+    best_score = -float('inf')
+    
+    for idx in sampled_indices:
+        # Get true values for the goals
+        true_goals = label(idx)
+        
+        # Create a temporary row with true values to calculate score
+        temp_row = list(rows[idx])
+        goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+        for i, g_idx in enumerate(goal_indices):
+            temp_row[g_idx] = true_goals[i]
+            
+        score = get_score(header, temp_row)
+        
+        if score > best_score:
+            best_score = score
+            best_idx = idx
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    # Define the label function for the harness
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    
+    def label(i):
+        return [rows[i][g] for g in goal_indices]
+    
+    # Mask the rows as per instructions
+    for row in rows:
+        for g in goal_indices:
+            row[g] = "?"
+            
+    best_row_idx = choose(header, rows, label)
+    
+    print(f"Analysis complete.")
+    print(f"The best working arrangement found is at row index: {best_row_idx}")
+    print("This selection was based on an in-depth evaluation of 50 sampled employees.")

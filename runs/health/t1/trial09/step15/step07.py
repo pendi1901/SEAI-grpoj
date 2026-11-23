@@ -1,0 +1,81 @@
+import csv
+import random
+
+def choose(header, rows, label):
+    """
+    Finds the best setup by sampling 50 rows, labeling them, 
+    and selecting the one with the best multi-objective score.
+    """
+    n = len(rows)
+    # We have a budget of 50 labels.
+    indices = list(range(n))
+    # Randomly sample 50 indices to evaluate
+    sample_indices = random.sample(indices, min(n, 50))
+    
+    labeled_data = []
+    for i in sample_indices:
+        goals = label(i)
+        # Reconstruct the row with real goals
+        row = rows[i][:]
+        row[0], row[1], row[2] = goals
+        labeled_data.append((row, i))
+    
+    # Identify goal indices
+    mre_idx, acc_idx, pred_idx = 0, 1, 2
+    
+    # Normalize goals for scoring
+    mres = [r[0][mre_idx] for r in labeled_data]
+    accs = [r[0][acc_idx] for r in labeled_data]
+    preds = [r[0][pred_idx] for r in labeled_data]
+    
+    def norm(val, vals):
+        mn, mx = min(vals), max(vals)
+        return (val - mn) / (mx - mn) if mx > mn else 0.5
+    
+    best_score = -1
+    best_idx = -1
+    
+    for row, original_idx in labeled_data:
+        s_mre = 1 - norm(row[mre_idx], mres)
+        s_acc = norm(row[acc_idx], accs)
+        s_pred = norm(row[pred_idx], preds)
+        score = s_mre + s_acc + s_pred
+        
+        if score > best_score:
+            best_score = score
+            best_idx = original_idx
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            full_data = []
+            for row in reader:
+                processed = [float(val) if header[i] not in ['criterion'] else val 
+                             for i, val in enumerate(row)]
+                full_data.append(processed)
+        
+        # Keep a copy of true goals for the label function
+        true_goals = [[r[0], r[1], r[2]] for r in full_data]
+        
+        # Mask the data
+        masked_rows = [r[:] for r in full_data]
+        for r in masked_rows:
+            r[0] = r[1] = r[2] = "?"
+            
+        def label(i):
+            return true_goals[i]
+            
+        best_idx = choose(header, masked_rows, label)
+        
+        row = full_data[best_idx]
+        print(f"Best setup found at row {best_idx}:")
+        print(f"MRE={row[0]:.4f}, ACC={row[1]:.4f}, PRED40={row[2]:.4f}")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

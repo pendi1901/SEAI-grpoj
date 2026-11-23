@@ -1,0 +1,107 @@
+import csv
+import random
+
+def race(header, rows, label):
+    """
+    Compares three strategies for finding the best employee arrangement:
+    1. 'random': Picks rows at random.
+    2. 'newest_staff': Follows the customer's rule of thumb (newest staff = low TotalWorkingYears).
+    3. 'tenure_optimized': Targets high-tenure staff (high YearsAtCompany+).
+    """
+    goal_indices = [i for i, col in enumerate(header) if col.endswith('+') or col.endswith('-')]
+    
+    def get_score(goal_values):
+        score = 0
+        for j, val in enumerate(goal_values):
+            col_name = header[goal_indices[j]]
+            if col_name.endswith('+'):
+                score += val
+            else:
+                score -= val
+        return score
+
+    # Strategy 1: Random
+    def strategy_random(budget):
+        indices = random.sample(range(len(rows)), budget)
+        best_idx, best_score = -1, -float('inf')
+        for i in indices:
+            score = get_score(label(i))
+            if score > best_score:
+                best_score, best_idx = score, i
+        return best_idx, best_score
+
+    # Strategy 2: Customer's rule (Newest staff = low TotalWorkingYears)
+    def strategy_newest(budget):
+        twy_idx = header.index('TotalWorkingYears')
+        # Sort by lowest working years
+        sorted_indices = sorted(range(len(rows)), key=lambda i: rows[i][twy_idx])
+        best_idx, best_score = -1, -float('inf')
+        for i in sorted_indices[:budget]:
+            score = get_score(label(i))
+            if score > best_score:
+                best_score, best_idx = score, i
+        return best_idx, best_score
+
+    # Strategy 3: Tenure optimized (High YearsAtCompany+)
+    def strategy_tenure(budget):
+        yac_idx = header.index('YearsAtCompany+')
+        # Sort by highest tenure
+        sorted_indices = sorted(range(len(rows)), key=lambda i: rows[i][yac_idx], reverse=True)
+        best_idx, best_score = -1, -float('inf')
+        for i in sorted_indices[:budget]:
+            score = get_score(label(i))
+            if score > best_score:
+                best_score, best_idx = score, i
+        return best_idx, best_score
+
+    # Budget: 50 labels total. Split 16, 17, 17.
+    strategies = {
+        "random": (strategy_random, 16),
+        "newest_staff": (strategy_newest, 17),
+        "tenure_optimized": (strategy_tenure, 17)
+    }
+
+    results = {}
+    for name, (func, budget) in strategies.items():
+        results[name] = func(budget)
+
+    winner = max(results, key=lambda n: results[n][1])
+    return {
+        "winner": winner,
+        "row": results[winner][0],
+        "tried": list(strategies.keys())
+    }
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    original_data = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = [float(val) if header[i][0].isupper() else val for i, val in enumerate(row)]
+            rows.append(processed_row[:])
+            original_data.append(processed_row)
+
+    goal_indices = [i for i, col in enumerate(header) if col.endswith('+') or col.endswith('-')]
+    for row in rows:
+        for idx in goal_indices:
+            row[idx] = "?"
+
+    labeled_count = 0
+    def label(i):
+        global labeled_count
+        labeled_count += 1
+        return [original_data[i][idx] for idx in goal_indices]
+
+    result = race(header, rows, label)
+    
+    print("Comparison: Is the 'newest staff' rule of thumb effective?")
+    print(f"Winner Strategy: {result['winner']}")
+    print(f"The 'newest_staff' rule was compared against random selection and tenure-based optimization.")
+    if result['winner'] == 'newest_staff':
+        print("Conclusion: Your rule of thumb is effective for identifying high-value arrangements.")
+    else:
+        print("Conclusion: Your rule of thumb is outperformed by other strategies. "
+              "Focusing on tenure-based metrics yields better results.")

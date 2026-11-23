@@ -1,0 +1,988 @@
+You are writing one Python file, step14.py.
+
+The data is the csv file Health-ClosedIssues0000.n1000.train.csv in the current directory. Column names starting in upper case are numeric, lower case are symbolic. A name ending in - is a goal to minimise, in + a goal to maximise; all other columns are inputs. It has 800 data rows after the header. Any count the customer quotes describes their full records, not this file: never hard-code a row count, read the file to the end. Its first lines:
+
+MRE-,ACC+,PRED40+,N_estimators,criterion,Min_sample_leaves,Min_impurity_decrease,Max_depth
+0.883063328,0.40756167894905476,0,180,absolute_error,11,9.75,11
+0.26612665684830633,0.681512336,0.5714285714285714,110,squared_error,2,2,2
+0.23902798232695144,0.6843960269144505,0.8571428571428571,120,squared_error,2,7.75,7
+
+Your function receives rows already parsed. The header and the first two rows look like this in Python:
+
+header = ['MRE-', 'ACC+', 'PRED40+', 'N_estimators', 'criterion', 'Min_sample_leaves', 'Min_impurity_decrease', 'Max_depth']
+row = [0.883063328, 0.40756167894905476, 0.0, 180.0, 'absolute_error', 11.0, 9.75, 11.0]
+row = [0.26612665684830633, 0.681512336, 0.5714285714285714, 110.0, 'squared_error', 2.0, 2.0, 2.0]
+
+These columns hold text, not numbers: criterion (absolute_error, poisson, squared_error).
+
+You may use scikit-learn, numpy and pandas.
+
+These files, written earlier, are in the same directory:
+
+--- step01.py ---
+import csv
+
+def remember(header, rows):
+    """
+    Identifies the best rows based on multi-objective optimization.
+    Goals: MRE- (minimize), ACC+ (maximize), PRED40+ (maximize).
+    We use a simple Pareto-based approach or weighted ranking to find 
+    the most trustworthy setups.
+    """
+    # Identify indices for goals
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+
+    # Normalize values to calculate a score
+    # Since we want low MRE, high ACC, high PRED40:
+    # Score = (1 - MRE) + ACC + PRED40
+    scored_rows = []
+    for i, row in enumerate(rows):
+        mre = float(row[mre_idx])
+        acc = float(row[acc_idx])
+        pred = float(row[pred_idx])
+        
+        # Simple heuristic: higher is better
+        score = (1.0 - mre) + acc + pred
+        scored_rows.append((score, i))
+
+    # Sort by score descending
+    scored_rows.sort(key=lambda x: x[0], reverse=True)
+
+    # Return top 5% (800 rows * 0.05 = 40 rows)
+    limit = max(1, int(len(rows) * 0.05))
+    return [item[1] for item in scored_rows[:limit]]
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            # Convert numeric columns to float, keep symbolic as is
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i] in ['criterion']:
+                    processed_row.append(val)
+                else:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+            rows.append(processed_row)
+
+    best_indices = remember(header, rows)
+    
+    print(f"Analysis complete. Found {len(best_indices)} highly trustworthy setups.")
+    print("Top indices:", best_indices[:10], "...")
+    
+    # Print details of the top 3
+    print("\nTop 3 recommended setups:")
+    for idx in best_indices[:3]:
+        print(f"Row {idx}: {rows[idx]}")
+
+
+--- step02.py ---
+import csv
+import numpy as np
+from sklearn.neighbors import KNeighborsRegressor
+from sklearn.preprocessing import LabelEncoder
+from step01 import remember
+
+def guess(header, train, test):
+    """
+    Predicts the MRE- (first goal column) for test rows using K-Nearest Neighbors.
+    Handles symbolic columns by encoding them into numeric values.
+    """
+    # Identify goal index
+    goal_idx = 0
+    
+    # Identify symbolic column indices
+    symbolic_indices = [i for i, col in enumerate(header) if col == 'criterion']
+    
+    # Combine train and test to ensure consistent encoding
+    all_data = train + test
+    data_arr = np.array(all_data, dtype=object)
+    
+    # Encode symbolic columns
+    for idx in symbolic_indices:
+        le = LabelEncoder()
+        data_arr[:, idx] = le.fit_transform(data_arr[:, idx].astype(str))
+    
+    # Convert everything to float
+    data_numeric = data_arr.astype(float)
+    
+    # Split back into train and test
+    train_len = len(train)
+    X = data_numeric[:, 3:]  # Features are columns 3 to end
+    y = data_numeric[:, goal_idx]
+    
+    X_train = X[:train_len]
+    y_train = y[:train_len]
+    X_test = X[train_len:]
+    
+    # Use KNN to estimate the MRE
+    model = KNeighborsRegressor(n_neighbors=5)
+    model.fit(X_train, y_train)
+    
+    return model.predict(X_test).tolist()
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i] == 'criterion':
+                    processed_row.append(val)
+                else:
+                    processed_row.append(float(val))
+            rows.append(processed_row)
+
+    # Split data for demonstration: use last 10 rows as 'test'
+    train_data = rows[:-10]
+    test_data = [r[:] for r in rows[-10:]]
+    
+    # Mask goals in test data
+    for row in test_data:
+        row[0] = row[1] = row[2] = "?"
+        
+    predictions = guess(header, train_data, test_data)
+    
+    print("Forecasted MRE- for the last 10 setups:")
+    for i, pred in enumerate(predictions):
+        print(f"Setup {i+1}: Estimated MRE = {pred:.4f}")
+
+
+--- step03.py ---
+import csv
+import numpy as np
+from scipy import stats
+from step01 import remember
+
+def certify(xs, ys):
+    """
+    Returns True if the difference between two distributions is likely noise,
+    False if they are statistically significantly different.
+    Uses Welch's t-test.
+    """
+    t_stat, p_value = stats.ttest_ind(xs, ys, equal_var=False)
+    # If p_value > 0.05, we fail to reject the null hypothesis (it's noise)
+    return p_value > 0.05
+
+def analyze_size_vs_accuracy(header, rows):
+    """
+    Compares accuracy (ACC+) of 'big' setups vs 'small' setups.
+    'Big' is defined as N_estimators > median.
+    """
+    n_est_idx = header.index('N_estimators')
+    acc_idx = header.index('ACC+')
+    
+    n_estimators = [float(row[n_est_idx]) for row in rows]
+    median_n = np.median(n_estimators)
+    
+    big_accs = [float(row[acc_idx]) for row in rows if float(row[n_est_idx]) > median_n]
+    small_accs = [float(row[acc_idx]) for row in rows if float(row[n_est_idx]) <= median_n]
+    
+    is_noise = certify(big_accs, small_accs)
+    
+    return is_noise, np.mean(big_accs), np.mean(small_accs)
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i] == 'criterion':
+                    processed_row.append(val)
+                else:
+                    processed_row.append(float(val))
+            rows.append(processed_row)
+            
+    is_noise, mean_big, mean_small = analyze_size_vs_accuracy(header, rows)
+    
+    print(f"Analysis of Setup Size vs Accuracy:")
+    print(f"Mean ACC+ (Big setups): {mean_big:.4f}")
+    print(f"Mean ACC+ (Small setups): {mean_small:.4f}")
+    
+    if is_noise:
+        print("Conclusion: The observed difference is likely noise (not statistically significant).")
+    else:
+        print("Conclusion: The difference is statistically significant; big setups perform differently.")
+
+
+--- step04.py ---
+import csv
+from step01 import remember
+
+def flow(header, row, seen):
+    """
+    Decides whether to accept the current row based on whether it is 
+    better than all previously seen rows.
+    """
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+
+    def get_score(r):
+        # Higher score is better: minimize MRE, maximize ACC, maximize PRED40
+        return (1.0 - float(r[mre_idx])) + float(r[acc_idx]) + float(r[pred_idx])
+
+    current_score = get_score(row)
+    
+    # If this is the first row, we don't have a baseline, so we keep looking
+    if not seen:
+        return False
+    
+    # Compare against the best seen so far
+    best_seen_score = max(get_score(r) for r in seen)
+    
+    # If current row is better than the best seen, we stop and ship it
+    return current_score > best_seen_score
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i] == 'criterion':
+                    processed_row.append(val)
+                else:
+                    processed_row.append(float(val))
+            rows.append(processed_row)
+
+    seen = []
+    found = False
+    for i, row in enumerate(rows):
+        if flow(header, row, seen):
+            print(f"Found a setup good enough to ship at index {i}!")
+            print(f"Row details: {row}")
+            found = True
+            break
+        seen.append(row)
+    
+    if not found:
+        print("No setup found that outperformed all previous ones.")
+
+
+--- step05.py ---
+import csv
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import LabelEncoder
+
+def blame(header, rows):
+    """
+    Identifies which input columns best explain the 'badness' of rows.
+    We define 'badness' as the inverse of the score used in step01.
+    We use a Random Forest to rank feature importance regarding this badness.
+    """
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+    
+    # Input columns are those not ending in - or +
+    input_indices = [i for i, h in enumerate(header) if '-' not in h and '+' not in h]
+    
+    # Calculate badness score (lower is better, so higher badness = worse)
+    # Badness = MRE + (1 - ACC) + (1 - PRED40)
+    badness = []
+    for row in rows:
+        b = float(row[mre_idx]) + (1.0 - float(row[acc_idx])) + (1.0 - float(row[pred_idx]))
+        badness.append(b)
+        
+    # Prepare X matrix
+    X = []
+    for row in rows:
+        features = []
+        for i in input_indices:
+            val = row[i]
+            if isinstance(val, str):
+                # Simple label encoding for symbolic columns
+                features.append(hash(val))
+            else:
+                features.append(float(val))
+        X.append(features)
+        
+    # Train a regressor to predict badness
+    model = RandomForestRegressor(n_estimators=50, random_state=42)
+    model.fit(X, badness)
+    
+    # Get feature importances
+    importances = model.feature_importances_
+    
+    # Pair names with importance
+    ranked = sorted(zip([header[i] for i in input_indices], importances), 
+                    key=lambda x: x[1], reverse=True)
+    
+    # Return the top 2 most damaging settings
+    return [item[0] for item in ranked[:2]]
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i] == 'criterion':
+                    processed_row.append(val)
+                else:
+                    processed_row.append(float(val))
+            rows.append(processed_row)
+            
+    damaging_settings = blame(header, rows)
+    
+    print("Analysis of bad setups:")
+    print(f"The settings contributing most to poor performance are: {', '.join(damaging_settings)}.")
+    print("These parameters show the highest correlation with low-quality outcomes.")
+
+
+--- step06.py ---
+import csv
+import numpy as np
+from sklearn.neighbors import KNeighborsRegressor
+from sklearn.preprocessing import LabelEncoder
+from step01 import remember
+
+def justify(header, rows, row):
+    """
+    Estimates the performance of the given row and compares it against all other rows.
+    Returns (fraction_better, reason).
+    """
+    # Identify indices
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+    
+    # Prepare data for KNN: predict all three goals
+    # We use KNN to predict MRE, ACC, and PRED40 based on input columns
+    X = []
+    y = []
+    for r in rows:
+        # Features: columns 3 to end
+        features = []
+        for i in range(3, len(header)):
+            val = r[i]
+            if isinstance(val, str):
+                features.append(hash(val))
+            else:
+                features.append(float(val))
+        X.append(features)
+        y.append([float(r[mre_idx]), float(r[acc_idx]), float(r[pred_idx])])
+    
+    # Prepare target row features
+    target_features = []
+    for i in range(3, len(header)):
+        val = row[i]
+        if isinstance(val, str):
+            target_features.append(hash(val))
+        else:
+            target_features.append(float(val))
+            
+    model = KNeighborsRegressor(n_neighbors=5)
+    model.fit(X, y)
+    pred_mre, pred_acc, pred_pred = model.predict([target_features])[0]
+    
+    # Score heuristic: (1 - MRE) + ACC + PRED40
+    target_score = (1.0 - pred_mre) + pred_acc + pred_pred
+    
+    def get_score(r):
+        return (1.0 - float(r[mre_idx])) + float(r[acc_idx]) + float(r[pred_idx])
+    
+    scores = [get_score(r) for r in rows]
+    better_than_count = sum(1 for s in scores if target_score > s)
+    p = better_than_count / len(rows)
+    
+    reason = f"This setup is estimated to outperform {p:.1%} of all known configurations based on its input parameters."
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i] == 'criterion':
+                    processed_row.append(val)
+                else:
+                    processed_row.append(float(val))
+            rows.append(processed_row)
+    
+    # Pick a sample row to justify
+    sample_row = rows[0][:]
+    sample_row[0] = sample_row[1] = sample_row[2] = "?"
+    
+    p, reason = justify(header, rows, sample_row)
+    print(f"Justification: {reason}")
+
+
+--- step07.py ---
+import csv
+import random
+from step01 import remember
+
+def choose(header, rows, label):
+    """
+    Selects the best row by sampling 50 candidates and evaluating them.
+    Uses the scoring logic from step01 to identify the best setup.
+    """
+    # Identify indices for goals
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+
+    # We have 800 rows, we can label 50.
+    # We pick 50 random indices to evaluate.
+    indices_to_sample = random.sample(range(len(rows)), 50)
+    
+    best_score = -float('inf')
+    best_idx = -1
+    
+    for i in indices_to_sample:
+        # Get true values from the oracle
+        goals = label(i)
+        mre, acc, pred = goals[0], goals[1], goals[2]
+        
+        # Calculate score: (1 - MRE) + ACC + PRED40
+        score = (1.0 - mre) + acc + pred
+        
+        if score > best_score:
+            best_score = score
+            best_idx = i
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    full_data = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i] == 'criterion':
+                    processed_row.append(val)
+                else:
+                    processed_row.append(float(val))
+            full_data.append(processed_row)
+            
+    # Create masked rows for the choose function
+    masked_rows = []
+    for r in full_data:
+        masked = r[:]
+        masked[0] = masked[1] = masked[2] = "?"
+        masked_rows.append(masked)
+        
+    def label(i):
+        return [full_data[i][0], full_data[i][1], full_data[i][2]]
+    
+    best_index = choose(header, masked_rows, label)
+    
+    print(f"Analysis complete. After evaluating 50 setups, the best configuration is at index {best_index}.")
+    print(f"Best setup details: {full_data[best_index]}")
+
+
+--- step08.py ---
+import csv
+import random
+from step01 import remember
+
+def fix(header, row, levers):
+    """
+    Finds the smallest change to a row's settings that improves its score.
+    Score = (1 - MRE) + ACC + PRED40.
+    We iterate through levers, try small adjustments, and return the first
+    change that improves the score (or the best one found).
+    """
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+
+    def get_score(r):
+        return (1.0 - float(r[mre_idx])) + float(r[acc_idx]) + float(r[pred_idx])
+
+    current_score = get_score(row)
+    best_change = {}
+    best_new_score = current_score
+
+    for col_name, allowed in levers.items():
+        idx = header.index(col_name)
+        original_val = row[idx]
+
+        if isinstance(allowed, list):  # Symbolic
+            for val in allowed:
+                if val != original_val:
+                    row[idx] = val
+                    # Heuristic: assume improvement if we can't run a full model
+                    # In a real scenario, we'd use a surrogate model here.
+                    # For this task, we return a valid change.
+                    return {col_name: val}
+        else:  # Numeric (low, high)
+            low, high = allowed
+            # Try a small step
+            step = (high - low) * 0.1
+            new_val = max(low, min(high, float(original_val) + step))
+            if new_val != original_val:
+                return {col_name: new_val}
+
+    return best_change
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i] == 'criterion':
+                    processed_row.append(val)
+                else:
+                    processed_row.append(float(val))
+            rows.append(processed_row)
+
+    # Define levers based on column types
+    levers = {
+        'N_estimators': (50, 200),
+        'criterion': ['absolute_error', 'poisson', 'squared_error'],
+        'Min_sample_leaves': (1, 20),
+        'Min_impurity_decrease': (0, 10),
+        'Max_depth': (1, 20)
+    }
+
+    # Pick a "bad" row (e.g., the one with the lowest score)
+    scores = [(i, (1.0 - float(r[0])) + float(r[1]) + float(r[2])) for i, r in enumerate(rows)]
+    bad_idx = min(scores, key=lambda x: x[1])[0]
+    bad_row = rows[bad_idx]
+
+    recommendation = fix(header, bad_row, levers)
+    
+    print(f"Analysis for row {bad_idx}:")
+    print(f"Current settings: {bad_row}")
+    print(f"Recommended change: {recommendation}")
+    print("This change is designed to improve performance while keeping the setup within constraints.")
+
+
+--- step09.py ---
+import csv
+import numpy as np
+
+def spot(header, rows):
+    """
+    Identifies suspicious rows (outliers) based on the distribution of input parameters.
+    Rows with values significantly outside the expected range (e.g., 3 standard deviations)
+    are flagged as potentially entered wrongly.
+    """
+    suspicious = []
+    
+    # Identify input columns (those not ending in - or +)
+    input_indices = [i for i, h in enumerate(header) if '-' not in h and '+' not in h]
+    
+    # Calculate Z-scores for numeric inputs to find outliers
+    for i in input_indices:
+        col_data = [row[i] for row in rows if isinstance(row[i], (int, float))]
+        if not col_data:
+            continue
+            
+        mean = np.mean(col_data)
+        std = np.std(col_data)
+        
+        if std == 0:
+            continue
+            
+        for row_idx, row in enumerate(rows):
+            val = row[i]
+            if isinstance(val, (int, float)):
+                z_score = abs((val - mean) / std)
+                # If Z-score > 3, it's a statistical outlier
+                if z_score > 3:
+                    # Store as (row_index, z_score) to sort by suspicion
+                    suspicious.append((row_idx, z_score))
+    
+    # Sort by Z-score descending (most suspicious first)
+    suspicious.sort(key=lambda x: x[1], reverse=True)
+    
+    # Return unique row indices
+    seen = set()
+    result = []
+    for idx, score in suspicious:
+        if idx not in seen:
+            result.append(idx)
+            seen.add(idx)
+            
+    return result
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i] == 'criterion':
+                    processed_row.append(val)
+                else:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+            rows.append(processed_row)
+
+    suspicious_indices = spot(header, rows)
+    
+    print(f"Analysis complete. Found {len(suspicious_indices)} potentially erroneous rows.")
+    print("Top 5 most suspicious row indices:", suspicious_indices[:5])
+    
+    if suspicious_indices:
+        print("\nDetails of the most suspicious row:")
+        print(rows[suspicious_indices[0]])
+
+
+--- step10.py ---
+import csv
+import random
+from step01 import remember
+
+def get_score(header, row):
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+    return (1.0 - float(row[mre_idx])) + float(row[acc_idx]) + float(row[pred_idx])
+
+def race(header, rows, label):
+    """
+    Compares three strategies: random, greedy (first 17), and top-k (last 16).
+    Total budget: 50 labels.
+    """
+    strategies = ["random", "greedy", "top-k"]
+    results = {}
+    
+    # Strategy 1: Random
+    indices_random = random.sample(range(len(rows)), 17)
+    best_r = -1
+    best_s_r = -float('inf')
+    for i in indices_random:
+        goals = label(i)
+        row = [goals[0], goals[1], goals[2]] + rows[i][3:]
+        score = get_score(header, row)
+        if score > best_s_r:
+            best_s_r = score
+            best_r = i
+    results["random"] = (best_s_r, best_r)
+
+    # Strategy 2: Greedy (first 17)
+    indices_greedy = list(range(17))
+    best_g = -1
+    best_s_g = -float('inf')
+    for i in indices_greedy:
+        goals = label(i)
+        row = [goals[0], goals[1], goals[2]] + rows[i][3:]
+        score = get_score(header, row)
+        if score > best_s_g:
+            best_s_g = score
+            best_g = i
+    results["greedy"] = (best_s_g, best_g)
+
+    # Strategy 3: Top-k (last 16)
+    indices_top = list(range(len(rows)-16, len(rows)))
+    best_t = -1
+    best_s_t = -float('inf')
+    for i in indices_top:
+        goals = label(i)
+        row = [goals[0], goals[1], goals[2]] + rows[i][3:]
+        score = get_score(header, row)
+        if score > best_s_t:
+            best_s_t = score
+            best_t = i
+    results["top-k"] = (best_s_t, best_t)
+
+    winner = max(results, key=lambda k: results[k][0])
+    return {"winner": winner, "row": results[winner][1], "tried": strategies}
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i] == 'criterion':
+                    processed_row.append(val)
+                else:
+                    processed_row.append(float(val))
+            rows.append(processed_row)
+
+    full_data = [r[:] for r in rows]
+    masked_rows = []
+    for r in rows:
+        m = r[:]
+        m[0] = m[1] = m[2] = "?"
+        masked_rows.append(m)
+
+    def label(i):
+        return [full_data[i][0], full_data[i][1], full_data[i][2]]
+
+    outcome = race(header, masked_rows, label)
+    print(f"Race complete. Winner: {outcome['winner']} (found at row {outcome['row']}).")
+    print(f"Strategies compared: {', '.join(outcome['tried'])}.")
+
+
+--- step11.py ---
+import csv
+from sklearn.neighbors import NearestNeighbors
+from sklearn.preprocessing import LabelEncoder
+import numpy as np
+
+def remember(header, rows):
+    """
+    Identifies the rows most similar to the 'current' setup (the first row).
+    Uses K-Nearest Neighbors on input features to find the most similar configurations.
+    """
+    # Input columns are those not ending in - or +
+    input_indices = [i for i, h in enumerate(header) if '-' not in h and '+' not in h]
+    
+    # Prepare feature matrix
+    X = []
+    for row in rows:
+        features = []
+        for i in input_indices:
+            val = row[i]
+            if isinstance(val, str):
+                # Simple encoding for symbolic columns
+                features.append(hash(val))
+            else:
+                features.append(float(val))
+        X.append(features)
+    
+    X = np.array(X)
+    
+    # The 'current' setup is the first row
+    current_setup = X[0].reshape(1, -1)
+    
+    # Find 5% of rows (800 * 0.05 = 40)
+    n_neighbors = max(1, int(len(rows) * 0.05))
+    
+    # Use KNN to find the most similar rows
+    nn = NearestNeighbors(n_neighbors=n_neighbors + 1)
+    nn.fit(X)
+    distances, indices = nn.kneighbors(current_setup)
+    
+    # Return indices (excluding the first one, which is the current setup itself)
+    return indices[0][1:].tolist()
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i] == 'criterion':
+                    processed_row.append(val)
+                else:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+            rows.append(processed_row)
+
+    best_indices = remember(header, rows)
+    
+    print("Analysis complete. Found setups most similar to the current one:")
+    
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+    
+    for idx in best_indices:
+        row = rows[idx]
+        score = (1.0 - float(row[mre_idx])) + float(row[acc_idx]) + float(row[pred_idx])
+        print(f"Row {idx}: Score={score:.4f}, MRE={row[mre_idx]:.4f}, ACC={row[acc_idx]:.4f}, PRED40={row[pred_idx]:.4f}")
+
+
+--- step12.py ---
+import csv
+import numpy as np
+from sklearn.neighbors import KNeighborsRegressor
+from sklearn.preprocessing import LabelEncoder
+
+def guess(header, train, test):
+    """
+    Estimates the MRE- (first goal) for test rows.
+    Compares a full-sized KNN (n=5) vs a halved-size KNN (n=2)
+    to answer the customer's question about performance degradation.
+    """
+    goal_idx = 0
+    symbolic_indices = [i for i, col in enumerate(header) if col == 'criterion']
+    
+    # Prepare training data (all numeric/encoded)
+    train_arr = np.array(train, dtype=object)
+    for idx in symbolic_indices:
+        le = LabelEncoder()
+        train_arr[:, idx] = le.fit_transform(train_arr[:, idx].astype(str))
+    X_train = train_arr[:, 3:].astype(float)
+    y_train = train_arr[:, goal_idx].astype(float)
+    
+    # Prepare test data (all numeric/encoded)
+    test_arr = np.array(test, dtype=object)
+    for idx in symbolic_indices:
+        le = LabelEncoder()
+        # Fit on train to ensure consistent encoding
+        le.fit([str(r[idx]) for r in train])
+        test_arr[:, idx] = le.transform(test_arr[:, idx].astype(str))
+    X_test = test_arr[:, 3:].astype(float)
+    
+    # Predict with full size (n=5) and halved size (n=2)
+    model_full = KNeighborsRegressor(n_neighbors=5).fit(X_train, y_train)
+    model_half = KNeighborsRegressor(n_neighbors=2).fit(X_train, y_train)
+    
+    preds_full = model_full.predict(X_test)
+    preds_half = model_half.predict(X_test)
+    
+    # Calculate average absolute difference (degradation)
+    diff = np.mean(np.abs(preds_full - preds_half))
+    
+    # Store the degradation in a way that can be accessed or printed
+    guess.degradation = diff
+    
+    return preds_half.tolist()
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i] == 'criterion':
+                    processed_row.append(val)
+                else:
+                    processed_row.append(float(val))
+            rows.append(processed_row)
+
+    # Use last 20 rows as test
+    train_data = rows[:-20]
+    test_data = [r[:] for r in rows[-20:]]
+    for row in test_data:
+        row[0] = row[1] = row[2] = "?"
+        
+    preds = guess(header, train_data, test_data)
+    
+    print("Analysis: Halving the forecaster size (n=5 to n=2).")
+    print(f"The average absolute difference in MRE- forecasts is {guess.degradation:.4f}.")
+    print("Conclusion: The model is robust to this reduction in neighbor count.")
+    print(f"Sample forecast for first test row: {preds[0]:.4f}")
+
+
+--- step13.py ---
+import csv
+import numpy as np
+from scipy import stats
+from step03 import certify
+
+def compare_criteria(header, rows):
+    """
+    Groups rows by the 'criterion' column and compares their performance
+    using the scoring metric: (1 - MRE) + ACC + PRED40.
+    """
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+    crit_idx = header.index('criterion')
+    
+    def get_score(row):
+        return (1.0 - float(row[mre_idx])) + float(row[acc_idx]) + float(row[pred_idx])
+    
+    # Group scores by criterion
+    groups = {}
+    for row in rows:
+        crit = row[crit_idx]
+        if crit not in groups:
+            groups[crit] = []
+        groups[crit].append(get_score(row))
+    
+    # Compare the two most common criteria (e.g., absolute_error vs squared_error)
+    # or all pairs if needed. Here we compare the two main ones.
+    c1, c2 = 'absolute_error', 'squared_error'
+    if c1 in groups and c2 in groups:
+        is_noise = certify(groups[c1], groups[c2])
+        return is_noise, c1, c2, groups[c1], groups[c2]
+    return None, None, None, None, None
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i] == 'criterion':
+                    processed_row.append(val)
+                else:
+                    processed_row.append(float(val))
+            rows.append(processed_row)
+            
+    is_noise, c1, c2, s1, s2 = compare_criteria(header, rows)
+    
+    print(f"Comparing '{c1}' vs '{c2}':")
+    if is_noise:
+        print("The difference is statistically insignificant (likely noise).")
+        print("Conclusion: You can stop arguing about it; the choice makes no real difference.")
+    else:
+        print("The difference is statistically significant.")
+        print("Conclusion: The choice of criterion does impact performance.")
+
+
+Reuse the earlier files wherever you can: import from them rather than rewriting. Write as little new code as possible. Do not edit the earlier files.
+
+The customer asks:
+
+  Results arrive every night. Tell me when the best so far has stopped improving, so I can stop paying for runs.
+
+Write step14.py to answer that ask on this data.
+
+A test harness will import your file and call this function, so you must define it exactly:
+
+def flow(header, row, seen)
+  Returns True or False.   Rows arrive one at a time. `row` is the one that just arrived; `seen` is the list of rows that arrived before it. Return True to choose `row` and stop, False to let it go. You cannot go back.
+
+Rules the harness enforces: The harness replays many arrival orders through the same imported function, so do not keep state between calls: decide from `row` and `seen` alone.
+
+Conventions: `header` is the list of column names. `rows` is a list of rows; each row is a list of cells in header order, floats for numeric columns and strings for symbolic ones. A cell shown as "?" is hidden from you. A row is better when its goals are closer to their best (low for names ending in -, high for names ending in +).
+
+Keep everything that prints or reads the csv file under `if __name__ == "__main__":` so that importing the file prints nothing. Plain built-in types are all you need: do not import anything from `typing`.
+
+Running `python step14.py` must load the csv, call your function, print a short answer a customer could read, and exit with status 0. Reply with the complete file in one ```python fenced block and nothing else.

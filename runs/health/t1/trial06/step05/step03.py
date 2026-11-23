@@ -1,0 +1,77 @@
+import csv
+
+def certify(xs, ys):
+    """
+    Returns True if the distributions of xs and ys are statistically 
+    indistinguishable (same apart from noise), False otherwise.
+    Uses a simple A12 effect size test (Vargha-Delaney).
+    """
+    if not xs or not ys:
+        return True
+    
+    n_x = len(xs)
+    n_y = len(ys)
+    
+    # Count how many times x > y, x < y, and x == y
+    greater = 0
+    less = 0
+    for x in xs:
+        for y in ys:
+            if x > y:
+                greater += 1
+            elif x < y:
+                less += 1
+                
+    # A12 = (count(x > y) + 0.5 * count(x == y)) / (n_x * n_y)
+    a12 = (greater + 0.5 * (n_x * n_y - greater - less)) / (n_x * n_y)
+    
+    # If A12 is close to 0.5, they are likely the same (noise).
+    # Thresholds: 0.56, 0.64, 0.71 are small, medium, large effects.
+    return 0.44 <= a12 <= 0.56
+
+def analyze(header, rows):
+    """
+    Compares 'ACC+' (accuracy) for 'big' vs 'small' setups.
+    'Big' defined as N_estimators > median.
+    """
+    idx_acc = header.index('ACC+')
+    idx_n = header.index('N_estimators')
+    
+    n_values = [r[idx_n] for r in rows]
+    median_n = sorted(n_values)[len(n_values) // 2]
+    
+    small = [r[idx_acc] for r in rows if r[idx_n] <= median_n]
+    big = [r[idx_acc] for r in rows if r[idx_n] > median_n]
+    
+    is_same = certify(small, big)
+    
+    return is_same, len(small), len(big)
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            for row in reader:
+                processed_row = []
+                for i, val in enumerate(row):
+                    if header[i] == 'criterion':
+                        processed_row.append(val)
+                    else:
+                        processed_row.append(float(val))
+                rows.append(processed_row)
+        
+        same, n_small, n_big = analyze(header, rows)
+        
+        print("Analysis: Are big setups significantly more accurate than small ones?")
+        if same:
+            print("Answer: No, the difference is likely just noise.")
+        else:
+            print("Answer: Yes, there is a statistically significant difference.")
+        print(f"(Compared {n_small} small setups vs {n_big} big setups)")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

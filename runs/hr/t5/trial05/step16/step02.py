@@ -1,0 +1,74 @@
+import ezr
+import random
+
+def guess(header, train, test):
+    """
+    Estimate the first goal column ('YearsAtCompany+') for test rows.
+    We use the tree-based ranker from ezr to find the leaf node
+    containing similar training rows and return the mean of the goal.
+    """
+    # Create a table object from the training data
+    # The header is needed to identify goals and inputs
+    tbl = ezr.Tbl([header] + train)
+    
+    # Build a tree on the training data
+    node = ezr.tree(tbl, tbl.rows)
+    
+    # The first goal column index
+    goal_idx = -1
+    for i, name in enumerate(header):
+        if name.endswith('+') or name.endswith('-'):
+            goal_idx = i
+            break
+            
+    results = []
+    for row in test:
+        # Find the leaf node for this test row
+        leaf_node = ezr.leaf(node, row)
+        
+        # Calculate the mean of the first goal column in this leaf
+        # We use the cached mu of the leaf if it represents the goal,
+        # but since ydist is a composite, we calculate the specific goal mean:
+        vals = [r[goal_idx] for r in leaf_node.rows if r[goal_idx] != "?"]
+        if not vals:
+            # Fallback to global mean if leaf is empty or has no goal data
+            all_vals = [r[goal_idx] for r in train if r[goal_idx] != "?"]
+            results.append(sum(all_vals) / len(all_vals))
+        else:
+            results.append(sum(vals) / len(vals))
+            
+    return results
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Split data: 70% train, 30% test
+    random.seed(1234567891)
+    random.shuffle(rows)
+    split = int(len(rows) * 0.7)
+    train = rows[:split]
+    test_full = rows[split:]
+    
+    # Mask the goal column in test data
+    goal_idx = next(i for i, name in enumerate(header) if name.endswith('+'))
+    test_masked = []
+    for row in test_full:
+        new_row = list(row)
+        new_row[goal_idx] = "?"
+        test_masked.append(new_row)
+        
+    # Get predictions
+    predictions = guess(header, train, test_masked)
+    
+    # Print summary
+    print("Estimation of 'YearsAtCompany+' for new hires:")
+    print("-" * 40)
+    print(f"{'Actual':<10} | {'Estimated':<10}")
+    print("-" * 40)
+    for i in range(min(10, len(predictions))):
+        print(f"{test_full[i][goal_idx]:<10.2f} | {predictions[i]:<10.2f}")
+    print("-" * 40)
+    print("Estimates derived from leaf-node averages in decision tree.")

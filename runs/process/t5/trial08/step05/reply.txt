@@ -1,0 +1,80 @@
+```python
+import ezr
+import random
+
+def blame(header, rows):
+    """
+    Identify input columns that best explain why the worst rows are bad.
+    We define 'worst' as the bottom 25% of rows by ydist.
+    We then compare the distribution of input values in these worst rows
+    against the rest of the data to find which inputs correlate with high ydist.
+    """
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate ydist for all rows
+    scored = []
+    for row in rows:
+        scored.append((ezr.ydist(tbl, row), row))
+    
+    # Sort by ydist descending (worst first)
+    scored.sort(key=lambda x: x[0], reverse=True)
+    
+    # Split into worst 25% and the rest
+    n_worst = len(scored) // 4
+    worst_rows = [x[1] for x in scored[:n_worst]]
+    rest_rows = [x[1] for x in scored[n_worst:]]
+    
+    # Find inputs that are significantly different in the worst rows
+    # We look for columns where the 'mid' value is significantly different
+    # or where the distribution is skewed.
+    # For simplicity and robustness, we check the difference in means/modes.
+    explanations = []
+    
+    for col in tbl.x:
+        # Get values for this column in worst vs rest
+        w_vals = [r[col.at] for r in worst_rows if r[col.at] != "?"]
+        r_vals = [r[col.at] for r in rest_rows if r[col.at] != "?"]
+        
+        if not w_vals or not r_vals:
+            continue
+            
+        # Compare distributions
+        if isinstance(col, ezr.Num):
+            w_avg = sum(w_vals) / len(w_vals)
+            r_avg = sum(r_vals) / len(r_vals)
+            # If the average of this input in the worst rows is significantly 
+            # higher/lower than the rest, it's a candidate for blame.
+            if abs(w_avg - r_avg) > 0.1:
+                explanations.append(col.txt)
+        else:
+            # For symbols, check if a specific category is over-represented in worst
+            w_counts = {v: w_vals.count(v) / len(w_vals) for v in set(w_vals)}
+            r_counts = {v: r_vals.count(v) / len(r_vals) for v in set(r_vals)}
+            for val, freq in w_counts.items():
+                if freq > r_counts.get(val, 0) + 0.2:
+                    explanations.append(col.txt)
+                    break
+                    
+    return explanations
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    data_gen = ezr.csv(filename)
+    
+    try:
+        header = next(data_gen)
+        rows = list(data_gen)
+    except StopIteration:
+        print("Error: File is empty or missing.")
+        exit(1)
+        
+    blame_list = blame(header, rows)
+    
+    print("Analysis: Why do our worst setups leave so many people waiting around?")
+    print("The following input factors are most strongly associated with poor performance:")
+    for factor in blame_list:
+        print(f" - {factor}")
+        
+    print("\nThese factors contribute to higher costs and idle times in our current configurations.")
+    exit(0)
+```

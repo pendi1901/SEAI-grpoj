@@ -1,0 +1,80 @@
+import csv
+import math
+
+def spot(header, rows):
+    """
+    Identifies rows that contain outliers or 'mistyped' data.
+    Uses the Interquartile Range (IQR) method to detect anomalies in numeric columns.
+    Returns the indices of the most suspicious rows, sorted by the number of 
+    outlier values found.
+    """
+    num_rows = len(rows)
+    num_cols = len(header)
+    
+    # Identify numeric columns
+    numeric_indices = [i for i, val in enumerate(rows[0]) if isinstance(val, (int, float))]
+    
+    # Calculate IQR for each numeric column
+    outlier_counts = [0] * num_rows
+    
+    for col_idx in numeric_indices:
+        col_data = [rows[i][col_idx] for i in range(num_rows) if rows[i][col_idx] != "?"]
+        if not col_data:
+            continue
+            
+        sorted_col = sorted(col_data)
+        q1 = sorted_col[int(0.25 * len(sorted_col))]
+        q3 = sorted_col[int(0.75 * len(sorted_col))]
+        iqr = q3 - q1
+        
+        # Define bounds for outliers (1.5 * IQR rule)
+        lower_bound = q1 - 1.5 * iqr
+        upper_bound = q3 + 1.5 * iqr
+        
+        # Mark rows that fall outside these bounds
+        for i in range(num_rows):
+            val = rows[i][col_idx]
+            if val != "?" and (val < lower_bound or val > upper_bound):
+                outlier_counts[i] += 1
+                
+    # Get indices of rows with at least one outlier, sorted by count descending
+    suspicious = []
+    for i in range(num_rows):
+        if outlier_counts[i] > 0:
+            suspicious.append((i, outlier_counts[i]))
+            
+    suspicious.sort(key=lambda x: x[1], reverse=True)
+    
+    return [item[0] for item in suspicious]
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed_row = []
+                for val in row:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        suspicious_indices = spot(header, rows)
+        
+        print("Customer Inquiry: Data Quality Analysis")
+        if not suspicious_indices:
+            print("No suspicious records were detected in the dataset.")
+        else:
+            print(f"Detected {len(suspicious_indices)} records that appear to contain outliers or mistyped values.")
+            print("The most suspicious rows (by index) are:")
+            # Print top 10 most suspicious
+            print(suspicious_indices[:10])
+            print("\nThese rows contain values that deviate significantly from the expected range.")
+            
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        exit(1)

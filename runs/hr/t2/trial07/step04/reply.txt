@@ -1,0 +1,63 @@
+```python
+import csv
+import step01
+
+def flow(header, row, seen):
+    """
+    Decides if the current row needs a 'what would keep you here' conversation.
+    We use the logic from step01 to determine if the employee has an 
+    'unusually long' tenure. If the current row's tenure score is in the 
+    top 5% of the historical data (represented by 'seen'), we flag it.
+    """
+    # Identify goal columns
+    idx_at_company = header.index('YearsAtCompany+')
+    idx_in_role = header.index('YearsInCurrentRole+')
+    idx_with_manager = header.index('YearsWithCurrManager+')
+
+    def get_score(r):
+        return r[idx_at_company] + r[idx_in_role] + r[idx_with_manager]
+
+    # Current row score
+    current_score = get_score(row)
+
+    # If no history, we can't compare, so default to False
+    if not seen:
+        return False
+
+    # Calculate scores of all seen rows
+    seen_scores = [get_score(r) for r in seen]
+    
+    # We define 'unusually long' as being in the top 5% of the distribution 
+    # seen so far.
+    threshold = sorted(seen_scores, reverse=True)[max(0, int(len(seen_scores) * 0.05))]
+    
+    return current_score >= threshold
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Simulate the arrival process
+    seen = []
+    flagged_count = 0
+    for row in rows:
+        if flow(header, row, seen):
+            flagged_count += 1
+        seen.append(row)
+
+    print(f"Analysis complete.")
+    print(f"Total employees reviewed: {len(rows)}")
+    print(f"Employees identified for 'what would keep you here' conversation: {flagged_count}")
+    print("The system flags employees with tenure metrics in the top 5% of the observed population.")
+```

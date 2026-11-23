@@ -1,0 +1,70 @@
+import csv
+
+def remember(header, rows):
+    """
+    Finds the 5% of employees most similar to the first employee in the dataset.
+    Similarity is calculated using Euclidean distance on numeric input columns.
+    """
+    # Identify goal column (first one ending in + or -)
+    goal_idx = next((i for i, h in enumerate(header) if h.endswith('+') or h.endswith('-')), -1)
+    
+    # Identify numeric input columns (excluding the goal column)
+    input_indices = [
+        i for i, col in enumerate(header) 
+        if col[0].isupper() and i != goal_idx
+    ]
+
+    # Target: The first employee
+    target = rows[0]
+    
+    # Calculate distances to all other rows
+    distances = []
+    for i, row in enumerate(rows):
+        if i == 0:
+            continue
+        
+        dist = 0.0
+        for idx in input_indices:
+            val_t = target[idx]
+            val_r = row[idx]
+            # Euclidean distance for numeric features
+            dist += (val_t - val_r) ** 2
+        
+        distances.append((i, dist**0.5))
+    
+    # Sort by distance ascending (most similar first)
+    distances.sort(key=lambda x: x[1])
+    
+    # Return top 5% (at least 1, max 5% of total rows)
+    limit = max(1, len(rows) // 20)
+    return [item[0] for item in distances[:limit]]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Find the goal column to report tenure
+    goal_idx = next(i for i, h in enumerate(header) if h.endswith('+') or h.endswith('-'))
+    
+    similar_indices = remember(header, rows)
+    
+    print(f"Employees most similar to the first record (Row 0):")
+    for i in similar_indices:
+        tenure = rows[i][goal_idx]
+        print(f"- Row {i}: Tenure = {tenure} years")

@@ -1,0 +1,65 @@
+import csv
+import pandas as pd
+import numpy as np
+
+def remember(header, rows):
+    """
+    Identifies rows that perform well across all goal columns.
+    Goals ending in '-' are minimized, '+' are maximized.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    
+    # Identify goal columns
+    goals = [c for c in header if c.endswith('-') or c.endswith('+')]
+    
+    # Normalize goals to a [0, 1] scale where 1 is always "best"
+    # For '-', best is 0 (so we use 1 - normalized_value)
+    # For '+', best is 1 (so we use normalized_value)
+    scores = pd.DataFrame(index=df.index)
+    for col in goals:
+        vals = df[col].astype(float)
+        norm = (vals - vals.min()) / (vals.max() - vals.min() + 1e-9)
+        if col.endswith('-'):
+            scores[col] = 1 - norm
+        else:
+            scores[col] = norm
+            
+    # Calculate aggregate score (mean of normalized goals)
+    df['aggregate'] = scores.mean(axis=1)
+    
+    # Select top 5% (or at least 1)
+    n_select = max(1, len(df) // 20)
+    best_indices = df['aggregate'].nlargest(n_select).index.tolist()
+    
+    return sorted(best_indices)
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                # Convert numeric columns to float, keep symbolic as is
+                processed_row = []
+                for i, val in enumerate(row):
+                    if header[i][0].isupper():
+                        processed_row.append(float(val))
+                    else:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        best_indices = remember(header, rows)
+        
+        print(f"Analysis complete. Found {len(best_indices)} top-performing setups.")
+        print("Indices of best rows:", best_indices)
+        
+        # Display a summary of the first few best rows
+        print("\nSummary of top 3 best rows:")
+        for idx in best_indices[:3]:
+            print(f"Row {idx}: {rows[idx]}")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

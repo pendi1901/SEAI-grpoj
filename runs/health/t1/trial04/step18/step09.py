@@ -1,0 +1,71 @@
+import csv
+
+def spot(header, rows):
+    """
+    Identifies rows that are 'outliers' in the input space.
+    A row is suspicious if its input values are statistically far from 
+    the median of the rest of the dataset (Z-score approach).
+    """
+    input_indices = [i for i, name in enumerate(header) if '-' not in name and '+' not in name]
+    
+    # Calculate medians and MAD (Median Absolute Deviation) for robust outlier detection
+    stats = {}
+    for i in input_indices:
+        if isinstance(rows[0][i], (int, float)):
+            vals = sorted([r[i] for r in rows if r[i] is not None])
+            median = vals[len(vals) // 2]
+            # MAD
+            abs_devs = sorted([abs(v - median) for v in vals])
+            mad = abs_devs[len(abs_devs) // 2]
+            stats[i] = (median, mad if mad > 0 else 1.0)
+        else:
+            # For symbolic, calculate frequency
+            counts = {}
+            for r in rows:
+                val = r[i]
+                counts[val] = counts.get(val, 0) + 1
+            stats[i] = counts
+
+    scores = []
+    for idx, row in enumerate(rows):
+        suspicion = 0
+        for i in input_indices:
+            val = row[i]
+            if isinstance(val, (int, float)):
+                median, mad = stats[i]
+                # Modified Z-score
+                z = abs(val - median) / mad
+                suspicion += z
+            else:
+                # Rare category penalty
+                total = len(rows)
+                freq = stats[i].get(val, 1) / total
+                suspicion += (1.0 - freq)
+        scores.append((suspicion, idx))
+    
+    # Sort by suspicion descending
+    scores.sort(key=lambda x: x[0], reverse=True)
+    
+    return [item[1] for item in scores]
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i] == 'criterion':
+                    processed_row.append(val)
+                else:
+                    processed_row.append(float(val))
+            rows.append(processed_row)
+            
+    suspicious_indices = spot(header, rows)
+    
+    print("Top 5 most suspicious rows (potential failed runs):")
+    for i in range(5):
+        idx = suspicious_indices[i]
+        print(f"Row {idx}: {rows[idx]}")

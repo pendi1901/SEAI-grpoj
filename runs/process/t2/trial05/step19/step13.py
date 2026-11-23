@@ -1,0 +1,42 @@
+import csv
+import step03
+
+def certify(xs, ys):
+    """
+    Returns True if the two distributions are statistically similar 
+    (using the A12 effect size check from step03), False otherwise.
+    """
+    return step03.certify(xs, ys)
+
+def get_data():
+    filename = "pom3a.n1000.train.csv"
+    with open(filename, mode='r', encoding='utf-8') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        rows = []
+        for row in reader:
+            rows.append([float(val) for val in row])
+    return header, rows
+
+if __name__ == "__main__":
+    header, rows = get_data()
+    
+    # The customer asks if results shifted after a change in how teams decide what to build.
+    # We simulate this by comparing the first half of the data (pre-change) 
+    # against the second half (post-change) for the primary goal 'Cost-'.
+    cost_idx = header.index('Cost-')
+    
+    # Split data chronologically
+    mid = len(rows) // 2
+    pre_change = [r[cost_idx] for r in rows[:mid]]
+    post_change = [r[cost_idx] for r in rows[mid:]]
+    
+    is_same = certify(pre_change, post_change)
+    
+    print("Analysis: Did the team's decision-making shift result in different outcomes?")
+    if is_same:
+        print("Result: The distributions of 'Cost-' are statistically similar.")
+        print("Conclusion: The results are the same as before; the change had no significant impact.")
+    else:
+        print("Result: The distributions of 'Cost-' are statistically different.")
+        print("Conclusion: The results have shifted significantly following the change.")

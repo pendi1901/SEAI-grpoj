@@ -1,0 +1,53 @@
+import ezr
+import random
+
+def justify(header, rows, row):
+    """
+    Returns (p, reason): p is the fraction of rows that `row` is better than.
+    The reason explains why the row ranks where it does.
+    """
+    # Create table to use distance metrics
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Estimate the goal values for the input row using a tree-based ranker
+    # The ranker returns the mean ydist of the leaf node where the row falls
+    ranker = ezr.ranker(tbl)
+    
+    # Calculate ydist for all existing rows
+    all_ydists = [ezr.ydist(tbl, r) for r in rows]
+    
+    # Estimate ydist for the target row
+    target_ydist = ranker(row)
+    
+    # Calculate p: fraction of rows that are worse (have higher ydist) than target
+    # A row is better if its ydist is lower.
+    better_than = [d for d in all_ydists if d > target_ydist]
+    p = len(better_than) / len(rows)
+    
+    # Generate a reason based on the leaf node characteristics
+    leaf_node = ezr.leaf(ezr.tree(tbl, rows), row)
+    reason = (f"This arrangement ranks in the top {int((1-p)*100)}% of all records "
+              f"because it falls into a cluster with an average goal distance of "
+              f"{target_ydist:.2f}, which is better than {int(p*100)}% of the population.")
+    
+    return p, reason
+
+if __name__ == "__main__":
+    # Load data
+    data = list(ezr.csv("WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"))
+    header = data[0]
+    rows = data[1:]
+    
+    # Pick a sample row and mask its goals
+    sample_row = list(rows[0])
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    for idx in goal_indices:
+        sample_row[idx] = "?"
+        
+    # Justify
+    p, reason = justify(header, rows, sample_row)
+    
+    print(f"Rank: {p:.2f}")
+    print(f"Reason: {reason}")
+    
+    exit(0)

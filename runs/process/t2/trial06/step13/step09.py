@@ -1,0 +1,53 @@
+import csv
+
+def spot(header, rows):
+    """
+    Identifies suspicious rows by calculating the distance of each row 
+    from the median of the dataset. Rows with high distance (outliers) 
+    are considered suspicious.
+    """
+    # Identify numeric columns (those not ending in - or +)
+    numeric_indices = [i for i, name in enumerate(header) 
+                       if not (name.endswith('-') or name.endswith('+'))]
+    
+    # Calculate median for each numeric column
+    medians = []
+    for i in numeric_indices:
+        col_vals = sorted([float(row[i]) for row in rows])
+        medians.append(col_vals[len(col_vals) // 2])
+    
+    # Calculate distance of each row from the median vector
+    # Using Manhattan distance for robustness
+    distances = []
+    for row_idx, row in enumerate(rows):
+        dist = 0
+        for i, col_idx in enumerate(numeric_indices):
+            val = float(row[col_idx])
+            dist += abs(val - medians[i])
+        distances.append((dist, row_idx))
+    
+    # Sort by distance descending (most suspicious first)
+    distances.sort(key=lambda x: x[0], reverse=True)
+    
+    # Return the top 10 most suspicious row indices
+    return [item[1] for item in distances[:10]]
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [row for row in reader]
+            
+        suspicious = spot(header, rows)
+        
+        print("Customer Inquiry: Identifying potentially mistyped or anomalous records.")
+        print(f"Analysis: We compared all records against the median values of the dataset.")
+        print(f"The following row indices are the most suspicious (most anomalous first):")
+        print(suspicious)
+        print("\nThese rows deviate significantly from the typical patterns found in the data.")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

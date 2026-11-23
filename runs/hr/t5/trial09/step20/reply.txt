@@ -1,0 +1,99 @@
+```python
+import ezr
+import random
+
+def race(header, rows, label):
+    """
+    Compares the customer's rule of thumb against data-driven strategies.
+    Budget: 50 labels total.
+    """
+    labeled = {}
+
+    def get_label(i):
+        if i not in labeled:
+            if len(labeled) >= 50:
+                raise Exception("Budget exceeded")
+            labeled[i] = label(i)
+        return labeled[i]
+
+    # Strategy 1: Customer's rule of thumb (Newest staff = lowest YearsAtCompany)
+    def strategy_rule_of_thumb(budget):
+        idx_tenure = header.index("YearsAtCompany+")
+        # Sort by tenure ascending (newest first)
+        sorted_indices = sorted(range(len(rows)), key=lambda i: rows[i][idx_tenure])
+        # Label the top 'budget' newest employees
+        for i in sorted_indices[:budget]:
+            get_label(i)
+        return min(sorted_indices[:budget], key=lambda i: ezr.ydist(tbl, get_label(i)))
+
+    # Strategy 2: Random search
+    def strategy_random(budget):
+        indices = random.sample(range(len(rows)), budget)
+        for i in indices:
+            get_label(i)
+        return min(indices, key=lambda i: ezr.ydist(tbl, get_label(i)))
+
+    # Strategy 3: Data-driven (Acquire)
+    def strategy_data_driven(budget):
+        # We use a subset of rows to build a model
+        indices = random.sample(range(len(rows)), min(len(rows), 200))
+        # Label initial set
+        for i in indices[:ezr.the.Start]:
+            get_label(i)
+        # Use acquire to pick the rest
+        lab_tbl = ezr.Tbl([header] + [get_label(i) for i in indices[:ezr.the.Start]])
+        best_rows = ezr.acquire(lab_tbl, cap=budget, label=lambda r: get_label(next(j for j, row in enumerate(rows) if row[9] == r[9])))
+        return next(i for i, r in enumerate(rows) if r[9] == min(best_rows, key=lambda x: ezr.ydist(lab_tbl, x))[9])
+
+    # Initialize table for ydist calculations
+    tbl = ezr.Tbl([header])
+    
+    # Run strategies with a shared budget of 50 (approx 16 each)
+    res_rule = strategy_rule_of_thumb(16)
+    res_random = strategy_random(17)
+    res_data = strategy_data_driven(17)
+    
+    results = {
+        "rule_of_thumb": res_rule,
+        "random": res_random,
+        "data_driven": res_data
+    }
+    
+    # Determine winner based on lowest ydist
+    winner = min(results, key=lambda name: ezr.ydist(tbl, get_label(results[name])))
+    
+    return {
+        "winner": winner,
+        "row": results[winner],
+        "tried": ["rule_of_thumb", "random", "data_driven"]
+    }
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Mask goal columns
+    goal_indices = [i for i, h in enumerate(header) if h.endswith(("+", "-"))]
+    masked_rows = []
+    for row in rows:
+        new_row = list(row)
+        for idx in goal_indices: new_row[idx] = "?"
+        masked_rows.append(new_row)
+        
+    def label_func(i):
+        return rows[i]
+    
+    result = race(header, masked_rows, label_func)
+    
+    print("Analysis: Is the 'newest staff' rule of thumb effective?")
+    print(f"Winner of the search strategy race: {result['winner']}")
+    
+    if result['winner'] == "rule_of_thumb":
+        print("Result: Your rule of thumb is highly effective for this dataset.")
+    else:
+        print("Result: Data-driven approaches outperformed the rule of thumb.")
+    
+    print(f"Strategies tried: {', '.join(result['tried'])}")
+```

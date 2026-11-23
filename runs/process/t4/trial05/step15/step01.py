@@ -1,0 +1,67 @@
+import csv
+import pandas as pd
+import numpy as np
+
+def remember(header, rows):
+    """
+    Identifies rows that perform well across all goal columns.
+    Goals ending in '-' are minimized, '+' are maximized.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    
+    # Identify goal columns
+    goals = [c for c in header if c.endswith('-') or c.endswith('+')]
+    
+    # Normalize goals to [0, 1] range to treat them equally
+    # For '-', lower is better (1 - normalized_val)
+    # For '+', higher is better (normalized_val)
+    normalized_goals = pd.DataFrame(index=df.index)
+    for goal in goals:
+        col = df[goal].astype(float)
+        norm = (col - col.min()) / (col.max() - col.min())
+        if goal.endswith('-'):
+            normalized_goals[goal] = 1 - norm
+        else:
+            normalized_goals[goal] = norm
+            
+    # Calculate a score: the product of normalized goals (geometric mean)
+    # This favors rows that are good across all objectives
+    scores = normalized_goals.prod(axis=1)
+    
+    # Select top 5% (or at least 1)
+    n_select = max(1, len(rows) // 20)
+    best_indices = scores.nlargest(n_select).index.tolist()
+    
+    return sorted(best_indices)
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                # Convert numeric columns to floats
+                processed_row = []
+                for i, val in enumerate(row):
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        best_indices = remember(header, rows)
+        
+        print(f"Analysis complete. Found {len(best_indices)} top-performing setups.")
+        print("Indices of best rows (0-based):")
+        print(best_indices)
+        
+        # Print a sample of the best rows
+        print("\nSample of best rows:")
+        for idx in best_indices[:3]:
+            print(f"Row {idx}: {rows[idx]}")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

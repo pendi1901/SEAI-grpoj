@@ -1,0 +1,55 @@
+```python
+import ezr
+import step01
+
+def certify(xs, ys):
+    """
+    Returns True if xs and ys are statistically indistinguishable,
+    False if they differ significantly.
+    """
+    # Use the stats functions from ezr to compare the two distributions
+    # same() checks cliffs and ks tests, which are robust for this purpose.
+    return ezr.same(xs, ys)
+
+def get_setup_size(row, header):
+    """
+    'Big' vs 'small' setups: use N_estimators as a proxy for setup size.
+    """
+    idx = header.index('N_estimators')
+    return row[idx]
+
+if __name__ == "__main__":
+    # Load data
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data_iter = ezr.csv(filename)
+    header = next(data_iter)
+    rows = list(data_iter)
+    
+    # Create a table to calculate ydist (the accuracy metric)
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate ydist for all rows
+    # Lower ydist means better accuracy
+    scored = [(ezr.ydist(tbl, r), get_setup_size(r, header)) for r in rows]
+    
+    # Split into two groups based on the median N_estimators
+    sizes = [s for _, s in scored]
+    median_size = sorted(sizes)[len(sizes) // 2]
+    
+    small_setups = [ydist for ydist, size in scored if size <= median_size]
+    big_setups = [ydist for ydist, size in scored if size > median_size]
+    
+    # Certify if the difference is real
+    is_same = certify(small_setups, big_setups)
+    
+    print(f"Analysis of {len(rows)} records.")
+    print(f"Small setups (N_estimators <= {median_size}): {len(small_setups)} records.")
+    print(f"Big setups (N_estimators > {median_size}): {len(big_setups)} records.")
+    
+    if is_same:
+        print("Result: The difference in accuracy between small and big setups is statistically insignificant (noise).")
+    else:
+        print("Result: There is a statistically significant difference in accuracy between small and big setups.")
+    
+    exit(0)
+```

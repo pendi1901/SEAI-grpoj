@@ -1,0 +1,78 @@
+import csv
+
+def remember(header, rows):
+    """
+    Finds the 5% of employees most similar to the first employee in the dataset.
+    Similarity is calculated using a simple Euclidean distance on normalized 
+    numeric inputs and categorical matching for symbolic inputs.
+    """
+    # Identify input columns (exclude goals)
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    input_indices = [i for i, name in enumerate(header) if i not in goal_indices]
+    
+    # Target row is the first one
+    target = rows[0]
+    
+    # Pre-calculate ranges for normalization of numeric inputs
+    ranges = {}
+    for i in input_indices:
+        if isinstance(target[i], float):
+            vals = [r[i] for r in rows if isinstance(r[i], float)]
+            min_v, max_v = min(vals), max(vals)
+            ranges[i] = (max_v - min_v) if (max_v - min_v) > 0 else 1.0
+            
+    def get_distance(row1, row2):
+        dist = 0
+        for i in input_indices:
+            if isinstance(row1[i], float):
+                # Normalized Euclidean distance
+                dist += ((row1[i] - row2[i]) / ranges[i]) ** 2
+            else:
+                # Categorical distance (0 if match, 1 if mismatch)
+                if row1[i] != row2[i]:
+                    dist += 1
+        return dist**0.5
+
+    # Calculate distances for all rows (excluding the target itself)
+    distances = []
+    for idx in range(1, len(rows)):
+        distances.append((get_distance(target, rows[idx]), idx))
+    
+    # Sort by distance ascending
+    distances.sort(key=lambda x: x[0])
+    
+    # Return top 5% (max 40 rows for 800 records)
+    limit = max(1, int(len(rows) * 0.05))
+    return [item[1] for item in distances[:limit]]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for line in reader:
+            processed_row = []
+            for i, val in enumerate(line):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    best_indices = remember(header, rows)
+    
+    # Identify goal columns to show tenure
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+')]
+    
+    print("Employees most similar to the first record:")
+    print(f"{'Index':<8} | {'Tenure Score (Sum of + columns)':<30}")
+    print("-" * 45)
+    
+    for idx in best_indices:
+        score = sum(rows[idx][i] for i in goal_indices)
+        print(f"{idx:<8} | {score:<30.1f}")
+        
+    exit(0)

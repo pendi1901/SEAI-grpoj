@@ -1,0 +1,103 @@
+import csv
+import pandas as pd
+import numpy as np
+from sklearn.ensemble import RandomForestRegressor
+from step07 import choose as active_learning_choose
+
+def choose(header, rows, label):
+    """
+    Finds the best setup for a large, high-stakes project.
+    We define 'large' as having a high 'Size' value.
+    We use active learning to find the best configuration within 50 trials.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    input_cols = [col for col in header if not (col.endswith('-') or col.endswith('+'))]
+    
+    # Filter for 'large' projects (Size > median)
+    size_median = df['Size'].median()
+    large_indices = df[df['Size'] > size_median].index.tolist()
+    
+    # We need to adapt the active learning strategy to focus on these large projects
+    # We use the logic from step07 but restrict the search space to large projects
+    
+    labeled_indices = []
+    
+    # 1. Initial exploration: Sample 10 random large projects
+    sample_size = min(10, len(large_indices))
+    indices_to_sample = np.random.choice(large_indices, sample_size, replace=False).tolist()
+    
+    for i in indices_to_sample:
+        label(i)
+        labeled_indices.append(i)
+        
+    # 2. Active learning: Sample remaining 40 rows from the large project pool
+    goal_cols = [col for col in header if col.endswith(('-', '+'))]
+    
+    for _ in range(40):
+        if len(labeled_indices) >= 50:
+            break
+            
+        # Train model on currently labeled large projects
+        train_df = pd.DataFrame([rows[i] for i in labeled_indices], columns=header)
+        X = train_df[input_cols]
+        
+        # Calculate aggregate score
+        scores = pd.DataFrame(index=train_df.index)
+        for goal in goal_cols:
+            col_data = train_df[goal].astype(float)
+            diff = col_data.max() - col_data.min()
+            norm = (col_data - col_data.min()) / diff if diff != 0 else 0
+            scores[goal] = (1 - norm) if goal.endswith('-') else norm
+        y = scores.mean(axis=1)
+        
+        model = RandomForestRegressor(n_estimators=20, random_state=42)
+        model.fit(X, y)
+        
+        # Predict for unlabeled large projects
+        unlabeled = [i for i in large_indices if i not in labeled_indices]
+        if not unlabeled:
+            break
+            
+        X_unlabeled = df.loc[unlabeled, input_cols]
+        preds = model.predict(X_unlabeled)
+        
+        best_unlabeled_idx = unlabeled[np.argmax(preds)]
+        label(best_unlabeled_idx)
+        labeled_indices.append(best_unlabeled_idx)
+        
+    # 3. Return the index of the best row found among the labeled ones
+    best_idx = -1
+    best_score = -float('inf')
+    
+    for i in labeled_indices:
+        goals = label(i)
+        scores = []
+        for idx, col in enumerate(goal_cols):
+            val = float(goals[idx])
+            # We don't have the full dataset stats here, so we use a simple heuristic
+            scores.append(-val if col.endswith('-') else val)
+        
+        current_score = np.mean(scores)
+        if current_score > best_score:
+            best_score = current_score
+            best_idx = i
+            
+    return int(best_idx)
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        df = pd.read_csv(filename)
+        header = df.columns.tolist()
+        full_data = df.values.tolist()
+        rows = [[val if i < 9 else "?" for i, val in enumerate(row)] for row in full_data]
+        
+        def label(i):
+            return full_data[i][9:]
+            
+        best_idx = choose(header, rows, label)
+        print(f"Best setup for a large, high-stakes project found at index: {best_idx}")
+        exit(0)
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

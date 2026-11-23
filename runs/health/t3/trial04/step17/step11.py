@@ -1,0 +1,53 @@
+import csv
+
+def get_score(header, row):
+    """Calculates aggregate score: (1 - MRE) + ACC + PRED40."""
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+    return (1.0 - float(row[mre_idx])) + float(row[acc_idx]) + float(row[pred_idx])
+
+def remember(header, rows):
+    """
+    Identifies the best rows based on multi-objective optimization.
+    Returns the indices of the top 5% of rows based on the aggregate score.
+    """
+    # Calculate scores for all rows
+    scores = []
+    for i, row in enumerate(rows):
+        scores.append((get_score(header, row), i))
+    
+    # Sort by score descending
+    scores.sort(key=lambda x: x[0], reverse=True)
+    
+    # Return top 5%
+    limit = max(1, int(len(rows) * 0.05))
+    return [item[1] for item in scores[:limit]]
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                # criterion is at index 4
+                if i == 4:
+                    processed_row.append(val)
+                else:
+                    processed_row.append(float(val))
+            rows.append(processed_row)
+            
+    best_indices = remember(header, rows)
+    
+    print("The following setups are the most effective based on our multi-objective analysis:")
+    for idx in best_indices:
+        row = rows[idx]
+        score = get_score(header, row)
+        print(f"Row {idx}: Score {score:.4f} | MRE: {row[0]:.4f}, ACC: {row[1]:.4f}, PRED40: {row[2]:.4f}")
+    
+    print(f"\nTotal of {len(best_indices)} top-performing configurations identified.")

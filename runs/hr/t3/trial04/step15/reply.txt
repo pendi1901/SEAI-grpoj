@@ -1,0 +1,71 @@
+```python
+import csv
+
+def blame(header, rows):
+    """
+    Identifies input columns that have the least correlation with the goal columns.
+    We define 'worst' as the bottom 25% of employees by aggregate goal performance.
+    We then calculate the difference in distribution between the 'worst' and 'rest'
+    for each input column. Columns with the smallest differences are deemed 
+    to have 'nothing to do' with the outcome.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-')]
+    input_indices = [i for i, name in enumerate(header) if not (name.endswith('+') or name.endswith('-'))]
+    
+    # Calculate aggregate score for each row to define 'worst'
+    # For '+', higher is better. For '-', lower is better.
+    # We normalize by range to make them comparable.
+    def get_score(row):
+        score = 0
+        for i in goal_indices:
+            # Simple heuristic: assume range is roughly 0-40 based on data
+            val = row[i]
+            if header[i].endswith('+'):
+                score += val
+            else:
+                score -= val
+        return score
+
+    scored_rows = sorted([(get_score(r), r) for r in rows], key=lambda x: x[0])
+    cutoff = len(rows) // 4
+    worst = [r for s, r in scored_rows[:cutoff]]
+    rest = [r for s, r in scored_rows[cutoff:]]
+    
+    diffs = []
+    for i in input_indices:
+        if isinstance(worst[0][i], (int, float)):
+            val_worst = sum(r[i] for r in worst) / len(worst)
+            val_rest = sum(r[i] for r in rest) / len(rest)
+            # Normalize difference by the range of the column
+            all_vals = [r[i] for r in rows]
+            col_range = max(all_vals) - min(all_vals) + 1e-9
+            diff = abs(val_worst - val_rest) / col_range
+            diffs.append((diff, header[i]))
+        else:
+            # For symbolic, check difference in distribution of the most common value
+            vals_w = [r[i] for r in worst]
+            vals_r = [r[i] for r in rest]
+            mode = max(set(vals_w + vals_r), key=(vals_w + vals_r).count)
+            freq_w = vals_w.count(mode) / len(vals_w)
+            freq_r = vals_r.count(mode) / len(vals_r)
+            diffs.append((abs(freq_w - freq_r), header[i]))
+            
+    # Return columns with the smallest differences (least predictive)
+    diffs.sort(key=lambda x: x[0])
+    return [d[1] for d in diffs[:5]]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = [float(val) if header[i][0].isupper() else val for i, val in enumerate(row)]
+            rows.append(processed_row)
+    
+    unimportant_cols = blame(header, rows)
+    print("Columns that have little to no impact on retention metrics (candidates for removal):")
+    for col in unimportant_cols:
+        print(f"- {col}")
+```

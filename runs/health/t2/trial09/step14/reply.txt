@@ -1,0 +1,46 @@
+```python
+import csv
+from step01 import remember
+
+def flow(header, row, seen):
+    """
+    Decides whether to stop based on whether the current row is the best 
+    seen so far. We define 'best' as being in the top 5% of the 
+    distribution of all rows seen including the current one.
+    """
+    if not seen:
+        return True
+    
+    # Combine previous rows with the current one
+    all_rows = seen + [row]
+    
+    # Use the logic from step01 to identify the top 5%
+    top_indices = remember(header, all_rows)
+    
+    # If the current row (index len(all_rows)-1) is in the top set, 
+    # it is a new "best" worth stopping for.
+    return (len(all_rows) - 1) in top_indices
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = [val if header[i] == 'criterion' else float(val) 
+                             for i, val in enumerate(row)]
+            rows.append(processed_row)
+
+    seen = []
+    stopped = False
+    for i, row in enumerate(rows):
+        if flow(header, row, seen):
+            print(f"Stopping at row {i + 1}: This setup is in the top 5% of all configurations seen so far.")
+            stopped = True
+            break
+        seen.append(row)
+    
+    if not stopped:
+        print("No setup met the criteria for early stopping.")
+```

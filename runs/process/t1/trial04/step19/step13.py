@@ -1,0 +1,83 @@
+import csv
+
+def certify(xs, ys):
+    """
+    Returns True if the two distributions are statistically similar (same population),
+    False if they differ significantly. Uses the A12 effect size check.
+    """
+    m, n = len(xs), len(ys)
+    xs = sorted(xs)
+    ys = sorted(ys)
+    
+    greater = 0
+    j = 0
+    for i in range(m):
+        while j < n and ys[j] < xs[i]:
+            j += 1
+        greater += j
+        
+    ties = 0
+    for i in range(m):
+        for j in range(n):
+            if xs[i] == ys[j]:
+                ties += 1
+    
+    a12 = (greater + 0.5 * ties) / (m * n)
+    # A12 threshold of 0.56 is a common small effect size threshold.
+    # If A12 is between 0.44 and 0.56, the difference is negligible.
+    return 0.44 <= a12 <= 0.56
+
+def analyze_shift(header, rows):
+    """
+    Compares the first half of the data (before the change) 
+    with the second half (after the change).
+    """
+    # Identify goal columns
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('-') or name.endswith('+')]
+    
+    # Calculate a composite score for each row (lower is better)
+    def get_score(row):
+        score = 0
+        for i, name in enumerate(header):
+            if name.endswith('-'):
+                score += row[i]
+            elif name.endswith('+'):
+                score += (1.0 - row[i])
+        return score
+
+    scores = [get_score(row) for row in rows]
+    mid = len(scores) // 2
+    before = scores[:mid]
+    after = scores[mid:]
+    
+    is_same = certify(before, after)
+    
+    print("Analysis of the 'Spring' process change:")
+    print(f"  Average score before: {sum(before)/len(before):.4f}")
+    print(f"  Average score after:  {sum(after)/len(after):.4f}")
+    if is_same:
+        print("  Conclusion: The results are statistically the same; the change had no significant impact.")
+    else:
+        print("  Conclusion: The results have shifted significantly; the process change had a real impact.")
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', encoding='utf-8') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed_row = []
+                for val in row:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        analyze_shift(header, rows)
+        exit(0)
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

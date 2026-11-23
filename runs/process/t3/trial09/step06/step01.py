@@ -1,0 +1,70 @@
+import csv
+import pandas as pd
+import numpy as np
+
+def remember(header, rows):
+    """
+    Identifies rows that perform well across all goal columns.
+    Goals ending in '-' are minimized, '+' are maximized.
+    """
+    df = pd.DataFrame(rows, columns=header)
+    
+    # Identify goal columns
+    goals = [c for c in header if c.endswith('-') or c.endswith('+')]
+    
+    # Normalize goals to [0, 1] range to treat them equally
+    # For '-', lower is better (1 - normalized_val)
+    # For '+', higher is better (normalized_val)
+    normalized_goals = pd.DataFrame(index=df.index)
+    for goal in goals:
+        col = df[goal].astype(float)
+        norm = (col - col.min()) / (col.max() - col.min())
+        if goal.endswith('-'):
+            normalized_goals[goal] = 1 - norm
+        else:
+            normalized_goals[goal] = norm
+            
+    # Calculate a score: the product of normalized goals (geometric mean)
+    # This favors rows that are good across all objectives simultaneously
+    scores = normalized_goals.prod(axis=1)
+    
+    # Select top 5% (or at least 1)
+    n_select = max(1, int(len(rows) * 0.05))
+    best_indices = scores.nlargest(n_select).index.tolist()
+    
+    return sorted(best_indices)
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                # Convert numeric columns to float, keep symbolic as is
+                processed_row = []
+                for i, val in enumerate(row):
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        best_indices = remember(header, rows)
+        
+        print(f"Analysis complete. Found {len(best_indices)} top-performing setups.")
+        print("Indices of the best rows (0-based):")
+        print(best_indices)
+        
+        # Display a summary of the first few best rows
+        print("\nSummary of top 3 best rows:")
+        goal_cols = [c for c in header if c.endswith('-') or c.endswith('+')]
+        for idx in best_indices[:3]:
+            row_data = {header[i]: rows[idx][i] for i in range(len(header))}
+            goals_summary = {g: row_data[g] for g in goal_cols}
+            print(f"Row {idx}: {goals_summary}")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

@@ -1,0 +1,68 @@
+```python
+import csv
+
+def flow(header, row, seen):
+    """
+    Decides whether to stop based on whether the current row is the best 
+    seen so far. If the best utility has not improved for a significant 
+    number of steps (e.g., 10% of the total expected data), we stop.
+    """
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+
+    def get_utility(r):
+        # MRE- (minimize), ACC+ (maximize), PRED40+ (maximize)
+        # We normalize by using negative MRE
+        return -r[mre_idx] + r[acc_idx] + r[pred_idx]
+
+    if not seen:
+        return False
+
+    current_utility = get_utility(row)
+    seen_utilities = [get_utility(r) for r in seen]
+    best_utility_so_far = max(seen_utilities)
+
+    # If the current row is better than anything seen, it's an improvement.
+    # If we haven't seen an improvement in a while, we stop.
+    # Using a patience window of 80 (10% of 800 rows).
+    patience = 80
+    if len(seen) > patience:
+        recent_utilities = seen_utilities[-patience:]
+        if best_utility_so_far >= max(recent_utilities):
+            return True
+
+    return current_utility > best_utility_so_far
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    seen = []
+    stopped = False
+    for i, row in enumerate(rows):
+        if flow(header, row, seen):
+            print(f"Stopped at row {i+1}: The best configuration has stopped improving.")
+            stopped = True
+            break
+        seen.append(row)
+    
+    if not stopped:
+        print("Processed all rows; no significant plateau detected.")
+    
+    exit(0)
+```

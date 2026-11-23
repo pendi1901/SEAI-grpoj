@@ -1,0 +1,64 @@
+```python
+import csv
+
+def remember(header, rows):
+    """
+    Identifies the best rows based on multi-objective optimization.
+    Goals: MRE- (minimize), ACC+ (maximize), PRED40+ (maximize).
+    We use a simple Pareto-based approach or weighted ranking to find 
+    the most trustworthy setups.
+    """
+    # Identify indices for goals
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+
+    # Normalize values to calculate a score
+    # Since we want low MRE, high ACC, high PRED40:
+    # Score = (1 - MRE) + ACC + PRED40
+    scored_rows = []
+    for i, row in enumerate(rows):
+        mre = float(row[mre_idx])
+        acc = float(row[acc_idx])
+        pred = float(row[pred_idx])
+        
+        # Simple heuristic: higher is better
+        score = (1.0 - mre) + acc + pred
+        scored_rows.append((score, i))
+
+    # Sort by score descending
+    scored_rows.sort(key=lambda x: x[0], reverse=True)
+
+    # Return top 5% (800 rows * 0.05 = 40 rows)
+    limit = max(1, int(len(rows) * 0.05))
+    return [item[1] for item in scored_rows[:limit]]
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            # Convert numeric columns to float, keep symbolic as is
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i] in ['criterion']:
+                    processed_row.append(val)
+                else:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+            rows.append(processed_row)
+
+    best_indices = remember(header, rows)
+    
+    print(f"Analysis complete. Found {len(best_indices)} highly trustworthy setups.")
+    print("Top indices:", best_indices[:10], "...")
+    
+    # Print details of the top 3
+    print("\nTop 3 recommended setups:")
+    for idx in best_indices[:3]:
+        print(f"Row {idx}: {rows[idx]}")
+```

@@ -1,0 +1,105 @@
+import csv
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import LabelEncoder
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column ('YearsAtCompany+') for test rows.
+    To answer the customer's question about cutting overtime in Sales,
+    we train a model that includes 'department' and 'overTime' as features.
+    """
+    # Identify goal column (first column ending in '+' or '-')
+    goal_idx = next(i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-'))
+    
+    # Identify input columns
+    input_indices = [i for i, name in enumerate(header) 
+                     if not (name.endswith('+') or name.endswith('-'))]
+    
+    # Prepare data
+    X_train = []
+    y_train = []
+    encoders = {}
+    
+    # Fit encoders on all data to handle categories
+    for i in input_indices:
+        if isinstance(train[0][i], str):
+            encoders[i] = LabelEncoder()
+            col_data = [row[i] for row in train] + [row[i] for row in test if row[i] != '?']
+            encoders[i].fit(col_data)
+            
+    for row in train:
+        processed = []
+        for i in input_indices:
+            val = row[i]
+            if i in encoders:
+                processed.append(encoders[i].transform([val])[0])
+            else:
+                processed.append(val)
+        X_train.append(processed)
+        y_train.append(row[goal_idx])
+        
+    # Train model
+    model = RandomForestRegressor(n_estimators=100, random_state=42)
+    model.fit(X_train, y_train)
+    
+    # Predict
+    X_test = []
+    for row in test:
+        processed = []
+        for i in input_indices:
+            val = row[i]
+            if i in encoders:
+                processed.append(encoders[i].transform([val])[0])
+            else:
+                processed.append(val)
+        X_test.append(processed)
+        
+    return model.predict(X_test).tolist()
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    # Identify indices
+    dept_idx = header.index('department')
+    ot_idx = header.index('overTime')
+    goal_idx = next(i for i, name in enumerate(header) if name.endswith('+'))
+    
+    # Create two test sets: Sales with Overtime vs Sales without Overtime
+    sales_rows = [r for r in rows if r[dept_idx] == 'Sales']
+    
+    test_with_ot = []
+    test_without_ot = []
+    
+    for r in sales_rows[:20]: # Sample 20
+        row_w = list(r)
+        row_w[ot_idx] = 'Yes'
+        row_w[goal_idx] = '?'
+        test_with_ot.append(row_w)
+        
+        row_wo = list(r)
+        row_wo[ot_idx] = 'No'
+        row_wo[goal_idx] = '?'
+        test_without_ot.append(row_wo)
+        
+    preds_with = guess(header, rows, test_with_ot)
+    preds_without = guess(header, rows, test_without_ot)
+    
+    avg_with = sum(preds_with) / len(preds_with)
+    avg_without = sum(preds_without) / len(preds_without)
+    
+    print("Analysis: Impact of cutting overtime in Sales on 'YearsAtCompany+'")
+    print(f"Average predicted tenure with Overtime: {avg_with:.2f} years")
+    print(f"Average predicted tenure without Overtime: {avg_without:.2f} years")
+    print(f"Result: Cutting overtime in Sales is predicted to change average tenure by {(avg_without - avg_with):.2f} years.")

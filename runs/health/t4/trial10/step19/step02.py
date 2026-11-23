@@ -1,0 +1,78 @@
+import csv
+import numpy as np
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import LabelEncoder
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column (MRE-) for test rows using a Random Forest.
+    Handles '?' in test data by excluding the goal column from input features.
+    """
+    goal_idx = 0
+    
+    # Identify symbolic columns
+    symbolic_indices = [i for i, val in enumerate(train[0]) if isinstance(val, str)]
+    
+    # Fit encoders on all available data (train + test non-goal columns)
+    encoders = {}
+    for i in symbolic_indices:
+        if i == goal_idx:
+            continue
+        encoders[i] = LabelEncoder()
+        # Collect all unique values from train and test (ignoring '?')
+        all_vals = [r[i] for r in train] + [r[i] for r in test if r[i] != '?']
+        encoders[i].fit(all_vals)
+
+    def transform_row(row):
+        features = []
+        for i in range(len(row)):
+            if i == goal_idx:
+                continue
+            if i in encoders:
+                features.append(encoders[i].transform([row[i]])[0])
+            else:
+                features.append(float(row[i]))
+        return features
+
+    X_train = [transform_row(row) for row in train]
+    y_train = [row[goal_idx] for row in train]
+    X_test = [transform_row(row) for row in test]
+    
+    model = RandomForestRegressor(n_estimators=100, random_state=42)
+    model.fit(X_train, y_train)
+    
+    return model.predict(X_test).tolist()
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            for row in reader:
+                processed_row = []
+                for val in row:
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        # Split into train and a dummy test set (last 5 rows)
+        train_data = rows[:-5]
+        test_data = []
+        for r in rows[-5:]:
+            new_row = list(r)
+            new_row[0] = '?'
+            test_data.append(new_row)
+        
+        predictions = guess(header, train_data, test_data)
+        
+        print("Forecasts for the first goal column (MRE-):")
+        for i, pred in enumerate(predictions):
+            print(f"Test row {i+1}: Estimated MRE- = {pred:.4f}")
+            
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

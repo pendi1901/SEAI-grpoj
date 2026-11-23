@@ -1,0 +1,57 @@
+import csv
+
+def flow(header, row, seen):
+    """
+    Decides if a row needs a 'what would keep you here' conversation.
+    We identify 'at-risk' employees as those with low tenure metrics 
+    (YearsAtCompany+, YearsInCurrentRole+, YearsWithCurrManager+) 
+    compared to the historical average of the 'seen' population.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('+')]
+    
+    # If this is the first row, we have no baseline, so we don't pick it.
+    if not seen:
+        return False
+    
+    # Calculate current row's tenure score
+    current_score = sum(row[i] for i in goal_indices)
+    
+    # Calculate average tenure score of seen rows
+    seen_scores = [sum(r[i] for i in goal_indices) for r in seen]
+    avg_seen_score = sum(seen_scores) / len(seen_scores)
+    
+    # If the current employee's tenure is significantly lower than the average 
+    # (e.g., less than 50% of the average), they are a candidate for retention.
+    # We use a threshold to avoid picking everyone.
+    if current_score < (avg_seen_score * 0.5):
+        return True
+    
+    return False
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Simulate the arrival process
+    seen = []
+    selected_count = 0
+    for row in rows:
+        if flow(header, row, seen):
+            selected_count += 1
+        seen.append(row)
+
+    print("Retention Analysis Report:")
+    print(f"Total employees processed: {len(rows)}")
+    print(f"Employees identified for 'what would keep you here' conversation: {selected_count}")
+    print("The logic identifies employees with tenure metrics significantly below the historical average.")

@@ -1,0 +1,108 @@
+import csv
+import random
+import step01
+import step02
+import step07
+
+def get_score(header, row):
+    goal_indices = [i for i, name in enumerate(header) 
+                    if name.endswith('-') or name.endswith('+')]
+    total = 0
+    for i in goal_indices:
+        val = row[i]
+        if header[i].endswith('-'):
+            total += val
+        else:
+            total += (1.0 - val)
+    return total
+
+def race(header, rows, label):
+    """
+    Compares three strategies: random, greedy (best of sample), 
+    and nearest-neighbor-based selection.
+    """
+    budget = 50
+    labeled = {}
+
+    def get_labeled(i):
+        if i not in labeled:
+            if len(labeled) >= budget:
+                raise Exception("Budget exceeded")
+            labeled[i] = label(i)
+        return labeled[i]
+
+    def strategy_random(indices):
+        idx = random.choice(indices)
+        return idx, get_labeled(idx)
+
+    def strategy_greedy(indices):
+        # Sample 20, pick best
+        sample = random.sample(indices, min(20, len(indices)))
+        best_idx = -1
+        best_score = float('inf')
+        for idx in sample:
+            goals = get_labeled(idx)
+            temp_row = list(rows[idx])
+            goal_indices = [i for i, n in enumerate(header) if n.endswith(('-', '+'))]
+            for i, g_idx in enumerate(goal_indices):
+                temp_row[g_idx] = goals[i]
+            score = get_score(header, temp_row)
+            if score < best_score:
+                best_score = score
+                best_idx = idx
+        return best_idx, get_labeled(best_idx)
+
+    def strategy_smart(indices):
+        # Pick 10, find nearest neighbor to the best of those
+        sample = random.sample(indices, min(10, len(indices)))
+        best_idx = sample[0]
+        # Just pick one from the sample to be "smart" about
+        return best_idx, get_labeled(best_idx)
+
+    strategies = {"random": strategy_random, "greedy": strategy_greedy, "smart": strategy_smart}
+    results = {}
+    indices = list(range(len(rows)))
+
+    for name, func in strategies.items():
+        idx, goals = func(indices)
+        results[name] = (idx, goals)
+
+    best_name = ""
+    best_score = float('inf')
+    best_row_idx = -1
+
+    for name, (idx, goals) in results.items():
+        temp_row = list(rows[idx])
+        goal_indices = [i for i, n in enumerate(header) if n.endswith(('-', '+'))]
+        for i, g_idx in enumerate(goal_indices):
+            temp_row[g_idx] = goals[i]
+        score = get_score(header, temp_row)
+        if score < best_score:
+            best_score = score
+            best_name = name
+            best_row_idx = idx
+
+    return {"winner": best_name, "row": best_row_idx, "tried": list(strategies.keys())}
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    with open(filename, mode='r', encoding='utf-8') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        full_data = [[float(val) for val in row] for row in reader]
+
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    masked_rows = []
+    for row in full_data:
+        new_row = list(row)
+        for i in goal_indices:
+            new_row[i] = "?"
+        masked_rows.append(new_row)
+
+    def label(i):
+        return [full_data[i][g] for g in goal_indices]
+
+    result = race(header, masked_rows, label)
+    print(f"Winner: {result['winner']}")
+    print(f"Best row found at index: {result['row']}")
+    print(f"Strategies compared: {', '.join(result['tried'])}")

@@ -1,0 +1,79 @@
+import csv
+import step01
+
+def fix(header, row, levers):
+    """
+    Finds the smallest change to a 'bad' row that improves its multi-objective score
+    without increasing the computational cost (N_estimators).
+    """
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+    n_est_idx = header.index('N_estimators')
+
+    def get_score(r):
+        # Using a simplified scoring based on the row's own values
+        # In a real scenario, we'd normalize against a population.
+        # Here we use the goals directly: minimize MRE, maximize ACC, maximize PRED.
+        return (-r[mre_idx] + r[acc_idx] + r[pred_idx])
+
+    best_change = {}
+    best_score = get_score(row)
+    
+    # Try changing each lever
+    for col_name, allowed in levers.items():
+        idx = header.index(col_name)
+        original_val = row[idx]
+        
+        # Don't increase N_estimators (cost)
+        if col_name == 'N_estimators':
+            continue
+            
+        candidates = []
+        if isinstance(allowed, list):  # Symbolic
+            candidates = [v for v in allowed if v != original_val]
+        else:  # Numeric (low, high)
+            # Try a small step within range
+            low, high = allowed
+            candidates = [low, high]
+            
+        for val in candidates:
+            new_row = list(row)
+            new_row[idx] = val
+            new_score = get_score(new_row)
+            if new_score > best_score:
+                best_score = new_score
+                best_change = {col_name: val}
+                
+    return best_change
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            rows.append([val if header[i] == 'criterion' else float(val) for i, val in enumerate(row)])
+    
+    # Define levers based on the dataset structure
+    levers = {
+        'criterion': ['absolute_error', 'poisson', 'squared_error'],
+        'Min_sample_leaves': (1, 20),
+        'Min_impurity_decrease': (0, 10),
+        'Max_depth': (1, 20),
+        'N_estimators': (10, 200)
+    }
+    
+    # Pick a 'bad' row (e.g., the one with the lowest score)
+    # Using step01 logic to find a bad row
+    bad_row = rows[0] # Simplified for demonstration
+    
+    recommendation = fix(header, bad_row, levers)
+    
+    print("Recommendation to improve performance:")
+    if recommendation:
+        for col, val in recommendation.items():
+            print(f"Change '{col}' to {val}.")
+    else:
+        print("No single-lever change found to improve performance without increasing cost.")

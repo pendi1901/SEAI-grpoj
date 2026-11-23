@@ -1,0 +1,99 @@
+import ezr
+import random
+
+def race(header, rows, label):
+    """
+    Compares three strategies:
+    1. 'random': Picks rows at random.
+    2. 'rule_of_thumb': Gives the biggest pay rises to the newest staff.
+    3. 'acquire': Uses the model-based acquisition.
+    """
+    budget = 50
+    labeled_indices = {}
+    row_map = {id(r): i for i, r in enumerate(rows)}
+    
+    def oracle_wrapper(row):
+        idx = row_map[id(row)]
+        if idx not in labeled_indices:
+            if len(labeled_indices) >= budget:
+                raise Exception("Budget exceeded!")
+            true_goals = label(idx)
+            goal_indices = [i for i, h in enumerate(header) if h.endswith(("+", "-"))]
+            for i, val in zip(goal_indices, true_goals):
+                row[i] = val
+            labeled_indices[idx] = row
+        return labeled_indices[idx]
+
+    tbl = ezr.Tbl([header] + [list(r) for r in rows])
+
+    # Strategy 1: Random
+    def run_random():
+        indices = random.sample(range(len(rows)), 16)
+        best_idx, min_ydist = -1, 1e30
+        for i in indices:
+            r = oracle_wrapper(rows[i])
+            d = ezr.ydist(tbl, r)
+            if d < min_ydist:
+                min_ydist, best_idx = d, i
+        return best_idx, min_ydist
+
+    # Strategy 2: Rule of Thumb (Newest staff = lowest YearsAtCompany)
+    def run_rule_of_thumb():
+        yac_idx = header.index('YearsAtCompany+')
+        # Filter out rows where YAC is unknown (represented as '?')
+        valid_indices = [i for i in range(len(rows)) if rows[i][yac_idx] != "?"]
+        # Sort by tenure ascending (newest first)
+        indices = sorted(valid_indices, key=lambda i: float(rows[i][yac_idx]))[:16]
+        best_idx, min_ydist = -1, 1e30
+        for i in indices:
+            r = oracle_wrapper(rows[i])
+            d = ezr.ydist(tbl, r)
+            if d < min_ydist:
+                min_ydist, best_idx = d, i
+        return best_idx, min_ydist
+
+    # Strategy 3: Acquire
+    def run_acquire():
+        labeled = ezr.acquire(tbl, cap=17, label=oracle_wrapper)
+        best_r = min(labeled, key=lambda r: ezr.ydist(tbl, r))
+        return row_map[id(best_r)], ezr.ydist(tbl, best_r)
+
+    results = {
+        "random": run_random(),
+        "rule_of_thumb": run_rule_of_thumb(),
+        "acquire": run_acquire()
+    }
+
+    winner = min(results, key=lambda k: results[k][1])
+    return {
+        "winner": winner,
+        "row": results[winner][0],
+        "tried": ["random", "rule_of_thumb", "acquire"]
+    }
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    all_rows = data[1:]
+    
+    goal_indices = [i for i, h in enumerate(header) if h.endswith(("+", "-"))]
+    
+    def label(i):
+        return [all_rows[i][idx] for idx in goal_indices]
+    
+    masked_rows = []
+    for row in all_rows:
+        new_row = list(row)
+        for idx in goal_indices:
+            new_row[idx] = "?"
+        masked_rows.append(new_row)
+        
+    result = race(header, masked_rows, label)
+    print(f"Analysis: Is the 'newest staff' rule of thumb better than model-based acquisition?")
+    print(f"The winner is the '{result['winner']}' strategy.")
+    print(f"The best row found is at index {result['row']}.")
+    if result['winner'] == 'rule_of_thumb':
+        print("Result: The rule of thumb is effective.")
+    else:
+        print("Result: The model-based approach outperforms the rule of thumb.")

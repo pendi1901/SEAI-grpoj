@@ -1,0 +1,47 @@
+```python
+import ezr
+import step01
+
+def spot(header, rows):
+    """
+    Identifies suspicious rows by calculating the distance of each row
+    from the global centroid of the data. Rows that are extreme outliers
+    in the input space (x-columns) are flagged as potentially entered wrongly.
+    """
+    # Create a table to handle normalization and distance calculations
+    tbl = ezr.Tbl([header] + rows)
+    
+    # Calculate the distance of each row from the global centroid (mids)
+    # in the input (x) space.
+    centroid = ezr.mids(tbl)
+    
+    # Calculate xdist for every row
+    # xdist measures how far a row's inputs are from the average inputs
+    distances = []
+    for i, row in enumerate(rows):
+        d = ezr.xdist(tbl, row, centroid)
+        distances.append((d, i))
+    
+    # Sort by distance descending (most suspicious = furthest from typical)
+    distances.sort(key=lambda x: x[0], reverse=True)
+    
+    # Return the indices of the top 10 most suspicious rows
+    return [idx for d, idx in distances[:10]]
+
+if __name__ == "__main__":
+    # Load data
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Identify suspicious rows
+    suspicious_indices = spot(header, rows)
+    
+    print("Analysis: Identifying potentially erroneous data entries.")
+    print("The following rows are the most statistically suspicious (outliers in input space):")
+    for idx in suspicious_indices:
+        print(f"- Row {idx} (Distance from centroid: {ezr.xdist(ezr.Tbl([header]+rows), rows[idx], ezr.mids(ezr.Tbl([header]+rows))):.2f})")
+    
+    print("\nThese rows contain input values that deviate significantly from the rest of the dataset.")
+```

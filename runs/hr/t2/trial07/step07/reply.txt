@@ -1,0 +1,73 @@
+```python
+import csv
+import random
+import step01
+import step02
+
+def choose(header, rows, label):
+    """
+    Finds the best row by sampling 50 rows, labeling them to get their true
+    goal values, and returning the index of the one with the highest tenure score.
+    """
+    # Identify goal indices
+    goal_indices = [i for i, h in enumerate(header) if '+' in h or '-' in h]
+    
+    # We can afford 50 interviews. We pick 50 random indices.
+    # To make it more robust, we pick a mix of random and potentially high-tenure rows.
+    # Given the constraints, random sampling is a safe strategy.
+    indices_to_sample = random.sample(range(len(rows)), min(50, len(rows)))
+    
+    best_idx = -1
+    best_score = -float('inf')
+    
+    for i in indices_to_sample:
+        # Get true values for this row
+        true_goals = label(i)
+        
+        # Calculate score: sum of '+' goals minus sum of '-' goals
+        score = 0
+        for j, goal_idx in enumerate(goal_indices):
+            val = true_goals[j]
+            if header[goal_idx].endswith('+'):
+                score += val
+            else:
+                score -= val
+        
+        if score > best_score:
+            best_score = score
+            best_idx = i
+            
+    return best_idx
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Define the label function for the harness
+    goal_indices = [i for i, h in enumerate(header) if '+' in h or '-' in h]
+    
+    def label(i):
+        return [rows[i][idx] for idx in goal_indices]
+
+    # Mask the rows as per requirements
+    for row in rows:
+        for idx in goal_indices:
+            row[idx] = "?"
+
+    best_idx = choose(header, rows, label)
+    
+    print(f"Analysis complete.")
+    print(f"The best working arrangement found is at index: {best_idx}")
+    print("This row was identified by sampling 50 records and evaluating their tenure metrics.")
+```

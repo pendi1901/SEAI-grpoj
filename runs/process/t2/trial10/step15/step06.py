@@ -1,0 +1,63 @@
+import csv
+import step01
+
+def justify(header, rows, row):
+    """
+    Estimates the goals for the given row and returns its percentile rank
+    among the existing rows, along with a justification string.
+    """
+    goal_indices = []
+    input_indices = []
+    for i, name in enumerate(header):
+        if name.endswith('-') or name.endswith('+'):
+            goal_indices.append((i, name[-1]))
+        else:
+            input_indices.append(i)
+
+    # Estimate goals for the input row using the average of the top 5% of rows
+    # (Using the logic established in step01/step02)
+    best_indices = step01.remember(header, rows)
+    estimated_goals = []
+    for idx, op in goal_indices:
+        avg = sum(float(rows[i][idx]) for i in best_indices) / len(best_indices)
+        estimated_goals.append(avg)
+
+    # Create a full row representation for scoring
+    full_row = list(row)
+    for i, (idx, _) in enumerate(goal_indices):
+        full_row[idx] = estimated_goals[i]
+
+    def get_score(r):
+        return sum(float(r[idx]) if op == '-' else -float(r[idx]) for idx, op in goal_indices)
+
+    target_score = get_score(full_row)
+    all_scores = [get_score(r) for r in rows]
+    
+    # Calculate fraction of rows that are worse than the target row
+    # (A row is better if its score is lower)
+    better_than_count = sum(1 for s in all_scores if s > target_score)
+    p = better_than_count / len(rows)
+    
+    reason = f"This setup is better than {p:.1%} of all known configurations based on its estimated performance goals."
+    return p, reason
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', newline='') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [row for row in reader]
+            
+            # Pick a sample row and hide its goals to test the function
+            sample_row = list(rows[0])
+            for i, name in enumerate(header):
+                if name.endswith('-') or name.endswith('+'):
+                    sample_row[i] = "?"
+            
+            p, reason = justify(header, rows, sample_row)
+            print(f"Justification: {reason}")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

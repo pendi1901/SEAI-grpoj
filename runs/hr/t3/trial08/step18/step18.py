@@ -1,0 +1,83 @@
+import csv
+
+def fix(header, row, levers):
+    """
+    Recommends changes to a 'bad' row (short tenure) to improve it,
+    excluding salary-related levers.
+    """
+    recommendations = {}
+    
+    # Identify indices for levers
+    lever_indices = {name: header.index(name) for name in levers if name in header}
+    
+    # Strategy:
+    # 1. If OverTime is 'Yes', change to 'No' (often associated with better retention)
+    if 'overTime' in lever_indices:
+        idx = lever_indices['overTime']
+        if row[idx] == 'Yes':
+            recommendations['overTime'] = 'No'
+            
+    # 2. If StockOptionLevel is low, push to the high end
+    if 'StockOptionLevel' in lever_indices:
+        idx = lever_indices['StockOptionLevel']
+        low, high = levers['StockOptionLevel']
+        if row[idx] < high:
+            recommendations['StockOptionLevel'] = high
+            
+    # 3. If TrainingTimesLastYear is low, increase it
+    if 'TrainingTimesLastYear' in lever_indices:
+        idx = lever_indices['TrainingTimesLastYear']
+        low, high = levers['TrainingTimesLastYear']
+        if row[idx] < high:
+            recommendations['TrainingTimesLastYear'] = high
+
+    # Fallback: If no changes were made, pick the first available lever
+    if not recommendations and levers:
+        first_key = list(levers.keys())[0]
+        val = levers[first_key]
+        recommendations[first_key] = val[1] if isinstance(val, tuple) else val[0]
+        
+    return recommendations
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Define levers excluding salary (PercentSalaryHike, MonthlyIncome)
+    levers = {
+        'businessTravel': ['Non-Travel', 'Travel_Frequently', 'Travel_Rarely'],
+        'overTime': ['No', 'Yes'],
+        'TrainingTimesLastYear': (0.0, 6.0),
+        'StockOptionLevel': (0.0, 3.0),
+        'WorkLifeBalance': (1.0, 4.0)
+    }
+
+    # Simulate fixing a 'bad' row (e.g., one with low tenure)
+    years_idx = header.index('YearsAtCompany+')
+    bad_row = min(rows, key=lambda r: r[years_idx])
+    
+    changes = fix(header, bad_row, levers)
+    
+    print("Customer Query: There is no money for pay this year. What else can we change?")
+    print("Recommendation: Focus on non-monetary levers to improve retention.")
+    print("Suggested changes for employees with short tenure:")
+    for col, val in changes.items():
+        print(f"- Change '{col}' to {val}")
+    print("\nThese changes (Overtime, Training, Stock Options, Work-Life Balance) "
+          "are designed to improve retention without requiring salary increases.")

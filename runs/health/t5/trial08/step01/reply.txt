@@ -1,0 +1,49 @@
+```python
+import ezr
+import random
+
+def remember(header, rows):
+    """
+    Returns the indices of the top 5% of rows based on multi-objective 
+    optimization (minimizing ydist).
+    """
+    # Create a table object from the provided header and rows
+    # ezr.Tbl expects an iterable of rows where the first row is the header
+    data = [header] + rows
+    tbl = ezr.Tbl(data)
+    
+    # Calculate ydist for every row
+    # ydist measures how far a row's goals are from the ideal
+    scored = []
+    for i, row in enumerate(rows):
+        d = ezr.ydist(tbl, row)
+        scored.append((d, i))
+    
+    # Sort by distance (ascending, as we want to minimize ydist)
+    scored.sort(key=lambda x: x[0])
+    
+    # Return the top 5% of indices
+    limit = max(1, len(rows) // 20)
+    return [item[1] for item in scored[:limit]]
+
+if __name__ == "__main__":
+    # Load the data
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    data_iter = ezr.csv(filename)
+    
+    # Extract header and rows
+    header = next(data_iter)
+    rows = list(data_iter)
+    
+    # Get the best indices
+    best_indices = remember(header, rows)
+    
+    # Print a summary for the customer
+    print(f"Analysis complete. Found {len(best_indices)} highly trustworthy setups.")
+    print("Top 5 indices (0-based):", best_indices[:5])
+    print("\nSample of best row:")
+    print(f"Header: {header}")
+    print(f"Row:    {rows[best_indices[0]]}")
+    
+    exit(0)
+```

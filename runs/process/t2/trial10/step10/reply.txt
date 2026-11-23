@@ -1,0 +1,92 @@
+```python
+import csv
+import random
+import step01
+
+def race(header, rows, label):
+    """
+    Compares three strategies: random, greedy (best of sample), 
+    and a simple heuristic (best of first 50).
+    """
+    budget = 50
+    tried = ["random", "greedy", "first"]
+    
+    # Strategy 1: Random
+    def strategy_random(indices):
+        return random.choice(indices)
+    
+    # Strategy 2: Greedy (Sample 25, pick best)
+    def strategy_greedy(indices):
+        sample = random.sample(indices, 25)
+        best_idx = -1
+        best_score = float('inf')
+        for i in sample:
+            goals = label(i)
+            score = sum(float(g) if header[idx].endswith('-') else -float(g) 
+                        for idx, g in zip(goal_indices, goals))
+            if score < best_score:
+                best_score, best_idx = score, i
+        return best_idx
+
+    # Strategy 3: First (Pick the first one we see)
+    def strategy_first(indices):
+        return indices[0]
+
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('-') or name.endswith('+')]
+    
+    results = {}
+    # We split the 50 budget: 1 for random, 25 for greedy, 24 for first (or similar)
+    # To keep it simple and fair, we allocate budget per strategy
+    # Strategy 1: 1 random pick
+    # Strategy 2: 25 picks
+    # Strategy 3: 24 picks
+    
+    # Note: The harness tracks total labels. We must ensure we don't exceed 50.
+    # We will use 1 for random, 25 for greedy, 24 for first.
+    
+    strategies = {
+        "random": strategy_random,
+        "greedy": strategy_greedy,
+        "first": strategy_first
+    }
+    
+    best_overall_score = float('inf')
+    winner = None
+    best_row_idx = -1
+    
+    # Execute strategies
+    for name in tried:
+        idx = strategies[name](list(range(len(rows))))
+        goals = label(idx)
+        score = sum(float(g) if header[i].endswith('-') else -float(g) 
+                    for i, g in zip(goal_indices, goals))
+        
+        if score < best_overall_score:
+            best_overall_score = score
+            winner = name
+            best_row_idx = idx
+            
+    return {"winner": winner, "row": best_row_idx, "tried": tried}
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, mode='r', newline='') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [row for row in reader]
+            
+            def label(i):
+                return [rows[i][j] for j, name in enumerate(header) 
+                        if name.endswith('-') or name.endswith('+')]
+            
+            result = race(header, rows, label)
+            print("Customer Inquiry: Which consultant's strategy performs best?")
+            print(f"Winner: {result['winner']}")
+            print(f"Best row found at index: {result['row']}")
+            print(f"Strategies compared: {', '.join(result['tried'])}")
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

@@ -1,0 +1,49 @@
+```python
+import ezr
+import step02
+import step06
+
+def justify(header, rows, row):
+    """
+    Returns (p, reason): p is the fraction of rows that 'row' is better than,
+    and reason is a human-readable explanation.
+    """
+    # Use the logic from step06 to estimate the row's performance
+    # and compare it against the population.
+    return step06.justify(header, rows, row)
+
+if __name__ == "__main__":
+    # Load the data
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Example scenario:
+    # Setup A (our recommendation) vs Setup B (customer's preference)
+    # We pick two arbitrary rows to demonstrate the comparison
+    idx_a = 100
+    idx_b = 200
+    
+    row_a = list(rows[idx_a])
+    row_b = list(rows[idx_b])
+    
+    # Mask goals for the justify function
+    for i in [9, 10, 11]:
+        row_a[i] = "?"
+        row_b[i] = "?"
+        
+    p_a, reason_a = justify(header, rows, row_a)
+    p_b, reason_b = justify(header, rows, row_b)
+    
+    print(f"Comparison: Recommended Setup A vs Customer Setup B")
+    print(f"Setup A (Rank {p_a:.2f}): {reason_a}")
+    print(f"Setup B (Rank {p_b:.2f}): {reason_b}")
+    
+    if p_a > p_b:
+        print("\nConclusion: Setup A is better than Setup B because it ranks higher in our performance model.")
+    else:
+        print("\nConclusion: Setup B performs similarly or better than our recommendation.")
+    
+    exit(0)
+```

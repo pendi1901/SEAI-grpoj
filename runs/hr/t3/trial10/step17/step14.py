@@ -1,0 +1,67 @@
+import csv
+
+def flow(header, row, seen):
+    """
+    Detects if the current team (represented by the most recent arrivals) 
+    deviates from the 'normal' distribution of the historical data.
+    
+    We monitor the 'JobSatisfaction' and 'EnvironmentSatisfaction' columns.
+    If the current row's satisfaction metrics are significantly lower than 
+    the average of the 'seen' population (specifically, more than 2 standard 
+    deviations below the mean), we flag the team as having changed.
+    """
+    if len(seen) < 30:
+        return False
+
+    sat_idx = header.index('JobSatisfaction')
+    env_idx = header.index('EnvironmentSatisfaction')
+
+    # Extract historical satisfaction scores
+    sat_scores = [r[sat_idx] for r in seen]
+    env_scores = [r[env_idx] for r in seen]
+
+    def get_stats(data):
+        mean = sum(data) / len(data)
+        variance = sum((x - mean) ** 2 for x in data) / len(data)
+        return mean, variance ** 0.5
+
+    sat_mean, sat_std = get_stats(sat_scores)
+    env_mean, env_std = get_stats(env_scores)
+
+    # Check if current row is an outlier (2 standard deviations below mean)
+    # This indicates a shift in team morale/environment
+    is_outlier = False
+    if sat_std > 0 and row[sat_idx] < (sat_mean - 2 * sat_std):
+        is_outlier = True
+    if env_std > 0 and row[env_idx] < (env_mean - 2 * env_std):
+        is_outlier = True
+
+    return is_outlier
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    seen = []
+    alerts = 0
+    for row in rows:
+        if flow(header, row, seen):
+            alerts += 1
+        seen.append(row)
+
+    print("Team Stability Analysis:")
+    print(f"Processed {len(rows)} employee records.")
+    print(f"Number of times the team's satisfaction profile deviated from the norm: {alerts}")
+    print("Strategy: Flagged records where Job or Environment Satisfaction dropped")
+    print("significantly (2+ standard deviations) below the historical team average.")

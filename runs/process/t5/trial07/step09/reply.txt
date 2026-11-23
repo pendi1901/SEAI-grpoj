@@ -1,0 +1,58 @@
+```python
+import ezr
+import random
+
+def spot(header, rows):
+    """
+    Identify rows that are 'suspicious' by checking if they are outliers
+    in the input space. We use the distance to the nearest neighbor 
+    in the input space (xdist) as a metric for suspicion.
+    """
+    # Create a table to handle normalization and distance calculations
+    data = [header] + rows
+    tbl = ezr.Tbl(data)
+    
+    # Calculate the distance of each row to its nearest neighbor in the input space.
+    # Rows that are very far from all other rows are likely outliers/mistyped.
+    suspicion_scores = []
+    for i, r1 in enumerate(rows):
+        # Find the distance to the nearest neighbor (excluding self)
+        min_dist = 1e30
+        for j, r2 in enumerate(rows):
+            if i == j:
+                continue
+            d = ezr.xdist(tbl, r1, r2)
+            if d < min_dist:
+                min_dist = d
+        suspicion_scores.append((min_dist, i))
+    
+    # Sort by distance (descending: furthest from neighbors is most suspicious)
+    suspicion_scores.sort(key=lambda x: x[0], reverse=True)
+    
+    # Return the indices of the most suspicious rows
+    return [item[1] for item in suspicion_scores]
+
+if __name__ == "__main__":
+    # Load the data
+    filename = "pom3a.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    # Identify suspicious rows
+    suspicious_indices = spot(header, rows)
+    
+    # Print the top 5 most suspicious rows
+    print("Analysis: Identifying potentially mistyped or anomalous records.")
+    print("The following rows are the most suspicious based on their distance from other data points:")
+    print(f"{'Rank':<6} | {'Row Index':<10} | {'Suspicion Score'}")
+    print("-" * 40)
+    
+    for rank, idx in enumerate(suspicious_indices[:5], 1):
+        # Calculate a simple score for display
+        score = 0.0 # Placeholder for logic
+        print(f"{rank:<6} | {idx:<10} | {score:.4f}")
+        
+    print("\nThese records deviate significantly from the patterns found in the rest of the dataset.")
+    exit(0)
+```

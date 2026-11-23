@@ -1,0 +1,60 @@
+import csv
+from scipy.stats import ttest_ind
+
+def certify(xs, ys):
+    """
+    Returns True if the difference between two groups is statistically 
+    insignificant (noise), False if they are significantly different.
+    Uses a standard t-test with a 0.05 alpha level.
+    """
+    if len(xs) < 2 or len(ys) < 2:
+        return True
+    
+    t_stat, p_value = ttest_ind(xs, ys, equal_var=False)
+    # If p_value > 0.05, we fail to reject the null hypothesis (they are the same)
+    return p_value > 0.05
+
+def analyze_data(header, rows):
+    """
+    Groups setups by 'N_estimators' (size) and compares the 'ACC+' (accuracy)
+    of small vs large setups to determine if the difference is significant.
+    """
+    n_idx = header.index('N_estimators')
+    acc_idx = header.index('ACC+')
+    
+    # Split into small and large based on median N_estimators
+    sizes = [row[n_idx] for row in rows]
+    median_size = sum(sizes) / len(sizes)
+    
+    small_setups = [row[acc_idx] for row in rows if row[n_idx] <= median_size]
+    large_setups = [row[acc_idx] for row in rows if row[n_idx] > median_size]
+    
+    is_noise = certify(small_setups, large_setups)
+    
+    if is_noise:
+        return "The observed difference in accuracy between small and large setups is likely just noise."
+    else:
+        return "There is a statistically significant difference in accuracy between small and large setups."
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            for row in reader:
+                processed_row = []
+                for i, val in enumerate(row):
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                rows.append(processed_row)
+        
+        result = analyze_data(header, rows)
+        print(result)
+        exit(0)
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)

@@ -1,0 +1,63 @@
+import csv
+import step02
+
+def guess(header, train, test):
+    """
+    Estimates the first goal column ('YearsAtCompany+') for test rows.
+    To answer the customer's question: 'If we cut overtime across Sales, 
+    what happens to how long people stay?', we calculate the average 
+    tenure for Sales employees who do NOT work overtime.
+    """
+    goal_idx = -1
+    for i, name in enumerate(header):
+        if name.endswith('+') or name.endswith('-'):
+            goal_idx = i
+            break
+            
+    dept_idx = header.index('department')
+    ot_idx = header.index('overTime')
+    
+    # Filter training data for Sales employees who do not work overtime
+    sales_no_ot = [
+        r[goal_idx] for r in train 
+        if r[dept_idx] == 'Sales' and r[ot_idx] == 'No'
+    ]
+    
+    # Fallback to global mean if no such employees exist in training
+    if not sales_no_ot:
+        return step02.guess(header, train, test)
+        
+    avg_tenure = sum(sales_no_ot) / len(sales_no_ot)
+    return [avg_tenure for _ in test]
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(val)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Create a test set of Sales employees who currently work overtime
+    # to see what their tenure would be if they stopped.
+    test_rows = [r[:] for r in rows if r[header.index('department')] == 'Sales' and r[header.index('overTime')] == 'Yes'][:5]
+    for row in test_rows:
+        row[31] = "?" # YearsAtCompany+
+        
+    estimates = guess(header, rows, test_rows)
+    
+    print("Impact Analysis: Cutting overtime in Sales.")
+    print("Estimated average tenure for Sales staff if overtime is removed:")
+    print(f"{estimates[0]:.2f} years.")

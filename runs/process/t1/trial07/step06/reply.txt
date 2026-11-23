@@ -1,0 +1,68 @@
+```python
+import csv
+
+def justify(header, rows, row):
+    """
+    Estimates the performance of a given row by comparing it to the 
+    training data and returns its percentile rank and a justification.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith('-') or name.endswith('+')]
+    input_indices = [i for i, name in enumerate(header) if i not in goal_indices]
+
+    def get_score(r):
+        score = 0.0
+        for i in goal_indices:
+            val = r[i]
+            if header[i].endswith('-'):
+                score += val
+            else:
+                score += (1.0 - val)
+        return score
+
+    # Estimate goal values for the input row using 1-nearest neighbor
+    best_dist = float('inf')
+    best_row = None
+    for train_row in rows:
+        dist = sum((row[i] - train_row[i])**2 for i in input_indices)
+        if dist < best_dist:
+            best_dist = dist
+            best_row = train_row
+    
+    # Create a copy of the row with estimated goals
+    estimated_row = list(row)
+    for i in goal_indices:
+        estimated_row[i] = best_row[i]
+    
+    # Calculate percentile rank
+    my_score = get_score(estimated_row)
+    better_count = sum(1 for r in rows if get_score(r) > my_score)
+    p = better_count / len(rows)
+    
+    reason = f"This setup is better than {p:.1%} of all known configurations based on its input characteristics."
+    return p, reason
+
+if __name__ == "__main__":
+    filename = 'pom3a.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = [[float(x) for x in row] for row in reader]
+        
+        # Pick a sample row and mask its goals
+        sample_row = list(rows[0])
+        for i, name in enumerate(header):
+            if name.endswith('-') or name.endswith('+'):
+                sample_row[i] = "?"
+        
+        p, reason = justify(header, rows, sample_row)
+        
+        print("Customer Inquiry: Justification of Top-Tier Status")
+        print("-" * 50)
+        print(f"Rank: {p:.4f}")
+        print(f"Reason: {reason}")
+        
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

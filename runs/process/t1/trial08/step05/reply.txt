@@ -1,0 +1,66 @@
+```python
+import csv
+
+def blame(header, rows):
+    """
+    Identifies which input columns correlate most strongly with 'Idle-' 
+    in the worst-performing rows.
+    """
+    goal_indices = [i for i, name in enumerate(header) if name.endswith(('-', '+'))]
+    input_indices = [i for i, name in enumerate(header) if not name.endswith(('-', '+'))]
+    idle_idx = header.index('Idle-')
+
+    def get_score(row):
+        s = 0
+        for i in goal_indices:
+            val = row[i]
+            s += val if header[i].endswith('-') else (1.0 - val)
+        return s
+
+    # Sort rows by total score (worst to best)
+    scored_rows = sorted(rows, key=get_score, reverse=True)
+    
+    # Focus on the worst 20% of setups
+    worst_rows = scored_rows[:len(rows) // 5]
+    
+    # Calculate correlation: how much does an input change as Idle- increases?
+    # We use a simple difference in means: (mean of input in worst 10% of Idle-) 
+    # vs (mean of input in best 10% of Idle-)
+    sorted_by_idle = sorted(worst_rows, key=lambda r: r[idle_idx])
+    bottom_idle = sorted_by_idle[:len(worst_rows) // 2]
+    top_idle = sorted_by_idle[len(worst_rows) // 2:]
+    
+    correlations = []
+    for i in input_indices:
+        # Only numeric inputs for simple correlation
+        vals = [r[i] for r in worst_rows if isinstance(r[i], (int, float))]
+        if not vals: continue
+        
+        mean_bottom = sum(r[i] for r in bottom_idle) / len(bottom_idle)
+        mean_top = sum(r[i] for r in top_idle) / len(top_idle)
+        
+        # The higher the difference, the more this input drives the idle time
+        correlations.append((abs(mean_top - mean_bottom), header[i]))
+    
+    # Return the top 2 inputs that explain the idle time
+    correlations.sort(reverse=True)
+    return [name for _, name in correlations[:2]]
+
+if __name__ == "__main__":
+    filename = "pom3a.n1000.train.csv"
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(x) for x in row])
+        
+        blame_cols = blame(header, rows)
+        print("Analysis: Why do our worst setups leave so many people waiting around?")
+        print(f"The primary drivers for high idle time in poor-performing setups are: {', '.join(blame_cols)}.")
+        print("These inputs show the strongest correlation with idle resources in our worst-case scenarios.")
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)
+```

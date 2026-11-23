@@ -1,0 +1,63 @@
+```python
+import csv
+
+def flow(header, row, seen):
+    """
+    Decides if an employee needs a 'what would keep you here' conversation.
+    We identify employees who are high-performers but potentially at risk 
+    (e.g., low JobSatisfaction or low EnvironmentSatisfaction) 
+    compared to the 'seen' population.
+    """
+    # Identify indices
+    try:
+        sat_idx = header.index('JobSatisfaction')
+        env_idx = header.index('EnvironmentSatisfaction')
+        years_idx = header.index('YearsAtCompany+')
+    except ValueError:
+        return False
+
+    # If this is the first row, we can't compare, so let it go
+    if not seen:
+        return False
+
+    # Calculate averages of the 'seen' population
+    avg_sat = sum(r[sat_idx] for r in seen) / len(seen)
+    avg_env = sum(r[env_idx] for r in seen) / len(seen)
+    avg_years = sum(r[years_idx] for r in seen) / len(seen)
+
+    # Criteria: If the employee has been here longer than average, 
+    # but their satisfaction is below the average of those seen so far,
+    # they are a candidate for a retention conversation.
+    if row[years_idx] > avg_years:
+        if row[sat_idx] < avg_sat or row[env_idx] < avg_env:
+            return True
+
+    return False
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    seen = []
+    triggered_count = 0
+    for row in rows:
+        if flow(header, row, seen):
+            triggered_count += 1
+        seen.append(row)
+
+    print(f"Retention Analysis Complete.")
+    print(f"Total employees processed: {len(rows)}")
+    print(f"Employees flagged for 'what would keep you here' conversation: {triggered_count}")
+    print("Logic: Flagged employees with above-average tenure but below-average satisfaction.")
+```

@@ -1,0 +1,41 @@
+import ezr
+import step03
+
+def certify(xs, ys):
+    """
+    Returns True if the two distributions are statistically indistinguishable 
+    (i.e., the difference is just noise), False if they really differ.
+    Uses the logic from step03.
+    """
+    return step03.certify(xs, ys)
+
+if __name__ == "__main__":
+    # Load data
+    data = list(ezr.csv("WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"))
+    header = data[0]
+    rows = data[1:]
+    
+    # Map column names to indices
+    col_map = {name: i for i, name in enumerate(header)}
+    training_idx = col_map['TrainingTimesLastYear']
+    manager_tenure_idx = col_map['YearsWithCurrManager+']
+    
+    # Define "more" training as > 3 days (median/mean range)
+    # Define "less" training as <= 3 days
+    more_training = [r[manager_tenure_idx] for r in rows if r[training_idx] > 3]
+    less_training = [r[manager_tenure_idx] for r in rows if r[training_idx] <= 3]
+    
+    # Perform statistical test
+    is_noise = certify(more_training, less_training)
+    
+    print("Analysis: Do people with more training stay longer with their manager?")
+    if is_noise:
+        print("Result: The difference is statistically insignificant (just noise).")
+    else:
+        print("Result: There is a statistically significant difference in tenure with manager.")
+        avg_more = sum(more_training) / len(more_training)
+        avg_less = sum(less_training) / len(less_training)
+        print(f"Average tenure with manager (More training): {avg_more:.2f} years")
+        print(f"Average tenure with manager (Less training): {avg_less:.2f} years")
+    
+    exit(0)

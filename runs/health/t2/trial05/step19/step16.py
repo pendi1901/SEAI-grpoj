@@ -1,0 +1,47 @@
+import csv
+import step06
+
+def justify(header, rows, row):
+    """
+    Estimates the performance of 'row' and compares it against all 'rows'.
+    Returns (fraction_better, reason_string).
+    """
+    # Reuse the logic from step06 to estimate goals and calculate the percentile
+    p, _ = step06.justify(header, rows, row)
+    
+    # The customer asks why not use the biggest/deepest setup.
+    # We explain that bigger/deeper models often suffer from diminishing returns
+    # or overfitting, which is why the setup is not always in the top percentile.
+    reason = "Using the biggest, deepest setup often leads to diminishing returns or overfitting, which is why this configuration only outperforms {:.1%} of all known setups.".format(p)
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = "Health-ClosedIssues0000.n1000.train.csv"
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                processed_row = [val if header[i] == 'criterion' else float(val) 
+                                 for i, val in enumerate(row)]
+                rows.append(processed_row)
+        
+        # Identify the "biggest, deepest" setup in the dataset
+        # Maximize N_estimators and Max_depth
+        n_est_idx = header.index('N_estimators')
+        depth_idx = header.index('Max_depth')
+        
+        biggest_row = max(rows, key=lambda r: r[n_est_idx] + r[depth_idx])
+        
+        # Create a query row with goals hidden
+        query_row = ["?"] * 3 + biggest_row[3:]
+        
+        p, reason = justify(header, rows, query_row)
+        
+        print(reason)
+            
+    except FileNotFoundError:
+        print(f"Error: {filename} not found.")
+        exit(1)

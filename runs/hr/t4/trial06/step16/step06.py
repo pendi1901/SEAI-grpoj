@@ -1,0 +1,81 @@
+import csv
+import pandas as pd
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import LabelEncoder
+
+def justify(header, rows, row):
+    """
+    Estimates the goal column for the provided row and calculates the 
+    fraction of existing rows that are 'worse' than the predicted value.
+    """
+    # Identify goal column (first column ending in + or -)
+    goal_col = [c for c in header if c.endswith('+') or c.endswith('-')][0]
+    is_maximize = goal_col.endswith('+')
+    
+    # Prepare data for training
+    df = pd.DataFrame(rows, columns=header)
+    inputs = [c for c in header if not (c.endswith('+') or c.endswith('-'))]
+    
+    # Encode symbolic columns
+    encoders = {}
+    df_encoded = df.copy()
+    for col in header:
+        if not col[0].isupper():
+            le = LabelEncoder()
+            df_encoded[col] = le.fit_transform(df[col].astype(str))
+            encoders[col] = le
+            
+    X = df_encoded[inputs]
+    y = df_encoded[goal_col]
+    
+    # Train model
+    model = RandomForestRegressor(n_estimators=100, random_state=42)
+    model.fit(X, y)
+    
+    # Prepare test row
+    test_df = pd.DataFrame([row], columns=header)
+    for col in header:
+        if not col[0].isupper():
+            # Handle potential unseen labels by mapping to a default or ignoring
+            val = str(test_df[col].iloc[0])
+            if val in encoders[col].classes_:
+                test_df[col] = encoders[col].transform([val])[0]
+            else:
+                test_df[col] = 0 
+                
+    prediction = model.predict(test_df[inputs])[0]
+    
+    # Calculate rank (fraction of rows worse than prediction)
+    if is_maximize:
+        better_than = [r for r in rows if r[header.index(goal_col)] < prediction]
+    else:
+        better_than = [r for r in rows if r[header.index(goal_col)] > prediction]
+        
+    p = len(better_than) / len(rows)
+    reason = f"This team arrangement is estimated to perform better than {p:.1%} of existing teams based on {goal_col} metrics."
+    
+    return p, reason
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+            
+    # Test with a sample row (masking the goal)
+    sample_row = list(rows[0])
+    goal_idx = [i for i, h in enumerate(header) if h.endswith('+') or h.endswith('-')][0]
+    sample_row[goal_idx] = "?"
+    
+    p, reason = justify(header, rows, sample_row)
+    print(f"Rank: {p:.4f}")
+    print(f"Reason: {reason}")

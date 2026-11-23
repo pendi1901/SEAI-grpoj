@@ -1,0 +1,63 @@
+```python
+import csv
+from scipy import stats
+
+def certify(xs, ys):
+    """
+    Returns True if the two groups are statistically similar (noise),
+    False if they are significantly different.
+    Uses a t-test to compare means.
+    """
+    if len(xs) < 2 or len(ys) < 2:
+        return True
+    t_stat, p_value = stats.ttest_ind(xs, ys, equal_var=False)
+    # If p-value > 0.05, we fail to reject the null hypothesis (they are the same)
+    return p_value > 0.05
+
+def analyze_training_impact(header, rows):
+    """
+    Compares 'YearsWithCurrManager+' for employees with high training 
+    vs low training.
+    """
+    idx_training = header.index('TrainingTimesLastYear')
+    idx_manager = header.index('YearsWithCurrManager+')
+    
+    # Split into two groups based on median training
+    trainings = [row[idx_training] for row in rows]
+    median_training = sum(trainings) / len(trainings)
+    
+    high_training = [row[idx_manager] for row in rows if row[idx_training] >= median_training]
+    low_training = [row[idx_manager] for row in rows if row[idx_training] < median_training]
+    
+    is_noise = certify(high_training, low_training)
+    
+    return is_noise, high_training, low_training
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    processed_row.append(float(val))
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+    
+    is_noise, high_group, low_group = analyze_training_impact(header, rows)
+    
+    print("Analysis: Do people with more training stay longer with their manager?")
+    if is_noise:
+        print("Result: The difference is statistically insignificant (noise).")
+        print("Training days do not appear to have a significant impact on tenure with the manager.")
+    else:
+        avg_high = sum(high_group) / len(high_group)
+        avg_low = sum(low_group) / len(low_group)
+        print("Result: The difference is statistically significant.")
+        print(f"Average years with manager (High Training): {avg_high:.2f}")
+        print(f"Average years with manager (Low Training): {avg_low:.2f}")
+```

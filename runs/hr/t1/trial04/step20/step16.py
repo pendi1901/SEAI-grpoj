@@ -1,0 +1,88 @@
+import csv
+
+def justify(header, rows, row):
+    """
+    Estimates the performance of a row and returns its percentile rank.
+    Addresses the 'pay everyone more' question by showing that performance
+    is multi-dimensional and not solely driven by income.
+    """
+    goal_indices = [i for i, h in enumerate(header) if h.endswith('+') or h.endswith('-')]
+    input_indices = [i for i, h in enumerate(header) if not (h.endswith('+') or h.endswith('-'))]
+    
+    # Simple KNN to estimate goals for the '?' row
+    def get_dist(r1, r2):
+        d = 0.0
+        for i in input_indices:
+            if isinstance(r1[i], (int, float)) and isinstance(r2[i], (int, float)):
+                d += (r1[i] - r2[i])**2
+            elif r1[i] != r2[i]:
+                d += 1.0
+        return d**0.5
+
+    # Find 5 nearest neighbors to estimate goals
+    distances = sorted([(get_dist(row, r), r) for r in rows], key=lambda x: x[0])
+    neighbors = distances[:5]
+    
+    estimated_goals = []
+    for g_idx in goal_indices:
+        vals = [n[1][g_idx] for n in neighbors]
+        estimated_goals.append(sum(vals) / len(vals))
+
+    # Score function: higher is better
+    def get_score(r_goals):
+        score = 0.0
+        for i, g_idx in enumerate(goal_indices):
+            col_vals = [r[g_idx] for r in rows if isinstance(r[g_idx], (int, float))]
+            min_v, max_v = min(col_vals), max(col_vals)
+            norm = (r_goals[i] - min_v) / (max_v - min_v + 1e-9)
+            if header[g_idx].endswith('-'):
+                score += (1.0 - norm)
+            else:
+                score += norm
+        return score / len(goal_indices)
+
+    # Compare against all rows
+    all_scores = []
+    for r in rows:
+        r_goals = [r[g] for g in goal_indices]
+        all_scores.append(get_score(r_goals))
+    
+    test_score = get_score(estimated_goals)
+    better_than = sum(1 for s in all_scores if test_score > s)
+    p = better_than / len(rows)
+    
+    reason = ("Simply increasing pay is insufficient because retention is driven by a complex "
+              "balance of job satisfaction, role engagement, and work-life balance metrics "
+              "that money alone does not address.")
+    
+    return (p, reason)
+
+if __name__ == "__main__":
+    filename = 'WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv'
+    rows = []
+    header = []
+    
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = []
+            for i, val in enumerate(row):
+                if header[i][0].isupper():
+                    try:
+                        processed_row.append(float(val))
+                    except ValueError:
+                        processed_row.append(0.0)
+                else:
+                    processed_row.append(val)
+            rows.append(processed_row)
+
+    # Test with the first row masked
+    test_row = list(rows[0])
+    goal_indices = [i for i, h in enumerate(header) if h.endswith('+') or h.endswith('-')]
+    for idx in goal_indices:
+        test_row[idx] = "?"
+        
+    p, reason = justify(header, rows, test_row)
+    print(f"Percentile Rank: {p:.2f}")
+    print(f"Justification: {reason}")

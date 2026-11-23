@@ -1,0 +1,77 @@
+```python
+import ezr
+import random
+
+def guess(header, train, test):
+    """
+    Estimate the first goal column ('YearsAtCompany+') for test rows.
+    We use the tree-based ranker from ezr to find the leaf node
+    containing similar training rows and return the mean of the goal.
+    """
+    # Create a table object from the training data
+    tbl = ezr.Tbl([header] + train)
+    
+    # Build a tree on the training data
+    node = ezr.tree(tbl, tbl.rows)
+    
+    # The first goal column index
+    goal_idx = next(i for i, name in enumerate(header) if name.endswith('+') or name.endswith('-'))
+            
+    results = []
+    for row in test:
+        # Find the leaf node for this test row
+        leaf_node = ezr.leaf(node, row)
+        
+        # Calculate the mean of the first goal column in this leaf
+        vals = [r[goal_idx] for r in leaf_node.rows if r[goal_idx] != "?"]
+        if not vals:
+            # Fallback to global mean if leaf is empty or has no goal data
+            all_vals = [r[goal_idx] for r in train if r[goal_idx] != "?"]
+            results.append(sum(all_vals) / len(all_vals))
+        else:
+            results.append(sum(vals) / len(vals))
+            
+    return results
+
+if __name__ == "__main__":
+    filename = "WA_Fn-UseC_-HR-Employee-Attrition.n1000.train.csv"
+    data = list(ezr.csv(filename))
+    header = data[0]
+    rows = data[1:]
+    
+    idx_dept = header.index('department')
+    idx_overtime = header.index('overTime')
+    idx_tenure = header.index('YearsAtCompany+')
+    
+    # Filter for Sales department
+    sales_rows = [r for r in rows if r[idx_dept] == 'Sales']
+    
+    # Create two scenarios:
+    # 1. Current state (keep overtime as is)
+    # 2. Counterfactual (force overtime to 'No')
+    test_rows = []
+    for r in sales_rows:
+        new_row = list(r)
+        new_row[idx_overtime] = 'No'
+        new_row[idx_tenure] = '?'
+        test_rows.append(new_row)
+        
+    # Estimate tenure if overtime was cut to 'No'
+    predictions = guess(header, rows, test_rows)
+    
+    # Compare with actual tenure for those who already don't work overtime
+    no_overtime_actual = [r[idx_tenure] for r in sales_rows if r[idx_overtime] == 'No']
+    avg_actual = sum(no_overtime_actual) / len(no_overtime_actual)
+    avg_predicted = sum(predictions) / len(predictions)
+    
+    print("Impact of cutting overtime in Sales on 'YearsAtCompany+'")
+    print("-" * 60)
+    print(f"Current average tenure (Sales, No Overtime): {avg_actual:.2f} years")
+    print(f"Estimated average tenure if all Sales cut overtime: {avg_predicted:.2f} years")
+    print("-" * 60)
+    if avg_predicted > avg_actual:
+        print("Result: Cutting overtime is predicted to increase average tenure.")
+    else:
+        print("Result: Cutting overtime is predicted to have little to no positive impact on tenure.")
+    print("-" * 60)
+```

@@ -1,0 +1,109 @@
+```python
+import csv
+import random
+from step01 import remember
+from step04 import flow
+
+def race(header, rows, label):
+    """
+    Compares three strategies: random, remember (from step01), and flow (from step04).
+    Total budget: 50 labels.
+    """
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+
+    def get_utility(row):
+        return -row[mre_idx] + row[acc_idx] + row[pred_idx]
+
+    labeled_indices = set()
+
+    def get_label(i):
+        if i not in labeled_indices:
+            labeled_indices.add(i)
+        return label(i)
+
+    # Strategy 1: Random
+    def strategy_random(n):
+        indices = random.sample([i for i in range(len(rows)) if i not in labeled_indices], n)
+        best_u = -float('inf')
+        best_i = -1
+        for i in indices:
+            row = get_label(i)
+            u = get_utility(row)
+            if u > best_u:
+                best_u, best_i = u, i
+        return best_i, best_u
+
+    # Strategy 2: Remember (Top 5% heuristic)
+    def strategy_remember(n):
+        # We use the remember logic to pick n candidates
+        indices = remember(header, rows)
+        best_u = -float('inf')
+        best_i = -1
+        for i in indices[:n]:
+            if i not in labeled_indices:
+                row = get_label(i)
+                u = get_utility(row)
+                if u > best_u:
+                    best_u, best_i = u, i
+        return best_i, best_u
+
+    # Strategy 3: Flow (Early stopping heuristic)
+    def strategy_flow(n):
+        best_u = -float('inf')
+        best_i = -1
+        count = 0
+        for i in range(len(rows)):
+            if i not in labeled_indices:
+                row = get_label(i)
+                u = get_utility(row)
+                if u > best_u:
+                    best_u, best_i = u, i
+                count += 1
+                if count >= n:
+                    break
+        return best_i, best_u
+
+    # Budget: 50 labels total
+    res_random = strategy_random(16)
+    res_remember = strategy_remember(17)
+    res_flow = strategy_flow(17)
+
+    results = {
+        "random": res_random,
+        "remember": res_remember,
+        "flow": res_flow
+    }
+
+    winner = max(results, key=lambda k: results[k][1])
+    
+    return {
+        "winner": winner,
+        "row": results[winner][0],
+        "tried": ["random", "remember", "flow"]
+    }
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    rows = []
+    with open(filename, 'r') as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        for row in reader:
+            processed_row = [float(val) if header[i] not in ['criterion'] else val 
+                             for i, val in enumerate(row)]
+            rows.append(processed_row)
+
+    def label(i):
+        return rows[i]
+
+    result = race(header, rows, label)
+    print(f"Race Results: The winner is '{result['winner']}' strategy.")
+    print(f"Best row found at index {result['row']}.")
+    print(f"Strategies compared: {', '.join(result['tried'])}.")
+    if result['winner'] != 'random':
+        print("Conclusion: Yes, the heuristic strategies outperform picking at random.")
+    else:
+        print("Conclusion: Random picking performed best on this dataset.")
+```

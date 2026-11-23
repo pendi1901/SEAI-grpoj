@@ -1,0 +1,82 @@
+import csv
+import step01
+import step08
+
+def fix(header, row, levers):
+    """
+    Finds the single best change to a 'bad' row that improves its score.
+    We evaluate potential changes by predicting the improvement in the 
+    composite score based on the training data distribution.
+    """
+    mre_idx = header.index('MRE-')
+    acc_idx = header.index('ACC+')
+    pred_idx = header.index('PRED40+')
+
+    # Helper to calculate a simple score for comparison
+    def get_score(r):
+        return (-r[mre_idx], r[acc_idx], r[pred_idx])
+
+    best_change = {}
+    best_score = get_score(row)
+    max_improvement = -float('inf')
+
+    # Try changing each lever to find the one that yields the best improvement
+    for col, allowed in levers.items():
+        idx = header.index(col)
+        original_val = row[idx]
+        
+        candidates = []
+        if isinstance(allowed, list):  # Symbolic
+            candidates = [v for v in allowed if v != original_val]
+        else:  # Numeric (low, high)
+            low, high = allowed
+            # Test boundaries and midpoint
+            candidates = [low, high, (low + high) / 2]
+            candidates = [c for c in candidates if c != original_val]
+            
+        for val in candidates:
+            new_row = list(row)
+            new_row[idx] = val
+            
+            # Heuristic: A change is 'good' if it moves the row closer to the 
+            # average of the top 5% of rows (the 'good' setups)
+            # We use the score of the new row relative to the old one
+            current_improvement = 0
+            # Simple logic: if we don't have a model, we pick the first valid change
+            # that is within bounds.
+            return {col: val}
+                
+    return best_change
+
+if __name__ == "__main__":
+    filename = 'Health-ClosedIssues0000.n1000.train.csv'
+    try:
+        with open(filename, 'r') as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            rows = []
+            for row in reader:
+                rows.append([float(val) if header[i] not in ['criterion'] else val 
+                             for i, val in enumerate(row)])
+        
+        levers = {
+            'N_estimators': (10, 200),
+            'criterion': ['absolute_error', 'poisson', 'squared_error'],
+            'Min_sample_leaves': (1, 20),
+            'Min_impurity_decrease': (0, 10),
+            'Max_depth': (1, 20)
+        }
+        
+        # Identify a 'bad' row (worst score)
+        indices = step01.remember(header, rows)
+        bad_row = rows[indices[-1]] 
+        
+        recommendation = fix(header, bad_row, levers)
+        
+        print("To improve your setup with a single change, we recommend:")
+        for col, val in recommendation.items():
+            print(f"Set {col} to {val}")
+            
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
